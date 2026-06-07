@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2a1d17" />
+    <meta
+      name="description"
+      content="פורטל מהיר של Sarcafe: בחירת סניף, ניווט, תפריט, אינסטגרם והשארת ביקורת."
+    />
+    <title>Sarcafe | פורטל קפה</title>
+
+    <link rel="icon" href="favicon-placeholder.ico" sizes="any" />
+    <link rel="preload" href="background-placeholder.jpg" as="image" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <div class="page-shell">
+      <div class="background-overlay" aria-hidden="true"></div>
+
+      <nav class="language-switcher" aria-label="בחירת שפה">
+        <button
+          class="language-toggle"
+          id="languageToggle"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="languageMenu"
+        >
+          <span aria-hidden="true">🌐</span>
+          <span class="sr-only" data-i18n="languageButton">בחירת שפה</span>
+        </button>
+
+        <div
+          class="language-menu"
+          id="languageMenu"
+          role="menu"
+          aria-label="בחירת שפה"
+          hidden
+        >
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="he"
+          >
+            עברית
+          </button>
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="en"
+          >
+            English
+          </button>
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="ar"
+          >
+            العربية
+          </button>
+        </div>
+      </nav>
+
+      <main class="portal" aria-live="polite">
+        <header class="brand" aria-label="Sarcafe">
+          <img
+            class="brand__logo"
+            src="logo-placeholder.png"
+            alt="Sarcafe logo"
+          />
+        </header>
+
+        <section
+          class="panel branch-panel"
+          id="branchPanel"
+          aria-labelledby="branchTitle"
+        >
+          <p class="eyebrow" data-i18n="eyebrow">פורטל קפה</p>
+          <h1 id="branchTitle" data-i18n="welcomeTitle">
+            ברוכים הבאים ל־Sarcafe
+          </h1>
+          <p class="panel__text" data-i18n="chooseBranch">
+            בחרו סניף כדי להמשיך.
+          </p>
+
+          <div
+            class="branch-grid"
+            role="group"
+            data-i18n-aria-label="chooseBranchAria"
+            aria-label="בחירת סניף של Sarcafe"
+          >
+            <button
+              class="branch-button fade-in-up"
+              type="button"
+              data-branch="givatHaviva"
+            >
+              <span data-branch-name="givatHaviva">גבעת חביבה</span>
+              <small data-i18n="branchLabel">סניף</small>
+            </button>
+
+            <button
+              class="branch-button fade-in-up fade-in-up--delay"
+              type="button"
+              data-branch="maor"
+            >
+              <span data-branch-name="maor">מאור</span>
+              <small data-i18n="branchLabel">סניף</small>
+            </button>
+          </div>
+        </section>
+
+        <section
+          class="panel actions-panel is-hidden"
+          id="actionsPanel"
+          aria-labelledby="actionsTitle"
+        >
+          <button
+            class="back-button"
+            id="backButton"
+            type="button"
+            data-i18n="changeBranch"
+            data-i18n-aria-label="changeBranchAria"
+            aria-label="חזרה לבחירת סניף"
+          >
+            ← החלפת סניף
+          </button>
+
+          <p class="eyebrow" data-i18n="selectedBranch">הסניף שנבחר</p>
+          <h1 id="actionsTitle">Sarcafe</h1>
+          <p class="panel__text" data-i18n="quickLinks">
+            קישורים מהירים למיקום הזה.
+          </p>
+
+          <div
+            class="action-list"
+            id="actionList"
+            data-i18n-aria-label="branchActionsAria"
+            aria-label="פעולות לסניף"
+          ></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
