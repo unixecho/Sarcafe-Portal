@@ -21,7 +21,7 @@ const branchConfig = {
       appleMaps: "https://maps.apple/p/eB5XbpUbv.RmXQ",
     },
 
-    menu: "p-390jutqaoipm2m7cumigj.rork.live/givat-haviva",
+    menu: "www.p-390jutqaoipm2m7cumigj.rork.live/givat-haviva",
     instagram: "www.instagram.com/sarcafe_givat.haviva/?hl=en",
     review:
       "https://www.google.com/search?client=tablet-android-samsung-ss&hs=8gMV&sca_esv=4a0395b1eb6eb655&sxsrf=ANbL-n7xzN2UPQ0yQNTy1S8MNHPHpXWQ8Q:1780816439201&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOeNC0svfKpdfz7r2d5Gv3xxio0TeM0ffKucL3b3hpR3CtxfCsNPVU51Loi5DrhiQ6D6yfcBC-HEmQfDo-_mo069DNVTiO2sDni4zdMhdtIrbmroIOg%3D%3D&q=%D7%A9%D7%A8%D7%A7%D7%A4%D7%94+%D7%92%D7%91%D7%A2%D7%AA+%D7%97%D7%91%D7%99%D7%91%D7%94+Reviews&sa=X&ved=2ahUKEwjq8ZKayvSUAxX0UkEAHfCmA5YQ0bkNegQIIRAF&biw=1691&bih=878&dpr=1.75#lrd=0x151d0ff513e8629d:0xa96e0271dcb22bc9,3,,,,",
@@ -44,7 +44,7 @@ const branchConfig = {
       appleMaps: "https://maps.apple/p/qpTdR-CW92-k85",
     },
 
-    menu: "p-390jutqaoipm2m7cumigj.rork.live/maor",
+    menu: "www.p-390jutqaoipm2m7cumigj.rork.live/maor",
     instagram: "https://www.instagram.com/sarcafe_maor?igsh=MWM2NThiMHliODB5cA==",
     review:
       "https://www.google.com/search?client=tablet-android-samsung-ss&hs=YhMV&sca_esv=4a0395b1eb6eb655&sxsrf=ANbL-n7WBcEx4otrLxlW5mdY5Hc3IS-9GA:1780817990838&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORq9ZRxUEGQjlwXHLY-hWlLKbVyKvZCKqbFZD0CiApiXy7ngKHZS3tp6qD365pwpMFnIZXyTH2i7VYL4-FsrQZ1ILbXFKYuAwJBe9odLsvctXY6pLg%3D%3D&q=%D7%A9%D7%A8%D7%A7%D7%A4%D7%94+%D7%9E%D7%90%D7%95%D7%A8+Reviews&sa=X&ved=2ahUKEwjJpYP-z_SUAxWc1wIHHQ4QJBQQ0bkNegQIJRAF&biw=1691&bih=878&dpr=1.75#lrd=0x151d11a50c80e89b:0x96d561f512db6ca9,3,,,,",
