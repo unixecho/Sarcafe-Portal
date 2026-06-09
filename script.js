@@ -17,16 +17,18 @@ const branchConfig = {
     navigation: {
       googleMaps:
         "https://www.google.com/search?client=tablet-android-samsung-ss&hs=8gMV&sca_esv=4a0395b1eb6eb655&sxsrf=ANbL-n7xzN2UPQ0yQNTy1S8MNHPHpXWQ8Q:1780816439201&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOeNC0svfKpdfz7r2d5Gv3xxio0TeM0ffKucL3b3hpR3CtxfCsNPVU51Loi5DrhiQ6D6yfcBC-HEmQfDo-_mo069DNVTiO2sDni4zdMhdtIrbmroIOg%3D%3D&q=%D7%A9%D7%A8%D7%A7%D7%A4%D7%94+%D7%92%D7%91%D7%A2%D7%AA+%D7%97%D7%91%D7%99%D7%91%D7%94+Reviews&sa=X&ved=2ahUKEwjq8ZKayvSUAxX0UkEAHfCmA5YQ0bkNegQIIRAF&biw=1691&bih=878&dpr=1.75#lrd=",
-      waze: "https://www.waze.com/live-map/directions?to=ll.32.458484%2C35.021689",
+      waze:
+        "https://www.waze.com/live-map/directions?to=ll.32.458484%2C35.021689",
       appleMaps: "https://maps.apple/p/eB5XbpUbv.RmXQ",
     },
 
-    menu: "www.p-390jutqaoipm2m7cumigj.rork.live/givat-haviva",
-    instagram: "www.instagram.com/sarcafe_givat.haviva/?hl=en",
+    menu: "https://www.p-390jutqaoipm2m7cumigj.rork.live/givat-haviva",
+    instagram: "https://www.instagram.com/sarcafe_givat.haviva/",
     review:
       "https://www.google.com/search?client=tablet-android-samsung-ss&hs=8gMV&sca_esv=4a0395b1eb6eb655&sxsrf=ANbL-n7xzN2UPQ0yQNTy1S8MNHPHpXWQ8Q:1780816439201&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOeNC0svfKpdfz7r2d5Gv3xxio0TeM0ffKucL3b3hpR3CtxfCsNPVU51Loi5DrhiQ6D6yfcBC-HEmQfDo-_mo069DNVTiO2sDni4zdMhdtIrbmroIOg%3D%3D&q=%D7%A9%D7%A8%D7%A7%D7%A4%D7%94+%D7%92%D7%91%D7%A2%D7%AA+%D7%97%D7%91%D7%99%D7%91%D7%94+Reviews&sa=X&ved=2ahUKEwjq8ZKayvSUAxX0UkEAHfCmA5YQ0bkNegQIIRAF&biw=1691&bih=878&dpr=1.75#lrd=0x151d0ff513e8629d:0xa96e0271dcb22bc9,3,,,,",
 
-    bit: "https://www.bitpay.co.il/app/me/E651C59A-1BFE-BEC5-4393-DC2A3AB120825472",
+    bit:
+      "https://www.bitpay.co.il/app/me/E651C59A-1BFE-BEC5-4393-DC2A3AB120825472",
     paybox: "#",
   },
 
@@ -44,12 +46,13 @@ const branchConfig = {
       appleMaps: "https://maps.apple/p/qpTdR-CW92-k85",
     },
 
-    menu: "www.p-390jutqaoipm2m7cumigj.rork.live/maor",
-    instagram: "https://www.instagram.com/sarcafe_maor?igsh=MWM2NThiMHliODB5cA==",
+    menu: "https://www.p-390jutqaoipm2m7cumigj.rork.live/maor",
+    instagram: "https://www.instagram.com/sarcafe_maor/",
     review:
       "https://www.google.com/search?client=tablet-android-samsung-ss&hs=YhMV&sca_esv=4a0395b1eb6eb655&sxsrf=ANbL-n7WBcEx4otrLxlW5mdY5Hc3IS-9GA:1780817990838&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORq9ZRxUEGQjlwXHLY-hWlLKbVyKvZCKqbFZD0CiApiXy7ngKHZS3tp6qD365pwpMFnIZXyTH2i7VYL4-FsrQZ1ILbXFKYuAwJBe9odLsvctXY6pLg%3D%3D&q=%D7%A9%D7%A8%D7%A7%D7%A4%D7%94+%D7%9E%D7%90%D7%95%D7%A8+Reviews&sa=X&ved=2ahUKEwjJpYP-z_SUAxWc1wIHHQ4QJBQQ0bkNegQIJRAF&biw=1691&bih=878&dpr=1.75#lrd=0x151d11a50c80e89b:0x96d561f512db6ca9,3,,,,",
 
-    bit: "https://www.bitpay.co.il/app/me/E651C59A-1BFE-BEC5-4393-DC2A3AB120825472",
+    bit:
+      "https://www.bitpay.co.il/app/me/E651C59A-1BFE-BEC5-4393-DC2A3AB120825472",
     paybox: "#",
   },
 };
@@ -252,15 +255,36 @@ function isRealLink(url) {
   return typeof url === "string" && url.trim() !== "" && url.trim() !== "#";
 }
 
+function normalizeUrl(href) {
+  if (!isRealLink(href)) return "#";
+
+  const cleanHref = href.trim();
+
+  if (
+    cleanHref.startsWith("https://") ||
+    cleanHref.startsWith("http://") ||
+    cleanHref.startsWith("mailto:") ||
+    cleanHref.startsWith("tel:") ||
+    cleanHref.startsWith("waze://") ||
+    cleanHref.startsWith("maps://")
+  ) {
+    return cleanHref;
+  }
+
+  if (cleanHref.startsWith("www.")) {
+    return `https://${cleanHref}`;
+  }
+
+  return cleanHref;
+}
+
 function getInitialLanguage() {
   const params = new URLSearchParams(window.location.search);
   const fromUrl = params.get("lang");
   const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  const browserLang = (navigator.language || "").slice(0, 2).toLowerCase();
 
   if (translations[fromUrl]) return fromUrl;
   if (translations[stored]) return stored;
-  if (translations[browserLang]) return browserLang;
 
   return DEFAULT_LANGUAGE;
 }
@@ -374,9 +398,10 @@ function createExternalLink({
   ariaSuffix = "",
 }) {
   const link = document.createElement("a");
+  const normalizedHref = normalizeUrl(href);
 
   link.className = `action-button${primary ? " action-button--primary" : ""}`;
-  link.href = href || "#";
+  link.href = normalizedHref;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
 
