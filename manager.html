@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2a1d17" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="מנהל התפריטים של Sarcafe — עריכת הקטגוריות, הפריטים והמחירים לכל סניף."
+    />
+    <title>Sarcafe | מנהל תפריט</title>
+
+    <link rel="icon" href="favicon-placeholder.ico" sizes="any" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@100..900&family=Noto+Sans+Arabic:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="manager.css" />
+  </head>
+
+  <body>
+    <div class="page-shell manager-shell">
+      <div class="background-overlay" aria-hidden="true"></div>
+
+      <main class="manager">
+        <!-- Step 1: choose a branch -->
+        <section
+          class="panel branch-panel"
+          id="branchSelect"
+          aria-labelledby="managerTitle"
+        >
+          <header class="brand" aria-label="Sarcafe">
+            <img
+              class="brand__logo"
+              src="logo-placeholder.png"
+              alt="Sarcafe logo"
+            />
+          </header>
+
+          <p class="eyebrow">ניהול תפריטים</p>
+          <h1 id="managerTitle">מנהל התפריט</h1>
+          <p class="panel__text">בחרו סניף כדי לערוך את התפריט שלו.</p>
+
+          <div
+            class="branch-grid"
+            id="branchButtons"
+            role="group"
+            aria-label="בחירת סניף לעריכה"
+          ></div>
+        </section>
+
+        <!-- Step 2: edit the chosen branch -->
+        <section class="manager-editor is-hidden" id="editor">
+          <div class="manager-toolbar">
+            <button class="m-btn" id="backBtn" type="button">
+              ← החלפת סניף
+            </button>
+            <h1 class="manager-toolbar__title" id="editorTitle">תפריט</h1>
+            <span class="manager-status" id="status"></span>
+
+            <div class="manager-toolbar__actions">
+              <button class="m-btn m-btn--primary" id="saveBtn" type="button">
+                שמירה
+              </button>
+              <button class="m-btn" id="previewBtn" type="button">
+                תצוגה מקדימה
+              </button>
+              <button class="m-btn" id="exportBtn" type="button">
+                ייצוא
+              </button>
+              <button class="m-btn m-btn--danger" id="resetBtn" type="button">
+                איפוס
+              </button>
+            </div>
+          </div>
+
+          <p class="manager-hint">
+            השינויים נשמרים במכשיר זה. כדי לפרסם אותם לכל הלקוחות יש לייצא את
+            הקובץ ולשמור אותו ב־menu-data.js שבמאגר.
+          </p>
+
+          <div id="categories"></div>
+
+          <button class="m-add-category" id="addCategoryBtn" type="button">
+            ＋ הוספת קטגוריה
+          </button>
+        </section>
+      </main>
+    </div>
+
+    <script src="menu-data.js" defer></script>
+    <script src="menu-store.js" defer></script>
+    <script src="manager.js" defer></script>
+  </body>
+</html>

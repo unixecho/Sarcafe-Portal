@@ -1,0 +1,339 @@
+/* Menu manager — builds on the tokens and base styles in styles.css. */
+
+.manager-shell {
+  place-items: start center;
+  padding-top: max(28px, calc(env(safe-area-inset-top) + 16px));
+}
+
+.manager {
+  width: min(100%, 820px);
+  display: grid;
+  gap: 16px;
+  padding-bottom: 48px;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+/* Toolbar */
+
+.manager-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.manager-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--glass-strong);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px) saturate(1.05);
+}
+
+.manager-toolbar__title {
+  margin: 0;
+  font-size: clamp(1.2rem, 5vw, 1.5rem);
+  letter-spacing: -0.02em;
+}
+
+.manager-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.m-btn {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: rgba(255, 248, 234, 0.1);
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--ease), background 160ms var(--ease);
+}
+
+.m-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 248, 234, 0.18);
+}
+
+.m-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.m-btn:focus-visible {
+  outline: 3px solid rgba(239, 176, 129, 0.95);
+  outline-offset: 3px;
+}
+
+.m-btn--primary {
+  color: var(--coffee-950);
+  background: linear-gradient(135deg, var(--sage-300), var(--cream-200));
+  border-color: transparent;
+}
+
+.m-btn--danger {
+  color: #ffc4ba;
+}
+
+.manager-status {
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: var(--muted);
+  padding-inline: 2px;
+}
+
+.manager-status.is-dirty {
+  color: var(--peach-300);
+}
+
+.manager-status.is-ok {
+  color: var(--sage-300);
+}
+
+.manager-hint {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(239, 176, 129, 0.08);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* Category cards */
+
+#categories {
+  display: grid;
+  gap: 14px;
+}
+
+.m-category {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    rgba(34, 22, 16, 0.86),
+    rgba(23, 15, 11, 0.92)
+  );
+  box-shadow: var(--shadow);
+}
+
+.m-category__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Control buttons (move / delete) */
+
+.m-controls {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.m-controls--column {
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+
+.m-ctrl {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 248, 234, 0.08);
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.m-ctrl:hover:not(:disabled) {
+  background: rgba(255, 248, 234, 0.16);
+}
+
+.m-ctrl:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.m-ctrl--danger {
+  color: #ffb4a8;
+}
+
+.m-ctrl:focus-visible {
+  outline: 2px solid rgba(239, 176, 129, 0.95);
+  outline-offset: 2px;
+}
+
+/* Inputs */
+
+.m-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 248, 234, 0.06);
+  color: var(--text);
+  font: inherit;
+}
+
+.m-input::placeholder {
+  color: rgba(255, 248, 234, 0.4);
+}
+
+.m-input:focus-visible {
+  outline: 2px solid rgba(239, 176, 129, 0.9);
+  outline-offset: 1px;
+}
+
+.m-input--icon {
+  flex: 0 0 auto;
+  width: 56px;
+  text-align: center;
+  font-size: 1.15rem;
+}
+
+.m-input--title {
+  flex: 1 1 auto;
+  font-weight: 800;
+}
+
+.m-field {
+  display: grid;
+  gap: 4px;
+}
+
+.m-field__label {
+  font-size: 0.7rem;
+  font-weight: 750;
+  color: var(--muted);
+}
+
+.m-grid-2 {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.m-grid-3 {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Items */
+
+.m-items {
+  display: grid;
+  gap: 10px;
+}
+
+.m-item {
+  display: flex;
+  gap: 10px;
+  padding: 11px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 248, 234, 0.12);
+  background: rgba(255, 248, 234, 0.04);
+}
+
+.m-item__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.m-item__line {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.m-item__line .m-field:first-child {
+  flex: 1 1 auto;
+}
+
+.m-field--price {
+  flex: 0 0 104px;
+}
+
+/* Add / link buttons */
+
+.m-add,
+.m-add-category {
+  border: 1px dashed var(--line);
+  background: rgba(255, 248, 234, 0.04);
+  color: var(--text);
+  font-weight: 850;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.m-add {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+}
+
+.m-add-category {
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--radius-lg);
+}
+
+.m-add:hover,
+.m-add-category:hover {
+  background: rgba(255, 248, 234, 0.1);
+}
+
+.m-link {
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--peach-300);
+  font-size: 0.84rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.m-note {
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 560px) {
+  .m-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .manager-toolbar__actions {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+}

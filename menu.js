@@ -66,7 +66,9 @@ const menuTranslations = {
 };
 
 const branchKey = document.body.dataset.branch;
-const branchMenu = MENUS[branchKey];
+const branchMenu = window.SarcafeMenu
+  ? SarcafeMenu.getMenu(branchKey)
+  : MENUS[branchKey];
 
 const menuTitle = document.querySelector("#menuTitle");
 const categoryNav = document.querySelector("#categoryNav");
