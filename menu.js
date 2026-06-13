@@ -81,7 +81,22 @@ const languageOptions = document.querySelectorAll("[data-lang]");
 let currentLanguage = getInitialLanguage();
 let languageCloseTimer = null;
 
-const collapsedCategories = new Set();
+// Accordion: everything starts collapsed and only one category is open
+// at a time, so customers focus on the category they picked.
+let expandedCategoryId = null;
+
+function setExpandedCategory(categoryId) {
+  expandedCategoryId = categoryId;
+
+  document.querySelectorAll(".menu-category").forEach((section) => {
+    const isExpanded = section.dataset.categoryId === categoryId;
+
+    section.classList.toggle("is-collapsed", !isExpanded);
+    section
+      .querySelector(".menu-category__toggle")
+      ?.setAttribute("aria-expanded", String(isExpanded));
+  });
+}
 
 function getInitialLanguage() {
   const params = new URLSearchParams(window.location.search);
@@ -178,19 +193,9 @@ function createMenuItem(item) {
   return row;
 }
 
-function expandCategory(section) {
-  if (!section) return;
-
-  collapsedCategories.delete(section.dataset.categoryId);
-  section.classList.remove("is-collapsed");
-  section
-    .querySelector(".menu-category__toggle")
-    ?.setAttribute("aria-expanded", "true");
-}
-
 function createCategorySection(category) {
   const section = document.createElement("section");
-  const isCollapsed = collapsedCategories.has(category.id);
+  const isCollapsed = category.id !== expandedCategoryId;
 
   section.className = `menu-category${isCollapsed ? " is-collapsed" : ""}`;
   section.id = `category-${category.id}`;
@@ -232,15 +237,9 @@ function createCategorySection(category) {
   body.append(inner);
 
   toggle.addEventListener("click", () => {
-    const collapsed = section.classList.toggle("is-collapsed");
-
-    toggle.setAttribute("aria-expanded", String(!collapsed));
-
-    if (collapsed) {
-      collapsedCategories.add(category.id);
-    } else {
-      collapsedCategories.delete(category.id);
-    }
+    setExpandedCategory(
+      expandedCategoryId === category.id ? null : category.id
+    );
   });
 
   section.append(heading, body);
@@ -257,12 +256,15 @@ function createCategoryChip(category) {
   chip.append(localized(category.title));
 
   chip.addEventListener("click", () => {
-    const section = document.querySelector(`#category-${category.id}`);
+    setExpandedCategory(category.id);
 
-    if (!section) return;
-
-    expandCategory(section);
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Wait for the other sections' collapse animation so the section
+    // lands at its final position before scrolling to it.
+    window.setTimeout(() => {
+      document
+        .querySelector(`#category-${category.id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
   });
 
   return chip;
