@@ -87,7 +87,7 @@
   z-index: 5;
   display: flex;
   gap: 8px;
-  padding: 8px;
+  padding: 8px 14px;
   overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -95,6 +95,17 @@
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(16px) saturate(1.05);
   scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 14px;
+  overscroll-behavior-x: contain;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.category-nav.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
 }
 
 .category-nav::-webkit-scrollbar {
@@ -103,6 +114,7 @@
 
 .category-chip {
   flex: 0 0 auto;
+  scroll-snap-align: start;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -146,19 +158,76 @@
   padding: clamp(18px, 5vw, 26px);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  background: linear-gradient(180deg, var(--glass), var(--glass-strong));
+  /* No backdrop-filter here: blurring every section repaints on each
+     scrolled frame and tanks the frame rate on desktops. */
+  background: linear-gradient(
+    180deg,
+    rgba(34, 22, 16, 0.86),
+    rgba(23, 15, 11, 0.92)
+  );
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px) saturate(1.05);
   scroll-margin-top: 84px;
 }
 
 .menu-category__title {
+  margin: 0;
+  font-size: clamp(1.3rem, 5.5vw, 1.6rem);
+  letter-spacing: -0.02em;
+}
+
+.menu-category__toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 14px;
-  font-size: clamp(1.3rem, 5.5vw, 1.6rem);
-  letter-spacing: -0.02em;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: inherit;
+  background: none;
+  font-size: inherit;
+  font-weight: 800;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.menu-category__toggle:focus-visible {
+  outline: 3px solid rgba(239, 176, 129, 0.95);
+  outline-offset: 4px;
+}
+
+.menu-category__chevron {
+  margin-inline-start: auto;
+  color: rgba(255, 248, 234, 0.62);
+  font-size: 1.35rem;
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 220ms var(--ease);
+}
+
+.menu-category.is-collapsed .menu-category__chevron {
+  transform: rotate(0deg);
+}
+
+.menu-category__body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 260ms var(--ease);
+}
+
+.menu-category.is-collapsed .menu-category__body {
+  grid-template-rows: 0fr;
+}
+
+.menu-category__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.menu-category__inner .menu-item-list {
+  margin-top: 10px;
 }
 
 .menu-category__icon {

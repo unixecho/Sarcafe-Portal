@@ -81,6 +81,8 @@ const languageOptions = document.querySelectorAll("[data-lang]");
 let currentLanguage = getInitialLanguage();
 let languageCloseTimer = null;
 
+const collapsedCategories = new Set();
+
 function getInitialLanguage() {
   const params = new URLSearchParams(window.location.search);
   const fromUrl = params.get("lang");
@@ -176,23 +178,72 @@ function createMenuItem(item) {
   return row;
 }
 
+function expandCategory(section) {
+  if (!section) return;
+
+  collapsedCategories.delete(section.dataset.categoryId);
+  section.classList.remove("is-collapsed");
+  section
+    .querySelector(".menu-category__toggle")
+    ?.setAttribute("aria-expanded", "true");
+}
+
 function createCategorySection(category) {
   const section = document.createElement("section");
-  section.className = "menu-category";
+  const isCollapsed = collapsedCategories.has(category.id);
+
+  section.className = `menu-category${isCollapsed ? " is-collapsed" : ""}`;
   section.id = `category-${category.id}`;
+  section.dataset.categoryId = category.id;
 
   const heading = document.createElement("h2");
   heading.className = "menu-category__title";
-  heading.innerHTML = `
+
+  const toggle = document.createElement("button");
+  toggle.className = "menu-category__toggle";
+  toggle.type = "button";
+  toggle.setAttribute("aria-expanded", String(!isCollapsed));
+  toggle.setAttribute("aria-controls", `category-body-${category.id}`);
+  toggle.innerHTML = `
     <span class="menu-category__icon" aria-hidden="true">${category.icon}</span>
   `;
-  heading.append(localized(category.title));
+  toggle.append(localized(category.title));
+
+  const chevron = document.createElement("span");
+  chevron.className = "menu-category__chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = "⌄";
+  toggle.append(chevron);
+
+  heading.append(toggle);
+
+  const body = document.createElement("div");
+  body.className = "menu-category__body";
+  body.id = `category-body-${category.id}`;
+
+  const inner = document.createElement("div");
+  inner.className = "menu-category__inner";
 
   const list = document.createElement("ul");
   list.className = "menu-item-list";
   list.append(...category.items.map(createMenuItem));
 
-  section.append(heading, list);
+  inner.append(list);
+  body.append(inner);
+
+  toggle.addEventListener("click", () => {
+    const collapsed = section.classList.toggle("is-collapsed");
+
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+
+    if (collapsed) {
+      collapsedCategories.add(category.id);
+    } else {
+      collapsedCategories.delete(category.id);
+    }
+  });
+
+  section.append(heading, body);
 
   return section;
 }
@@ -206,12 +257,73 @@ function createCategoryChip(category) {
   chip.append(localized(category.title));
 
   chip.addEventListener("click", () => {
-    document
-      .querySelector(`#category-${category.id}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const section = document.querySelector(`#category-${category.id}`);
+
+    if (!section) return;
+
+    expandCategory(section);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   return chip;
+}
+
+// Lets mouse users drag the chip row sideways, like a touch swipe.
+function enableDragScroll(element) {
+  if (!element) return;
+
+  let activePointer = null;
+  let startX = 0;
+  let startScroll = 0;
+  let dragged = false;
+
+  element.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "mouse") return;
+
+    activePointer = event.pointerId;
+    startX = event.clientX;
+    startScroll = element.scrollLeft;
+    dragged = false;
+  });
+
+  element.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== activePointer) return;
+
+    const delta = event.clientX - startX;
+
+    if (!dragged && Math.abs(delta) > 4) {
+      dragged = true;
+      element.classList.add("is-dragging");
+      element.setPointerCapture(activePointer);
+    }
+
+    if (dragged) {
+      element.scrollLeft = startScroll - delta;
+    }
+  });
+
+  const endDrag = (event) => {
+    if (event.pointerId !== activePointer) return;
+
+    activePointer = null;
+    element.classList.remove("is-dragging");
+  };
+
+  element.addEventListener("pointerup", endDrag);
+  element.addEventListener("pointercancel", endDrag);
+
+  // Swallow the click that follows a drag so chips aren't activated.
+  element.addEventListener(
+    "click",
+    (event) => {
+      if (dragged) {
+        event.preventDefault();
+        event.stopPropagation();
+        dragged = false;
+      }
+    },
+    true
+  );
 }
 
 function renderMenu() {
@@ -275,6 +387,8 @@ function applyLanguage(lang) {
 if (portalLink && branchKey) {
   portalLink.href = `index.html?s=${branchKey}`;
 }
+
+enableDragScroll(categoryNav);
 
 languageToggle?.addEventListener("click", (event) => {
   event.stopPropagation();
