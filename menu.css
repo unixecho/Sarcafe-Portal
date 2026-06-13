@@ -6,6 +6,7 @@
 }
 
 .menu {
+  animation: fadeInUp 480ms var(--ease) both;
   width: min(100%, 560px);
   display: grid;
   gap: clamp(16px, 3.5svh, 26px);

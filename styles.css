@@ -78,6 +78,21 @@ button {
   font: inherit;
 }
 
+/* Animate navigation between the portal and the menu pages so moving
+   between them feels like one app, not leaving to another website. */
+@view-transition {
+  navigation: auto;
+}
+
+.page-shell {
+  transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+}
+
+body.is-navigating .page-shell {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 .page-shell {
   position: relative;
   min-height: 100vh;
@@ -263,6 +278,7 @@ button {
 /* Main layout */
 
 .portal {
+  animation: fadeInUp 480ms var(--ease) both;
   width: min(100%, 480px);
   min-height: min(760px, calc(100svh - 36px));
   display: flex;

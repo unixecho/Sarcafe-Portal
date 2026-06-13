@@ -212,11 +212,10 @@ const GIVAT_HAVIVA_CATEGORIES = [
     icon: "☕",
     title: { he: "קפה חם", en: "Hot Coffee", ar: "قهوة ساخنة" },
     items: [
-      { he: "אספרסו בודד", en: "Espresso Single", ar: "إسبريسو فردي", price: 8 },
+      { he: "מנת אספרסו", en: "Espresso Shot", ar: "إسبريسو فردي", price: 8 },
       { he: "אספרסו כפול", en: "Espresso Double", ar: "إسبريسو مزدوج", price: 11 },
       { he: "הפוך קטן", en: "Small Latte", ar: "لاتيه صغير", price: 13 },
       { he: "הפוך גדול", en: "Large Latte", ar: "لاتيه كبير", price: 15 },
-      { he: "הפוך חזק", en: "Strong Latte", ar: "لاتيه قوي", price: 15 },
       { he: "אמריקנו קטן", en: "Americano Small", ar: "أمريكانو صغير", price: 13 },
       { he: "אמריקנו גדול", en: "Americano Large", ar: "أمريكانو كبير", price: 15 },
       { he: "קפה שחור", en: "Black Coffee", ar: "قهوة سوداء", price: 8 },
@@ -271,7 +270,7 @@ const GIVAT_HAVIVA_CATEGORIES = [
       { he: "אייס וניל", en: "Iced Vanilla", ar: "آيس فانيلا", price: 16 },
       { he: "אייס שוקולד", en: "Iced Chocolate", ar: "آيس شوكولاتة", price: 16 },
       { he: "אמריקנו קר", en: "Cold Americano", ar: "أمريكانو بارد", price: 13 },
-      { he: "תה קר", en: "Iced Tea", ar: "شاي مثلج", price: 13 },
+      { he: "תה קר", en: "Iced Tea", ar: "شاي مثلج", price: 15 },
     ],
   },
 
@@ -306,7 +305,12 @@ const GIVAT_HAVIVA_CATEGORIES = [
           ar: "مصنوعة يدويًا — الجمعة والسبت",
         },
       },
-      { he: "ברעצל", en: "Pretzel", ar: "بريتزل", price: 15 },
+      {
+        he: "פרעצל / בייגלה",
+        en: "Pretzel / Beigale",
+        ar: "بريتزل / بيغلة",
+        price: 15,
+      },
     ],
   },
 

@@ -390,6 +390,19 @@ if (portalLink && branchKey) {
   portalLink.href = `index.html?s=${branchKey}`;
 }
 
+// Fade out before returning to the portal in browsers without native
+// cross-document view transitions, mirroring the portal's behavior.
+portalLink?.addEventListener("click", (event) => {
+  if ("startViewTransition" in document) return;
+
+  event.preventDefault();
+  document.body.classList.add("is-navigating");
+
+  window.setTimeout(() => {
+    window.location.href = portalLink.href;
+  }, 220);
+});
+
 enableDragScroll(categoryNav);
 
 languageToggle?.addEventListener("click", (event) => {
