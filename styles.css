@@ -45,7 +45,8 @@ body {
   overflow-x: hidden;
   color: var(--text);
   font-family:
-    Inter,
+    "Heebo",
+    "Noto Sans Arabic",
     ui-sans-serif,
     system-ui,
     -apple-system,
