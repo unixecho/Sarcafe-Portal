@@ -239,8 +239,13 @@ let languageCloseTimer = null;
 let navigationOptionsOpen = false;
 let paymentOptionsOpen = false;
 
+// Browsers with cross-document view transitions animate the page swap
+// natively (see @view-transition in styles.css); others get a JS fade.
+const supportsViewTransitions = "startViewTransition" in document;
+const NAVIGATE_FADE_MS = 220;
+
 const quickActions = [
-  { key: "menu", icon: "📖" },
+  { key: "menu", icon: "📖", internal: true },
   { key: "instagram", icon: "📸" },
   { key: "review", icon: "⭐" },
 ];
@@ -396,14 +401,20 @@ function createExternalLink({
   href,
   primary = false,
   ariaSuffix = "",
+  internal = false,
 }) {
   const link = document.createElement("a");
   const normalizedHref = normalizeUrl(href);
 
   link.className = `action-button${primary ? " action-button--primary" : ""}`;
   link.href = normalizedHref;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
+
+  // Internal pages open in the same tab so the portal and the menus
+  // feel like one app; only true external links leave to a new tab.
+  if (!internal) {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  }
 
   if (!isRealLink(href)) {
     link.addEventListener("click", (event) => event.preventDefault());
@@ -412,12 +423,27 @@ function createExternalLink({
     link.setAttribute("aria-label", `${label}: ${ariaSuffix}`);
   }
 
+  if (internal && isRealLink(href)) {
+    link.addEventListener("click", (event) => {
+      if (supportsViewTransitions) return;
+
+      event.preventDefault();
+      document.body.classList.add("is-navigating");
+
+      window.setTimeout(() => {
+        window.location.href = normalizedHref;
+      }, NAVIGATE_FADE_MS);
+    });
+  }
+
   link.innerHTML = `
     <span class="action-button__label">
       <span aria-hidden="true">${icon}</span>
       ${label}
     </span>
-    <span class="action-button__arrow" aria-hidden="true">↗</span>
+    <span class="action-button__arrow" aria-hidden="true">${
+      internal ? "→" : "↗"
+    }</span>
   `;
 
   return link;
@@ -513,6 +539,7 @@ function createActionLink(action, branch) {
     icon: action.icon,
     href: branch[action.key],
     primary: false,
+    internal: action.internal,
   });
 }
 
