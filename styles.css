@@ -54,12 +54,19 @@ body {
     "Segoe UI",
     Arial,
     sans-serif;
-  background:
-    var(--coffee-950)
-    url("background-placeholder.jpg")
-    center / cover
-    fixed
-    no-repeat;
+  /* Base color lives on <html>; an opaque body background would paint
+     over the fixed ::before image layer below. */
+  background: transparent;
+}
+
+/* The photo lives on a fixed layer instead of background-attachment:
+   fixed, which forces a full repaint on every scrolled frame. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: url("background-placeholder.png") center / cover no-repeat;
 }
 
 button,
@@ -593,11 +600,8 @@ html[dir="ltr"] .action-button__label {
 }
 
 @media (min-width: 760px), (orientation: landscape) {
-  body {
+  body::before {
     background-image: url("background-landscape.png");
-    background-size: cover;
-    background-position: center;
-    background-color: var(--coffee-950);
   }
 
   .portal {
