@@ -63,7 +63,7 @@ const MAOR_CATEGORIES = [
         },
       },
       {
-        he: "ברעצל עם נוטלה",
+        he: "פרעצל עם נוטלה",
         en: "Pretzel with Nutella",
         ar: "بريتزل مع نوتيلا",
         price: 20,
@@ -110,7 +110,6 @@ const MAOR_CATEGORIES = [
         ar: "ثلاثي الشوكولاتة",
         price: 12,
       },
-      { he: "סטרופוואפל", en: "Stroopwafel", ar: "ستروب وافل", price: 15 },
     ],
   },
 
