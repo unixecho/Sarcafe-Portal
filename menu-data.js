@@ -51,7 +51,17 @@ const MAOR_CATEGORIES = [
     title: { he: "מאפים", en: "Pastries", ar: "معجنات" },
     items: [
       { he: "מאפה גדול", en: "Large Pastry", ar: "معجنة كبيرة", price: 15 },
-      { he: "מאפה שווה", en: "Pastry Deal", ar: "معجنة بسعر مميز", price: 30 },
+      {
+        he: "מאפה שווה",
+        en: "Handmade Specialty Pastry",
+        ar: "معجنة مميزة مصنوعة يدويًا",
+        price: 30,
+        note: {
+          he: "בעבודת יד — שישי ושבת",
+          en: "Handmade — Fri & Sat",
+          ar: "مصنوعة يدويًا — الجمعة والسبت",
+        },
+      },
       {
         he: "ברעצל עם נוטלה",
         en: "Pretzel with Nutella",
@@ -196,6 +206,159 @@ const MAOR_CATEGORIES = [
   },
 ];
 
+const GIVAT_HAVIVA_CATEGORIES = [
+  {
+    id: "hotCoffee",
+    icon: "☕",
+    title: { he: "קפה חם", en: "Hot Coffee", ar: "قهوة ساخنة" },
+    items: [
+      { he: "אספרסו בודד", en: "Espresso Single", ar: "إسبريسو فردي", price: 8 },
+      { he: "אספרסו כפול", en: "Espresso Double", ar: "إسبريسو مزدوج", price: 11 },
+      { he: "הפוך קטן", en: "Small Latte", ar: "لاتيه صغير", price: 13 },
+      { he: "הפוך גדול", en: "Large Latte", ar: "لاتيه كبير", price: 15 },
+      { he: "הפוך חזק", en: "Strong Latte", ar: "لاتيه قوي", price: 15 },
+      { he: "אמריקנו קטן", en: "Americano Small", ar: "أمريكانو صغير", price: 13 },
+      { he: "אמריקנו גדול", en: "Americano Large", ar: "أمريكانو كبير", price: 15 },
+      { he: "קפה שחור", en: "Black Coffee", ar: "قهوة سوداء", price: 8 },
+      {
+        he: "חליטת צמחים מיוחדת",
+        en: "Special Herbal Tea",
+        ar: "شاي أعشاب مميز",
+        price: 15,
+      },
+      {
+        he: "תוספת חלב סויה",
+        en: "Soy Milk Add-On",
+        ar: "إضافة حليب الصويا",
+        price: 2,
+      },
+      {
+        he: "תוספת חלב שיבולת שועל",
+        en: "Oat Milk Add-On",
+        ar: "إضافة حليب الشوفان",
+        price: 2,
+      },
+    ],
+  },
+
+  {
+    id: "coldBeverages",
+    icon: "🧊",
+    title: { he: "שתייה קרה", en: "Cold Beverages", ar: "مشروبات باردة" },
+    items: [
+      {
+        he: "קפה קר",
+        en: "Cold Coffee",
+        ar: "قهوة باردة",
+        price: 16,
+        note: {
+          he: "קפה קר עם חלב וקרח",
+          en: "Cold coffee with milk and ice",
+          ar: "قهوة باردة مع حليب وثلج",
+        },
+      },
+      {
+        he: "אייס קפה",
+        en: "Blended Iced Coffee",
+        ar: "آيس كافيه",
+        price: 16,
+        note: {
+          he: "אייס קפה על בסיס תערובת, עם חלב ומים",
+          en: "Formula-based blended iced coffee with milk and water",
+          ar: "آيس كافيه على أساس خليط، مع حليب وماء",
+        },
+      },
+      { he: "אייס וניל", en: "Iced Vanilla", ar: "آيس فانيلا", price: 16 },
+      { he: "אייס שוקולד", en: "Iced Chocolate", ar: "آيس شوكولاتة", price: 16 },
+      { he: "אמריקנו קר", en: "Cold Americano", ar: "أمريكانو بارد", price: 13 },
+      { he: "תה קר", en: "Iced Tea", ar: "شاي مثلج", price: 13 },
+    ],
+  },
+
+  {
+    id: "sandwiches",
+    icon: "🥪",
+    title: {
+      he: "כריכים וטוסטים",
+      en: "Sandwiches & Toasts",
+      ar: "ساندويتشات وتوست",
+    },
+    items: [
+      { he: "כריכים", en: "Sandwiches", ar: "ساندويتشات", price: 24 },
+      { he: "טוסטים", en: "Toasts", ar: "توست", price: 32 },
+    ],
+  },
+
+  {
+    id: "pastries",
+    icon: "🥐",
+    title: { he: "מאפים", en: "Pastries", ar: "معجنات" },
+    items: [
+      { he: "מאפה רגיל", en: "Regular Pastry", ar: "معجنة عادية", price: 15 },
+      {
+        he: "מאפה שווה",
+        en: "Handmade Specialty Pastry",
+        ar: "معجنة مميزة مصنوعة يدويًا",
+        price: 30,
+        note: {
+          he: "בעבודת יד — שישי ושבת",
+          en: "Handmade — Fri & Sat",
+          ar: "مصنوعة يدويًا — الجمعة والسبت",
+        },
+      },
+      { he: "ברעצל", en: "Pretzel", ar: "بريتزل", price: 15 },
+    ],
+  },
+
+  {
+    id: "pizza",
+    icon: "🍕",
+    title: { he: "פיצה", en: "Pizza", ar: "بيتزا" },
+    items: [
+      { he: "פיצה אישית", en: "Personal Pizza", ar: "بيتزا شخصية", price: 30 },
+      { he: "פיצה גדולה", en: "Large Pizza", ar: "بيتزا كبيرة", price: 45 },
+    ],
+  },
+
+  {
+    id: "softDrinks",
+    icon: "🥤",
+    title: { he: "שתייה קלה", en: "Soft Drinks", ar: "مشروبات غازية" },
+    items: [
+      { he: "פחית שתייה", en: "Soda Can", ar: "علبة مشروب غازي", price: 10 },
+      { he: "פיוז טי", en: "Fuze Tea", ar: "فيوز تي", price: 12 },
+      {
+        he: "מיץ תפוזים פריגת",
+        en: "Prigat Orange Juice",
+        ar: "عصير برتقال بريغات",
+        price: 12,
+      },
+      { he: "סודה", en: "Soda Water", ar: "صودا", price: 8 },
+      { he: "מים", en: "Water", ar: "مياه", price: 8 },
+    ],
+  },
+
+  {
+    id: "iceCream",
+    icon: "🍦",
+    title: { he: "גלידות", en: "Ice Cream", ar: "مثلجات" },
+    items: [
+      { he: "ארטיק קרח", en: "Ice Popsicle", ar: "مصاصة ثلج", price: 5 },
+      { he: "לה פרוטה", en: "La Fruita", ar: "لا فروتا", price: 10 },
+      { he: "גומיגם", en: "Gummy Gum", ar: "غومي غام", price: 10 },
+      {
+        he: "קראנץ' נוגט נסטלה",
+        en: "Nestlé Crunch Nougat",
+        ar: "كرانش نوغا نستله",
+        price: 14,
+      },
+      { he: "מילקה", en: "Milka", ar: "ميلكا", price: 14 },
+      { he: "קורנטו", en: "Cornetto", ar: "كورنيتو", price: "14/16" },
+      { he: "גלידת אוראו", en: "Oreo Ice Cream", ar: "بوظة أوريو", price: 14 },
+    ],
+  },
+];
+
 const MENUS = {
   maor: {
     name: {
@@ -206,15 +369,12 @@ const MENUS = {
     categories: MAOR_CATEGORIES,
   },
 
-  // Placeholder: the Giv'at Haviva menu uses the Maor list until the
-  // branch's own menu is provided. Replace `categories` with its own
-  // array when it arrives.
   givatHaviva: {
     name: {
       he: "גבעת חביבה",
       en: "Givat Haviva",
       ar: "جفعات حبيبة",
     },
-    categories: MAOR_CATEGORIES,
+    categories: GIVAT_HAVIVA_CATEGORIES,
   },
 };
