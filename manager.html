@@ -30,12 +30,67 @@
       <div class="background-overlay" aria-hidden="true"></div>
 
       <main class="manager">
+        <!-- Step 0: login gate -->
+        <section class="panel login-panel" id="login" aria-labelledby="loginTitle">
+          <header class="brand" aria-label="Sarcafe">
+            <img
+              class="brand__logo"
+              src="logo-placeholder.png"
+              alt="Sarcafe logo"
+            />
+          </header>
+
+          <p class="eyebrow">אזור ניהול</p>
+          <h1 id="loginTitle">כניסת מנהל</h1>
+          <p class="panel__text">יש להתחבר כדי לערוך את התפריטים.</p>
+
+          <form class="login-form" id="loginForm" novalidate>
+            <label class="m-field">
+              <span class="m-field__label">שם משתמש</span>
+              <input
+                class="m-input"
+                id="loginUser"
+                type="text"
+                name="username"
+                autocomplete="username"
+                dir="ltr"
+                required
+              />
+            </label>
+
+            <label class="m-field">
+              <span class="m-field__label">סיסמה</span>
+              <input
+                class="m-input"
+                id="loginPass"
+                type="password"
+                name="password"
+                autocomplete="current-password"
+                dir="ltr"
+                required
+              />
+            </label>
+
+            <p class="login-error" id="loginError" role="alert" hidden>
+              שם משתמש או סיסמה שגויים
+            </p>
+
+            <button class="m-btn m-btn--primary login-submit" type="submit">
+              כניסה
+            </button>
+          </form>
+        </section>
+
         <!-- Step 1: choose a branch -->
         <section
-          class="panel branch-panel"
+          class="panel branch-panel is-hidden"
           id="branchSelect"
           aria-labelledby="managerTitle"
         >
+          <button class="m-link logout-link" id="logoutBtn" type="button">
+            ← התנתקות
+          </button>
+
           <header class="brand" aria-label="Sarcafe">
             <img
               class="brand__logo"
