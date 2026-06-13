@@ -31,6 +31,21 @@ const PREVIEW_PAGES = {
   givatHaviva: "menu-givat-haviva.html",
 };
 
+// Client-side login gate. NOTE: this is a static site with no backend, so this
+// only keeps casual users out of the UI — anyone who reads this file or edits
+// their storage can get past it. The password is kept as a SHA-256 hash so the
+// plaintext never lives in the repo. Replace with real auth (a backend) later.
+const ADMIN_USER = "sarcafeadmin";
+const ADMIN_PASS_HASH =
+  "9ea00e3564457eb83e4f86271aaf9a61e54d5642f415441f289910008e7808ca";
+const AUTH_KEY = "sarcafe-admin-auth";
+
+const loginSection = document.querySelector("#login");
+const loginForm = document.querySelector("#loginForm");
+const loginUser = document.querySelector("#loginUser");
+const loginPass = document.querySelector("#loginPass");
+const loginError = document.querySelector("#loginError");
+
 const branchSelect = document.querySelector("#branchSelect");
 const branchButtons = document.querySelector("#branchButtons");
 const editor = document.querySelector("#editor");
@@ -70,6 +85,75 @@ function flash(message) {
 
   window.clearTimeout(flashTimer);
   flashTimer = window.setTimeout(updateStatus, 1600);
+}
+
+// --- Auth -----------------------------------------------------------------
+
+async function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function isAuthed() {
+  try {
+    return sessionStorage.getItem(AUTH_KEY) === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function showLogin() {
+  loginSection.classList.remove("is-hidden");
+  branchSelect.classList.add("is-hidden");
+  editor.classList.add("is-hidden");
+  loginUser?.focus();
+}
+
+function showAuthedView() {
+  loginSection.classList.add("is-hidden");
+  editor.classList.add("is-hidden");
+  branchSelect.classList.remove("is-hidden");
+  renderBranchSelect();
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const user = loginUser.value.trim();
+  const hash = await sha256Hex(loginPass.value);
+
+  if (user === ADMIN_USER && hash === ADMIN_PASS_HASH) {
+    try {
+      sessionStorage.setItem(AUTH_KEY, "1");
+    } catch (error) {
+      // Session storage unavailable; the session just won't persist.
+    }
+
+    loginError.hidden = true;
+    loginPass.value = "";
+    showAuthedView();
+  } else {
+    loginError.hidden = false;
+    loginPass.select();
+  }
+}
+
+function logout() {
+  if (dirty && !window.confirm(STRINGS.confirmLeave)) return;
+
+  try {
+    sessionStorage.removeItem(AUTH_KEY);
+  } catch (error) {
+    // Nothing to clear.
+  }
+
+  currentBranch = null;
+  draft = null;
+  dirty = false;
+  showLogin();
 }
 
 // --- Small builders -------------------------------------------------------
@@ -512,6 +596,9 @@ function preview() {
 
 // --- Wiring ---------------------------------------------------------------
 
+loginForm?.addEventListener("submit", handleLogin);
+document.querySelector("#logoutBtn")?.addEventListener("click", logout);
+
 document.querySelector("#backBtn")?.addEventListener("click", backToBranches);
 document.querySelector("#saveBtn")?.addEventListener("click", save);
 document.querySelector("#previewBtn")?.addEventListener("click", preview);
@@ -527,4 +614,8 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
-renderBranchSelect();
+if (isAuthed()) {
+  showAuthedView();
+} else {
+  showLogin();
+}

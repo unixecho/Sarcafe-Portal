@@ -16,6 +16,44 @@
   display: none !important;
 }
 
+/* Login */
+
+.login-panel {
+  width: min(100%, 420px);
+  margin: auto;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.login-form .m-field__label {
+  font-size: 0.78rem;
+}
+
+.login-form .m-input {
+  min-height: 48px;
+}
+
+.login-submit {
+  margin-top: 4px;
+  width: 100%;
+  min-height: 50px;
+}
+
+.login-error {
+  margin: 0;
+  color: #ffb4a8;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.logout-link {
+  margin: -4px 0 10px;
+}
+
 /* Toolbar */
 
 .manager-editor {
