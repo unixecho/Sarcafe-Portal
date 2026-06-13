@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2a1d17" />
+    <meta
+      name="description"
+      content="התפריט הדיגיטלי של Sarcafe: קטגוריות, פריטים ומחירים."
+    />
+    <title>Sarcafe גבעת חביבה | תפריט דיגיטלי</title>
+
+    <link rel="icon" href="favicon-placeholder.ico" sizes="any" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="menu.css" />
+  </head>
+
+  <body data-branch="givatHaviva">
+    <div class="page-shell menu-shell">
+      <div class="background-overlay" aria-hidden="true"></div>
+
+      <nav class="language-switcher" aria-label="בחירת שפה">
+        <button
+          class="language-toggle"
+          id="languageToggle"
+          type="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-controls="languageMenu"
+        >
+          <span aria-hidden="true">🌐</span>
+          <span class="sr-only" data-i18n="languageButton">בחירת שפה</span>
+        </button>
+
+        <div
+          class="language-menu"
+          id="languageMenu"
+          role="menu"
+          aria-label="בחירת שפה"
+          hidden
+        >
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="he"
+          >
+            עברית
+          </button>
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="en"
+          >
+            English
+          </button>
+          <button
+            class="language-option"
+            type="button"
+            role="menuitem"
+            data-lang="ar"
+          >
+            العربية
+          </button>
+        </div>
+      </nav>
+
+      <a
+        class="portal-link"
+        id="portalLink"
+        href="index.html?s=givatHaviva"
+        data-i18n-aria-label="backToPortalAria"
+        aria-label="חזרה לפורטל Sarcafe"
+      >
+        <span aria-hidden="true">🏠</span>
+      </a>
+
+      <main class="menu">
+        <header class="menu-header">
+          <img
+            class="brand__logo"
+            src="logo-placeholder.png"
+            alt="Sarcafe logo"
+          />
+          <p class="eyebrow" data-i18n="eyebrow">תפריט דיגיטלי</p>
+          <h1 id="menuTitle">גבעת חביבה</h1>
+          <p class="panel__text" data-i18n="viewOnly">
+            התפריט לתצוגה בלבד — מזמינים ומשלמים בדוכן.
+          </p>
+        </header>
+
+        <nav
+          class="category-nav"
+          id="categoryNav"
+          data-i18n-aria-label="categoriesAria"
+          aria-label="קטגוריות בתפריט"
+        ></nav>
+
+        <div id="menuSections"></div>
+
+        <footer class="menu-footer">
+          <p data-i18n="footerNote">המחירים בשקלים חדשים וכוללים מע"מ.</p>
+        </footer>
+      </main>
+    </div>
+
+    <script src="menu-data.js" defer></script>
+    <script src="menu.js" defer></script>
+  </body>
+</html>
