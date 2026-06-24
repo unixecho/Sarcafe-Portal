@@ -30,8 +30,10 @@
       <div class="background-overlay" aria-hidden="true"></div>
 
       <main class="manager">
-        <!-- Step 0: login gate -->
-        <section class="panel login-panel" id="login" aria-labelledby="loginTitle">
+        <!-- Shown briefly while we check for a Supabase session, and if the
+             check fails (e.g. config.js missing). Real login lives at
+             login.html — unauthenticated visitors get redirected there. -->
+        <section class="panel login-panel" id="checkingAuth" aria-live="polite">
           <header class="brand" aria-label="Sarcafe">
             <img
               class="brand__logo"
@@ -39,46 +41,9 @@
               alt="Sarcafe logo"
             />
           </header>
-
           <p class="eyebrow">אזור ניהול</p>
-          <h1 id="loginTitle">כניסת מנהל</h1>
-          <p class="panel__text">יש להתחבר כדי לערוך את התפריטים.</p>
-
-          <form class="login-form" id="loginForm" novalidate>
-            <label class="m-field">
-              <span class="m-field__label">שם משתמש</span>
-              <input
-                class="m-input"
-                id="loginUser"
-                type="text"
-                name="username"
-                autocomplete="username"
-                dir="ltr"
-                required
-              />
-            </label>
-
-            <label class="m-field">
-              <span class="m-field__label">סיסמה</span>
-              <input
-                class="m-input"
-                id="loginPass"
-                type="password"
-                name="password"
-                autocomplete="current-password"
-                dir="ltr"
-                required
-              />
-            </label>
-
-            <p class="login-error" id="loginError" role="alert" hidden>
-              שם משתמש או סיסמה שגויים
-            </p>
-
-            <button class="m-btn m-btn--primary login-submit" type="submit">
-              כניסה
-            </button>
-          </form>
+          <h1>בודק התחברות…</h1>
+          <p class="panel__text" id="checkingAuthText">רגע אחד.</p>
         </section>
 
         <!-- Step 1: choose a branch -->
@@ -101,7 +66,7 @@
 
           <p class="eyebrow">ניהול תפריטים</p>
           <h1 id="managerTitle">מנהל התפריט</h1>
-          <p class="panel__text">בחרו סניף כדי לערוך את התפריט שלו.</p>
+          <p class="panel__text" id="whoami"></p>
 
           <div
             class="branch-grid"
@@ -131,14 +96,14 @@
                 ייצוא
               </button>
               <button class="m-btn m-btn--danger" id="resetBtn" type="button">
-                איפוס
+                ביטול שינויים
               </button>
             </div>
           </div>
 
           <p class="manager-hint">
-            השינויים נשמרים במכשיר זה. כדי לפרסם אותם לכל הלקוחות יש לייצא את
-            הקובץ ולשמור אותו ב־menu-data.js שבמאגר.
+            השינויים נשמרים מיידית לכל הלקוחות (Supabase) ברגע שלוחצים
+            "שמירה". "ביטול שינויים" טוען מחדש את הגרסה האחרונה שנשמרה.
           </p>
 
           <div id="categories"></div>
@@ -150,7 +115,8 @@
       </main>
     </div>
 
-    <script src="menu-data.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="config.js"></script>
     <script src="menu-store.js" defer></script>
     <script src="manager.js" defer></script>
   </body>
