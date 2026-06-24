@@ -37,7 +37,7 @@ const PREVIEW_PAGES = {
 // plaintext never lives in the repo. Replace with real auth (a backend) later.
 const ADMIN_USER = "sarcafeadmin";
 const ADMIN_PASS_HASH =
-  "saridaniadmin2026";
+  "dec5b56a67ebd70c86d0df556a077ce0fb308781f0f822ac23854fc24a36a3b";
 const AUTH_KEY = "sarcafe-admin-auth";
 
 const loginSection = document.querySelector("#login");
