@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2a1d17" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Sarcafe | כניסת מנהל</title>
+
+    <link rel="icon" href="favicon-placeholder.ico" sizes="any" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@100..900&family=Noto+Sans+Arabic:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="manager.css" />
+  </head>
+
+  <body>
+    <div class="page-shell manager-shell">
+      <div class="background-overlay" aria-hidden="true"></div>
+
+      <main class="manager">
+        <section class="panel login-panel" id="login" aria-labelledby="loginTitle">
+          <header class="brand" aria-label="Sarcafe">
+            <img
+              class="brand__logo"
+              src="logo-placeholder.png"
+              alt="Sarcafe logo"
+            />
+          </header>
+
+          <p class="eyebrow">אזור ניהול</p>
+          <h1 id="loginTitle">כניסת מנהל</h1>
+          <p class="panel__text">
+            הזן את כתובת האימייל שלך ונשלח לך לינק התחברות חד-פעמי.
+          </p>
+
+          <form class="login-form" id="loginForm" novalidate>
+            <label class="m-field">
+              <span class="m-field__label">אימייל</span>
+              <input
+                class="m-input"
+                id="loginEmail"
+                type="email"
+                name="email"
+                autocomplete="email"
+                dir="ltr"
+                placeholder="you@example.com"
+                required
+              />
+            </label>
+
+            <button
+              class="m-btn m-btn--primary login-submit"
+              id="submitBtn"
+              type="submit"
+            >
+              שליחת לינק התחברות
+            </button>
+          </form>
+
+          <p class="login-status" id="status" role="status"></p>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="config.js"></script>
+    <script>
+      (function () {
+        "use strict";
+
+        var statusEl = document.getElementById("status");
+        var submitBtn = document.getElementById("submitBtn");
+
+        function setStatus(msg, color) {
+          statusEl.textContent = msg || "";
+          statusEl.style.color = color || "";
+        }
+
+        if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+          setStatus("config.js לא הוגדר עדיין — מלא את פרטי ה-Supabase שם.", "var(--err, #ff6b6b)");
+          submitBtn.disabled = true;
+          return;
+        }
+
+        var supabase = window.supabase.createClient(
+          window.SUPABASE_URL,
+          window.SUPABASE_ANON_KEY
+        );
+
+        var managerUrl = new URL("manager.html", window.location.href).toString();
+
+        // Already signed in, or just followed the magic link back -> go straight in.
+        supabase.auth.getSession().then(function (res) {
+          if (res.data && res.data.session) window.location.replace(managerUrl);
+        });
+
+        supabase.auth.onAuthStateChange(function (event, session) {
+          if (session) window.location.replace(managerUrl);
+        });
+
+        document
+          .getElementById("loginForm")
+          .addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            var email = document.getElementById("loginEmail").value.trim();
+            if (!email) return;
+
+            submitBtn.disabled = true;
+            setStatus("שולח…");
+
+            var { error } = await supabase.auth.signInWithOtp({
+              email: email,
+              options: { emailRedirectTo: managerUrl },
+            });
+
+            submitBtn.disabled = false;
+
+            if (error) {
+              setStatus("שגיאה: " + error.message, "var(--err, #ff6b6b)");
+              return;
+            }
+
+            setStatus("נשלח! בדוק את תיבת המייל שלך ולחץ על הלינק.", "var(--ok, #4ade80)");
+          });
+      })();
+    </script>
+  </body>
+</html>
