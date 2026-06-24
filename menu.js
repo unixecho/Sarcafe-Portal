@@ -66,9 +66,7 @@ const menuTranslations = {
 };
 
 const branchKey = document.body.dataset.branch;
-const branchMenu = window.SarcafeMenu
-  ? SarcafeMenu.getMenu(branchKey)
-  : MENUS[branchKey];
+let branchMenu = null;
 
 const menuTitle = document.querySelector("#menuTitle");
 const categoryNav = document.querySelector("#categoryNav");
@@ -444,4 +442,18 @@ if (languageToggle) {
   languageToggle.classList.remove("is-open");
 }
 
-applyLanguage(currentLanguage);
+async function init() {
+  try {
+    branchMenu = window.SarcafeMenu
+      ? await SarcafeMenu.getMenu(branchKey)
+      : MENUS[branchKey];
+  } catch (error) {
+    // Network/Supabase error — fall back to an empty menu rather than a
+    // blank crash; the categories list will just render empty.
+    branchMenu = null;
+  }
+
+  applyLanguage(currentLanguage);
+}
+
+init();
