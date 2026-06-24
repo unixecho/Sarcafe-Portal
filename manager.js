@@ -1,8 +1,9 @@
 "use strict";
 
 // Menu manager. Edits a working copy of a branch's menu and saves it through
-// SarcafeMenu (localStorage). Display-only menus read the same store, so the
-// preview reflects edits on this device. Export downloads the data to commit.
+// SarcafeMenu, which talks to Supabase. Auth is handled by Supabase Auth
+// (magic-link email) — see login.html. Anyone without a valid session is
+// redirected there immediately.
 
 const STRINGS = {
   moveUp: "הזזה למעלה",
@@ -22,8 +23,10 @@ const STRINGS = {
   editLabel: "עריכת תפריט",
   confirmDeleteCategory: "למחוק את הקטגוריה וכל הפריטים שבה?",
   confirmReset:
-    "לאפס את התפריט לברירת המחדל? כל השינויים שנשמרו במכשיר זה יימחקו.",
+    "לטעון מחדש את הגרסה האחרונה שנשמרה? כל השינויים שלא נשמרו יימחקו.",
   confirmLeave: "יש שינויים שלא נשמרו. לעזוב בכל זאת?",
+  saveError: "שגיאה בשמירה",
+  loadError: "שגיאה בטעינת התפריט",
 };
 
 const PREVIEW_PAGES = {
@@ -31,32 +34,21 @@ const PREVIEW_PAGES = {
   givatHaviva: "menu-givat-haviva.html",
 };
 
-// Client-side login gate. NOTE: this is a static site with no backend, so this
-// only keeps casual users out of the UI — anyone who reads this file or edits
-// their storage can get past it. The password is kept as a SHA-256 hash so the
-// plaintext never lives in the repo. Replace with real auth (a backend) later.
-const ADMIN_USER = "sarcafeadmin";
-const ADMIN_PASS_HASH =
-  "dec5b56a67ebd70c86d0df556a077ce0fb308781f0f822ac23854fc24a36a3b";
-const AUTH_KEY = "sarcafe-admin-auth";
-
-const loginSection = document.querySelector("#login");
-const loginForm = document.querySelector("#loginForm");
-const loginUser = document.querySelector("#loginUser");
-const loginPass = document.querySelector("#loginPass");
-const loginError = document.querySelector("#loginError");
-
+const checkingAuthSection = document.querySelector("#checkingAuth");
+const checkingAuthText = document.querySelector("#checkingAuthText");
 const branchSelect = document.querySelector("#branchSelect");
 const branchButtons = document.querySelector("#branchButtons");
 const editor = document.querySelector("#editor");
 const editorTitle = document.querySelector("#editorTitle");
 const categoriesEl = document.querySelector("#categories");
 const statusEl = document.querySelector("#status");
+const whoamiEl = document.querySelector("#whoami");
 
 let currentBranch = null;
 let draft = null;
 let dirty = false;
 let flashTimer = null;
+let supabaseClient = null;
 
 function markDirty() {
   dirty = true;
@@ -72,91 +64,69 @@ function updateStatus() {
     return;
   }
 
-  const saved = currentBranch && SarcafeMenu.hasOverride(currentBranch);
-  statusEl.textContent = saved ? "נשמר במכשיר זה" : "ברירת מחדל";
+  statusEl.textContent = "נשמר";
   statusEl.className = "manager-status";
 }
 
-function flash(message) {
+function flash(message, isError = false) {
   if (!statusEl) return;
 
   statusEl.textContent = message;
-  statusEl.className = "manager-status is-ok";
+  statusEl.className = isError ? "manager-status is-error" : "manager-status is-ok";
 
   window.clearTimeout(flashTimer);
   flashTimer = window.setTimeout(updateStatus, 1600);
 }
 
-// --- Auth -----------------------------------------------------------------
-
-async function sha256Hex(text) {
-  const data = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function isAuthed() {
-  try {
-    return sessionStorage.getItem(AUTH_KEY) === "1";
-  } catch (error) {
-    return false;
-  }
-}
-
-function showLogin() {
-  loginSection.classList.remove("is-hidden");
-  branchSelect.classList.add("is-hidden");
-  editor.classList.add("is-hidden");
-  loginUser?.focus();
-}
+// --- Auth -------------------------------------------------------------
 
 function showAuthedView() {
-  loginSection.classList.add("is-hidden");
+  checkingAuthSection.classList.add("is-hidden");
   editor.classList.add("is-hidden");
   branchSelect.classList.remove("is-hidden");
   renderBranchSelect();
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-
-  const user = loginUser.value.trim();
-  const hash = await sha256Hex(loginPass.value);
-
-  if (user === ADMIN_USER && hash === ADMIN_PASS_HASH) {
-    try {
-      sessionStorage.setItem(AUTH_KEY, "1");
-    } catch (error) {
-      // Session storage unavailable; the session just won't persist.
-    }
-
-    loginError.hidden = true;
-    loginPass.value = "";
-    showAuthedView();
-  } else {
-    loginError.hidden = false;
-    loginPass.select();
-  }
-}
-
-function logout() {
+async function logout() {
   if (dirty && !window.confirm(STRINGS.confirmLeave)) return;
 
-  try {
-    sessionStorage.removeItem(AUTH_KEY);
-  } catch (error) {
-    // Nothing to clear.
-  }
-
-  currentBranch = null;
-  draft = null;
-  dirty = false;
-  showLogin();
+  await supabaseClient.auth.signOut();
+  window.location.href = "login.html";
 }
 
-// --- Small builders -------------------------------------------------------
+async function boot() {
+  if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+    checkingAuthText.textContent =
+      "config.js לא הוגדר עדיין — מלא את פרטי ה-Supabase שם.";
+    return;
+  }
+
+  supabaseClient = window.supabase.createClient(
+    window.SUPABASE_URL,
+    window.SUPABASE_ANON_KEY
+  );
+
+  const { data: sessionRes } = await supabaseClient.auth.getSession();
+  const session = sessionRes && sessionRes.session;
+
+  if (!session) {
+    window.location.href = "login.html";
+    return;
+  }
+
+  whoamiEl.textContent = session.user.email || "";
+
+  try {
+    await SarcafeMenu.primeBranches();
+  } catch (error) {
+    checkingAuthText.textContent = STRINGS.loadError + ": " + error.message;
+    return;
+  }
+
+  showAuthedView();
+}
+
+// --- Small builders -----------------------------------------------------
 
 function ctrlButton(glyph, label, onClick, disabled = false, variant = "") {
   const button = document.createElement("button");
@@ -432,9 +402,21 @@ function renderNoteSection(item) {
 
 // --- Mutations ------------------------------------------------------------
 
-function selectBranch(key) {
+async function selectBranch(key) {
   currentBranch = key;
-  draft = SarcafeMenu.getMenu(key);
+
+  try {
+    draft = await SarcafeMenu.getMenu(key);
+  } catch (error) {
+    flash(STRINGS.loadError + ": " + error.message, true);
+    return;
+  }
+
+  if (!draft) {
+    flash(STRINGS.loadError, true);
+    return;
+  }
+
   dirty = false;
 
   editorTitle.textContent = draft.name?.he || key;
@@ -455,6 +437,7 @@ function backToBranches() {
 
   editor.classList.add("is-hidden");
   branchSelect.classList.remove("is-hidden");
+  renderBranchSelect();
 }
 
 function moveCategory(index, direction) {
@@ -555,18 +538,31 @@ function buildPayload() {
   return payload;
 }
 
-function save() {
-  SarcafeMenu.saveMenu(currentBranch, buildPayload());
+async function save() {
+  const payload = buildPayload();
+
+  try {
+    await SarcafeMenu.saveMenu(currentBranch, payload);
+  } catch (error) {
+    flash(STRINGS.saveError + ": " + error.message, true);
+    return;
+  }
+
   dirty = false;
   updateStatus();
   flash(STRINGS.saved);
 }
 
-function resetToDefault() {
+async function resetToDefault() {
   if (!window.confirm(STRINGS.confirmReset)) return;
 
-  SarcafeMenu.resetMenu(currentBranch);
-  draft = SarcafeMenu.getDefaultMenu(currentBranch);
+  try {
+    draft = await SarcafeMenu.resetMenu(currentBranch);
+  } catch (error) {
+    flash(STRINGS.loadError + ": " + error.message, true);
+    return;
+  }
+
   dirty = false;
   renderCategories();
   updateStatus();
@@ -588,17 +584,15 @@ function exportJson() {
   flash(STRINGS.exported);
 }
 
-function preview() {
-  // The menu page reads from storage, so persist first.
-  save();
+async function preview() {
+  // The public menu page reads from Supabase, so persist first.
+  await save();
   window.open(PREVIEW_PAGES[currentBranch] || "index.html", "_blank");
 }
 
 // --- Wiring ---------------------------------------------------------------
 
-loginForm?.addEventListener("submit", handleLogin);
 document.querySelector("#logoutBtn")?.addEventListener("click", logout);
-
 document.querySelector("#backBtn")?.addEventListener("click", backToBranches);
 document.querySelector("#saveBtn")?.addEventListener("click", save);
 document.querySelector("#previewBtn")?.addEventListener("click", preview);
@@ -614,8 +608,4 @@ window.addEventListener("beforeunload", (event) => {
   event.returnValue = "";
 });
 
-if (isAuthed()) {
-  showAuthedView();
-} else {
-  showLogin();
-}
+boot();
