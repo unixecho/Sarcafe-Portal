@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>סארקפה · כרטיסי מתנה</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+:root{--paper:#F6EFE3;--paper-dark:#ECE1CB;--ink:#2B1B12;--ink-soft:#6B5B4C;--copper:#C9722C;--copper-dark:#A85A1E;--pine:#1F6E5C;--rust:#B23A2E;--gold:#B08D57;--white:#FFFDF8;--ease:cubic-bezier(.22,.61,.36,1);}
+*{box-sizing:border-box;}html,body{margin:0;padding:0;}body.gc-body{background:var(--paper);background-image:radial-gradient(circle at 1px 1px, rgba(43,27,18,0.05) 1px, transparent 0);background-size:22px 22px;color:var(--ink);font-family:'Assistant',sans-serif;min-height:100vh;padding-bottom:60px;}
+.mono{font-family:'JetBrains Mono',monospace;}h1,h2,h3,.display{font-family:'Frank Ruhl Libre',serif;margin:0;}
+.gc-page{animation:gcEnter .38s var(--ease) both;}.gc-page.gc-leaving{animation:gcLeave .18s var(--ease) both;}
+@keyframes gcEnter{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}@keyframes gcLeave{from{opacity:1;transform:translateY(0);}to{opacity:0;transform:translateY(-8px);}}
+@media (prefers-reduced-motion:reduce){.gc-page,.gc-page.gc-leaving{animation:none;}}
+.gc-header{max-width:760px;margin:0 auto;padding:22px 20px 4px;}.gc-eyebrow{font-size:12px;letter-spacing:.14em;color:var(--copper-dark);font-weight:700;text-transform:uppercase;display:flex;align-items:center;gap:8px;}.gc-eyebrow::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--copper);display:inline-block;}.gc-header h1{font-size:28px;font-weight:900;margin-top:6px;}.gc-header p{margin:6px 0 0;color:var(--ink-soft);font-size:14.5px;}
+.gc-back{display:inline-flex;align-items:center;gap:4px;color:var(--ink-soft);text-decoration:none;font-size:13px;font-weight:600;margin-bottom:10px;cursor:pointer;}.gc-back:hover{color:var(--copper-dark);}
+.gc-demo-banner{max-width:760px;margin:0 auto 10px;background:#FFF3D6;border:1px solid var(--gold);color:#7A5A20;padding:8px 14px;border-radius:8px;font-size:12.5px;text-align:center;}
+main.gc-main{max-width:760px;margin:0 auto;padding:18px 20px 0;}
+.gc-panel{background:var(--white);border:1px solid var(--gold);border-radius:16px;padding:22px;margin-bottom:18px;box-shadow:0 2px 0 rgba(176,141,87,.15);transition:box-shadow .2s var(--ease);}.gc-panel h2{font-size:20px;margin-bottom:4px;}.gc-panel .gc-sub{color:var(--ink-soft);font-size:13.5px;margin-bottom:18px;}
+label.gc-label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:5px;}.gc-field{margin-bottom:14px;}.gc-field input[type=text],.gc-field input[type=email],.gc-field input[type=tel]{width:100%;padding:11px 13px;border-radius:9px;border:1.5px solid #DDD0BA;background:var(--paper);font-family:'Assistant',sans-serif;font-size:15px;color:var(--ink);transition:border-color .15s, box-shadow .15s;}.gc-field input:focus{outline:none;border-color:var(--copper);box-shadow:0 0 0 3px rgba(201,114,44,.18);}
+.gc-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.gc-amount-picks{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}.gc-amount-pick{padding:9px 16px;border-radius:9px;border:1.5px solid var(--gold);background:var(--paper);cursor:pointer;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink);transition:all .15s var(--ease);}.gc-amount-pick:hover{transform:translateY(-1px);border-color:var(--copper);}.gc-amount-pick.selected{background:var(--copper);border-color:var(--copper);color:var(--white);}
+.gc-hint{font-size:12.5px;color:var(--ink-soft);margin-top:4px;}
+.gc-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 22px;border-radius:11px;border:none;font-weight:700;font-size:14.5px;cursor:pointer;font-family:'Assistant',sans-serif;transition:transform .12s var(--ease), box-shadow .18s var(--ease), background .18s;will-change:transform;}.gc-btn:active{transform:scale(.96);}.gc-btn::after{content:"";position:absolute;inset:0;border-radius:inherit;background:radial-gradient(circle at var(--x,50%) var(--y,50%), rgba(255,255,255,.35) 0%, transparent 60%);opacity:0;transition:opacity .35s;}.gc-btn:hover::after{opacity:1;}
+.gc-btn-primary{background:var(--copper);color:var(--white);box-shadow:0 3px 0 var(--copper-dark);}.gc-btn-primary:hover{transform:translateY(-1px);box-shadow:0 5px 10px rgba(168,90,30,.35),0 3px 0 var(--copper-dark);}
+.gc-btn-bit{background:#FF9900;color:#1a1a1a;box-shadow:0 3px 0 #C77400;}.gc-btn-bit:hover{transform:translateY(-1px);box-shadow:0 5px 10px rgba(199,116,0,.35),0 3px 0 #C77400;}
+.gc-btn-ghost{background:transparent;border:1.5px solid var(--gold);color:var(--ink);}.gc-btn-ghost:hover{background:var(--paper-dark);}
+.gc-btn-approve{background:var(--pine);color:var(--white);box-shadow:0 3px 0 #144539;}.gc-btn-approve:hover{transform:translateY(-1px);}
+.gc-btn-deny{background:var(--rust);color:var(--white);box-shadow:0 3px 0 #7E2A20;}.gc-btn-deny:hover{transform:translateY(-1px);}
+.gc-btn-sm{padding:8px 14px;font-size:13px;border-radius:9px;box-shadow:none !important;}.gc-btn:disabled{opacity:.4;cursor:not-allowed;transform:none !important;}.gc-btn:focus-visible{outline:3px solid var(--copper);outline-offset:2px;}
+.gc-ticket{display:flex;background:var(--paper-dark);border:1.5px solid var(--gold);border-radius:14px;overflow:hidden;position:relative;min-height:190px;animation:gcTicketIn .45s var(--ease) both;}
+@keyframes gcTicketIn{from{opacity:0;transform:scale(.97) translateY(6px);}to{opacity:1;transform:scale(1) translateY(0);}}
+.gc-ticket-stub{width:170px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;position:relative;}.gc-ticket-perf{width:0;position:relative;flex-shrink:0;border-inline-start:2px dashed var(--gold);}.gc-ticket-perf::before,.gc-ticket-perf::after{content:"";position:absolute;width:20px;height:20px;background:var(--paper);border-radius:50%;right:-11px;}.gc-ticket-perf::before{top:-10px;}.gc-ticket-perf::after{bottom:-10px;}
+.gc-ticket-info{flex:1;padding:16px 18px;display:flex;flex-direction:column;justify-content:center;gap:8px;}.gc-ticket-info .gc-name{font-family:'Frank Ruhl Libre',serif;font-weight:700;font-size:18px;}.gc-ticket-info .gc-cardid{font-size:12px;color:var(--ink-soft);}
+.gc-ticket-balance{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:var(--copper-dark);display:flex;align-items:baseline;gap:4px;}.gc-ticket-balance small{font-size:13px;font-weight:500;color:var(--ink-soft);}
+.gc-qr-img{width:110px;height:110px;border-radius:6px;background:#fff;}.gc-qr-label{font-size:10.5px;color:var(--ink-soft);margin-top:6px;letter-spacing:.05em;}
+.gc-stamp{position:absolute;top:10px;left:10px;padding:5px 12px;border:2.5px solid currentColor;border-radius:6px;font-weight:900;font-size:11px;letter-spacing:.08em;transform:rotate(-9deg);text-transform:uppercase;opacity:0;background:rgba(255,255,255,.4);animation:gcStamp .3s .3s var(--ease) forwards;}
+@keyframes gcStamp{from{opacity:0;transform:rotate(-24deg) scale(1.4);}to{opacity:.85;transform:rotate(-9deg) scale(1);}}
+.gc-stamp.pending{color:var(--rust);}.gc-stamp.active{color:var(--pine);}.gc-stamp.denied{color:var(--rust);}
+.gc-req-row,.gc-card-row{display:flex;align-items:center;justify-content:space-between;padding:13px 4px;border-bottom:1px solid #EEE3CC;gap:10px;transition:background .15s;}.gc-req-row:hover,.gc-card-row:hover{background:rgba(201,114,44,.05);}.gc-req-row:last-child,.gc-card-row:last-child{border-bottom:none;}.gc-req-name{font-weight:700;}.gc-req-meta{font-size:12.5px;color:var(--ink-soft);}.gc-row-actions{display:flex;gap:8px;flex-shrink:0;}.gc-empty{color:var(--ink-soft);font-size:14px;text-align:center;padding:24px 0;}
+.gc-branch-toggle{display:flex;gap:8px;margin-bottom:14px;}.gc-branch-btn{flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--gold);background:var(--paper);cursor:pointer;font-weight:600;font-size:13.5px;transition:all .15s;}.gc-branch-btn.selected{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.gc-cat-title{font-weight:700;font-size:14px;margin:14px 0 6px;display:flex;align-items:center;gap:6px;}.gc-item-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.gc-item-btn{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;border:1.5px solid #DDD0BA;background:var(--paper);cursor:pointer;font-size:13px;text-align:right;transition:transform .1s, border-color .15s;}.gc-item-btn:hover{border-color:var(--copper);transform:translateY(-1px);}.gc-item-btn:active{transform:scale(.97);}.gc-item-btn .gc-p{font-family:'JetBrains Mono',monospace;color:var(--copper-dark);font-weight:700;}
+.gc-cart-bar{position:sticky;bottom:0;background:var(--ink);color:var(--paper);border-radius:12px;padding:14px 16px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;}.gc-cart-total{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;}
+.gc-tx-item{display:flex;justify-content:space-between;font-size:13px;padding:8px 4px;border-bottom:1px solid #EEE3CC;animation:gcEnter .3s var(--ease) both;}.gc-tx-item:last-child{border-bottom:none;}.gc-note{background:#F0E9D8;border-radius:10px;padding:12px 14px;font-size:13px;color:var(--ink-soft);margin-top:12px;animation:gcEnter .25s var(--ease) both;}
+.gc-role-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}.gc-role-card{border:1.5px solid var(--gold);border-radius:14px;background:var(--white);padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s var(--ease);}.gc-role-card:hover{transform:translateY(-3px);border-color:var(--copper);box-shadow:0 8px 18px rgba(43,27,18,.1);}.gc-role-card .gc-role-icon{font-size:34px;display:block;margin-bottom:8px;}.gc-role-card h3{font-size:15.5px;}.gc-role-card p{font-size:12px;color:var(--ink-soft);margin:4px 0 0;}
+@media (max-width:520px){.gc-ticket{flex-direction:column;}.gc-ticket-stub{width:100%;flex-direction:row;gap:12px;padding:14px;}.gc-ticket-perf{border-inline-start:none;border-top:2px dashed var(--gold);width:auto;height:0;}.gc-ticket-perf::before,.gc-ticket-perf::after{top:-11px;bottom:auto;right:auto;}.gc-ticket-perf::before{left:15%;}.gc-ticket-perf::after{left:65%;}.gc-row2{grid-template-columns:1fr;}.gc-item-grid{grid-template-columns:1fr;}.gc-role-grid{grid-template-columns:1fr;}}
+.page{display:none;}.page.active{display:block;}
+</style>
+</head>
+<body class="gc-body">
+
+<div class="page active" id="page-request">
+  <div class="gc-page">
+    <header class="gc-header">
+      <div class="gc-eyebrow">Sarcafe · כרטיס מתנה</div>
+      <h1>יצירת כרטיס מתנה</h1>
+      <p>עד 200 ₪ לכרטיס. התשלום מתבצע ב-Bit לבעלים ומאושר ידנית בלוח הבעלים.</p>
+    </header>
+    <div class="gc-demo-banner">🔧 דמו אינטראקטיבית — הכל בקובץ HTML אחד, מתחילים בלוח הבעלים או יצירת בקשה</div>
+    <main class="gc-main">
+      <div class="gc-panel" id="panel-form">
+        <h2>פרטים</h2>
+        <div class="gc-sub">כמה דקות וזהו</div>
+        <div class="gc-row2">
+          <div class="gc-field"><label class="gc-label">שם פרטי</label><input type="text" id="f-first" placeholder="נועה"></div>
+          <div class="gc-field"><label class="gc-label">שם משפחה</label><input type="text" id="f-last" placeholder="כהן"></div>
+        </div>
+        <div class="gc-row2">
+          <div class="gc-field"><label class="gc-label">טלפון</label><input type="tel" id="f-phone" placeholder="050-1234567"></div>
+          <div class="gc-field"><label class="gc-label">אימייל</label><input type="email" id="f-email" placeholder="noa@example.com"></div>
+        </div>
+        <div class="gc-field"><label class="gc-label">מייל למתנה (לא חובה)</label><input type="email" id="f-recipient" placeholder="לדוגמה: לילד/ה..."></div>
+        <div class="gc-field">
+          <label class="gc-label">סכום טעינה</label>
+          <div class="gc-amount-picks">
+            <div class="gc-amount-pick" data-amt="50">50 ₪</div>
+            <div class="gc-amount-pick" data-amt="100">100 ₪</div>
+            <div class="gc-amount-pick" data-amt="150">150 ₪</div>
+            <div class="gc-amount-pick selected" data-amt="200">200 ₪</div>
+          </div>
+          <div class="gc-hint">מקסימום 200 ₪ לכרטיס</div>
+        </div>
+        <button class="gc-btn gc-btn-primary" id="btn-goto-bit">המשך לתשלום ב-Bit ←</button>
+      </div>
+      <div class="gc-panel" id="panel-bit" style="display:none;">
+        <h2>תשלום ב-Bit</h2>
+        <div class="gc-sub">לחיצה תפתח את Bit עם הטלפון של הבעלים והסכום מוכן מראש.</div>
+        <a class="gc-btn gc-btn-bit" id="btn-bit-link" href="#">פתיחת Bit לתשלום 🅱️</a>
+        <div class="gc-hint">בדמו זה לא פותח Bit — בייצור זה קישור עמוק עם הטלפון של הבעלים.</div>
+        <div style="margin-top:18px;">
+          <button class="gc-btn gc-btn-primary" id="btn-confirm-paid">סימנתי שהעברתי — שלח לאישור</button>
+        </div>
+      </div>
+      <div class="gc-panel" id="panel-done" style="display:none;">
+        <h2>הבקשה נשלחה 🎉</h2>
+        <div class="gc-sub">הכרטיס ימתין לאישור הבעלים. קישור לכרטיס האישי יישלח למייל עם קבלת האישור.</div>
+        <div id="ticket-slot"></div>
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-new-request">יצירת בקשה נוספת</button>
+          <button class="gc-btn gc-btn-primary gc-btn-sm" id="btn-go-owner">המשך הדגמה: אישור בלוח הבעלים →</button>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-go-portal">מעבר לכרטיס (לדוגמה) →</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="page" id="page-owner">
+  <div class="gc-page">
+    <header class="gc-header">
+      <button class="gc-back" onclick="APP.goPage('request')">← בחזרה</button>
+      <div class="gc-eyebrow">Sarcafe · לוח בעלים</div>
+      <h1>ניהול כרטיסי מתנה</h1>
+      <p>אישור בקשות, מעקב יתרות ופתיחת מסך חיוב</p>
+    </header>
+    <div class="gc-demo-banner">🔧 דמו — עמוד עצמאי; בייצור זה נטמע בלוח הניהול הקיים</div>
+    <main class="gc-main">
+      <div class="gc-panel">
+        <h2>בקשות ממתינות לאישור</h2>
+        <div class="gc-sub">לפני אישור — לוודא שהתקבל תשלום ב-Bit</div>
+        <div id="pending-list"></div>
+      </div>
+      <div class="gc-panel">
+        <h2>כרטיסים פעילים</h2>
+        <div class="gc-sub">לחיצה על "פתיחת סריקה" מדמה סריקת ה-QR של הלקוח בקופה</div>
+        <div id="active-list"></div>
+      </div>
+      <div class="gc-panel">
+        <h2>המשך הדגמה</h2>
+        <div class="gc-sub">קיצורי דרך לשאר עמודי הזרימה</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" onclick="APP.goPage('request')">בקשה חדשה (לקוח)</button>
+          <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-open-portal">סריקת כרטיס פעיל (פורטל)</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="page" id="page-portal">
+  <div class="gc-page">
+    <header class="gc-header">
+      <button class="gc-back" onclick="APP.goPage('owner')">← חזרה ללוח הבעלים</button>
+      <div class="gc-eyebrow">Sarcafe · סריקת כרטיס</div>
+      <h1 id="portal-title">כרטיס מתנה</h1>
+      <p id="portal-sub">מזהה כרטיס מתוך קוד ה-QR שנסרק.</p>
+    </header>
+    <div class="gc-demo-banner">
+      🔧 דמו · אם יש "סשן צוות" פעיל תועברו ישר למסך חיוב.
+      <label style="display:inline-flex; align-items:center; gap:6px; margin-right:10px; cursor:pointer;">
+        <input type="checkbox" id="staff-toggle"> מחובר כצוות (לדוגמה)
+      </label>
+    </div>
+    <main class="gc-main">
+      <div class="gc-panel" id="panel-not-found" style="display:none;">
+        <h2>לא נמצא כרטיס</h2>
+        <div class="gc-sub">בדקו את הקישור, או פתחו כרטיס לדוגמה</div>
+        <button class="gc-btn gc-btn-ghost" onclick="APP.goPage('request')">יצירת בקשה חדשה</button>
+      </div>
+      <div class="gc-panel" id="panel-ticket-preview" style="display:none;">
+        <h2>הכרטיס שנסרק</h2>
+        <div id="ticket-slot-portal"></div>
+      </div>
+      <div class="gc-panel" id="panel-picker" style="display:none;">
+        <h2>מי סורק?</h2>
+        <div class="gc-sub">בייצור: זיהוי אוטומטי אם יש סשן צוות פעיל בדפדפן.</div>
+        <div class="gc-role-grid">
+          <div class="gc-role-card" id="role-customer">
+            <span class="gc-role-icon">🎫</span>
+            <h3>אני הלקוח/ה</h3>
+            <p>קבלת קישור קסם למייל לצפייה בכרטיס</p>
+          </div>
+          <div class="gc-role-card" id="role-staff">
+            <span class="gc-role-icon">☕</span>
+            <h3>אני צוות</h3>
+            <p>התחברות לחיוב הכרטיס בקופה</p>
+          </div>
+        </div>
+      </div>
+      <div class="gc-panel" id="panel-magic" style="display:none;">
+        <h2>קישור קסם</h2>
+        <div class="gc-sub">מזינים את המייל שאיתו נוצר הכרטיס</div>
+        <div class="gc-field"><input type="email" id="magic-email" placeholder="האימייל שנרשם עם הכרטיס"></div>
+        <button class="gc-btn gc-btn-primary" id="btn-send-magic">שליחת קישור קסם</button>
+        <div class="gc-hint" id="magic-hint" style="display:none;"></div>
+      </div>
+      <div class="gc-panel" id="panel-staff-login" style="display:none;">
+        <h2>התחברות צוות</h2>
+        <div class="gc-sub">בדמו — כפתור התחברות מדומה</div>
+        <button class="gc-btn gc-btn-primary" id="btn-fake-staff-login">התחברות (לדוגמה) →</button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="page" id="page-customer">
+  <div class="gc-page">
+    <header class="gc-header">
+      <a class="gc-back" href="#" id="back-link-customer" onclick="event.preventDefault(); APP.goBack();">← חזרה לסריקה</a>
+      <div class="gc-eyebrow">Sarcafe · הכרטיס שלי</div>
+      <h1>הכרטיס שלי</h1>
+      <p>יתרה עדכנית ויומן קניות מכל הסניפים</p>
+    </header>
+    <div class="gc-demo-banner">🔧 דמו — בייצור מגיעים כאן רק אחרי קישור קסם תקף</div>
+    <main class="gc-main">
+      <div id="ticket-slot-customer"></div>
+      <div class="gc-panel" id="log-panel">
+        <h2>יומן קניות</h2>
+        <div class="gc-sub">כל רכישה מהכרטיס, כולל הסניף</div>
+        <div id="tx-log"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="page" id="page-checkout">
+  <div class="gc-page">
+    <header class="gc-header">
+      <button class="gc-back" onclick="APP.goPage('owner')">← חזרה ללוח הבעלים</button>
+      <div class="gc-eyebrow">Sarcafe · צוות</div>
+      <h1 id="checkout-title">חיוב כרטיס</h1>
+      <p>נבחר סניף ופריטים — היתרה משותפת לשני הסניפים</p>
+    </header>
+    <div class="gc-demo-banner">🔧 דמו — בייצור המסך הזה יעבור לתוך לוח הניהול</div>
+    <main class="gc-main">
+      <div id="ticket-slot-checkout"></div>
+      <div class="gc-panel" id="panel-notfound" style="display:none;">
+        <div class="gc-empty">כרטיס לא נמצא</div>
+      </div>
+      <div class="gc-panel" id="panel-checkout">
+        <h2>בחירת פריטים</h2>
+        <div class="gc-branch-toggle" id="branches"></div>
+        <div id="menu"></div>
+        <div class="gc-cart-bar">
+          <span>סה"כ בעגלה: <span class="gc-cart-total mono" id="cart-total">0 ₪</span></span>
+          <button class="gc-btn gc-btn-primary gc-btn-sm" id="btn-charge">חיוב מהכרטיס</button>
+        </div>
+        <div class="gc-note" id="note" style="display:none;"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+"use strict";
+const GC = (function () {
+  const KEY = "sarcafe_giftcards_demo_v1", STAFF_KEY = "sarcafe_demo_staff_session";
+  const MENUS = {
+    maor: { label: "מאור", categories: [{id:"food",icon:"🥪",title:"אוכל",items:[{n:"בורקס",p:35},{n:"טוסט",p:35},{n:"כריך גדול",p:35},{n:"כריך קטן",p:28},{n:"סלט גדול",p:45},{n:"סלט קטן",p:35},{n:"פיצה ללא גלוטן",p:35}]},{id:"popsicles",icon:"🍧",title:"ארטיקים",items:[{n:"ארטיק פלטאס",p:12}]},{id:"pastries",icon:"🥐",title:"מאפים",items:[{n:"מאפה גדול",p:15},{n:"מאפה שווה",p:30},{n:"פרעצל עם נוטלה",p:20},{n:"טארט תות",p:32},{n:"עוגת גבינה",p:25}]},{id:"cookies",icon:"🍪",title:"עוגיות",items:[{n:"אלפחורס",p:12},{n:"בלונדיס / בראוניס",p:15},{n:"כדור שוקולד/קוקוס",p:6},{n:"עוגייה בלגית",p:15},{n:"עוגיית שוקולד צ'יפס",p:12},{n:"שוקולד בלגי",p:12},{n:"שלושה שוקולדים",p:12}]},{id:"hotDrinks",icon:"☕",title:"שתייה חמה",items:[{n:"אמריקנו גדול",p:11},{n:"אמריקנו קטן",p:8},{n:"אספרסו כפול",p:11},{n:"אספרסו קצר/ארוך",p:8},{n:"הפוך גדול",p:15},{n:"הפוך קטן",p:13},{n:"חליטה",p:15},{n:"מאצ'ה",p:22},{n:"מקיאטו",p:8},{n:"נס קפה גדול",p:12},{n:"נס קפה קטן",p:10},{n:"סחלב",p:18},{n:"קורטדו",p:8},{n:"קפה שחור",p:8},{n:"שוקו גדול",p:14},{n:"שוקו קטן",p:12},{n:"שוקו מפנק גדול",p:17},{n:"שוקו מפנק קטן",p:15}]},{id:"coldDrinks",icon:"🧊",title:"שתייה קרה",items:[{n:"אייס קטן",p:8},{n:"אייס גדול",p:16},{n:"מים/סודה",p:8},{n:"מיץ טבעי",p:16},{n:"פחית",p:10},{n:"פחית גדולה",p:12},{n:"פיוז טי",p:12},{n:"קפה קר",p:16},{n:"שוקו קר",p:16},{n:"שייק",p:25}]}]},
+    givatHaviva: { label: "גבעת חביבה", categories: [{id:"hotCoffee",icon:"☕",title:"קפה חם",items:[{n:"מנת אספרסו",p:8},{n:"אספרסו כפול",p:11},{n:"הפוך קטן",p:13},{n:"הפוך גדול",p:15},{n:"אמריקנו קטן",p:13},{n:"אמריקנו גדול",p:15},{n:"קפה שחור",p:8},{n:"חליטת צמחים מיוחדת",p:15}]},{id:"coldBeverages",icon:"🧊",title:"שתייה קרה",items:[{n:"קפה קר",p:16},{n:"אייס קפה",p:16},{n:"אייס וניל",p:16},{n:"אייס שוקולד",p:16},{n:"אמריקנו קר",p:13},{n:"תה קר",p:15}]},{id:"sandwiches",icon:"🥪",title:"כריכים וטוסטים",items:[{n:"כריכים",p:24},{n:"טוסטים",p:32}]},{id:"pastries",icon:"🥐",title:"מאפים",items:[{n:"מאפה רגיל",p:15},{n:"מאפה שווה",p:30},{n:"פרעצל/בייגלה",p:15}]},{id:"pizza",icon:"🍕",title:"פיצה",items:[{n:"פיצה אישית",p:30},{n:"פיצה גדולה",p:45}]},{id:"softDrinks",icon:"🥤",title:"שתייה קלה",items:[{n:"פחית שתייה",p:10},{n:"פיוז טי",p:12},{n:"מיץ תפוזים פריגת",p:12},{n:"סודה",p:8},{n:"מים",p:8}]},{id:"iceCream",icon:"🍦",title:"גלידות",items:[{n:"ארטיק קרח",p:5},{n:"לה פרוטה",p:10},{n:"גומיגם",p:10},{n:"קראנץ' נוגט נסטלה",p:14},{n:"מילקה",p:14},{n:"קורנטו",p:15},{n:"גלידת אוראו",p:14}]}]}
+  };
+  function load(){try{const raw=sessionStorage.getItem(KEY);if(raw)return JSON.parse(raw);}catch(e){}const seeded={seq:1000,cards:[{id:"SC-1000",first:"נועה",last:"לוי",phone:"050-1112233",email:"noa.levi@example.com",recipientEmail:null,balance:200,status:"active",createdAt:Date.now(),transactions:[]}]};save(seeded);return seeded;}
+  function save(state){sessionStorage.setItem(KEY,JSON.stringify(state));}
+  function money(n){return Number(n).toLocaleString("he-IL")+" ₪";}
+  function qrUrl(cardId){const target="https://sarcafe.app/c/"+cardId;return"https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=8&data="+encodeURIComponent(target);}
+  function createRequest(data){const state=load();state.seq+=1;const card={id:"SC-"+state.seq,first:data.first,last:data.last,phone:data.phone,email:data.email,recipientEmail:data.recipientEmail||null,balance:data.amount,status:"pending",createdAt:Date.now(),transactions:[]};state.cards.push(card);save(state);return card;}
+  function getCard(id){return load().cards.find((c)=>c.id===id)||null;}
+  function listPending(){return load().cards.filter((c)=>c.status==="pending");}
+  function listActive(){return load().cards.filter((c)=>c.status==="active");}
+  function approve(id){const state=load();const c=state.cards.find((x)=>x.id===id);if(c){c.status="active";save(state);}return c;}
+  function deny(id){const state=load();const c=state.cards.find((x)=>x.id===id);if(c){c.status="denied";save(state);}return c;}
+  function charge(id,branch,items){const state=load();const c=state.cards.find((x)=>x.id===id);if(!c)return{ok:false,error:"כרטיס לא נמצא"};const total=items.reduce((s,i)=>s+i.p,0);if(total>c.balance)return{ok:false,error:"היתרה לא מספיקה"};c.balance-=total;c.transactions.push({branch,amount:total,itemsText:items.map((i)=>i.n).join(", "),at:Date.now()});save(state);return{ok:true,card:c};}
+  function isStaffSession(){return sessionStorage.getItem(STAFF_KEY)==="1";}
+  function setStaffSession(on){sessionStorage.setItem(STAFF_KEY,on?"1":"0");}
+  function wireButtonGlow(root){(root||document).querySelectorAll(".gc-btn").forEach((btn)=>{btn.addEventListener("pointermove",(e)=>{const r=btn.getBoundingClientRect();btn.style.setProperty("--x",((e.clientX-r.left)/r.width)*100+"%");btn.style.setProperty("--y",((e.clientY-r.top)/r.height)*100+"%");});});}
+  return{MENUS,money,qrUrl,createRequest,getCard,listPending,listActive,approve,deny,charge,isStaffSession,setStaffSession,wireButtonGlow};
+})();
+
+function gcEscape(v){return String(v??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function gcRenderTicket(card){let stamp="";if(card.status==="pending")stamp='<div class="gc-stamp pending">ממתין לאישור</div>';if(card.status==="denied")stamp='<div class="gc-stamp denied">נדחה</div>';if(card.status==="active")stamp='<div class="gc-stamp active">פעיל</div>';return`<div class="gc-ticket">${stamp}<div class="gc-ticket-info"><div class="gc-cardid mono">#${gcEscape(card.id)}</div><div class="gc-name">${gcEscape(card.first)} ${gcEscape(card.last)}</div><div class="gc-ticket-balance">${Number(card.balance)}<small>₪ יתרה</small></div><div class="gc-cardid">${gcEscape(card.email)}${card.recipientEmail?" · מתנה ל: "+gcEscape(card.recipientEmail):""}</div></div><div class="gc-ticket-perf"></div><div class="gc-ticket-stub"><img class="gc-qr-img" src="${GC.qrUrl(card.id)}" alt="קוד QR"><div class="gc-qr-label mono">/c/${gcEscape(card.id)}</div></div></div>`;}
+
+const APP={currentPage:"request",currentCard:null,goPage(p){const current=document.querySelector(".page.active");current.classList.remove("active");document.getElementById("page-"+p).classList.add("active");this.currentPage=p;window.scrollTo(0,0);},goBack(){if(this.currentPage==="customer")this.goPage("portal");else this.goPage("owner");},goPortal(cardId){this.currentCard=cardId;this.goPage("portal");this.bootPortal();},goCheckout(cardId){this.currentCard=cardId;this.goPage("checkout");this.bootCheckout();},goCustomer(cardId){this.currentCard=cardId;this.goPage("customer");this.bootCustomer();},bootRequest(){let selectedAmount=200,draftCard=null;document.querySelectorAll(".gc-amount-pick").forEach((el)=>{el.addEventListener("click",()=>{document.querySelectorAll(".gc-amount-pick").forEach((x)=>x.classList.remove("selected"));el.classList.add("selected");selectedAmount=parseInt(el.dataset.amt,10);});});document.getElementById("btn-goto-bit").addEventListener("click",()=>{const first=document.getElementById("f-first").value.trim(),last=document.getElementById("f-last").value.trim(),phone=document.getElementById("f-phone").value.trim(),email=document.getElementById("f-email").value.trim(),recipientEmail=document.getElementById("f-recipient").value.trim();if(!first||!last||!phone||!email){alert("נא למלא שם, טלפון ואימייל");return;}draftCard={first,last,phone,email,recipientEmail,amount:selectedAmount};document.getElementById("panel-form").style.display="none";document.getElementById("panel-bit").style.display="";const link=document.getElementById("btn-bit-link");link.href="bit://pay?phone=0501234567&amount="+selectedAmount+"&note="+encodeURIComponent("כרטיס מתנה סארקפה");link.textContent="פתיחת Bit לתשלום "+selectedAmount+" ₪ 🅱️";});let createdCard=null;document.getElementById("btn-confirm-paid").addEventListener("click",()=>{createdCard=GC.createRequest(draftCard);document.getElementById("panel-bit").style.display="none";document.getElementById("panel-done").style.display="";document.getElementById("ticket-slot").innerHTML=gcRenderTicket(createdCard);});document.getElementById("btn-new-request").addEventListener("click",()=>{["f-first","f-last","f-phone","f-email","f-recipient"].forEach((id)=>(document.getElementById(id).value=""));document.getElementById("panel-done").style.display="none";document.getElementById("panel-form").style.display="";draftCard=null;});document.getElementById("btn-go-owner").addEventListener("click",()=>{this.goPage("owner");this.bootOwner();});document.getElementById("btn-go-portal").addEventListener("click",()=>{if(createdCard)this.goPortal(createdCard.id);});GC.wireButtonGlow();},bootOwner(){const pending=GC.listPending(),active=GC.listActive();const pl=document.getElementById("pending-list");if(!pending.length){pl.innerHTML='<div class="gc-empty">אין בקשות ממתינות</div>';}else{pl.innerHTML=pending.map((c)=>`<div class="gc-req-row"><div><div class="gc-req-name">${gcEscape(c.first)} ${gcEscape(c.last)} — <span class="mono">${GC.money(c.balance)}</span></div><div class="gc-req-meta">${gcEscape(c.phone)} · ${gcEscape(c.email)}</div></div><div class="gc-row-actions"><button class="gc-btn gc-btn-approve gc-btn-sm" data-approve="${gcEscape(c.id)}">אישור</button><button class="gc-btn gc-btn-deny gc-btn-sm" data-deny="${gcEscape(c.id)}">דחייה</button></div></div>`).join("");}const al=document.getElementById("active-list");if(!active.length){al.innerHTML='<div class="gc-empty">אין עדיין כרטיסים פעילים</div>';}else{al.innerHTML=active.map((c)=>`<div class="gc-card-row"><div><div class="gc-req-name">${gcEscape(c.first)} ${gcEscape(c.last)}</div><div class="gc-req-meta">#${gcEscape(c.id)} · יתרה <span class="mono">${GC.money(c.balance)}</span></div></div><button class="gc-btn gc-btn-ghost gc-btn-sm" data-open="${gcEscape(c.id)}">פתיחת סריקה →</button></div>`).join("");}pl.querySelectorAll("[data-approve]").forEach((b)=>b.addEventListener("click",()=>{GC.approve(b.dataset.approve);this.bootOwner();}));pl.querySelectorAll("[data-deny]").forEach((b)=>b.addEventListener("click",()=>{GC.deny(b.dataset.deny);this.bootOwner();}));al.querySelectorAll("[data-open]").forEach((b)=>b.addEventListener("click",()=>this.goCheckout(b.dataset.open)));document.getElementById("btn-open-portal").addEventListener("click",()=>{const first=GC.listActive()[0];if(!first){alert("אין כרטיס פעיל — קודם מאשרים בקשה");return;}this.goPortal(first.id);});GC.wireButtonGlow();},bootPortal(){const params=new URLSearchParams(window.location.search),cardId=this.currentCard,card=GC.getCard(cardId);document.getElementById("staff-toggle").checked=GC.isStaffSession();document.getElementById("staff-toggle").addEventListener("change",(e)=>{GC.setStaffSession(e.target.checked);this.bootPortal();});function show(id){["panel-not-found","panel-ticket-preview","panel-picker","panel-magic","panel-staff-login"].forEach((p)=>{document.getElementById(p).style.display=p===id?"":"none";});}if(!card){document.getElementById("portal-title").textContent="כרטיס לא נמצא";show("panel-not-found");return;}document.getElementById("portal-title").textContent="כרטיס #"+card.id;document.getElementById("portal-sub").textContent=card.first+" "+card.last;document.getElementById("ticket-slot-portal").innerHTML=gcRenderTicket(card);if(GC.isStaffSession()){this.goCheckout(card.id);return;}show("panel-picker");document.getElementById("role-customer").addEventListener("click",()=>{show("panel-magic");});document.getElementById("role-staff").addEventListener("click",()=>{show("panel-staff-login");});document.getElementById("btn-send-magic").addEventListener("click",()=>{const email=document.getElementById("magic-email").value.trim(),hint=document.getElementById("magic-hint");hint.style.display="";if(!card||email.toLowerCase()!==card.email.toLowerCase()){hint.textContent="בייצור: קישור קסם נשלח לכל מייל, אבל רק מייל תואם יפתח את הכרטיס הזה.";return;}hint.textContent="קישור קסם נשלח!";window.setTimeout(()=>this.goCustomer(card.id),500);});document.getElementById("btn-fake-staff-login").addEventListener("click",()=>{GC.setStaffSession(true);this.goCheckout(card.id);});GC.wireButtonGlow();},bootCustomer(){const card=GC.getCard(this.currentCard);if(!card){document.querySelector("main").innerHTML='<div class="gc-panel gc-empty">כרטיס לא נמצא</div>';}else{document.getElementById("back-link-customer").href="#";document.getElementById("ticket-slot-customer").innerHTML=gcRenderTicket(card);const log=document.getElementById("tx-log");if(card.transactions.length===0){log.innerHTML='<div class="gc-empty">עוד לא בוצעו רכישות מהכרטיס</div>';}else{log.innerHTML=card.transactions.slice().reverse().map((tx)=>`<div class="gc-tx-item"><span>${tx.itemsText} <span style="color:var(--ink-soft);">· ${GC.MENUS[tx.branch].label}</span></span><span class="mono">-${tx.amount} ₪</span></div>`).join("");}}GC.wireButtonGlow();},bootCheckout(){let card=GC.getCard(this.currentCard),branch="maor",cart=[];if(!card){document.getElementById("panel-checkout").style.display="none";document.getElementById("panel-notfound").style.display="";}else{renderAll();}function renderAll(){document.getElementById("checkout-title").textContent=`חיוב כרטיס — ${card.first} ${card.last} (#${card.id})`;document.getElementById("ticket-slot-checkout").innerHTML=gcRenderTicket(card);renderBranches();renderMenu();renderCart();}function renderBranches(){const el=document.getElementById("branches");el.innerHTML=Object.keys(GC.MENUS).map((k)=>`<div class="gc-branch-btn ${k===branch?"selected":""}" data-branch="${k}">${GC.MENUS[k].label}</div>`).join("");el.querySelectorAll("[data-branch]").forEach((b)=>b.addEventListener("click",()=>{branch=b.dataset.branch;renderBranches();renderMenu();}));}function renderMenu(){const el=document.getElementById("menu");el.innerHTML=GC.MENUS[branch].categories.map((cat)=>`<div class="gc-cat-title">${cat.icon} ${cat.title}</div><div class="gc-item-grid">${cat.items.map((it)=>`<div class="gc-item-btn" data-n="${it.n}" data-p="${it.p}"><span>${it.n}</span><span class="gc-p mono">${it.p} ₪</span></div>`).join("")}</div>`).join("");el.querySelectorAll(".gc-item-btn").forEach((b)=>{b.addEventListener("click",()=>{cart.push({n:b.dataset.n,p:parseInt(b.dataset.p,10)});renderCart();});});}function renderCart(){const total=cart.reduce((s,i)=>s+i.p,0);document.getElementById("cart-total").textContent=GC.money(total);const btn=document.getElementById("btn-charge");btn.disabled=cart.length===0||total>card.balance;const note=document.getElementById("note");if(total>card.balance&&cart.length){note.style.display="";note.style.color="";note.textContent=`היתרה בכרטיס (${GC.money(card.balance)}) לא מספיקה לסכום הזה (${GC.money(total)}).`;}else if(!cart.length){note.style.display="none";}}document.getElementById("btn-charge").addEventListener("click",()=>{const res=GC.charge(card.id,branch,cart);const note=document.getElementById("note");note.style.display="";if(!res.ok){note.style.color="var(--rust)";note.textContent=res.error;return;}card=res.card;cart=[];note.style.color="var(--pine)";note.textContent=`חויב בהצלחה. יתרה חדשה: ${GC.money(card.balance)}`;renderAll();});GC.wireButtonGlow();}};
+
+APP.bootRequest();
+</script>
+</body>
+</html>
