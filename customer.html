@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הכרטיס שלי · סארקפה</title>
+<link rel="stylesheet" href="assets/giftcards.css">
+</head>
+<body class="gc-body">
+<div class="gc-page">
+
+  <header class="gc-header">
+    <a class="gc-back" href="#" id="back-link">→ חזרה לסריקה</a>
+    <div class="gc-eyebrow">Sarcafe · הכרטיס שלי</div>
+    <h1>כרטיס המתנה שלי</h1>
+    <p>יתרה עדכנית ויומן קניות מכל הסניפים</p>
+  </header>
+  <div class="gc-demo-banner">🔧 מצב דמו — בייצור מגיעים לכאן רק אחרי קישור קסם תקף</div>
+
+  <main class="gc-main">
+    <div id="ticket-slot"></div>
+
+    <div class="gc-panel" id="log-panel">
+      <h2>יומן קניות</h2>
+      <div class="gc-sub">כל רכישה מהכרטיס, כולל הסניף</div>
+      <div id="tx-log"></div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/giftcards-mock.js"></script>
+<script src="assets/giftcards-ui.js"></script>
+<script>
+"use strict";
+const params = new URLSearchParams(window.location.search);
+const card = GC.getCard(params.get("id"));
+
+if (!card) {
+  document.querySelector("main").innerHTML = '<div class="gc-panel gc-empty">כרטיס לא נמצא. <a href="gift-request.html">יצירת בקשה חדשה</a></div>';
+} else {
+  document.getElementById("back-link").href = "portal.html?id=" + encodeURIComponent(card.id);
+  document.getElementById("ticket-slot").innerHTML = gcRenderTicket(card);
+  const log = document.getElementById("tx-log");
+  if (card.transactions.length === 0) {
+    log.innerHTML = '<div class="gc-empty">עוד לא בוצעו רכישות מהכרטיס</div>';
+  } else {
+    log.innerHTML = card.transactions.slice().reverse().map((tx) => `
+      <div class="gc-tx-item">
+        <span>${tx.itemsText} <span style="color:var(--ink-soft);">· ${GC.MENUS[tx.branch].label}</span></span>
+        <span class="mono">-${tx.amount} ₪</span>
+      </div>`).join("");
+  }
+}
+GC.wireButtonGlow();
+</script>
+</body>
+</html>

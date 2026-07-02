@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>חיוב כרטיס · סארקפה</title>
+<link rel="stylesheet" href="assets/giftcards.css">
+</head>
+<body class="gc-body">
+<div class="gc-page">
+
+  <header class="gc-header">
+    <a class="gc-back" href="owner.html">→ חזרה ללוח הבעלים</a>
+    <div class="gc-eyebrow">Sarcafe · צוות</div>
+    <h1 id="checkout-title">חיוב כרטיס</h1>
+    <p>נבחר סניף ופריטים — היתרה משותפת לשני הסניפים</p>
+  </header>
+  <div class="gc-demo-banner">🔧 מצב דמו — במוצר הסופי המסך הזה יעבור לתוך manager.js (ראו MANAGER_INTEGRATION.md)</div>
+
+  <main class="gc-main">
+    <div id="ticket-slot"></div>
+
+    <div class="gc-panel" id="panel-notfound" style="display:none;">
+      <div class="gc-empty">כרטיס לא נמצא</div>
+    </div>
+
+    <div class="gc-panel" id="panel-checkout">
+      <h2>בחירת פריטים</h2>
+      <div class="gc-branch-toggle" id="branches"></div>
+      <div id="menu"></div>
+      <div class="gc-cart-bar">
+        <span>סה"כ בעגלה: <span class="gc-cart-total mono" id="cart-total">0 ₪</span></span>
+        <button class="gc-btn gc-btn-primary gc-btn-sm" id="btn-charge">חיוב מהכרטיס</button>
+      </div>
+      <div class="gc-note" id="note" style="display:none;"></div>
+    </div>
+  </main>
+</div>
+
+<script src="assets/giftcards-mock.js"></script>
+<script src="assets/giftcards-ui.js"></script>
+<script>
+"use strict";
+const params = new URLSearchParams(window.location.search);
+let card = GC.getCard(params.get("id"));
+let branch = "maor";
+let cart = [];
+
+if (!card) {
+  document.getElementById("panel-checkout").style.display = "none";
+  document.getElementById("panel-notfound").style.display = "";
+} else {
+  renderAll();
+}
+
+function renderAll() {
+  document.getElementById("checkout-title").textContent = `חיוב כרטיס — ${card.first} ${card.last} (#${card.id})`;
+  document.getElementById("ticket-slot").innerHTML = gcRenderTicket(card);
+  renderBranches();
+  renderMenu();
+  renderCart();
+}
+function renderBranches() {
+  const el = document.getElementById("branches");
+  el.innerHTML = Object.keys(GC.MENUS).map((k) =>
+    `<div class="gc-branch-btn ${k === branch ? "selected" : ""}" data-branch="${k}">${GC.MENUS[k].label}</div>`
+  ).join("");
+  el.querySelectorAll("[data-branch]").forEach((b) => {
+    b.addEventListener("click", () => { branch = b.dataset.branch; renderBranches(); renderMenu(); });
+  });
+}
+function renderMenu() {
+  const el = document.getElementById("menu");
+  el.innerHTML = GC.MENUS[branch].categories.map((cat) => `
+    <div class="gc-cat-title">${cat.icon} ${cat.title}</div>
+    <div class="gc-item-grid">
+      ${cat.items.map((it) => `<div class="gc-item-btn" data-n="${it.n}" data-p="${it.p}">
+        <span>${it.n}</span><span class="gc-p mono">${it.p} ₪</span>
+      </div>`).join("")}
+    </div>`).join("");
+  el.querySelectorAll(".gc-item-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      cart.push({ n: b.dataset.n, p: parseInt(b.dataset.p, 10) });
+      renderCart();
+    });
+  });
+}
+function renderCart() {
+  const total = cart.reduce((s, i) => s + i.p, 0);
+  document.getElementById("cart-total").textContent = GC.money(total);
+  const btn = document.getElementById("btn-charge");
+  btn.disabled = cart.length === 0 || total > card.balance;
+  const note = document.getElementById("note");
+  if (total > card.balance && cart.length) {
+    note.style.display = ""; note.style.color = "";
+    note.textContent = `היתרה בכרטיס (${GC.money(card.balance)}) לא מספיקה לסכום הזה (${GC.money(total)}).`;
+  } else if (!cart.length) {
+    note.style.display = "none";
+  }
+}
+document.getElementById("btn-charge").addEventListener("click", () => {
+  const res = GC.charge(card.id, branch, cart);
+  const note = document.getElementById("note");
+  note.style.display = "";
+  if (!res.ok) {
+    note.style.color = "var(--rust)";
+    note.textContent = res.error;
+    return;
+  }
+  card = res.card;
+  cart = [];
+  note.style.color = "var(--pine)";
+  note.textContent = `חויב בהצלחה. יתרה חדשה: ${GC.money(card.balance)}`;
+  renderAll();
+});
+
+GC.wireButtonGlow();
+</script>
+</body>
+</html>

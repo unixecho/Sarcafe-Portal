@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>כרטיס #… · סארקפה</title>
+<link rel="stylesheet" href="assets/giftcards.css">
+</head>
+<body class="gc-body">
+<div class="gc-page">
+
+  <header class="gc-header">
+    <div class="gc-eyebrow">Sarcafe · סריקת כרטיס</div>
+    <h1 id="page-title">כרטיס מתנה</h1>
+    <p id="page-sub">מזהה כרטיס מתוך קוד ה-QR שנסרק.</p>
+  </header>
+  <div class="gc-demo-banner">
+    🔧 מצב דמו · מדמה סריקה בפועל: אם יש "סשן צוות" פעיל תועברו ישר למסך חיוב.
+    <label style="display:inline-flex; align-items:center; gap:6px; margin-right:10px; cursor:pointer;">
+      <input type="checkbox" id="staff-toggle"> מחובר כצוות (לדוגמה)
+    </label>
+  </div>
+
+  <main class="gc-main">
+
+    <div class="gc-panel" id="panel-not-found" style="display:none;">
+      <h2>לא נמצא כרטיס</h2>
+      <div class="gc-sub">בדקו את הקישור, או פתחו כרטיס לדוגמה:</div>
+      <a class="gc-btn gc-btn-ghost" href="gift-request.html">יצירת בקשה חדשה</a>
+    </div>
+
+    <div class="gc-panel" id="panel-ticket-preview" style="display:none;">
+      <h2>הכרטיס שנסרק</h2>
+      <div id="ticket-slot"></div>
+    </div>
+
+    <div class="gc-panel" id="panel-picker" style="display:none;">
+      <h2>מי סורק?</h2>
+      <div class="gc-sub">בייצור: זיהוי אוטומטי אם יש סשן צוות פעיל בדפדפן. אחרת בוחרים כאן.</div>
+      <div class="gc-role-grid">
+        <div class="gc-role-card" id="role-customer">
+          <span class="gc-role-icon">🎫</span>
+          <h3>אני הלקוח/ה</h3>
+          <p>קבלת קישור קסם למייל לצפייה בכרטיס</p>
+        </div>
+        <div class="gc-role-card" id="role-staff">
+          <span class="gc-role-icon">☕</span>
+          <h3>אני צוות</h3>
+          <p>התחברות לחיוב הכרטיס בקופה</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="gc-panel" id="panel-magic" style="display:none;">
+      <h2>קישור קסם</h2>
+      <div class="gc-sub">מזינים את המייל שאיתו נוצר הכרטיס, ומקבלים קישור כניסה.</div>
+      <div class="gc-field"><input type="email" id="magic-email" placeholder="האימייל שנרשם עם הכרטיס"></div>
+      <button class="gc-btn gc-btn-primary" id="btn-send-magic">שליחת קישור קסם</button>
+      <div class="gc-hint" id="magic-hint" style="display:none;"></div>
+    </div>
+
+    <div class="gc-panel" id="panel-staff-login" style="display:none;">
+      <h2>התחברות צוות</h2>
+      <div class="gc-sub">בייצור: זה בדיוק login.html הקיים — לא עמוד נפרד. כאן זה כפתור מדומה.</div>
+      <button class="gc-btn gc-btn-primary" id="btn-fake-staff-login">התחברות (לדוגמה) →</button>
+    </div>
+
+  </main>
+</div>
+
+<script src="assets/giftcards-mock.js"></script>
+<script src="assets/giftcards-ui.js"></script>
+<script>
+"use strict";
+const params = new URLSearchParams(window.location.search);
+const cardId = params.get("id");
+const card = cardId ? GC.getCard(cardId) : null;
+
+document.getElementById("staff-toggle").checked = GC.isStaffSession();
+document.getElementById("staff-toggle").addEventListener("change", (e) => {
+  GC.setStaffSession(e.target.checked);
+  boot();
+});
+
+function show(id) {
+  ["panel-not-found", "panel-ticket-preview", "panel-picker", "panel-magic", "panel-staff-login"].forEach((p) => {
+    document.getElementById(p).style.display = p === id ? "" : "none";
+  });
+}
+
+function boot() {
+  if (!card) {
+    document.getElementById("page-title").textContent = "כרטיס לא נמצא";
+    show("panel-not-found");
+    return;
+  }
+  document.getElementById("page-title").textContent = "כרטיס #" + card.id;
+  document.getElementById("page-sub").textContent = card.first + " " + card.last;
+  document.getElementById("ticket-slot").innerHTML = gcRenderTicket(card);
+  document.getElementById("panel-ticket-preview").style.display = "";
+
+  if (GC.isStaffSession()) {
+    // this is the real behaviour: a staff/manager session is detected automatically
+    // (Supabase Auth session, same check manager.js's boot() already does) —
+    // so scanning a card mid-shift skips the picker entirely.
+    GC.navigateTo("staff-checkout.html?id=" + card.id);
+    return;
+  }
+  show("panel-picker");
+}
+
+document.getElementById("role-customer").addEventListener("click", () => {
+  document.getElementById("panel-picker").style.display = "none";
+  document.getElementById("panel-magic").style.display = "";
+});
+document.getElementById("role-staff").addEventListener("click", () => {
+  document.getElementById("panel-picker").style.display = "none";
+  document.getElementById("panel-staff-login").style.display = "";
+});
+
+document.getElementById("btn-send-magic").addEventListener("click", () => {
+  const email = document.getElementById("magic-email").value.trim();
+  const hint = document.getElementById("magic-hint");
+  hint.style.display = "";
+  if (!card || email.toLowerCase() !== card.email.toLowerCase()) {
+    hint.textContent = "בייצור: קישור קסם נשלח לכל מייל, אבל רק מייל תואם ל-owner_email יפתח את הכרטיס הזה.";
+    return;
+  }
+  hint.textContent = "קישור קסם נשלח! (בהדגמה — מעבר ישיר)";
+  window.setTimeout(() => GC.navigateTo("customer.html?id=" + card.id), 500);
+});
+
+document.getElementById("btn-fake-staff-login").addEventListener("click", () => {
+  GC.setStaffSession(true);
+  GC.navigateTo("staff-checkout.html?id=" + card.id);
+});
+
+GC.wireButtonGlow();
+boot();
+</script>
+</body>
+</html>

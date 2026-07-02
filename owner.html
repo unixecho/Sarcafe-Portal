@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>לוח בעלים · כרטיסי מתנה · סארקפה</title>
+<link rel="stylesheet" href="assets/giftcards.css">
+</head>
+<body class="gc-body">
+<div class="gc-page">
+
+  <header class="gc-header">
+    <div class="gc-eyebrow">Sarcafe · לוח בעלים</div>
+    <h1>ניהול כרטיסי מתנה</h1>
+    <p>אישור בקשות, מעקב יתרות ופתיחת מסך חיוב. במוצר הסופי — לשונית בתוך לוח הניהול הקיים.</p>
+  </header>
+  <div class="gc-demo-banner">🔧 מצב דמו — עמוד עצמאי; בייצור זה נטמע ב-manager.html כלשונית ליד עריכת התפריטים</div>
+
+  <main class="gc-main">
+
+    <div class="gc-panel">
+      <h2>בקשות ממתינות לאישור</h2>
+      <div class="gc-sub">לפני אישור — לוודא שהתקבל תשלום ב-Bit</div>
+      <div id="pending-list"></div>
+    </div>
+
+    <div class="gc-panel">
+      <h2>כרטיסים פעילים</h2>
+      <div class="gc-sub">לחיצה על "פתיחת סריקה" מדמה סריקת ה-QR של הלקוח בקופה</div>
+      <div id="active-list"></div>
+    </div>
+
+    <div class="gc-panel">
+      <h2>המשך הדגמה</h2>
+      <div class="gc-sub">קיצורי דרך לשאר עמודי הזרימה</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a class="gc-btn gc-btn-ghost gc-btn-sm" href="gift-request.html">בקשה חדשה (לקוח)</a>
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-open-portal">סריקת כרטיס פעיל (פורטל)</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="assets/giftcards-mock.js"></script>
+<script src="assets/giftcards-ui.js"></script>
+<script>
+"use strict";
+
+function render() {
+  const pending = GC.listPending();
+  const active = GC.listActive();
+
+  const pl = document.getElementById("pending-list");
+  if (!pending.length) {
+    pl.innerHTML = '<div class="gc-empty">אין בקשות ממתינות — אפשר ליצור אחת בעמוד הבקשות</div>';
+  } else {
+    pl.innerHTML = pending.map((c) => `
+      <div class="gc-req-row">
+        <div>
+          <div class="gc-req-name">${gcEscape(c.first)} ${gcEscape(c.last)} — <span class="mono">${GC.money(c.balance)}</span></div>
+          <div class="gc-req-meta">${gcEscape(c.phone)} · ${gcEscape(c.email)}${c.recipientEmail ? " · מתנה ל " + gcEscape(c.recipientEmail) : ""}</div>
+        </div>
+        <div class="gc-row-actions">
+          <button class="gc-btn gc-btn-approve gc-btn-sm" data-approve="${gcEscape(c.id)}">אישור</button>
+          <button class="gc-btn gc-btn-deny gc-btn-sm" data-deny="${gcEscape(c.id)}">דחייה</button>
+        </div>
+      </div>`).join("");
+  }
+
+  const al = document.getElementById("active-list");
+  if (!active.length) {
+    al.innerHTML = '<div class="gc-empty">אין עדיין כרטיסים פעילים</div>';
+  } else {
+    al.innerHTML = active.map((c) => `
+      <div class="gc-card-row">
+        <div>
+          <div class="gc-req-name">${gcEscape(c.first)} ${gcEscape(c.last)}</div>
+          <div class="gc-req-meta">#${gcEscape(c.id)} · יתרה <span class="mono">${GC.money(c.balance)}</span> · ${c.transactions.length} רכישות</div>
+        </div>
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" data-open="${gcEscape(c.id)}">פתיחת סריקה →</button>
+      </div>`).join("");
+  }
+
+  pl.querySelectorAll("[data-approve]").forEach((b) =>
+    b.addEventListener("click", () => { GC.approve(b.dataset.approve); render(); }));
+  pl.querySelectorAll("[data-deny]").forEach((b) =>
+    b.addEventListener("click", () => { GC.deny(b.dataset.deny); render(); }));
+  al.querySelectorAll("[data-open]").forEach((b) =>
+    b.addEventListener("click", () => GC.navigateTo("staff-checkout.html?id=" + b.dataset.open)));
+
+  GC.wireButtonGlow();
+}
+
+document.getElementById("btn-open-portal").addEventListener("click", () => {
+  const first = GC.listActive()[0];
+  if (!first) { alert("אין כרטיס פעיל — קודם מאשרים בקשה"); return; }
+  GC.navigateTo("portal.html?id=" + first.id);
+});
+
+render();
+</script>
+</body>
+</html>

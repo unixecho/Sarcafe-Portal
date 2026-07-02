@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>כרטיס מתנה · סארקפה</title>
+<link rel="stylesheet" href="assets/giftcards.css">
+</head>
+<body class="gc-body">
+<div class="gc-page">
+
+  <header class="gc-header">
+    <div class="gc-eyebrow">Sarcafe · כרטיס מתנה</div>
+    <h1>יצירת כרטיס מתנה</h1>
+    <p>עד 200 ₪ לכרטיס. התשלום מתבצע ב-Bit לבעלים ומאושר ידנית בלוח הבעלים.</p>
+  </header>
+  <div class="gc-demo-banner">🔧 מצב דמו — עמוד עצמאי, בלי חיבור אמיתי ל-Bit או Supabase</div>
+
+  <main class="gc-main">
+
+    <div class="gc-panel" id="panel-form">
+      <h2>פרטים</h2>
+      <div class="gc-sub">כמה דקות וזהו</div>
+
+      <div class="gc-row2">
+        <div class="gc-field"><label class="gc-label">שם פרטי</label><input type="text" id="f-first" placeholder="נועה"></div>
+        <div class="gc-field"><label class="gc-label">שם משפחה</label><input type="text" id="f-last" placeholder="כהן"></div>
+      </div>
+      <div class="gc-row2">
+        <div class="gc-field"><label class="gc-label">טלפון</label><input type="tel" id="f-phone" placeholder="050-1234567"></div>
+        <div class="gc-field"><label class="gc-label">אימייל</label><input type="email" id="f-email" placeholder="noa@example.com"></div>
+      </div>
+      <div class="gc-field">
+        <label class="gc-label">מייל למתנה (לא חובה)</label>
+        <input type="email" id="f-recipient" placeholder="לדוגמה: לילד/ה, בן/בת זוג...">
+      </div>
+      <div class="gc-field">
+        <label class="gc-label">סכום טעינה</label>
+        <div class="gc-amount-picks">
+          <div class="gc-amount-pick" data-amt="50">50 ₪</div>
+          <div class="gc-amount-pick" data-amt="100">100 ₪</div>
+          <div class="gc-amount-pick" data-amt="150">150 ₪</div>
+          <div class="gc-amount-pick selected" data-amt="200">200 ₪</div>
+        </div>
+        <div class="gc-hint">מקסימום 200 ₪ לכרטיס</div>
+      </div>
+      <button class="gc-btn gc-btn-primary" id="btn-goto-bit">המשך לתשלום ב-Bit ←</button>
+    </div>
+
+    <div class="gc-panel" id="panel-bit" style="display:none;">
+      <h2>תשלום ב-Bit</h2>
+      <div class="gc-sub">לחיצה תפתח את Bit עם הטלפון של הבעלים והסכום מוכן מראש.</div>
+      <a class="gc-btn gc-btn-bit" id="btn-bit-link" href="#">פתיחת Bit לתשלום 🅱️</a>
+      <div class="gc-hint">בהדגמה זה לא פותח Bit באמת — בייצור זה קישור עמוק (deep link) עם הטלפון של הבעלים.</div>
+      <div style="margin-top:18px;">
+        <button class="gc-btn gc-btn-primary" id="btn-confirm-paid">סימנתי שהעברתי — שלח לאישור</button>
+      </div>
+    </div>
+
+    <div class="gc-panel" id="panel-done" style="display:none;">
+      <h2>הבקשה נשלחה 🎉</h2>
+      <div class="gc-sub">הכרטיס ימתין לאישור הבעלים. קישור לכרטיס האישי יישלח למייל עם קבלת האישור.</div>
+      <div id="ticket-slot"></div>
+      <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-new-request">יצירת בקשה נוספת</button>
+        <button class="gc-btn gc-btn-primary gc-btn-sm" id="btn-go-owner">המשך הדגמה: אישור בלוח הבעלים →</button>
+        <button class="gc-btn gc-btn-ghost gc-btn-sm" id="btn-go-portal">מעבר לכרטיס (לדוגמה) →</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="assets/giftcards-mock.js"></script>
+<script src="assets/giftcards-ui.js"></script>
+<script>
+"use strict";
+let selectedAmount = 200;
+let draftCard = null;
+
+document.querySelectorAll(".gc-amount-pick").forEach((el) => {
+  el.addEventListener("click", () => {
+    document.querySelectorAll(".gc-amount-pick").forEach((x) => x.classList.remove("selected"));
+    el.classList.add("selected");
+    selectedAmount = parseInt(el.dataset.amt, 10);
+  });
+});
+
+document.getElementById("btn-goto-bit").addEventListener("click", () => {
+  const first = document.getElementById("f-first").value.trim();
+  const last = document.getElementById("f-last").value.trim();
+  const phone = document.getElementById("f-phone").value.trim();
+  const email = document.getElementById("f-email").value.trim();
+  const recipientEmail = document.getElementById("f-recipient").value.trim();
+  if (!first || !last || !phone || !email) {
+    alert("נא למלא שם, טלפון ואימייל");
+    return;
+  }
+  draftCard = { first, last, phone, email, recipientEmail, amount: selectedAmount };
+  document.getElementById("panel-form").style.display = "none";
+  document.getElementById("panel-bit").style.display = "";
+  const link = document.getElementById("btn-bit-link");
+  link.href = "bit://pay?phone=0501234567&amount=" + selectedAmount + "&note=" + encodeURIComponent("כרטיס מתנה סארקפה");
+  link.textContent = "פתיחת Bit לתשלום " + selectedAmount + " ₪ 🅱️";
+});
+
+let createdCard = null;
+document.getElementById("btn-confirm-paid").addEventListener("click", () => {
+  createdCard = GC.createRequest(draftCard);
+  document.getElementById("panel-bit").style.display = "none";
+  document.getElementById("panel-done").style.display = "";
+  document.getElementById("ticket-slot").innerHTML = gcRenderTicket(createdCard);
+});
+
+document.getElementById("btn-new-request").addEventListener("click", () => {
+  ["f-first", "f-last", "f-phone", "f-email", "f-recipient"].forEach((id) => (document.getElementById(id).value = ""));
+  document.getElementById("panel-done").style.display = "none";
+  document.getElementById("panel-form").style.display = "";
+  draftCard = null;
+});
+
+document.getElementById("btn-go-owner").addEventListener("click", () => {
+  GC.navigateTo("owner.html");
+});
+
+document.getElementById("btn-go-portal").addEventListener("click", () => {
+  if (createdCard) GC.navigateTo("portal.html?id=" + createdCard.id);
+});
+
+GC.wireButtonGlow();
+</script>
+</body>
+</html>
