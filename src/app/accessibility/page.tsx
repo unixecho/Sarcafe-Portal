@@ -1,0 +1,96 @@
+import Link from 'next/link'
+import { readSetting } from '@/lib/settings/server'
+import { DEFAULT_ACCESSIBILITY_STATEMENT, type AccessibilityStatement } from '@/lib/settings/keys'
+
+export const metadata = { title: 'Sarcafe | הצהרת נגישות' }
+
+// IS 5568 (Israeli accessibility-service regulations) / WCAG 2.2 AA target.
+// Fixed copy below is not owner-editable on purpose (it describes what the
+// codebase actually does, not a business-specific claim); the
+// conditionally-rendered sections are, via /owner/accessibility. An empty
+// field is simply omitted, never shown as a "[to be completed]" placeholder.
+export default async function AccessibilityStatementPage() {
+  const statement = await readSetting<AccessibilityStatement>('accessibility_statement', DEFAULT_ACCESSIBILITY_STATEMENT)
+
+  const hasPhysicalNotes = statement.entranceAccess || statement.restroomAccess || statement.generalNote
+  const hasContact = statement.contactName || statement.contactPhone || statement.contactEmail
+
+  return (
+    <main dir="rtl" lang="he" style={{ maxWidth: 560, margin: '0 auto', padding: '32px 20px 48px' }}>
+      <Link href="/" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+        ← לדף הבית
+      </Link>
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: 16 }}>הצהרת נגישות</h1>
+
+      <p style={{ color: 'var(--text-dim)', lineHeight: 1.7 }}>
+        אנו פועלים להנגשת האתר בהתאם לתקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), תשע״ג-2013,
+        ובהתאם לתקן הישראלי (ת״י) 5568 ברמת AA, המבוסס על הנחיות WCAG 2.2.
+      </p>
+
+      <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>מה נעשה באתר</h2>
+      <ul style={{ color: 'var(--text-dim)', lineHeight: 1.9, paddingInlineStart: 20 }}>
+        <li>מבנה סמנטי ותמיכה בקוראי מסך</li>
+        <li>ניגודיות צבעים העומדת ברמה AA</li>
+        <li>אינדיקציית פוקוס ברורה ותמיכה מלאה בניווט מקלדת</li>
+        <li>כיבוד הגדרת &quot;הפחתת תנועה&quot; (prefers-reduced-motion) במכשיר</li>
+        <li>תמיכה מלאה בעברית, אנגלית וערבית, כולל כיווניות RTL</li>
+      </ul>
+
+      {statement.browsersTested && (
+        <p style={{ color: 'var(--text-dim)', marginTop: 16 }}>
+          <strong>נבדק בדפדפנים: </strong>
+          {statement.browsersTested}
+        </p>
+      )}
+
+      {hasPhysicalNotes && (
+        <>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>נגישות פיזית בדוכן</h2>
+          {statement.entranceAccess && <p style={{ color: 'var(--text-dim)' }}>{statement.entranceAccess}</p>}
+          {statement.restroomAccess && <p style={{ color: 'var(--text-dim)' }}>{statement.restroomAccess}</p>}
+          {statement.generalNote && <p style={{ color: 'var(--text-dim)' }}>{statement.generalNote}</p>}
+        </>
+      )}
+
+      {statement.exemptionNote && (
+        <p style={{ color: 'var(--text-dim)', marginTop: 16, fontSize: '0.85rem' }}>{statement.exemptionNote}</p>
+      )}
+
+      {hasContact && (
+        <>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>פנייה בנושא נגישות</h2>
+          <p style={{ color: 'var(--text-dim)' }}>
+            {statement.contactName}
+            {statement.contactPhone && (
+              <>
+                {' · '}
+                <a href={`tel:${statement.contactPhone}`} className="ltr-isolate" style={{ color: 'var(--neon-2)' }}>
+                  {statement.contactPhone}
+                </a>
+              </>
+            )}
+            {statement.contactEmail && (
+              <>
+                {' · '}
+                <a href={`mailto:${statement.contactEmail}`} className="ltr-isolate" style={{ color: 'var(--neon-2)' }}>
+                  {statement.contactEmail}
+                </a>
+              </>
+            )}
+          </p>
+        </>
+      )}
+
+      <p style={{ marginTop: 32, fontSize: '0.78rem' }}>
+        <a
+          href="https://www.gov.il/he/departments/policies/disability_accessibility_regulations"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--text-faint)' }}
+        >
+          לתקנות הנגישות הרשמיות באתר הממשלה ↗
+        </a>
+      </p>
+    </main>
+  )
+}

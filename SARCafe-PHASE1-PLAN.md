@@ -147,6 +147,28 @@ Supabase's Google provider needs a Google Cloud OAuth client. Once you've create
 2. Authorized redirect URI: `https://moiunkugxgsgbdokaxbr.supabase.co/auth/v1/callback` (Supabase's fixed callback — not the app's own `/auth/callback`, which is separate and needs no Google-side entry).
 3. Paste the Client ID + Secret into Supabase Dashboard → Authentication → Providers → Google.
 
+## Status (2026-09-11)
+
+Built and verified (`tsc --noEmit` + `next build` pass clean) on `rewrite/nextjs-ayekabar-style`:
+- Portal (`/`, branch picker + real nav/Instagram/review/Bit-payment links migrated from the legacy site)
+- Auth: `/login` + `AuthHandoff`, `/no-access`, `/auth/callback`, signout
+- Owner dashboard (branch-aware stats + signals, nav tile grid)
+- Menu editor + full versioning (draft/publish, named/scheduled variants, out-of-stock panel)
+- Public `/menu/[branch]` (accordion, live-poll for publish changes, language switch)
+- Accessibility statement (`/accessibility` public + `/owner/accessibility` editor)
+- Staff management (`/owner/staff` — invite, role/badge/branch assignment, deactivate)
+- Full SQL schema staged in `supabase/migrations/`, not yet applied
+
+**Caught and fixed during this pass:** `/menu/[branch]` originally paired `generateStaticParams` with `dynamic = 'force-dynamic'` — Next.js prerenders listed params at *build* time regardless of that export, which would have frozen the public menu at whatever (empty) state existed during the build, permanently, until the next deploy. Removed `generateStaticParams`; the route is now genuinely per-request dynamic.
+
+**Deliberately deferred**, each noted in code comments where it matters:
+- The AyekaBar-style accessibility **widget** (visitor-facing font-scale/contrast-mode/reading-guide/big-cursor panel) — baseline WCAG 2.2 AA work (semantics, focus management, contrast tokens, keyboard operability, reduced-motion, non-color status, 52px tap targets) is built into every component from the start; this widget is an additive convenience layer on top, not a compliance gap, and deserves its own careful pass rather than being rushed in at the end of this one.
+- Custom iOS `WheelPicker`/`TimeWheel` — `TempMenuSheet` uses native `datetime-local`/`time` inputs instead (fully accessible and correct; the wheel's tactile feel is cosmetic polish).
+- `menu_audit` logging — the table and RLS exist; no code path writes to it yet.
+- Real contact phone number on `/no-access` — intentionally not invented as a placeholder.
+- Real brand assets (logo/background/favicon) — still literally placeholders; carried over as a known gap from the original audit.
+- Automated tests (Phase 27 of the master prompt) — not started.
+
 ## Still blocked on
 
 The `supabase` MCP connector shows `needs_auth` — authorize it with `/mcp` in an interactive Claude Code session before any migration can actually run against `moiunkugxgsgbdokaxbr`. Everything else in this plan (app scaffold, config, design tokens, SQL files staged in the repo) can proceed without it.
