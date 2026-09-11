@@ -1,4 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 
@@ -55,7 +56,18 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && (editorProtected || opProtected)) {
-    const { data: staffRow } = await supabase
+    // `staff` has zero SELECT policies for `authenticated` on purpose — a
+    // staff member shouldn't be able to read their own role/badge directly
+    // and reason about privilege escalation client-side. That means the
+    // session-scoped `supabase` client above (subject to RLS) would always
+    // see zero rows here; this check needs the service-role client, which
+    // bypasses RLS, same as owner/guard.ts and staff/guard.ts.
+    const service = createSupabaseJsClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data: staffRow } = await service
       .from('staff')
       .select('role, badge, branch_id')
       .eq('auth_user_id', user.id)

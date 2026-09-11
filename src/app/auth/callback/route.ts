@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp, hasAnyMenuEditAccess, isStaff } from '@/lib/staff/access'
 
 // Mirrors AyekaBar's auth/callback/route.ts. One important difference:
@@ -46,8 +46,12 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // `staff` has zero SELECT policies for `authenticated` on purpose — the
+  // session-scoped `supabase` client above (subject to RLS) would always
+  // see zero rows here, which is exactly the "no staff row -> /no-access"
+  // bug this service-role read fixes.
   const { data: staffRow } = user
-    ? await supabase
+    ? await createServiceRoleClient()
         .from('staff')
         .select('role, badge, branch_id')
         .eq('auth_user_id', user.id)
