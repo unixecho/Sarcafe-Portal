@@ -69,7 +69,14 @@ export async function GET(request: NextRequest) {
 
   if (staffError) {
     console.error('auth/callback: staff lookup failed:', staffError.message)
-    return NextResponse.redirect(`${origin}/no-access?reason=lookup_failed`)
+    // Including the actual message here (not just a generic code) since we
+    // don't have Vercel log access from this session — a Postgrest/GoTrue
+    // error message ("Invalid API key", "JWT expired", etc.) isn't
+    // sensitive, and seeing it directly beats another round trip through
+    // logs we can't reach.
+    return NextResponse.redirect(
+      `${origin}/no-access?reason=lookup_failed&detail=${encodeURIComponent(staffError.message)}`
+    )
   }
 
   if (isOp(staffRow)) {
