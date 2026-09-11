@@ -44,7 +44,22 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
+
+  // Defensive: Supabase should redirect the OAuth callback to
+  // `redirectTo` (`/auth/callback`) — confirmed correct at the request
+  // level (the `redirect_to` sent to Google/Supabase is right) — but has
+  // intermittently landed the browser on bare `/` with the `code` still
+  // attached instead, which strands the code (nothing on `/` exchanges
+  // it). Whatever the cause upstream, forward it server-side rather than
+  // let the code go to waste on every request, not just this app's own
+  // navigations.
+  if (pathname === '/' && searchParams.has('code')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/callback'
+    return NextResponse.redirect(url)
+  }
+
   const editorProtected = matchesAny(pathname, [MENU_EDITOR_PREFIX])
   const opProtected = matchesAny(pathname, OP_ONLY_PREFIXES)
 
