@@ -46,18 +46,31 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    // Fails loudly and visibly (in the redirect URL, since we may not have
+    // access to Vercel's function logs) rather than silently landing on
+    // /no-access with no way to tell a missing env var from a real denial.
+    console.error('auth/callback: SUPABASE_SERVICE_ROLE_KEY is not set')
+    return NextResponse.redirect(`${origin}/no-access?reason=server_misconfigured`)
+  }
+
   // `staff` has zero SELECT policies for `authenticated` on purpose — the
   // session-scoped `supabase` client above (subject to RLS) would always
   // see zero rows here, which is exactly the "no staff row -> /no-access"
   // bug this service-role read fixes.
-  const { data: staffRow } = user
+  const { data: staffRow, error: staffError } = user
     ? await createServiceRoleClient()
         .from('staff')
         .select('role, badge, branch_id')
         .eq('auth_user_id', user.id)
         .eq('active', true)
         .maybeSingle()
-    : { data: null }
+    : { data: null, error: null }
+
+  if (staffError) {
+    console.error('auth/callback: staff lookup failed:', staffError.message)
+    return NextResponse.redirect(`${origin}/no-access?reason=lookup_failed`)
+  }
 
   if (isOp(staffRow)) {
     return NextResponse.redirect(`${origin}/owner/dashboard`)
@@ -70,8 +83,8 @@ export async function GET(request: NextRequest) {
     // 2/3 gives this a real kitchen/staff destination. For now there is
     // genuinely nowhere else to send them, so this is honest rather than a
     // placeholder page built just to have somewhere to land.
-    return NextResponse.redirect(`${origin}/no-access`)
+    return NextResponse.redirect(`${origin}/no-access?reason=no_elevated_role`)
   }
 
-  return NextResponse.redirect(`${origin}/no-access`)
+  return NextResponse.redirect(`${origin}/no-access?reason=no_staff_row`)
 }
