@@ -1,0 +1,366 @@
+/* ==========================================================================
+   Fonts — kept from the current Sarcafe site (Heebo + Noto Sans Arabic),
+   not switched to AyekaBar's Rubik. Listing both in one font-family stack
+   lets the browser pick whichever actually has glyphs for the script in
+   use, so Hebrew renders in Heebo and any Arabic text automatically falls
+   through to Noto Sans Arabic with no per-element font-family switching.
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300..900&family=Noto+Sans+Arabic:wght@300..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design tokens — mechanics ported from AyekaBar (radii scale, shadow/glow
+   shape, --ease timing curve, sheet geometry), recolored to Sarcafe's own
+   coffee palette rather than AyekaBar's bar-neon orange/cyan. Single
+   committed dark theme, no light mode, matching AyekaBar's own choice (this
+   is a food truck used outdoors/under bright light as much as at night —
+   revisit if that turns out to be wrong in practice, not before).
+   ========================================================================== */
+:root {
+  --bg: #150f0c;
+  --bg-elev: #221712;
+  --bg-elev-2: #2e1f18;
+
+  --neon: #ff7a45; /* primary brand accent (amber-orange / roast) */
+  --neon-soft: #ffab7a;
+  --neon-2: #57d9c0; /* secondary/info accent (teal-mint) — never the only
+                          signal for a status; always paired with text/icon */
+
+  --text: #fdf6ec;
+  --text-dim: #b9ada0; /* checked 4.5:1 against --bg-elev */
+  --text-faint: #9c9086;
+
+  --line: rgba(253, 246, 236, 0.08);
+  --line-strong: rgba(253, 246, 236, 0.14);
+  --line-interactive: rgba(253, 246, 236, 0.4); /* clears WCAG 1.4.11's 3:1
+                                                     non-text contrast floor */
+
+  --glow: 0 0 24px rgba(255, 122, 69, 0.45);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1); /* the one curve for all travel
+                                              motion (slides, fades, rises) */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* "something just got
+                                                    decided" moments only:
+                                                    a switch landing, a
+                                                    sheet grabber, a badge
+                                                    bump */
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+
+  --tap-min: 52px; /* generous touch-target floor for a tablet POS — above
+                       WCAG's 44px minimum on purpose */
+
+  /* Accessibility-widget hooks (see components/a11y). Defaults are inert;
+     the widget only ever sets these three, never touches anything else. */
+  --a11y-font-scale: 100%;
+  --a11y-letter-spacing: normal;
+  --a11y-word-spacing: normal;
+  --a11y-line-height: normal;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Heebo', 'Noto Sans Arabic', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--a11y-font-scale, 100%);
+}
+
+body {
+  margin: 0;
+  letter-spacing: var(--a11y-letter-spacing, normal);
+  word-spacing: var(--a11y-word-spacing, normal);
+  line-height: var(--a11y-line-height, normal);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numerals/prices/times must never mirror inside RTL text. */
+.ltr-isolate {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Icons (e.g. a back-chevron) that must visually flip under RTL. */
+[dir='rtl'] .dir-flip {
+  transform: scaleX(-1);
+}
+
+/* Visible everywhere, deliberately with !important — this overrides the
+   many inline `outline: none`s that show up in third-party/reset styles,
+   because a missing focus ring is a WCAG 2.4.7 failure, not a style choice
+   to be silently overridden downstream. */
+:focus-visible {
+  outline: 2px solid var(--neon-2) !important;
+  outline-offset: 2px !important;
+}
+
+/* ==========================================================================
+   Tap / press feedback — applied to essentially every tappable control.
+   ========================================================================== */
+.press {
+  transition: transform 0.12s var(--ease), filter 0.12s ease;
+}
+.press:active {
+  transform: scale(0.96);
+  filter: brightness(1.18);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise-in 0.55s var(--ease) backwards;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pop {
+  animation: pop-in 0.32s var(--spring) backwards;
+}
+
+/* ==========================================================================
+   Skeleton loading — one shared class for every loading.tsx in the app, so
+   a route's skeleton always matches its real layout's geometry exactly
+   (same box, just shimmering) and there is zero layout shift on swap-in.
+   ========================================================================== */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elev-2);
+  border-radius: var(--radius-md);
+}
+.sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(253, 246, 236, 0.06), transparent);
+  animation: sk-shimmer 1.3s infinite;
+}
+@keyframes sk-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* ==========================================================================
+   Sheet shell — the one bottom-sheet/dialog shape every overlay in the app
+   uses (SheetShell, VariantWizard, TempMenuSheet). Phone: full-width sheet
+   rising from the bottom edge. Desktop (>=720px): the SAME shell becomes a
+   centered dialog via one breakpoint swap — one component, two
+   presentations, not two components.
+   ========================================================================== */
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fade-in 0.22s var(--ease);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sheet-panel {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line-strong);
+  border-bottom: none;
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+  animation: sheet-up 0.34s var(--ease);
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.sheet-grabber {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  margin: 0 auto 14px;
+}
+.sheet-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 720px) {
+  .sheet-scrim {
+    align-items: center;
+    padding: 24px;
+  }
+  .sheet-panel {
+    border-radius: var(--radius-xl);
+    border-bottom: 1px solid var(--line-strong);
+    animation: rise-in 0.3s var(--ease);
+  }
+  .sheet-grabber {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   iOS-style page-push transitions. Direction is spelled out per [dir]
+   because CSS transforms don't follow writing direction: forward pushes in
+   from the left under RTL (Hebrew/Arabic) and from the right under LTR,
+   matching the platform convention each way.
+   ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.42s;
+  animation-timing-function: var(--ease);
+  mix-blend-mode: normal;
+}
+
+html[dir='rtl'][data-nav='forward']::view-transition-old(root) {
+  animation-name: vt-out-to-left;
+}
+html[dir='rtl'][data-nav='forward']::view-transition-new(root) {
+  animation-name: vt-in-from-right;
+  z-index: 1;
+}
+html[dir='rtl'][data-nav='back']::view-transition-old(root) {
+  animation-name: vt-out-to-right;
+  z-index: 1;
+}
+html[dir='rtl'][data-nav='back']::view-transition-new(root) {
+  animation-name: vt-in-from-left;
+}
+
+html[dir='ltr'][data-nav='forward']::view-transition-old(root) {
+  animation-name: vt-out-to-right;
+}
+html[dir='ltr'][data-nav='forward']::view-transition-new(root) {
+  animation-name: vt-in-from-left;
+  z-index: 1;
+}
+html[dir='ltr'][data-nav='back']::view-transition-old(root) {
+  animation-name: vt-out-to-left;
+  z-index: 1;
+}
+html[dir='ltr'][data-nav='back']::view-transition-new(root) {
+  animation-name: vt-in-from-right;
+}
+
+@keyframes vt-in-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes vt-in-from-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes vt-out-to-left {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-25%);
+    opacity: 0.55;
+  }
+}
+@keyframes vt-out-to-right {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(25%);
+    opacity: 0.55;
+  }
+}
+
+/* Fallback entrance when the View Transitions API is unsupported (or a
+   navigation didn't go through the JS push path, e.g. first load). */
+.page-enter {
+  animation: page-in 0.32s var(--ease) both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Suppresses the CSS entrance on a page that's already being animated by
+   the View Transition API, so it never double-animates. Read once at mount
+   (see template.tsx) — never toggled live on a mounted instance. */
+.page-enter--pushed,
+.page-enter--pushed .rise {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* ==========================================================================
+   Reduced motion — a blanket override, last in the cascade on purpose.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
