@@ -2,11 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BRANCHES, type BranchSlug } from '@/lib/branches'
-import { PAYBOX_PHONE_NUMBER, PORTAL_BRANCHES } from '@/lib/portal-config'
+import {
+  MapPin,
+  Car,
+  Compass,
+  BookOpen,
+  Camera,
+  Star,
+  CreditCard,
+  Zap,
+  Package,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react'
+import PublicBackdrop from '@/components/PublicBackdrop'
+import LogoMark from '@/components/LogoMark'
+import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
+import type { Branch } from '@/lib/branches'
 
 type Lang = 'he' | 'en' | 'ar'
-const LANGUAGE_STORAGE_KEY = 'sarcafe-language'
+const PAYBOX_PHONE_NUMBER = '0507437395'
 
 type PortalCopy = {
   eyebrow: string
@@ -30,7 +47,7 @@ const T: Record<Lang, PortalCopy> = {
     welcome: 'ברוכים הבאים ל־Sarcafe',
     chooseBranch: 'בחרו סניף כדי להמשיך.',
     branchLabel: 'סניף',
-    changeBranch: '← החלפת סניף',
+    changeBranch: 'החלפת סניף',
     quickLinks: 'קישורים מהירים למיקום הזה.',
     navigation: 'ניווט אלינו',
     menu: 'תפריט דיגיטלי',
@@ -45,7 +62,7 @@ const T: Record<Lang, PortalCopy> = {
     welcome: 'Welcome to Sarcafe',
     chooseBranch: 'Choose your branch to continue.',
     branchLabel: 'Branch',
-    changeBranch: '← Change branch',
+    changeBranch: 'Change branch',
     quickLinks: 'Quick links for this location.',
     navigation: 'Navigate to Us',
     menu: 'Digital Menu',
@@ -60,7 +77,7 @@ const T: Record<Lang, PortalCopy> = {
     welcome: 'أهلاً بكم في Sarcafe',
     chooseBranch: 'اختاروا الفرع للمتابعة.',
     branchLabel: 'فرع',
-    changeBranch: '← تغيير الفرع',
+    changeBranch: 'تغيير الفرع',
     quickLinks: 'روابط سريعة لهذا الموقع.',
     navigation: 'التنقل إلينا',
     menu: 'القائمة الرقمية',
@@ -72,31 +89,30 @@ const T: Record<Lang, PortalCopy> = {
   },
 }
 
-function getInitialLanguage(): Lang {
-  if (typeof window === 'undefined') return 'he'
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
-  return stored === 'en' || stored === 'ar' || stored === 'he' ? stored : 'he'
-}
-
 export default function PortalPage() {
-  const [lang, setLang] = useState<Lang>('he')
-  const [branch, setBranch] = useState<BranchSlug | null>(null)
+  const [lang, setLang] = useLanguage()
+  const [branches, setBranches] = useState<Branch[] | null>(null)
+  const [branchSlug, setBranchSlug] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
 
   useEffect(() => {
-    setLang(getInitialLanguage())
+    let cancelled = false
+    fetch('/api/branches')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { branches: Branch[] } | null) => {
+        if (!cancelled && payload) setBranches(payload.branches)
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([])
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  useEffect(() => {
-    document.documentElement.lang = lang
-    document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl'
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
-  }, [lang])
-
   const t = T[lang]
-  const config = branch ? PORTAL_BRANCHES[branch] : null
-  const branchMeta = BRANCHES.find((b) => b.slug === branch)
+  const branch = branches?.find((b) => b.slug === branchSlug) ?? null
 
   return (
     <main
@@ -109,124 +125,113 @@ export default function PortalPage() {
         padding: '32px 20px',
         gap: 20,
         textAlign: 'center',
+        position: 'relative',
       }}
     >
-      <nav aria-label="בחירת שפה" style={{ position: 'fixed', insetInlineEnd: 16, top: 16, display: 'flex', gap: 4 }}>
-        {(['he', 'en', 'ar'] as Lang[]).map((l) => (
-          <button
-            key={l}
-            type="button"
-            className="press"
-            aria-pressed={lang === l}
-            onClick={() => setLang(l)}
-            style={{
-              minWidth: 36,
-              minHeight: 36,
-              borderRadius: 999,
-              border: `1px solid ${lang === l ? 'var(--neon)' : 'var(--line-strong)'}`,
-              background: lang === l ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-              color: 'var(--text)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            {l.toUpperCase()}
-          </button>
-        ))}
-      </nav>
+      <PublicBackdrop />
 
-      <div aria-hidden="true" style={{ fontSize: '2.6rem' }}>
-        ☕
-      </div>
+      <LanguageSwitch lang={lang} onChange={setLang} />
+
+      <LogoMark size={92} />
 
       {!branch ? (
-        <section key="branches" className="rise" style={{ maxWidth: 360 }}>
+        <section key="branches" className="rise" style={{ maxWidth: 360, width: '100%' }}>
           <p style={{ margin: 0, color: 'var(--neon-soft)', fontSize: '0.8rem', fontWeight: 700 }}>{t.eyebrow}</p>
           <h1 style={{ margin: '4px 0 6px', fontSize: '1.8rem', fontWeight: 800 }}>{t.welcome}</h1>
           <p style={{ margin: '0 0 20px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{t.chooseBranch}</p>
 
-          <div role="group" aria-label={t.chooseBranch} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {BRANCHES.map((b) => (
-              <button
-                key={b.slug}
-                type="button"
-                className="press"
-                onClick={() => setBranch(b.slug)}
-                style={{
-                  minHeight: 64,
-                  borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--line-strong)',
-                  background: 'var(--bg-elev)',
-                  color: 'var(--text)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  cursor: 'pointer',
-                }}
-              >
-                <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{b.name[lang]}</span>
-                <small style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>{t.branchLabel}</small>
-              </button>
-            ))}
-          </div>
+          {branches === null ? (
+            <div role="group" aria-label={t.chooseBranch} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[0, 1].map((i) => (
+                <div key={i} className="sk" style={{ height: 64 }} />
+              ))}
+            </div>
+          ) : (
+            <div role="group" aria-label={t.chooseBranch} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {branches.map((b) => (
+                <button
+                  key={b.slug}
+                  type="button"
+                  className="press"
+                  onClick={() => setBranchSlug(b.slug)}
+                  style={{
+                    minHeight: 64,
+                    borderRadius: 15,
+                    border: '1px solid var(--line)',
+                    background: 'var(--bg-elev)',
+                    color: 'var(--text)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{b.name[lang] || b.name.he}</span>
+                  <small style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>{t.branchLabel}</small>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       ) : (
         <section key="actions" className="rise" style={{ maxWidth: 360, width: '100%' }}>
           <button
             type="button"
             onClick={() => {
-              setBranch(null)
+              setBranchSlug(null)
               setNavOpen(false)
               setPayOpen(false)
             }}
-            style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: 12, cursor: 'pointer' }}
+            className="press"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-dim)',
+              fontSize: '0.85rem',
+              marginBottom: 12,
+              cursor: 'pointer',
+            }}
           >
+            <ChevronLeft size={16} className="dir-flip" aria-hidden="true" />
             {t.changeBranch}
           </button>
 
           <p style={{ margin: 0, color: 'var(--neon-soft)', fontSize: '0.8rem', fontWeight: 700 }}>{t.branchLabel}</p>
-          <h1 style={{ margin: '4px 0 6px', fontSize: '1.6rem', fontWeight: 800 }}>{branchMeta?.name[lang]}</h1>
+          <h1 style={{ margin: '4px 0 6px', fontSize: '1.6rem', fontWeight: 800 }}>{branch.name[lang] || branch.name.he}</h1>
           <p style={{ margin: '0 0 16px', color: 'var(--text-dim)', fontSize: '0.85rem' }}>{t.quickLinks}</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <ExpandableAction
-              open={navOpen}
-              onToggle={() => setNavOpen((v) => !v)}
-              icon="🗺️"
-              label={t.navigation}
-              primary
-            >
-              <ActionLink href={config!.navigation.googleMaps} icon="🗺️" label="Google Maps" primary />
-              <ActionLink href={config!.navigation.waze} icon="🚗" label="Waze" />
-              <ActionLink href={config!.navigation.appleMaps} icon="🍎" label="Apple Maps" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ExpandableAction open={navOpen} onToggle={() => setNavOpen((v) => !v)} icon={<MapPin size={18} />} label={t.navigation}>
+              <ActionLink href={branch.links.navGoogleMaps} icon={<MapPin size={16} />} label="Google Maps" />
+              <ActionLink href={branch.links.navWaze} icon={<Car size={16} />} label="Waze" />
+              <ActionLink href={branch.links.navAppleMaps} icon={<Compass size={16} />} label="Apple Maps" />
             </ExpandableAction>
 
-            <Link
-              href={`/menu/${branch}`}
-              className="press action-link"
-              style={{ ...actionLinkStyle, textDecoration: 'none' }}
-            >
-              <span style={actionLabelStyle}>
-                <span aria-hidden="true">📖</span> {t.menu}
+            {/* The hero action — one clear primary CTA per screen, same
+                gradient+glow treatment AyekaBar gives its own "Menu" button. */}
+            <Link href={`/menu/${branch.slug}`} className="press" style={heroButtonStyle}>
+              <span style={icWrap}>
+                <BookOpen size={18} aria-hidden="true" />
               </span>
-              <span aria-hidden="true">←</span>
+              <span style={{ flex: 1, textAlign: 'start' }}>{t.menu}</span>
+              <Arrow />
             </Link>
 
-            <ActionLink href={config!.instagram} icon="📸" label={t.instagram} external />
-            <ActionLink href={config!.review} icon="⭐" label={t.review} external />
+            <ActionLink href={branch.links.instagram} icon={<Camera size={16} />} label={t.instagram} external />
+            <ActionLink href={branch.links.review} icon={<Star size={16} />} label={t.review} external />
 
-            <ExpandableAction open={payOpen} onToggle={() => setPayOpen((v) => !v)} icon="💳" label={t.payment}>
-              <ActionLink href={config!.bit} icon="⚡" label="Bit" primary external />
-              <div
-                aria-disabled="true"
-                style={{ ...actionLinkStyle, opacity: 0.6, cursor: 'default' }}
-              >
-                <span style={actionLabelStyle}>
-                  <span aria-hidden="true">📦</span>
-                  <span>
-                    PayBox
-                    <small style={{ display: 'block', color: 'var(--text-faint)', fontSize: '0.7rem' }}>{t.payboxManual}</small>
-                  </span>
+            <ExpandableAction open={payOpen} onToggle={() => setPayOpen((v) => !v)} icon={<CreditCard size={18} />} label={t.payment}>
+              <ActionLink href={branch.links.bit} icon={<Zap size={16} />} label="Bit" external />
+              <div aria-disabled="true" style={{ ...subOptStyle, opacity: 0.6, cursor: 'default' }}>
+                <span style={icWrap}>
+                  <Package size={16} aria-hidden="true" />
+                </span>
+                <span style={{ flex: 1, textAlign: 'start' }}>
+                  PayBox
+                  <small style={{ display: 'block', color: 'var(--text-faint)', fontSize: '0.7rem' }}>{t.payboxManual}</small>
                 </span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-faint)' }}>{t.paused}</span>
               </div>
@@ -238,52 +243,55 @@ export default function PortalPage() {
   )
 }
 
+function Arrow() {
+  return <ChevronRight size={16} className="dir-flip" aria-hidden="true" style={{ color: 'var(--text-faint)' }} />
+}
+
 function ExpandableAction({
   open,
   onToggle,
   icon,
   label,
-  primary,
   children,
 }: {
   open: boolean
   onToggle: () => void
-  icon: string
+  icon: React.ReactNode
   label: string
-  primary?: boolean
   children: React.ReactNode
 }) {
   return (
     <div>
-      <button
-        type="button"
-        className="press"
-        aria-expanded={open}
-        onClick={onToggle}
-        style={{
-          ...actionLinkStyle,
-          width: '100%',
-          border: primary ? '1px solid var(--neon)' : actionLinkStyle.border,
-        }}
-      >
-        <span style={actionLabelStyle}>
-          <span aria-hidden="true">{icon}</span> {label}
-        </span>
-        <span aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }}>
-          ⌄
-        </span>
+      <button type="button" className="press" aria-expanded={open} onClick={onToggle} style={{ ...actionRowStyle, width: '100%' }}>
+        <span style={icWrap}>{icon}</span>
+        <span style={{ flex: 1, textAlign: 'start' }}>{label}</span>
+        <ChevronDown
+          size={18}
+          aria-hidden="true"
+          style={{ color: 'var(--text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s var(--ease)' }}
+        />
       </button>
-      {open && (
-        <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, paddingInlineStart: 8 }}>
-          {children}
+      <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows 0.4s var(--ease)' }}>
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 2px' }}>{children}</div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
-function ActionLink({ href, icon, label, primary, external }: { href: string; icon: string; label: string; primary?: boolean; external?: boolean }) {
-  const missing = !href || href === '#'
+function ActionLink({
+  href,
+  icon,
+  label,
+  external,
+}: {
+  href: string | null
+  icon: React.ReactNode
+  label: string
+  external?: boolean
+}) {
+  const missing = !href
   return (
     <a
       href={missing ? undefined : href}
@@ -292,33 +300,58 @@ function ActionLink({ href, icon, label, primary, external }: { href: string; ic
       aria-disabled={missing}
       className="press"
       style={{
-        ...actionLinkStyle,
-        border: primary ? '1px solid var(--neon)' : actionLinkStyle.border,
+        ...actionRowStyle,
         opacity: missing ? 0.5 : 1,
         cursor: missing ? 'not-allowed' : 'pointer',
         pointerEvents: missing ? 'none' : 'auto',
       }}
     >
-      <span style={actionLabelStyle}>
-        <span aria-hidden="true">{icon}</span> {label}
-      </span>
-      <span aria-hidden="true">↗</span>
+      <span style={icWrap}>{icon}</span>
+      <span style={{ flex: 1, textAlign: 'start' }}>{label}</span>
+      {external ? <ExternalLink size={14} aria-hidden="true" style={{ color: 'var(--text-faint)' }} /> : <Arrow />}
     </a>
   )
 }
 
-const actionLinkStyle: React.CSSProperties = {
+const icWrap: React.CSSProperties = { width: 26, display: 'grid', placeItems: 'center', color: 'var(--neon-soft)', flex: '0 0 auto' }
+
+const actionRowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'space-between',
+  gap: 12,
   minHeight: 'var(--tap-min)',
   padding: '0 16px',
-  borderRadius: 999,
-  border: '1px solid var(--line-strong)',
+  borderRadius: 15,
+  border: '1px solid var(--line)',
   background: 'var(--bg-elev)',
   color: 'var(--text)',
   fontWeight: 600,
-  fontSize: '0.9rem',
+  fontSize: '0.95rem',
+  textDecoration: 'none',
 }
 
-const actionLabelStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10 }
+const subOptStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  minHeight: 48,
+  padding: '0 16px',
+  borderRadius: 13,
+  border: '1px solid var(--line)',
+  background: 'rgba(21,15,12,0.75)',
+  color: 'var(--text)',
+  fontWeight: 600,
+  fontSize: '0.9rem',
+  textDecoration: 'none',
+}
+
+// One clear hero per screen — the digital-menu link — same gradient/glow
+// treatment AyekaBar reserves for its single primary CTA, so it doesn't
+// compete visually with the plain rows around it.
+const heroButtonStyle: React.CSSProperties = {
+  ...actionRowStyle,
+  border: '1px solid transparent',
+  background: 'linear-gradient(135deg, rgba(255,122,69,0.2), rgba(255,171,122,0.1))',
+  boxShadow: '0 0 24px rgba(255,122,69,0.22)',
+  textDecoration: 'none',
+}

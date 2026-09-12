@@ -155,6 +155,7 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
                       </strong>
                       <button
                         type="button"
+                        className="press"
                         onClick={() => toggleCategory(uids, !allOff)}
                         style={{ background: 'none', border: 'none', color: 'var(--neon-2)', fontSize: '0.78rem', cursor: 'pointer' }}
                       >
@@ -199,6 +200,7 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
                         <button
                           key={i}
                           type="button"
+                          className="press"
                           onClick={() =>
                             setDays((prev) => {
                               const next = new Set(prev)

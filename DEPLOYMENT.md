@@ -62,9 +62,15 @@ All three below must be:
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project-ref>.supabase.co` | ⚠️ Must be the **bare project URL** — no `/rest/v1/` suffix. Pasting the REST API endpoint (as shown elsewhere in Supabase's own API docs page) breaks every request the client makes. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the `anon` `public` key | — |
 | `SUPABASE_SERVICE_ROLE_KEY` | the `service_role` **secret** key | ⚠️ Easy to paste the `anon` key here by mistake — they're both long JWTs and look similar at a glance. Symptom if wrong: `permission denied for table X` (because the query actually runs as `anon`, which correctly lacks access, not because anything is broken). **Verify by decoding the value at jwt.io — the payload must say `"role":"service_role"`, not `"role":"anon"`.** |
+| `CRON_SECRET` | any long random string you generate yourself (e.g. `openssl rand -hex 32`) | Gates `/api/cron/keep-alive` — see §3.6. Not a Supabase value; you're inventing this one. |
 
 ### 3.5 After ANY of the above changes
 **Deployments → latest → ⋯ → Redeploy.** Settings changes and env var edits do not trigger a new deployment on their own.
+
+### 3.6 Keep-alive cron (Supabase auto-pause)
+Supabase's free tier pauses a project after 7 days with zero API activity. The QR codes on the trucks are the only normal traffic this app gets — a slow week or a branch closed for a stretch is enough to trip it, and every page breaks with no warning until a customer scans a dead QR code.
+
+`vercel.json` registers a daily Vercel Cron hitting `GET /api/cron/keep-alive` (see the file for the schedule), which does a throwaway `select` against `branches` purely to register activity. The route refuses any request that isn't Vercel's own scheduled invocation — it checks for `Authorization: Bearer $CRON_SECRET`, which Vercel attaches automatically once `CRON_SECRET` is set in the project's env vars (§3.4). **Vercel Cron only actually runs once this project is deployed** — nothing fires from a local `next dev` — and Hobby-tier projects are limited to once-daily cron invocations, which is already what's configured here (well under the 7-day pause window). Confirm it's firing via Vercel's dashboard → the project → Cron Jobs tab, or by checking `/api/cron/keep-alive`'s logs for a 200 once a day.
 
 ## 4. Known defensive code (don't remove without understanding why)
 

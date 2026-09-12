@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { ChevronLeft, UtensilsCrossed, Accessibility } from 'lucide-react'
 import { fetchMenuClient } from '@/lib/menu/client'
 import { localized, type Lang } from '@/lib/menu/types'
 import type { ResolvedMenu } from '@/lib/menu/fetch'
 import type { BranchSlug } from '@/lib/branches'
+import { resolveCategoryIcon } from '@/lib/menu/icons'
+import PublicBackdrop from '@/components/PublicBackdrop'
+import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 
-const LANGUAGE_STORAGE_KEY = 'sarcafe-language'
 const REFRESH_MS = 30_000 // re-checks published_at; also catches a scheduled
 // variant flipping on/off within about this margin. A full resolveVariant
 // recompute independent of network polling (AyekaBar's 60s client tick)
@@ -17,32 +20,18 @@ const REFRESH_MS = 30_000 // re-checks published_at; also catches a scheduled
 type MenuCopy = { viewOnly: string; back: string; footer: string; accessibility: string; shekel: string; soldOut: string }
 
 const T: Record<Lang, MenuCopy> = {
-  he: { viewOnly: 'התפריט לתצוגה בלבד — מזמינים ומשלמים בדוכן.', back: '→ לפורטל', footer: 'המחירים בשקלים חדשים וכוללים מע"מ.', accessibility: 'הצהרת נגישות', shekel: '₪', soldOut: 'אזל' },
-  en: { viewOnly: 'This menu is for display only — order and pay at the truck.', back: '← Back to portal', footer: 'Prices are in NIS and include VAT.', accessibility: 'Accessibility statement', shekel: '₪', soldOut: 'Sold out' },
-  ar: { viewOnly: 'القائمة للعرض فقط — الطلب والدفع عند العربة.', back: '→ إلى البوابة', footer: 'الأسعار بالشيكل الجديد وتشمل ضريبة القيمة المضافة.', accessibility: 'بيان إمكانية الوصول', shekel: '₪', soldOut: 'نفدت الكمية' },
-}
-
-function getInitialLanguage(): Lang {
-  if (typeof window === 'undefined') return 'he'
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
-  return stored === 'en' || stored === 'ar' || stored === 'he' ? stored : 'he'
+  he: { viewOnly: 'התפריט לתצוגה בלבד — מזמינים ומשלמים בדוכן.', back: 'לפורטל', footer: 'המחירים בשקלים חדשים וכוללים מע"מ.', accessibility: 'הצהרת נגישות', shekel: '₪', soldOut: 'אזל' },
+  en: { viewOnly: 'This menu is for display only — order and pay at the truck.', back: 'Back to portal', footer: 'Prices are in NIS and include VAT.', accessibility: 'Accessibility statement', shekel: '₪', soldOut: 'Sold out' },
+  ar: { viewOnly: 'القائمة للعرض فقط — الطلب والدفع عند العربة.', back: 'إلى البوابة', footer: 'الأسعار بالشيكل الجديد وتشمل ضريبة القيمة المضافة.', accessibility: 'بيان إمكانية الوصول', shekel: '₪', soldOut: 'نفدت الكمية' },
 }
 
 export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSlug; initial: ResolvedMenu }) {
-  const [lang, setLang] = useState<Lang>('he')
+  const [lang, setLang] = useLanguage()
   const [menu, setMenu] = useState(initial)
-  const [expandedId, setExpandedId] = useState<string | null>(initial.categories[0]?.id ?? null)
+  const [openId, setOpenId] = useState<string | null>(initial.categories[0]?.id ?? null)
   const lastPublishedAt = useRef(initial.publishedAt)
-
-  useEffect(() => {
-    setLang(getInitialLanguage())
-  }, [])
-
-  useEffect(() => {
-    document.documentElement.lang = lang
-    document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl'
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
-  }, [lang])
+  const chipsRef = useRef<HTMLDivElement>(null)
+  const stickyRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function refresh() {
@@ -65,132 +54,176 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
     }
   }, [branchSlug])
 
+  // Keeps the active chip scrolled into view (centered once the row is
+  // wider than the viewport; the row simply centers itself via .fits
+  // otherwise). Ported from AyekaBar's MenuView.
+  const centerChip = useCallback((id: string | null, instant = false) => {
+    const chips = chipsRef.current
+    if (!chips || !id) return
+    const fits = chips.scrollWidth <= chips.clientWidth + 1
+    chips.classList.toggle('fits', fits)
+    if (fits) return
+    const chip = chips.querySelector<HTMLElement>(`[data-chip="${id}"]`)
+    chip?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: instant ? 'auto' : 'smooth' })
+  }, [])
+  useEffect(() => {
+    centerChip(openId, true)
+  }, [openId, menu, lang, centerChip])
+
+  // Tracks the sticky header's real height in a CSS var so a category's
+  // scroll-margin-top (menu-cat in globals.css) lands its top just below
+  // the bar, however tall the bar ends up being (it grows with wrapped
+  // category names at some font sizes).
+  useEffect(() => {
+    function setH() {
+      document.documentElement.style.setProperty('--sticky-h', `${stickyRef.current?.offsetHeight ?? 108}px`)
+    }
+    setH()
+    const el = stickyRef.current
+    if (el && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(setH)
+      ro.observe(el)
+      return () => ro.disconnect()
+    }
+    window.addEventListener('resize', setH)
+    return () => window.removeEventListener('resize', setH)
+  }, [menu, lang])
+
+  // On open, scroll so the category's top sits under the sticky bar — but
+  // wait for the accordion (and the collapsing sibling) to finish
+  // animating, so this scrolls to the settled position, not the
+  // pre-collapse one. Ported from AyekaBar's MenuView; skips the very
+  // first render (nothing to scroll to yet).
+  const firstOpen = useRef(true)
+  useEffect(() => {
+    if (firstOpen.current) {
+      firstOpen.current = false
+      return
+    }
+    if (!openId) return
+    const sec = document.getElementById(`category-${openId}`)
+    if (!sec) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    let done = false
+    function go() {
+      if (done) return
+      done = true
+      sec!.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+    }
+    const body = sec.querySelector('.accordion-body')
+    function onEnd(e: Event) {
+      if ((e as TransitionEvent).propertyName === 'grid-template-rows') go()
+    }
+    body?.addEventListener('transitionend', onEnd)
+    const fallback = window.setTimeout(go, 560)
+    return () => {
+      body?.removeEventListener('transitionend', onEnd)
+      window.clearTimeout(fallback)
+    }
+  }, [openId])
+
+  function openCategory(id: string) {
+    setOpenId((cur) => (cur === id ? null : id))
+  }
+
   const t = T[lang]
+  const brand = localized(menu.name, lang)
 
   return (
-    <main style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 48 }}>
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          background: 'var(--bg)',
-          padding: '14px 16px 10px',
-          borderBottom: '1px solid var(--line)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Link href="/" style={{ color: 'var(--text-dim)', fontSize: '0.8rem', textDecoration: 'none' }}>
-            {t.back}
-          </Link>
-          <div role="group" aria-label="Language" style={{ display: 'flex', gap: 4 }}>
-            {(['he', 'en', 'ar'] as Lang[]).map((l) => (
-              <button
-                key={l}
-                type="button"
-                aria-pressed={lang === l}
-                onClick={() => setLang(l)}
-                style={{
-                  minWidth: 30,
-                  minHeight: 30,
-                  borderRadius: 999,
-                  border: `1px solid ${lang === l ? 'var(--neon)' : 'var(--line-strong)'}`,
-                  background: lang === l ? 'rgba(255,122,69,0.14)' : 'transparent',
-                  color: 'var(--text)',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
+    <main style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
+      <PublicBackdrop />
+
+      <div className="menu-sticky" ref={stickyRef}>
+        <div className="menu-topbar">
+          <div className="menu-lang-slot rise" style={{ animationDelay: '20ms' }}>
+            <LanguageSwitch lang={lang} onChange={setLang} variant="inline" />
           </div>
+          <h1 className="menu-brand rise" style={{ animationDelay: '90ms' }}>
+            {brand}
+          </h1>
+          <Link href="/" className="menu-back press rise" aria-label={t.back} style={{ animationDelay: '20ms' }}>
+            <ChevronLeft size={18} className="dir-flip" aria-hidden="true" />
+          </Link>
         </div>
-        <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{localized(menu.name, lang)}</h1>
-        <p style={{ margin: '4px 0 0', fontSize: '0.76rem', color: 'var(--text-faint)' }}>{t.viewOnly}</p>
+
+        <p style={{ margin: '0 16px 8px', fontSize: '0.76rem', color: 'var(--text-faint)', textAlign: 'center' }}>{t.viewOnly}</p>
+
         {menu.activeVariant && !menu.isDefaultVariant && (
-          <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: 'var(--neon-soft)' }}>
-            🍽️ {localized(menu.activeVariant.name, lang)}
+          <p
+            style={{
+              margin: '0 16px 8px',
+              fontSize: '0.78rem',
+              color: 'var(--neon-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+            }}
+          >
+            <UtensilsCrossed size={14} aria-hidden="true" /> {localized(menu.activeVariant.name, lang)}
           </p>
         )}
 
         {menu.categories.length > 1 && (
-          <nav aria-label="Categories" style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 12, paddingBottom: 2 }}>
-            {menu.categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => {
-                  setExpandedId(category.id)
-                  document.getElementById(`category-${category.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
-                style={{
-                  flexShrink: 0,
-                  minHeight: 36,
-                  padding: '0 14px',
-                  borderRadius: 999,
-                  border: '1px solid var(--line-strong)',
-                  background: expandedId === category.id ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-                  color: 'var(--text)',
-                  fontSize: '0.78rem',
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                }}
-              >
-                {category.icon} {localized(category.title, lang)}
-              </button>
-            ))}
-          </nav>
+          <div className="menu-chips-wrap rise" style={{ animationDelay: '160ms' }}>
+            <nav className="menu-chips" ref={chipsRef} aria-label="Categories">
+              {menu.categories.map((category) => {
+                const CategoryIcon = resolveCategoryIcon(category.icon)
+                return (
+                  <button
+                    key={category.id}
+                    data-chip={category.id}
+                    type="button"
+                    className={`menu-chip press${category.id === openId ? ' active' : ''}`}
+                    onClick={() => openCategory(category.id)}
+                  >
+                    <CategoryIcon size={14} aria-hidden="true" /> {localized(category.title, lang)}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
         )}
-      </header>
+      </div>
 
       <div style={{ padding: '8px 16px 0' }}>
-        {menu.categories.map((category) => {
-          const isOpen = category.id === expandedId
+        {menu.categories.map((category, i) => {
+          const isOpen = category.id === openId
+          const CategoryIcon = resolveCategoryIcon(category.icon)
           return (
-            <section key={category.id} id={`category-${category.id}`} style={{ marginBottom: 8 }}>
+            <section
+              key={category.id}
+              id={`category-${category.id}`}
+              className={`menu-cat rise${isOpen ? ' is-open' : ''}`}
+              style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+            >
               <h2 style={{ margin: 0 }}>
                 <button
                   type="button"
+                  className="menu-cat-head press"
                   aria-expanded={isOpen}
                   aria-controls={`category-body-${category.id}`}
-                  onClick={() => setExpandedId(isOpen ? null : category.id)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    minHeight: 'var(--tap-min)',
-                    padding: '0 4px',
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: '1px solid var(--line)',
-                    color: 'var(--text)',
-                    fontSize: '1rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => openCategory(category.id)}
                 >
-                  <span>
-                    <span aria-hidden="true">{category.icon}</span> {localized(category.title, lang)}
+                  <span className="menu-cat-icon">
+                    <CategoryIcon size={19} aria-hidden="true" />
                   </span>
-                  <span aria-hidden="true" style={{ transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }}>
-                    ⌄
-                  </span>
+                  <span style={{ flex: 1, fontWeight: 700, fontSize: '1.05rem' }}>{localized(category.title, lang)}</span>
+                  <span style={{ color: 'var(--text-faint)', fontSize: '0.82rem', fontWeight: 500 }}>{category.items.length}</span>
+                  <ChevronDownIcon />
                 </button>
               </h2>
-              <div id={`category-body-${category.id}`} inert={!isOpen} hidden={!isOpen}>
-                <ul style={{ listStyle: 'none', margin: 0, padding: '8px 0' }}>
-                  {category.items.map((item) => (
+              <div id={`category-body-${category.id}`} inert={!isOpen} className={`accordion-body${isOpen ? ' is-open' : ''}`}>
+                <ul className="accordion-inner" style={{ listStyle: 'none', margin: 0, padding: '0 14px 14px' }}>
+                  {category.items.map((item, itemIndex) => (
                     <li
-                      key={item.uid}
+                      key={item.uid ?? `${category.id}-${itemIndex}`}
                       style={{
                         display: 'flex',
                         gap: 10,
                         alignItems: 'flex-start',
-                        padding: '10px 4px',
-                        borderBottom: '1px solid var(--line)',
+                        padding: '10px 0',
+                        borderTop: itemIndex === 0 ? 'none' : '1px solid var(--line)',
                         opacity: item.available === false ? 0.5 : 1,
                       }}
                     >
@@ -223,10 +256,36 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
 
       <footer style={{ padding: '20px 16px 0', textAlign: 'center' }}>
         <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>{t.footer}</p>
-        <Link href="/accessibility" style={{ display: 'inline-block', marginTop: 8, fontSize: '0.78rem', color: 'var(--neon-2)' }}>
-          ♿ {t.accessibility}
+        <Link
+          href="/accessibility"
+          className="press"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, fontSize: '0.78rem', color: 'var(--neon-2)' }}
+        >
+          <Accessibility size={15} aria-hidden="true" /> {t.accessibility}
         </Link>
       </footer>
     </main>
+  )
+}
+
+// Rotation/color-on-open comes from the .menu-cat.is-open .menu-chev rule
+// in globals.css, not a prop here — same as AyekaBar's .chev, so opening a
+// category never fights an inline style against the CSS transition.
+function ChevronDownIcon() {
+  return (
+    <svg
+      className="menu-chev"
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
   )
 }

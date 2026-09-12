@@ -1,18 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Package, HelpCircle, Save, Send, Sparkles, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import MenuVersionBar from '@/components/MenuVersionBar'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
-import Switch from '@/components/Switch'
+import CategoryAccordion from '@/components/CategoryAccordion'
+import MenuOnboardingWizard from '@/components/MenuOnboardingWizard'
 import { ensureUids } from '@/lib/menu/variants'
+import { randomId } from '@/lib/menu/id'
 import type { MenuCategory, MenuDoc, MenuItem, MenuVariant } from '@/lib/menu/types'
 
 type LoadedMenu = { menuId: string; activeVariantId: string | null; draft: MenuDoc; variants: MenuVariant[] }
 
-function randomId(prefix: string): string {
-  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-}
+const ONBOARDING_SEEN_PREFIX = 'sarcafe:onboarding-seen:'
 
 function normalizePrice(value: unknown): number | string {
   const text = String(value ?? '').trim()
@@ -29,6 +30,10 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
   const [statusMessage, setStatusMessage] = useState('')
   const [confirmRequest, setConfirmRequest] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
   const [showOutOfStock, setShowOutOfStock] = useState(false)
+  const [openCategoryIds, setOpenCategoryIds] = useState<Set<string>>(new Set())
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+
+  const onboardingKey = ONBOARDING_SEEN_PREFIX + branchSlug
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/owner/menu-variants?branch=${branchSlug}`)
@@ -38,6 +43,13 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     setLoaded({ ...payload, draft: withUids })
     setDraft(withUids)
     setDirty(false)
+    setOpenCategoryIds(new Set(withUids.categories[0] ? [withUids.categories[0].id] : []))
+
+    if (withUids.categories.length === 0 && !window.localStorage.getItem(onboardingKey)) {
+      setOnboardingOpen(true)
+    }
+    // onboardingKey is derived from branchSlug, stable for the component's life
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchSlug])
 
   useEffect(() => {
@@ -118,19 +130,31 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
       flash('שגיאה בפרסום: ' + error.message, true)
       return
     }
-    flash('פורסם ✓')
+    flash('פורסם ללקוחות ✓')
   }
 
-  function addCategory() {
-    edit((doc) => {
-      doc.categories.push({ id: randomId('c'), icon: '🍽️', title: { he: '', en: '', ar: '' }, items: [] })
+  function toggleCategory(id: string) {
+    setOpenCategoryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
   }
 
+  function addCategory() {
+    const id = randomId('c')
+    edit((doc) => {
+      doc.categories.push({ id, icon: 'utensils', title: { he: '', en: '', ar: '' }, items: [] })
+    })
+    setOpenCategoryIds((prev) => new Set(prev).add(id))
+  }
+
   function deleteCategory(index: number) {
+    const category = draft?.categories[index]
     setConfirmRequest({
       title: 'מחיקת קטגוריה?',
-      body: 'כל הפריטים בקטגוריה יימחקו יחד איתה.',
+      body: category?.title.he ? `"${category.title.he}" וכל הפריטים בתוכה יימחקו.` : 'כל הפריטים בקטגוריה יימחקו יחד איתה.',
       confirmLabel: 'מחיקה',
       danger: true,
       onYes: () => edit((doc) => void doc.categories.splice(index, 1)),
@@ -154,8 +178,14 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     })
   }
 
-  function deleteItem(categoryIndex: number, itemIndex: number) {
-    edit((doc) => void doc.categories[categoryIndex]?.items.splice(itemIndex, 1))
+  function requestDeleteItem(categoryIndex: number, itemIndex: number, itemLabel: string) {
+    setConfirmRequest({
+      title: 'מחיקת פריט?',
+      body: `"${itemLabel}" יימחק מהתפריט.`,
+      confirmLabel: 'מחיקה',
+      danger: true,
+      onYes: () => edit((doc) => void doc.categories[categoryIndex]?.items.splice(itemIndex, 1)),
+    })
   }
 
   function moveItem(categoryIndex: number, index: number, direction: -1 | 1) {
@@ -179,6 +209,19 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     })
   }
 
+  function closeOnboarding() {
+    window.localStorage.setItem(onboardingKey, '1')
+    setOnboardingOpen(false)
+  }
+
+  function completeOnboarding(category: MenuCategory) {
+    edit((doc) => {
+      doc.categories.push(category)
+    })
+    setOpenCategoryIds((prev) => new Set(prev).add(category.id))
+    closeOnboarding()
+  }
+
   if (!loaded || !draft) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -193,6 +236,29 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
 
   return (
     <div style={{ paddingBottom: 88 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -4 }}>
+        <button
+          type="button"
+          className="press"
+          onClick={() => setOnboardingOpen(true)}
+          aria-label="איך זה עובד"
+          title="איך זה עובד"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-faint)',
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            padding: '6px 2px',
+          }}
+        >
+          <HelpCircle size={15} aria-hidden="true" /> איך זה עובד
+        </button>
+      </div>
+
       <MenuVersionBar
         branchSlug={branchSlug}
         draft={draft}
@@ -209,6 +275,7 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
         <section style={{ marginBottom: 20 }}>
           <button
             type="button"
+            className="press"
             onClick={() => setShowOutOfStock((v) => !v)}
             aria-expanded={showOutOfStock}
             style={{
@@ -216,6 +283,7 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              gap: 8,
               background: 'var(--bg-elev)',
               border: '1px solid var(--line-strong)',
               borderRadius: 'var(--radius-md)',
@@ -224,11 +292,17 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
               cursor: 'pointer',
             }}
           >
-            <span>📦 {outOfStock.length} פריטים אזלו מהמלאי</span>
-            <span aria-hidden="true">{showOutOfStock ? '▲' : '▼'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Package size={17} aria-hidden="true" /> {outOfStock.length} פריטים אזלו מהמלאי
+            </span>
+            <ChevronDown
+              size={16}
+              aria-hidden="true"
+              style={{ transform: showOutOfStock ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }}
+            />
           </button>
           {showOutOfStock && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
               {outOfStock.map((item) => (
                 <div
                   key={item.uid}
@@ -267,60 +341,79 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
         </section>
       )}
 
-      {draft.categories.map((category, categoryIndex) => (
-        <CategoryCard
-          key={category.id}
-          category={category}
-          index={categoryIndex}
-          total={draft.categories.length}
-          onMove={(dir) => moveCategory(categoryIndex, dir)}
-          onDelete={() => deleteCategory(categoryIndex)}
-          onEditField={(field, lang, value) =>
-            edit((doc) => {
-              const cat = doc.categories[categoryIndex]
-              if (!cat) return
-              if (field === 'icon') cat.icon = value
-              else cat.title[lang] = value
-            })
-          }
-          onAddItem={() => addItem(categoryIndex)}
-          renderItem={(item, itemIndex) => (
-            <ItemRow
-              key={item.uid ?? itemIndex}
-              item={item}
-              index={itemIndex}
-              total={category.items.length}
-              onMove={(dir) => moveItem(categoryIndex, itemIndex, dir)}
-              onDelete={() => deleteItem(categoryIndex, itemIndex)}
-              onEdit={(patch) =>
-                edit((doc) => {
-                  const target = doc.categories[categoryIndex]?.items[itemIndex]
-                  if (target) Object.assign(target, patch)
-                })
-              }
-            />
-          )}
-        />
-      ))}
+      {draft.categories.length === 0 ? (
+        <div
+          className="rise"
+          style={{
+            textAlign: 'center',
+            padding: '40px 20px',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px dashed var(--line-strong)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              background: 'rgba(255,122,69,0.14)',
+              color: 'var(--neon)',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            <Sparkles size={22} strokeWidth={2} />
+          </span>
+          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>התפריט עדיין ריק</h2>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-dim)', maxWidth: 260 }}>
+            נבנה יחד את הקטגוריה והפריט הראשונים — זה לוקח פחות מדקה.
+          </p>
+          <button type="button" className="press" onClick={() => setOnboardingOpen(true)} style={primaryButtonStyle}>
+            יצירת קטגוריה ראשונה
+          </button>
+        </div>
+      ) : (
+        draft.categories.map((category, categoryIndex) => (
+          <CategoryAccordion
+            key={category.id}
+            category={category}
+            index={categoryIndex}
+            total={draft.categories.length}
+            open={openCategoryIds.has(category.id)}
+            onToggle={() => toggleCategory(category.id)}
+            onMoveCategory={(dir) => moveCategory(categoryIndex, dir)}
+            onDeleteCategory={() => deleteCategory(categoryIndex)}
+            onEditCategoryField={(field, value) =>
+              edit((doc) => {
+                const cat = doc.categories[categoryIndex]
+                if (!cat) return
+                if (field === 'icon') cat.icon = value
+                else cat.title[field] = value
+              })
+            }
+            onAddItem={() => addItem(categoryIndex)}
+            onMoveItem={(itemIndex, dir) => moveItem(categoryIndex, itemIndex, dir)}
+            onRequestDeleteItem={(itemIndex, itemLabel) => requestDeleteItem(categoryIndex, itemIndex, itemLabel)}
+            onEditItem={(itemIndex, patch) =>
+              edit((doc) => {
+                const target = doc.categories[categoryIndex]?.items[itemIndex]
+                if (target) Object.assign(target, patch)
+              })
+            }
+          />
+        ))
+      )}
 
-      <button
-        type="button"
-        className="press"
-        onClick={addCategory}
-        style={{
-          width: '100%',
-          minHeight: 'var(--tap-min)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px dashed var(--line-strong)',
-          background: 'transparent',
-          color: 'var(--text-dim)',
-          fontWeight: 600,
-          cursor: 'pointer',
-          marginBottom: 24,
-        }}
-      >
-        ＋ הוספת קטגוריה
-      </button>
+      {draft.categories.length > 0 && (
+        <button type="button" className="press" onClick={addCategory} style={dashedAddCategoryStyle}>
+          + הוספת קטגוריה
+        </button>
+      )}
 
       <div
         style={{
@@ -343,39 +436,11 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
           {status === 'saving' ? 'שומר…' : status !== 'idle' ? statusMessage : dirty ? 'יש שינויים שלא נשמרו' : 'נשמר'}
         </span>
         <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="press"
-          onClick={save}
-          style={{
-            minHeight: 'var(--tap-min)',
-            padding: '0 18px',
-            borderRadius: 999,
-            border: '1px solid var(--line-strong)',
-            background: 'var(--bg-elev)',
-            color: 'var(--text)',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          שמירת טיוטה
+        <button type="button" className="press" onClick={save} style={saveButtonStyle}>
+          <Save size={16} aria-hidden="true" /> שמירת טיוטה
         </button>
-        <button
-          type="button"
-          className="press"
-          onClick={publish}
-          style={{
-            minHeight: 'var(--tap-min)',
-            padding: '0 18px',
-            borderRadius: 999,
-            border: 'none',
-            background: 'var(--neon)',
-            color: 'var(--bg)',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          פרסום
+        <button type="button" className="press" onClick={publish} style={publishButtonStyle}>
+          <Send size={16} aria-hidden="true" /> פרסום
         </button>
       </div>
 
@@ -387,241 +452,67 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
           setConfirmRequest(null)
         }}
       />
+
+      <MenuOnboardingWizard
+        open={onboardingOpen}
+        branchLabel={branchLabel}
+        onSkip={closeOnboarding}
+        onComplete={completeOnboarding}
+      />
     </div>
   )
 }
 
-function CategoryCard({
-  category,
-  index,
-  total,
-  onMove,
-  onDelete,
-  onEditField,
-  onAddItem,
-  renderItem,
-}: {
-  category: MenuCategory
-  index: number
-  total: number
-  onMove: (dir: -1 | 1) => void
-  onDelete: () => void
-  onEditField: (field: 'icon' | 'he' | 'en' | 'ar', lang: 'he' | 'en' | 'ar', value: string) => void
-  onAddItem: () => void
-  renderItem: (item: MenuItem, index: number) => React.ReactNode
-}) {
-  return (
-    <section
-      style={{
-        background: 'var(--bg-elev)',
-        border: '1px solid var(--line)',
-        borderRadius: 'var(--radius-lg)',
-        padding: 14,
-        marginBottom: 12,
-      }}
-    >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-        <CtrlButton label="הזזה למעלה" glyph="▲" disabled={index === 0} onClick={() => onMove(-1)} />
-        <CtrlButton label="הזזה למטה" glyph="▼" disabled={index === total - 1} onClick={() => onMove(1)} />
-        <input
-          value={category.icon ?? ''}
-          maxLength={4}
-          aria-label="אייקון"
-          onChange={(e) => onEditField('icon', 'he', e.target.value)}
-          style={{ ...smallInputStyle, width: 44, textAlign: 'center' }}
-        />
-        <input
-          value={category.title.he ?? ''}
-          placeholder="שם הקטגוריה"
-          onChange={(e) => onEditField('he', 'he', e.target.value)}
-          style={{ ...smallInputStyle, flex: 1, fontWeight: 700 }}
-        />
-        <CtrlButton label="מחיקת קטגוריה" glyph="🗑" danger onClick={onDelete} />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-        <input
-          dir="ltr"
-          placeholder="English"
-          value={category.title.en ?? ''}
-          onChange={(e) => onEditField('en', 'en', e.target.value)}
-          style={smallInputStyle}
-        />
-        <input
-          placeholder="العربية"
-          value={category.title.ar ?? ''}
-          onChange={(e) => onEditField('ar', 'ar', e.target.value)}
-          style={smallInputStyle}
-        />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {category.items.map((item, itemIndex) => renderItem(item, itemIndex))}
-      </div>
-
-      <button
-        type="button"
-        onClick={onAddItem}
-        style={{
-          marginTop: 10,
-          width: '100%',
-          minHeight: 40,
-          borderRadius: 10,
-          border: '1px dashed var(--line-strong)',
-          background: 'transparent',
-          color: 'var(--text-dim)',
-          fontSize: '0.85rem',
-          cursor: 'pointer',
-        }}
-      >
-        ＋ הוספת פריט
-      </button>
-    </section>
-  )
+const primaryButtonStyle: React.CSSProperties = {
+  minHeight: 'var(--tap-min)',
+  padding: '0 20px',
+  borderRadius: 999,
+  border: 'none',
+  background: 'var(--neon)',
+  color: 'var(--bg)',
+  fontWeight: 700,
+  fontSize: '0.9rem',
+  cursor: 'pointer',
 }
 
-function ItemRow({
-  item,
-  index,
-  total,
-  onMove,
-  onDelete,
-  onEdit,
-}: {
-  item: MenuItem
-  index: number
-  total: number
-  onMove: (dir: -1 | 1) => void
-  onDelete: () => void
-  onEdit: (patch: Partial<MenuItem>) => void
-}) {
-  const [showNote, setShowNote] = useState(!!item.note)
-
-  return (
-    <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <CtrlButton label="הזזה למעלה" glyph="▲" disabled={index === 0} onClick={() => onMove(-1)} small />
-        <CtrlButton label="הזזה למטה" glyph="▼" disabled={index === total - 1} onClick={() => onMove(1)} small />
-        <CtrlButton label="מחיקת פריט" glyph="🗑" danger small onClick={onDelete} />
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            placeholder="שם הפריט"
-            value={item.he ?? ''}
-            onChange={(e) => onEdit({ he: e.target.value })}
-            style={{ ...smallInputStyle, flex: 1 }}
-          />
-          <input
-            inputMode="decimal"
-            placeholder="מחיר"
-            value={String(item.price ?? '')}
-            onChange={(e) => onEdit({ price: e.target.value })}
-            className="ltr-isolate"
-            style={{ ...smallInputStyle, width: 72, textAlign: 'center' }}
-          />
-          <label
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.7rem', color: 'var(--text-faint)' }}
-          >
-            <button
-              type="button"
-              role="switch"
-              aria-checked={item.available !== false}
-              aria-label="זמין"
-              onClick={() => onEdit({ available: item.available === false ? true : false })}
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-            >
-              <Switch on={item.available !== false} />
-            </button>
-          </label>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <input dir="ltr" placeholder="English" value={item.en ?? ''} onChange={(e) => onEdit({ en: e.target.value })} style={smallInputStyle} />
-          <input placeholder="العربية" value={item.ar ?? ''} onChange={(e) => onEdit({ ar: e.target.value })} style={smallInputStyle} />
-        </div>
-
-        {showNote ? (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input
-              placeholder="הערה"
-              value={item.note?.he ?? ''}
-              onChange={(e) => onEdit({ note: { ...item.note, he: e.target.value } })}
-              style={{ ...smallInputStyle, flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setShowNote(false)
-                onEdit({ note: undefined })
-              }}
-              style={{ background: 'none', border: 'none', color: 'var(--text-faint)', fontSize: '0.78rem', cursor: 'pointer' }}
-            >
-              × הסרה
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowNote(true)}
-            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--neon-2)', fontSize: '0.78rem', cursor: 'pointer' }}
-          >
-            ＋ הוספת הערה
-          </button>
-        )}
-      </div>
-    </div>
-  )
+const dashedAddCategoryStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: 'var(--tap-min)',
+  borderRadius: 'var(--radius-md)',
+  border: '1px dashed var(--line-strong)',
+  background: 'transparent',
+  color: 'var(--text-dim)',
+  fontWeight: 600,
+  cursor: 'pointer',
+  marginBottom: 24,
 }
 
-function CtrlButton({
-  label,
-  glyph,
-  onClick,
-  disabled,
-  danger,
-  small,
-}: {
-  label: string
-  glyph: string
-  onClick: () => void
-  disabled?: boolean
-  danger?: boolean
-  small?: boolean
-}) {
-  const size = small ? 28 : 34
-  return (
-    <button
-      type="button"
-      className="press"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      style={{
-        width: size,
-        height: size,
-        minWidth: size,
-        borderRadius: 8,
-        border: '1px solid var(--line-strong)',
-        background: 'var(--bg-elev-2)',
-        color: danger ? '#ff6b6b' : 'var(--text)',
-        opacity: disabled ? 0.35 : 1,
-        cursor: disabled ? 'default' : 'pointer',
-        fontSize: small ? '0.7rem' : '0.8rem',
-      }}
-    >
-      {glyph}
-    </button>
-  )
-}
-
-const smallInputStyle: React.CSSProperties = {
-  minHeight: 40,
-  borderRadius: 10,
+const saveButtonStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  minHeight: 'var(--tap-min)',
+  padding: '0 16px',
+  borderRadius: 999,
   border: '1px solid var(--line-strong)',
-  background: 'var(--bg)',
+  background: 'var(--bg-elev)',
   color: 'var(--text)',
-  padding: '0 10px',
+  fontWeight: 600,
   fontSize: '0.85rem',
+  cursor: 'pointer',
+}
+
+const publishButtonStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  minHeight: 'var(--tap-min)',
+  padding: '0 18px',
+  borderRadius: 999,
+  border: 'none',
+  background: 'var(--neon)',
+  color: 'var(--bg)',
+  fontWeight: 700,
+  fontSize: '0.85rem',
+  cursor: 'pointer',
 }

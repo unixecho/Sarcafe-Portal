@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import ModalPortal from '@/components/ModalPortal'
+import { useSheetExit } from '@/lib/useSheetExit'
 
 export type PromptRequest = {
   title: string
@@ -25,6 +26,15 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
   const inputRef = useRef<HTMLInputElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const [value, setValue] = useState('')
+  const { rendered, closing } = useSheetExit(!!request)
+
+  // request goes null the instant the caller closes this, but `rendered`
+  // stays true for the ~220ms exit animation — keep rendering the last
+  // real request during that window instead of the sheet's own content
+  // blanking out mid-close.
+  const lastRequest = useRef<PromptRequest | null>(null)
+  if (request) lastRequest.current = request
+  const shown = request ?? lastRequest.current
 
   useEffect(() => {
     if (!request) return
@@ -46,9 +56,9 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request])
 
-  if (!request) return null
+  if (!rendered || !shown) return null
 
-  const canSubmit = request.allowEmpty || value.trim().length > 0
+  const canSubmit = !!request && (request.allowEmpty || value.trim().length > 0)
 
   function submit() {
     if (!canSubmit) return
@@ -57,7 +67,7 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
 
   return (
     <ModalPortal>
-      <div className="sheet-scrim" onClick={onCancel}>
+      <div className={`sheet-scrim${closing ? ' sheet-scrim--closing' : ''}`} onClick={onCancel}>
         <div
           role="dialog"
           aria-modal="true"
@@ -76,11 +86,11 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
             }}
           >
             <h2 id={titleId} style={{ margin: '0 0 12px', fontSize: '1.05rem', fontWeight: 700 }}>
-              {request.title}
+              {shown.title}
             </h2>
-            {request.label && (
+            {shown.label && (
               <label htmlFor={inputId} className="sr-only">
-                {request.label}
+                {shown.label}
               </label>
             )}
             <input
@@ -122,7 +132,7 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
                 background: 'var(--neon)',
               }}
             >
-              {request.submitLabel}
+              {shown.submitLabel}
             </button>
           </div>
           <button
@@ -141,7 +151,7 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
               cursor: 'pointer',
             }}
           >
-            {request.cancelLabel ?? 'ביטול'}
+            {shown.cancelLabel ?? 'ביטול'}
           </button>
         </div>
       </div>

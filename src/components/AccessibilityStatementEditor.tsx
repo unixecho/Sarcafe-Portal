@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ExternalLink } from 'lucide-react'
 import type { AccessibilityStatement } from '@/lib/settings/keys'
 
 // Every field has a properly associated <label htmlFor> via useId() — a
@@ -80,8 +81,13 @@ export default function AccessibilityStatementEditor({ initial }: { initial: Acc
         <span role="status" style={{ fontSize: '0.82rem', color: status === 'error' ? '#ff6b6b' : 'var(--text-faint)' }}>
           {status === 'saved' ? 'נשמר ✓' : status === 'error' ? 'שגיאה בשמירה' : ''}
         </span>
-        <a href="/accessibility" target="_blank" rel="noopener noreferrer" style={{ marginInlineStart: 'auto', fontSize: '0.8rem', color: 'var(--neon-2)' }}>
-          תצוגה חיה ↗
+        <a
+          href="/accessibility"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginInlineStart: 'auto', fontSize: '0.8rem', color: 'var(--neon-2)' }}
+        >
+          תצוגה חיה <ExternalLink size={13} aria-hidden="true" />
         </a>
       </div>
     </div>

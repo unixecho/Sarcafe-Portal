@@ -2,19 +2,30 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { FileEdit, Package, Bell } from 'lucide-react'
 import StatStrip from '@/components/StatStrip'
-import { BRANCHES, type BranchSlug } from '@/lib/branches'
+import type { Branch, BranchSlug } from '@/lib/branches'
 import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
 
 const POLL_MS = 30_000
 
+// Signals are keyed by a stable `id` server-side (lib/owner/signals.ts);
+// resolved to an icon here by id rather than trusting the data layer's own
+// `icon` (still a legacy emoji string) to pick the right glyph.
+const SIGNAL_ICONS: Record<string, typeof FileEdit> = {
+  'menu-unpublished': FileEdit,
+  'menu-out-of-stock': Package,
+}
+
 type DashboardPayload = { stats: DashboardStats; signals: Signal[] }
 
 export default function DashboardLive({
+  branches,
   initialBranch,
   initial,
 }: {
+  branches: Branch[]
   initialBranch: BranchSlug
   initial: DashboardPayload
 }) {
@@ -50,7 +61,7 @@ export default function DashboardLive({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6 }}>
-        {BRANCHES.map((b) => {
+        {branches.map((b) => {
           const selected = b.slug === branch
           return (
             <button
@@ -82,11 +93,10 @@ export default function DashboardLive({
       {data.signals.length > 0 && (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {data.signals.map((signal) => {
+            const SignalIcon = SIGNAL_ICONS[signal.id] ?? Bell
             const content = (
               <>
-                <span aria-hidden="true" style={{ fontSize: '1.1rem' }}>
-                  {signal.icon}
-                </span>
+                <SignalIcon aria-hidden="true" size={20} strokeWidth={2} style={{ flexShrink: 0, color: 'var(--neon-soft)' }} />
                 <span style={{ flex: 1, textAlign: 'start' }}>
                   <strong style={{ display: 'block', fontSize: '0.88rem' }}>{signal.title}</strong>
                   {signal.detail && (

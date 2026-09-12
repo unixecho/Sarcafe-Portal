@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import ModalPortal from '@/components/ModalPortal'
+import { useSheetExit } from '@/lib/useSheetExit'
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -28,6 +29,7 @@ type SheetShellProps = {
 export default function SheetShell({ open, onClose, children, labelledBy, suspended, className }: SheetShellProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const { rendered, closing } = useSheetExit(open)
 
   useEffect(() => {
     if (!open) return
@@ -93,12 +95,12 @@ export default function SheetShell({ open, onClose, children, labelledBy, suspen
     }
   }, [open, onClose, suspended])
 
-  if (!open) return null
+  if (!rendered) return null
 
   return (
     <ModalPortal>
       <div
-        className="sheet-scrim"
+        className={`sheet-scrim${closing ? ' sheet-scrim--closing' : ''}`}
         onClick={onClose}
       >
         <div

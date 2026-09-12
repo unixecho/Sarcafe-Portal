@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 import AuthHandoff from '@/components/AuthHandoff'
+import PublicBackdrop from '@/components/PublicBackdrop'
+import LogoMark from '@/components/LogoMark'
 
 // Structurally mirrors AyekaBar's /login: a two-step reveal (this page,
 // then the AuthHandoff interstitial) rather than firing OAuth straight off
@@ -30,15 +33,18 @@ export default function LoginPage() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 20,
-        background: `radial-gradient(circle at 85% 0%, rgba(255,122,69,0.14), transparent 60%), var(--bg)`,
+        position: 'relative',
       }}
     >
+      <PublicBackdrop />
+
       <section
         className="rise"
         style={{
           width: '100%',
           maxWidth: 360,
-          background: 'var(--bg-elev)',
+          background: 'var(--glass-strong)',
+          backdropFilter: 'blur(24px)',
           border: '1px solid var(--line)',
           borderRadius: 20,
           padding: '32px 24px',
@@ -49,28 +55,10 @@ export default function LoginPage() {
         }}
       >
         <header>
-          {/* TODO: swap for the real Sarcafe logo asset once available —
-              see SARCafe-ARCHITECTURE-AUDIT.md §5 (current assets are
-              named "-placeholder"). */}
-          <div
-            aria-hidden="true"
-            style={{
-              width: 56,
-              height: 56,
-              margin: '0 auto 12px',
-              borderRadius: 16,
-              background: 'rgba(255,122,69,0.14)',
-              display: 'grid',
-              placeItems: 'center',
-              fontSize: '1.8rem',
-              filter: 'drop-shadow(0 0 12px rgba(255,122,69,0.35))',
-            }}
-          >
-            ☕
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <LogoMark size={64} />
           </div>
-          <h1 style={{ margin: 0, fontSize: '1.7rem', fontWeight: 800 }}>
-            Sar<span style={{ color: 'var(--neon)' }}>·</span>Cafe
-          </h1>
+          <h1 style={{ margin: 0, fontSize: '1.7rem', fontWeight: 800 }}>Sarcafe</h1>
           <p style={{ margin: '4px 0 0', color: 'var(--text-faint)', fontSize: '0.85rem' }}>כניסה</p>
         </header>
 
@@ -108,8 +96,13 @@ export default function LoginPage() {
           המערכת תיקח אותך לאזור המתאים לך אוטומטית לפי ההרשאה שלך.
         </p>
 
-        <Link href="/" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-          ← חזרה
+        <Link
+          href="/"
+          className="press"
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-dim)', fontSize: '0.85rem' }}
+        >
+          <ArrowRight size={15} aria-hidden="true" />
+          חזרה
         </Link>
       </section>
 

@@ -1,6 +1,8 @@
 import Link from 'next/link'
+import { ArrowRight, ExternalLink } from 'lucide-react'
 import { readSetting } from '@/lib/settings/server'
 import { DEFAULT_ACCESSIBILITY_STATEMENT, type AccessibilityStatement } from '@/lib/settings/keys'
+import PublicBackdrop from '@/components/PublicBackdrop'
 
 export const metadata = { title: 'Sarcafe | הצהרת נגישות' }
 
@@ -16,11 +18,27 @@ export default async function AccessibilityStatementPage() {
   const hasContact = statement.contactName || statement.contactPhone || statement.contactEmail
 
   return (
-    <main dir="rtl" lang="he" style={{ maxWidth: 560, margin: '0 auto', padding: '32px 20px 48px' }}>
-      <Link href="/" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-        ← לדף הבית
+    <main dir="rtl" lang="he" style={{ maxWidth: 560, margin: '0 auto', padding: '32px 20px 48px', position: 'relative' }}>
+      <PublicBackdrop />
+      <Link
+        href="/"
+        className="press"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-dim)', fontSize: '0.85rem' }}
+      >
+        <ArrowRight size={15} aria-hidden="true" />
+        לדף הבית
       </Link>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: 16 }}>הצהרת נגישות</h1>
+      <div
+        style={{
+          background: 'var(--glass)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid var(--line)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px 22px',
+          marginTop: 16,
+        }}
+      >
+      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: 0 }}>הצהרת נגישות</h1>
 
       <p style={{ color: 'var(--text-dim)', lineHeight: 1.7 }}>
         אנו פועלים להנגשת האתר בהתאם לתקנות שוויון זכויות לאנשים עם מוגבלות (התאמות נגישות לשירות), תשע״ג-2013,
@@ -86,11 +104,13 @@ export default async function AccessibilityStatementPage() {
           href="https://www.gov.il/he/departments/policies/disability_accessibility_regulations"
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: 'var(--text-faint)' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--text-faint)' }}
         >
-          לתקנות הנגישות הרשמיות באתר הממשלה ↗
+          לתקנות הנגישות הרשמיות באתר הממשלה
+          <ExternalLink size={13} aria-hidden="true" />
         </a>
       </p>
+      </div>
     </main>
   )
 }

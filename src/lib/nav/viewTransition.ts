@@ -98,3 +98,39 @@ export function navigateWithTransition(path: string, direction: NavDirection, co
     })
   })
 }
+
+/**
+ * Companion to navigateWithTransition() for navigation this app doesn't
+ * itself drive — the browser back/forward button, an edge-swipe, a
+ * hardware back gesture. Next.js's router still re-renders the page via
+ * its own History-API-driven update, so there's no `commit()` step here:
+ * this only needs to start the View Transition BEFORE that re-render
+ * paints, so the outgoing screenshot is captured while the old page is
+ * still on screen. Call this synchronously from the `popstate` handler.
+ *
+ * Without this, back navigation only gets the weaker CSS `.page-enter`
+ * fallback (see app/template.tsx) — link-click forward navigation gets the
+ * full directional slide via navigateWithTransition, but popstate never
+ * called it, so back never looked the same as forward.
+ */
+export function beginBackTransition() {
+  document.documentElement.dataset.nav = 'back'
+
+  const supportsViewTransitions =
+    typeof document !== 'undefined' && 'startViewTransition' in document && !prefersReducedMotion()
+  if (!supportsViewTransitions) return
+
+  document.documentElement.dataset.vt = 'running'
+
+  document.startViewTransition(() => {
+    return new Promise<void>((resolve) => {
+      settleResolver = resolve
+      // Backstop: same reasoning as navigateWithTransition — if the
+      // post-popstate render never calls settleNavigation(), don't leave
+      // the transition frozen forever.
+      window.setTimeout(() => {
+        if (settleResolver === resolve) settleNavigation()
+      }, COMMIT_TIMEOUT_MS)
+    })
+  })
+}

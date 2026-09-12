@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from 'react'
 import ModalPortal from '@/components/ModalPortal'
+import { useSheetExit } from '@/lib/useSheetExit'
 
 export type ConfirmRequest = {
   title: string
@@ -19,14 +20,20 @@ type ConfirmSheetProps = {
 
 /**
  * Replaces window.confirm() — which renders as un-themed, LTR, top-anchored
- * OS chrome, wrong for a dark RTL app. `request === null` unmounts
- * synchronously (no exit animation on the dialog itself, only entrance).
+ * OS chrome, wrong for a dark RTL app. `request === null` starts the close
+ * animation (see useSheetExit) rather than unmounting instantly.
  * Ported from AyekaBar.
  */
 export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSheetProps) {
   const titleId = useId()
   const confirmRef = useRef<HTMLButtonElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const { rendered, closing } = useSheetExit(!!request)
+
+  // See PromptSheet.tsx for why this sticky-last-request pattern exists.
+  const lastRequest = useRef<ConfirmRequest | null>(null)
+  if (request) lastRequest.current = request
+  const shown = request ?? lastRequest.current
 
   useEffect(() => {
     if (!request) return
@@ -45,11 +52,11 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request])
 
-  if (!request) return null
+  if (!rendered || !shown) return null
 
   return (
     <ModalPortal>
-      <div className="sheet-scrim" onClick={onCancel}>
+      <div className={`sheet-scrim${closing ? ' sheet-scrim--closing' : ''}`} onClick={onCancel}>
         <div
           role="alertdialog"
           aria-modal="true"
@@ -68,10 +75,10 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
             }}
           >
             <h2 id={titleId} style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>
-              {request.title}
+              {shown.title}
             </h2>
-            {request.body && (
-              <p style={{ margin: '8px 0 0', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{request.body}</p>
+            {shown.body && (
+              <p style={{ margin: '8px 0 0', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{shown.body}</p>
             )}
             <button
               ref={confirmRef}
@@ -87,11 +94,11 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
                 fontWeight: 700,
                 fontSize: '0.95rem',
                 cursor: 'pointer',
-                color: request.danger ? '#ff6b6b' : 'var(--bg)',
-                background: request.danger ? 'transparent' : 'var(--neon)',
+                color: shown.danger ? '#ff6b6b' : 'var(--bg)',
+                background: shown.danger ? 'transparent' : 'var(--neon)',
               }}
             >
-              {request.confirmLabel}
+              {shown.confirmLabel}
             </button>
           </div>
           <button
@@ -110,7 +117,7 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
               cursor: 'pointer',
             }}
           >
-            {request.cancelLabel ?? 'ביטול'}
+            {shown.cancelLabel ?? 'ביטול'}
           </button>
         </div>
       </div>

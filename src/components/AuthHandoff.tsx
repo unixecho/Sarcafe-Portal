@@ -1,17 +1,23 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Lock, Zap, KeyRound } from 'lucide-react'
 import ModalPortal from '@/components/ModalPortal'
+import LogoMark from '@/components/LogoMark'
 import { createClient } from '@/lib/supabase/client'
+
+// Indexed the same as COPY[lang].features below — kept separate from that
+// per-language copy since the icons themselves don't change with language.
+const FEATURE_ICONS = [Lock, Zap, KeyRound]
 
 const COPY = {
   he: {
     heading: 'קפיצה קצרה ל-Google',
     subtitle: 'Google מוודא מי אתם ומחזיר אתכם לכאן.',
     features: [
-      { icon: '🔒', title: 'רק השם והאימייל', blurb: 'Google משתף איתנו רק שם ואימייל — שום דבר אחר.' },
-      { icon: '⚡', title: 'הקשה אחת, בלי סיסמאות', blurb: 'אין סיסמה לזכור ואין טופס למלא.' },
-      { icon: '🔑', title: 'הגישה שלך מאומתת', blurb: 'ההרשאה שלך נקבעת אצלנו לפי החשבון המאומת שלך.' },
+      { title: 'רק השם והאימייל', blurb: 'Google משתף איתנו רק שם ואימייל — שום דבר אחר.' },
+      { title: 'הקשה אחת, בלי סיסמאות', blurb: 'אין סיסמה לזכור ואין טופס למלא.' },
+      { title: 'הגישה שלך מאומתת', blurb: 'ההרשאה שלך נקבעת אצלנו לפי החשבון המאומת שלך.' },
     ],
     continueLabel: 'המשך עם Google',
     connecting: 'מתחבר…',
@@ -22,9 +28,9 @@ const COPY = {
     heading: 'A quick hop to Google',
     subtitle: 'Google verifies who you are and returns you here.',
     features: [
-      { icon: '🔒', title: 'Only your name & email', blurb: 'Google shares nothing else with us.' },
-      { icon: '⚡', title: 'One tap, no passwords', blurb: 'Nothing to remember, nothing to type.' },
-      { icon: '🔑', title: 'Your access is verified', blurb: 'Your permissions are set by us against your verified account.' },
+      { title: 'Only your name & email', blurb: 'Google shares nothing else with us.' },
+      { title: 'One tap, no passwords', blurb: 'Nothing to remember, nothing to type.' },
+      { title: 'Your access is verified', blurb: 'Your permissions are set by us against your verified account.' },
     ],
     continueLabel: 'Continue with Google',
     connecting: 'Connecting…',
@@ -169,20 +175,8 @@ export default function AuthHandoff({ open, onClose, lang = 'he', redirectPath =
               marginBottom: 20,
             }}
           >
-            <div
-              className="pop"
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: 18,
-                background: 'rgba(255,122,69,0.14)',
-                display: 'grid',
-                placeItems: 'center',
-                fontSize: '1.6rem',
-              }}
-              aria-hidden="true"
-            >
-              ☕
+            <div className="pop" aria-hidden="true">
+              <LogoMark size={64} radius={18} />
             </div>
             <div aria-hidden="true" style={{ display: 'flex', gap: 4 }}>
               {[0, 1, 2].map((i) => (
@@ -218,31 +212,32 @@ export default function AuthHandoff({ open, onClose, lang = 'he', redirectPath =
           <p style={{ margin: '0 0 20px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{t.subtitle}</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {t.features.map((f, i) => (
-              <div
-                key={f.title}
-                className="rise"
-                style={{
-                  animationDelay: `${90 + i * 60}ms`,
-                  display: 'flex',
-                  gap: 12,
-                  alignItems: 'flex-start',
-                  textAlign: 'start',
-                  padding: '12px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--bg-elev)',
-                  border: '1px solid var(--line)',
-                }}
-              >
-                <span aria-hidden="true" style={{ fontSize: '1.1rem' }}>
-                  {f.icon}
-                </span>
-                <span>
-                  <strong style={{ display: 'block', fontSize: '0.88rem' }}>{f.title}</strong>
-                  <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-faint)' }}>{f.blurb}</span>
-                </span>
-              </div>
-            ))}
+            {t.features.map((f, i) => {
+              const FeatureIcon = FEATURE_ICONS[i] ?? Lock
+              return (
+                <div
+                  key={f.title}
+                  className="rise"
+                  style={{
+                    animationDelay: `${90 + i * 60}ms`,
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'flex-start',
+                    textAlign: 'start',
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-elev)',
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  <FeatureIcon size={18} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1, color: 'var(--neon-soft)' }} />
+                  <span>
+                    <strong style={{ display: 'block', fontSize: '0.88rem' }}>{f.title}</strong>
+                    <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-faint)' }}>{f.blurb}</span>
+                  </span>
+                </div>
+              )
+            })}
           </div>
 
           {error && (
@@ -279,6 +274,7 @@ export default function AuthHandoff({ open, onClose, lang = 'he', redirectPath =
 
           <button
             type="button"
+            className="press"
             onClick={onClose}
             style={{
               marginTop: 12,

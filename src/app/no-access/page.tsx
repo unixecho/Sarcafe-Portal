@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ShieldAlert, ArrowRight } from 'lucide-react'
 import AuthHandoff from '@/components/AuthHandoff'
+import PublicBackdrop from '@/components/PublicBackdrop'
 import { createClient } from '@/lib/supabase/client'
 
 // Reached when authenticated but not authorized for anything in the app —
@@ -28,15 +30,17 @@ export default function NoAccessPage() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 20,
-        background: `radial-gradient(circle at 85% 0%, rgba(255,122,69,0.14), transparent 60%), var(--bg)`,
+        position: 'relative',
       }}
     >
+      <PublicBackdrop />
       <section
         className="rise"
         style={{
           width: '100%',
           maxWidth: 360,
-          background: 'var(--bg-elev)',
+          background: 'var(--glass-strong)',
+          backdropFilter: 'blur(24px)',
           border: '1px solid var(--line)',
           borderRadius: 20,
           padding: '32px 24px',
@@ -46,8 +50,20 @@ export default function NoAccessPage() {
           textAlign: 'center',
         }}
       >
-        <div aria-hidden="true" style={{ fontSize: '2rem', color: '#ff6b6b' }}>
-          ⛔
+        <div
+          aria-hidden="true"
+          style={{
+            width: 48,
+            height: 48,
+            margin: '0 auto',
+            borderRadius: 14,
+            background: 'rgba(255,107,107,0.14)',
+            display: 'grid',
+            placeItems: 'center',
+            color: '#ff6b6b',
+          }}
+        >
+          <ShieldAlert size={24} strokeWidth={2} />
         </div>
         <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>אין הרשאת גישה</h1>
         <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
@@ -81,8 +97,13 @@ export default function NoAccessPage() {
           יש לך כמה חשבונות Google? יכול להיות שבחרת בטעות בחשבון הלא נכון.
         </p>
 
-        <Link href="/" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-          ← חזרה לדף הבית
+        <Link
+          href="/"
+          className="press"
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-dim)', fontSize: '0.85rem' }}
+        >
+          <ArrowRight size={15} aria-hidden="true" />
+          חזרה לדף הבית
         </Link>
       </section>
 

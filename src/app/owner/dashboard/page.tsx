@@ -1,19 +1,20 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { ClipboardList, Users, Accessibility } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import DashboardLive from '@/components/DashboardLive'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
 import { readDashboardStats } from '@/lib/owner/dashboard-stats'
 import { readDashboardSignals } from '@/lib/owner/signals'
-import { BRANCHES } from '@/lib/branches'
+import { getBranches } from '@/lib/branches/server'
 
 export const dynamic = 'force-dynamic'
 
 const TILES = [
-  { href: '/owner/editor', icon: '📋', label: 'עריכת תפריט' },
-  { href: '/owner/staff', icon: '👥', label: 'צוות' },
-  { href: '/owner/accessibility', icon: '♿', label: 'הצהרת נגישות' },
+  { href: '/owner/editor', icon: ClipboardList, label: 'עריכת תפריט' },
+  { href: '/owner/staff', icon: Users, label: 'צוות' },
+  { href: '/owner/accessibility', icon: Accessibility, label: 'הצהרת נגישות' },
 ] as const
 
 export default async function OwnerDashboardPage() {
@@ -35,15 +36,11 @@ export default async function OwnerDashboardPage() {
 
   if (!isOp(me)) redirect('/no-access')
 
-  const defaultBranch = BRANCHES[0]
-  const { data: branchRow } = await service
-    .from('branches')
-    .select('id')
-    .eq('slug', defaultBranch.slug)
-    .maybeSingle()
+  const branches = await getBranches()
+  const defaultBranch = branches[0] ?? null
 
-  const [stats, signals] = branchRow
-    ? await Promise.all([readDashboardStats(branchRow.id), readDashboardSignals(branchRow.id)])
+  const [stats, signals] = defaultBranch
+    ? await Promise.all([readDashboardStats(defaultBranch.id), readDashboardSignals(defaultBranch.id)])
     : [
         { hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } },
         [],
@@ -54,7 +51,7 @@ export default async function OwnerDashboardPage() {
       <OwnerHeader title="לוח בקרה" />
 
       <div className="rise" style={{ animationDelay: '60ms' }}>
-        <DashboardLive initialBranch={defaultBranch.slug} initial={{ stats, signals }} />
+        <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
       </div>
 
       <nav aria-label="ניהול" style={{ marginTop: 24 }}>
@@ -81,9 +78,7 @@ export default async function OwnerDashboardPage() {
                 fontWeight: 600,
               }}
             >
-              <span aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-                {tile.icon}
-              </span>
+              <tile.icon size={22} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--neon-soft)' }} />
               {tile.label}
             </Link>
           ))}

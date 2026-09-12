@@ -2,7 +2,13 @@
 
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { directionFor, navigateWithTransition, recordNavigation, settleNavigation } from '@/lib/nav/viewTransition'
+import {
+  beginBackTransition,
+  directionFor,
+  navigateWithTransition,
+  recordNavigation,
+  settleNavigation,
+} from '@/lib/nav/viewTransition'
 
 // Mounted once in the root layout. Ported near-verbatim from AyekaBar — no
 // app-specific logic. Intercepts same-origin link clicks and re-dispatches
@@ -45,8 +51,11 @@ export default function PageTransitions() {
     // Capture phase so this fires before any per-link handler.
     document.addEventListener('click', onClick, true)
 
+    // Hardware/gesture/browser-button back never goes through the link-click
+    // handler above, so it needs its own View Transition start — see
+    // beginBackTransition()'s doc comment for why this was missing before.
     function onPopState() {
-      document.documentElement.dataset.nav = 'back'
+      beginBackTransition()
     }
     window.addEventListener('popstate', onPopState)
 

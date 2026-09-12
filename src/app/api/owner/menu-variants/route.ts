@@ -3,16 +3,13 @@ import { z } from 'zod'
 import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireMenuEditor } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { BRANCHES } from '@/lib/branches'
 import { allItemUids } from '@/lib/menu/variants'
 import type { MenuDoc } from '@/lib/menu/types'
 
 const MAX_TEMP_DAYS = 30
 
 async function resolveMenu(branchSlug: string | null) {
-  if (!branchSlug || !BRANCHES.some((b) => b.slug === branchSlug)) {
-    throw BadRequest('Unknown or missing branch.')
-  }
+  if (!branchSlug) throw BadRequest('Unknown or missing branch.')
   const service = createServiceRoleClient()
   const { data: menu } = await service
     .from('menus')

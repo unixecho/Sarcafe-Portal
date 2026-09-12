@@ -4,7 +4,6 @@ import { requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { readDashboardStats } from '@/lib/owner/dashboard-stats'
 import { readDashboardSignals } from '@/lib/owner/signals'
-import { BRANCHES } from '@/lib/branches'
 
 // Polled by DashboardLive every 30s, and re-fetched on tab refocus. Returns
 // {stats, signals} for one branch as a single JSON blob — deliberately
@@ -15,9 +14,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   await requireOwner()
 
   const branchSlug = request.nextUrl.searchParams.get('branch')
-  if (!branchSlug || !BRANCHES.some((b) => b.slug === branchSlug)) {
-    throw BadRequest('Unknown or missing branch.')
-  }
+  if (!branchSlug) throw BadRequest('Unknown or missing branch.')
 
   const service = createServiceRoleClient()
   const { data: branch } = await service.from('branches').select('id').eq('slug', branchSlug).maybeSingle()

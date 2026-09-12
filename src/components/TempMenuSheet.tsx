@@ -107,6 +107,7 @@ export default function TempMenuSheet({ open, onClose, initialUntil, initialExpi
         <button
           type="button"
           role="switch"
+          className="press"
           aria-checked={expireAction === 'delete'}
           onClick={() => setExpireAction((prev) => (prev === 'delete' ? 'revert' : 'delete'))}
           style={{

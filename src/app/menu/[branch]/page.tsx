@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import { fetchMenu } from '@/lib/menu/fetch'
 import MenuView from '@/components/MenuView'
-import { BRANCHES, type BranchSlug } from '@/lib/branches'
+import { getBranchBySlug } from '@/lib/branches/server'
+import type { BranchSlug } from '@/lib/branches'
 
 // Deliberately NOT paired with generateStaticParams: Next.js prerenders
 // any route generateStaticParams lists at BUILD time regardless of this
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function PublicMenuPage({ params }: { params: Promise<{ branch: string }> }) {
   const { branch } = await params
-  if (!BRANCHES.some((b) => b.slug === branch)) notFound()
+  if (!(await getBranchBySlug(branch))) notFound()
 
   const menu = await fetchMenu(branch)
   if (!menu) notFound()

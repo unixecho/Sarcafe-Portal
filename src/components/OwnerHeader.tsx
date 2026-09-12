@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import SignOutButton from '@/components/SignOutButton'
 
 type OwnerHeaderProps = {
@@ -40,10 +41,9 @@ export default function OwnerHeader({ title, backHref, right }: OwnerHeaderProps
             placeItems: 'center',
             color: 'var(--text)',
             textDecoration: 'none',
-            fontSize: '1.1rem',
           }}
         >
-          ‹
+          <ChevronLeft size={18} strokeWidth={2.25} aria-hidden="true" />
         </Link>
       )}
       <h1 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, flex: 1 }}>{title}</h1>

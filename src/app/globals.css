@@ -38,6 +38,14 @@
   --line-interactive: rgba(253, 246, 236, 0.4); /* clears WCAG 1.4.11's 3:1
                                                      non-text contrast floor */
 
+  /* Glass surfaces — recovered from the legacy static site's --glass/
+     --glass-strong (legacy-static-site/styles.css), recolored to this
+     palette. Used ONLY on the public-facing pages that sit on top of
+     --brand-bg-image below (portal, digital menu, login, accessibility
+     statement) — the owner app keeps its opaque --bg-elev cards. */
+  --glass: rgba(34, 23, 18, 0.72);
+  --glass-strong: rgba(21, 15, 12, 0.84);
+
   --glow: 0 0 24px rgba(255, 122, 69, 0.45);
   --ease: cubic-bezier(0.22, 1, 0.36, 1); /* the one curve for all travel
                                               motion (slides, fades, rises) */
@@ -132,11 +140,24 @@ body {
    Tap / press feedback — applied to essentially every tappable control.
    ========================================================================== */
 .press {
-  transition: transform 0.12s var(--ease), filter 0.12s ease;
+  transition: transform 0.12s var(--ease), filter 0.12s ease, box-shadow 0.12s ease;
 }
 .press:active {
   transform: scale(0.96);
   filter: brightness(1.18);
+}
+/* Real mouse/trackpad only — guards against "sticky hover" on touch,
+   where the last-tapped button would otherwise stay visually hovered
+   until something else is tapped. This is the desktop-fallback polish a
+   phone-first app otherwise has none of: every .press control had zero
+   feedback for a pointer that isn't a finger. */
+@media (hover: hover) and (pointer: fine) {
+  .press:hover {
+    filter: brightness(1.08);
+  }
+  .press:active:hover {
+    filter: brightness(1.18);
+  }
 }
 
 @keyframes rise-in {
@@ -270,6 +291,266 @@ body {
   .sheet-grabber {
     display: none;
   }
+}
+
+/* Closing state — opt-in via a class swap (see hooks/useSheetExit), played
+   for ~200ms before the caller actually unmounts, so a sheet closes with
+   the same directional motion it opened with instead of just vanishing. */
+.sheet-scrim--closing {
+  animation: fade-out 0.2s var(--ease) forwards;
+}
+.sheet-scrim--closing .sheet-panel {
+  animation: sheet-down 0.22s var(--ease) forwards;
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+@media (min-width: 720px) {
+  .sheet-scrim--closing .sheet-panel {
+    animation: fall-out 0.2s var(--ease) forwards;
+  }
+  @keyframes fall-out {
+    to {
+      opacity: 0;
+      transform: translateY(10px) scale(0.97);
+    }
+  }
+}
+
+/* ==========================================================================
+   Accordion body — animated expand/collapse via the grid-template-rows
+   0fr/1fr trick (ported verbatim from legacy-static-site/menu.css's
+   .menu-category__body, the exact mechanism the old site used and the one
+   being restored here). No JS height measurement, no layout thrash: the
+   grid track itself animates from 0fr to 1fr, the inner wrapper clips
+   overflow while that happens. Used by both the public digital menu
+   (MenuView) and the owner menu editor (CategoryAccordion) so both share
+   the same feel.
+   ========================================================================== */
+.accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.45s var(--ease);
+}
+.accordion-body.is-open {
+  grid-template-rows: 1fr;
+}
+.accordion-inner {
+  min-height: 0;
+  overflow: hidden;
+  /* Content cross-fades in slightly after the row starts growing (AyekaBar's
+     exact timing) rather than just appearing at zero height — a small
+     touch that reads as considered rather than mechanical. */
+  opacity: 0;
+  transition: opacity 0.4s var(--ease);
+}
+.accordion-body.is-open .accordion-inner {
+  opacity: 1;
+  transition-delay: 0.08s;
+}
+
+/* ==========================================================================
+   Public digital menu — category cards, chip nav. Ported from AyekaBar's
+   MenuView (globals.css, its ".cat" and ".menu-chip" rule families),
+   recolored to this palette. Uses .accordion-body/.accordion-inner above
+   for the actual expand mechanics; these add the menu-specific chrome
+   (card lift on open, icon chip, chevron color).
+   ========================================================================== */
+.menu-cat {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin: 0 0 10px;
+  background: linear-gradient(180deg, rgba(253, 246, 236, 0.025), rgba(253, 246, 236, 0.01));
+  overflow: hidden;
+  scroll-margin-top: calc(var(--sticky-h, 108px) + 10px);
+  transition: border-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+.menu-cat.is-open {
+  border-color: var(--line-strong);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+.menu-cat-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 122, 69, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 69, 0.18);
+  flex: 0 0 auto;
+  color: var(--neon-soft);
+}
+.menu-chev {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: transform 0.4s var(--ease), color 0.3s var(--ease);
+}
+.menu-cat.is-open .menu-chev {
+  transform: rotate(180deg);
+  color: var(--neon);
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-cat-head {
+    transition: background-color 0.16s var(--ease);
+  }
+  .menu-cat-head:hover {
+    background-color: rgba(253, 246, 236, 0.035);
+  }
+  .menu-cat-head:hover .menu-cat-icon {
+    box-shadow: inset 0 0 0 1px rgba(255, 122, 69, 0.32);
+  }
+}
+
+/* Category chip nav — scroll-snap row with the native scrollbar hidden
+   (was visibly showing as a track/thumb under the chips, the "slider"
+   look). 50% inline padding lets scrollIntoView's inline:'center' actually
+   center the first/last chip; .fits switches to plain centered layout
+   once every chip already fits without scrolling. */
+.menu-chips-wrap {
+  position: relative;
+}
+.menu-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 6px 50% 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.menu-chips::-webkit-scrollbar {
+  display: none;
+}
+.menu-chips.fits {
+  justify-content: center;
+  padding: 6px 14px 12px;
+}
+.menu-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 8px 14px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease), background 0.25s var(--ease), box-shadow 0.3s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-chip:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+  }
+}
+.menu-chip.active {
+  color: var(--bg);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--neon), var(--neon-soft));
+  box-shadow: var(--glow);
+}
+
+.menu-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+
+/* Menu topbar — large centered title, back/language pinned to fixed
+   PHYSICAL corners in both RTL and LTR (AyekaBar project rule: chrome
+   controls stay where a thumb expects them; only the glyph inside mirrors
+   via .dir-flip, the button position never does). */
+.menu-topbar {
+  position: relative;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 56px;
+}
+.menu-brand {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: 0.3px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-back {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  background: rgba(253, 246, 236, 0.04);
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease), background 0.25s var(--ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-back:hover {
+    color: var(--text);
+    border-color: var(--line-strong);
+    background: rgba(253, 246, 236, 0.08);
+  }
+}
+.menu-lang-slot {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+}
+
+/* ==========================================================================
+   Public-page background — a fixed, full-bleed illustration behind a glass
+   UI, recovered from the legacy static site (legacy-static-site/styles.css
+   `body::before`). Mounted only on public-facing pages via
+   components/PublicBackdrop.tsx — the owner app never uses this.
+   ========================================================================== */
+.public-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: url('/background.jpg') center 18% / cover no-repeat, var(--bg);
+}
+@media (min-width: 900px) {
+  .public-backdrop {
+    background: url('/background-wide.jpg') center 30% / cover no-repeat, var(--bg);
+  }
+}
+.public-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(21, 15, 12, 0.55) 0%, rgba(21, 15, 12, 0.72) 45%, var(--bg) 92%),
+    radial-gradient(circle at 50% 0%, rgba(21, 15, 12, 0.2), transparent 55%);
 }
 
 /* ==========================================================================

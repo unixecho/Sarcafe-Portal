@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import OwnerHeader from '@/components/OwnerHeader'
 import EditorWorkspace from '@/components/EditorWorkspace'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
-import { hasAnyMenuEditAccess } from '@/lib/staff/access'
+import { hasAnyMenuEditAccess, isOp } from '@/lib/staff/access'
+import { getBranches } from '@/lib/branches/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,10 +34,12 @@ export default async function MenuEditorPage() {
     allowedBranchSlug = branch?.slug ?? null
   }
 
+  const branches = await getBranches()
+
   return (
     <main style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="עריכת תפריט" backHref="/owner/dashboard" />
-      <EditorWorkspace allowedBranchSlug={allowedBranchSlug} />
+      <EditorWorkspace branches={branches} allowedBranchSlug={allowedBranchSlug} isOwner={isOp(me)} />
     </main>
   )
 }

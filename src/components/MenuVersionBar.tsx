@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Pencil, Timer, Trash2, Plus } from 'lucide-react'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import TempMenuSheet from '@/components/TempMenuSheet'
@@ -115,11 +116,12 @@ export default function MenuVersionBar({ branchSlug, draft, variants, activeVari
             border: '1px dashed var(--line-strong)',
             background: 'transparent',
             color: 'var(--text-dim)',
-            fontSize: '1.1rem',
+            display: 'grid',
+            placeItems: 'center',
             cursor: 'pointer',
           }}
         >
-          ＋
+          <Plus size={17} aria-hidden="true" />
         </button>
       </div>
 
@@ -160,12 +162,12 @@ export default function MenuVersionBar({ branchSlug, draft, variants, activeVari
             }
             style={iconButtonStyle}
           >
-            ✏️ שינוי שם
+            <Pencil size={14} aria-hidden="true" /> שינוי שם
           </button>
           {!selected.is_default && (
             <>
               <button type="button" className="press" onClick={() => setTempSheetFor(selected)} style={iconButtonStyle}>
-                ⏱ טיימר
+                <Timer size={14} aria-hidden="true" /> טיימר
               </button>
               <button
                 type="button"
@@ -181,7 +183,7 @@ export default function MenuVersionBar({ branchSlug, draft, variants, activeVari
                 }
                 style={{ ...iconButtonStyle, color: '#ff6b6b' }}
               >
-                🗑 מחיקה
+                <Trash2 size={14} aria-hidden="true" /> מחיקה
               </button>
             </>
           )}
@@ -232,6 +234,10 @@ export default function MenuVersionBar({ branchSlug, draft, variants, activeVari
 
 const iconButtonStyle: React.CSSProperties = {
   flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
   minHeight: 40,
   borderRadius: 12,
   border: '1px solid var(--line-strong)',

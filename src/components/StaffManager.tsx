@@ -163,6 +163,7 @@ export default function StaffManager({ branches }: { branches: BranchOption[] })
                 </div>
                 <button
                   type="button"
+                  className="press"
                   onClick={() => patch(row.id, { active: !row.active })}
                   style={{
                     minHeight: 32,
