@@ -596,6 +596,49 @@ html[dir='ltr'][data-nav='back']::view-transition-new(root) {
   animation-name: vt-in-from-right;
 }
 
+/* Same iOS push/pop, for an in-page state swap that isn't a navigation
+   (the portal's branch-picker -> branch-actions swap, driven by
+   lib/nav/viewTransition.ts's runLocalTransition). Keyed off
+   `data-local-nav`, not `data-nav`, and scoped to a named group
+   (`view-transition-name` set inline on the swapping element) so the
+   root/background never animates — only the panel itself does. */
+::view-transition-old(portal-panel),
+::view-transition-new(portal-panel) {
+  animation-duration: 0.42s;
+  animation-timing-function: var(--ease);
+  mix-blend-mode: normal;
+}
+
+html[dir='rtl'][data-local-nav='forward']::view-transition-old(portal-panel) {
+  animation-name: vt-out-to-left;
+}
+html[dir='rtl'][data-local-nav='forward']::view-transition-new(portal-panel) {
+  animation-name: vt-in-from-right;
+  z-index: 1;
+}
+html[dir='rtl'][data-local-nav='back']::view-transition-old(portal-panel) {
+  animation-name: vt-out-to-right;
+  z-index: 1;
+}
+html[dir='rtl'][data-local-nav='back']::view-transition-new(portal-panel) {
+  animation-name: vt-in-from-left;
+}
+
+html[dir='ltr'][data-local-nav='forward']::view-transition-old(portal-panel) {
+  animation-name: vt-out-to-right;
+}
+html[dir='ltr'][data-local-nav='forward']::view-transition-new(portal-panel) {
+  animation-name: vt-in-from-left;
+  z-index: 1;
+}
+html[dir='ltr'][data-local-nav='back']::view-transition-old(portal-panel) {
+  animation-name: vt-out-to-left;
+  z-index: 1;
+}
+html[dir='ltr'][data-local-nav='back']::view-transition-new(portal-panel) {
+  animation-name: vt-in-from-right;
+}
+
 @keyframes vt-in-from-left {
   from {
     transform: translateX(-100%);

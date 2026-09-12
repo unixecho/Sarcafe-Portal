@@ -107,7 +107,12 @@ export default function CategoryAccordion({
       </button>
 
       <div id={bodyId} inert={!open} className={`accordion-body${open ? ' is-open' : ''}`}>
-        <div className="accordion-inner" style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* .accordion-inner carries no padding of its own — see the same
+            note in MenuView.tsx. A border-box element can't render
+            shorter than its own padding, which pinned every collapsed
+            category to a permanent 14px instead of 0. */}
+        <div className="accordion-inner">
+        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <IconPicker
               value={(category.icon as CategoryIconKey) ?? 'utensils'}
@@ -177,6 +182,7 @@ export default function CategoryAccordion({
           <button type="button" className="press" onClick={onAddItem} style={dashedButtonStyle}>
             <Plus size={16} aria-hidden="true" /> הוספת פריט
           </button>
+        </div>
         </div>
       </div>
     </section>

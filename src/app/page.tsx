@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import Link from 'next/link'
+import { runLocalTransition } from '@/lib/nav/viewTransition'
 import {
   MapPin,
   Car,
@@ -114,6 +116,20 @@ export default function PortalPage() {
   const t = T[lang]
   const branch = branches?.find((b) => b.slug === branchSlug) ?? null
 
+  // Same iOS push/pop the rest of the app uses for page navigation, just
+  // driven locally since picking a branch never touches the router. See
+  // runLocalTransition's doc comment for why this needs flushSync and its
+  // own view-transition-name instead of reusing the page-nav machinery.
+  function selectBranch(slug: string | null) {
+    runLocalTransition('portal-panel', slug ? 'forward' : 'back', () => {
+      flushSync(() => {
+        setBranchSlug(slug)
+        setNavOpen(false)
+        setPayOpen(false)
+      })
+    })
+  }
+
   return (
     <main
       style={{
@@ -135,7 +151,7 @@ export default function PortalPage() {
       <LogoMark size={92} />
 
       {!branch ? (
-        <section key="branches" className="rise" style={{ maxWidth: 360, width: '100%' }}>
+        <section key="branches" style={{ maxWidth: 360, width: '100%', viewTransitionName: 'portal-panel' }}>
           <p style={{ margin: 0, color: 'var(--neon-soft)', fontSize: '0.8rem', fontWeight: 700 }}>{t.eyebrow}</p>
           <h1 style={{ margin: '4px 0 6px', fontSize: '1.8rem', fontWeight: 800 }}>{t.welcome}</h1>
           <p style={{ margin: '0 0 20px', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{t.chooseBranch}</p>
@@ -153,7 +169,7 @@ export default function PortalPage() {
                   key={b.slug}
                   type="button"
                   className="press"
-                  onClick={() => setBranchSlug(b.slug)}
+                  onClick={() => selectBranch(b.slug)}
                   style={{
                     minHeight: 64,
                     borderRadius: 15,
@@ -174,14 +190,10 @@ export default function PortalPage() {
           )}
         </section>
       ) : (
-        <section key="actions" className="rise" style={{ maxWidth: 360, width: '100%' }}>
+        <section key="actions" style={{ maxWidth: 360, width: '100%', viewTransitionName: 'portal-panel' }}>
           <button
             type="button"
-            onClick={() => {
-              setBranchSlug(null)
-              setNavOpen(false)
-              setPayOpen(false)
-            }}
+            onClick={() => selectBranch(null)}
             className="press"
             style={{
               display: 'inline-flex',

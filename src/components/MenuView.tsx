@@ -214,8 +214,16 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                 </button>
               </h2>
               <div id={`category-body-${category.id}`} inert={!isOpen} className={`accordion-body${isOpen ? ' is-open' : ''}`}>
-                <ul className="accordion-inner" style={{ listStyle: 'none', margin: 0, padding: '0 14px 14px' }}>
-                  {category.items.map((item, itemIndex) => (
+                {/* .accordion-inner must carry NO padding of its own — a
+                    border-box element can never render shorter than its
+                    own padding, so padding here would put a permanent
+                    14px floor under the 0fr collapse no matter what
+                    overflow/min-height says (confirmed live: it was
+                    stuck at exactly 14px, the padding-bottom value).
+                    Padding lives one level deeper instead. */}
+                <div className="accordion-inner">
+                  <ul style={{ listStyle: 'none', margin: 0, padding: '0 14px 14px' }}>
+                    {category.items.map((item, itemIndex) => (
                     <li
                       key={item.uid ?? `${category.id}-${itemIndex}`}
                       style={{
@@ -246,8 +254,9 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                         {item.price} {t.shekel}
                       </span>
                     </li>
-                  ))}
-                </ul>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </section>
           )

@@ -134,3 +134,45 @@ export function beginBackTransition() {
     })
   })
 }
+
+/**
+ * Same iOS push/pop slide, but for an in-page state swap that never
+ * touches the router — e.g. the portal choosing a branch (branch-picker →
+ * branch-actions) and going back. Deliberately keyed off `data-local-nav`,
+ * never `data-nav`: reusing `data-nav` would also fire the root-level page
+ * rules (globals.css) for a transition that isn't a navigation, sliding
+ * the whole page (background included) a second, conflicting way at the
+ * same time as the named group below.
+ *
+ * `commit` must be wrapped in `flushSync` by the caller (or otherwise
+ * force a synchronous render) — `document.startViewTransition` snapshots
+ * the DOM synchronously after this callback returns, and a bare
+ * `setState` call doesn't repaint until React's next microtask, which is
+ * too late for the API to see the new state as "new."
+ *
+ * The transitioning element(s) must carry a matching
+ * `style={{ viewTransitionName: name }}` (same `name` on both the
+ * before-swap and after-swap element) so the browser pairs them into
+ * their own group instead of diffing the whole root.
+ */
+export function runLocalTransition(name: string, direction: NavDirection, commit: () => void) {
+  const supportsViewTransitions =
+    typeof document !== 'undefined' && 'startViewTransition' in document && !prefersReducedMotion()
+
+  if (!supportsViewTransitions) {
+    commit()
+    return
+  }
+
+  document.documentElement.dataset.localNav = direction
+  const transition = document.startViewTransition(commit)
+  transition.finished.finally(() => {
+    // Only this transition owns the attribute at a time in practice (a
+    // second local transition can't start mid-flight — the sheet/section
+    // it would animate is itself mid-animation and not interactive), but
+    // guard anyway rather than assume.
+    if (document.documentElement.dataset.localNav === direction) {
+      delete document.documentElement.dataset.localNav
+    }
+  })
+}
