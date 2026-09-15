@@ -274,13 +274,14 @@ export default function PortalPage() {
                           display: 'flex',
                           flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
+                          justifyContent: 'center',
+                          gap: 10,
                           padding: '0 16px',
                           cursor: isCurrent ? 'default' : 'pointer',
                           animationDelay: `${160 + i * 70}ms`,
                         }}
                       >
-                        <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'start' }}>
+                        <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
                           <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{b.name[lang] || b.name.he}</span>
                           <small style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>{t.branchLabel}</small>
                         </span>

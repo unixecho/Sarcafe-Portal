@@ -15,6 +15,16 @@ export default function Switch({ on }: { on: boolean }) {
         border: `1px solid ${on ? 'var(--neon)' : 'var(--line-interactive)'}`,
         transition: 'background 0.18s var(--ease), border-color 0.18s var(--ease)',
         boxSizing: 'border-box',
+        // Forced regardless of the page's `dir` — the knob's travel below is
+        // a physical translateX, not a logical one. Under `dir="rtl"` (the
+        // whole app), an unset direction here makes the single flex child's
+        // rest position flex-start = the RIGHT edge, so the "on" translateX
+        // (+16px) shoves an already flush-right knob another 16px past the
+        // track's own edge instead of sliding it across — a knob visibly
+        // hanging half outside the pill. Pinning ltr makes rest position
+        // flex-start = LEFT in every direction context, so translateX(0)/
+        // translateX(16) always land at the track's two physical ends.
+        direction: 'ltr',
       }}
     >
       <span
