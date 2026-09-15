@@ -32,10 +32,24 @@ export default function EditorWorkspace({
 
   const showSwitcher = branches.length > 1 || isOwner
 
+  // Entrance stagger. Ayeka's COUNTER, not hand-written delays, because both
+  // blocks below are conditional: a branch-scoped general_manager gets no
+  // switcher, and there is no editor at all until a branch exists. A skipped
+  // block skips its delay() call, so whatever follows moves one step earlier
+  // instead of leaving a visible hole where the missing block would have been.
+  // The numbers are the owner dashboard's own — 60ms for the first body block,
+  // 80ms between blocks (60 / 140 / 220) — so the owner app reads as one app
+  // page to page; the header itself is at 0ms, it rises inside OwnerHeader.
+  // Deliberately NOT given a delay(): the individual branch chips (one row is
+  // one block — staggering chips makes a manager wait to see which branch is
+  // selected) and AddBranchSheet (a sheet, with its own entrance already).
+  let d = 0
+  const delay = () => `${60 + d++ * 80}ms`
+
   return (
     <>
       {showSwitcher && (
-        <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div role="group" aria-label="בחירת סניף" className="rise" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', animationDelay: delay() }}>
           {branches.map((b) => {
             const selected = b.slug === branch
             return (
@@ -87,7 +101,19 @@ export default function EditorWorkspace({
         </div>
       )}
 
-      {branch && <MenuEditor key={branch} branchSlug={branch} branchLabel={branchName(branches, branch)} />}
+      {/* One rise for the whole editor, and the wrapper is deliberately NOT
+          keyed by branch — only MenuEditor inside it is. Keying the wrapper
+          would replay the entrance on every branch switch, which is a
+          transition, not an entrance. rise-in ends at `transform: none`, so
+          the 16px translate is gone the moment it finishes and the wrapper
+          stops being the containing block for MenuEditor's fixed-position
+          sheets; only during those 0.55s could one be anchored to the wrapper
+          instead of the viewport, and nothing can be opened that fast. */}
+      {branch && (
+        <div className="rise" style={{ animationDelay: delay() }}>
+          <MenuEditor key={branch} branchSlug={branch} branchLabel={branchName(branches, branch)} />
+        </div>
+      )}
 
       {isOwner && (
         <AddBranchSheet

@@ -1,14 +1,26 @@
+import type { ReactNode } from 'react'
+
 /**
- * The recovered illustrated coffee-cart scene, reintroduced as a fixed
- * full-bleed layer behind a glass UI — recovers legacy-static-site's
- * `body::before` treatment (styles.css), gone in the rewrite. Mounted only
- * on public-facing pages (portal, digital menu, login, accessibility
- * statement) via each page's own top-level render — the owner app never
- * uses this, see globals.css's .public-backdrop rule (plain CSS
- * background-image, swapped for a wider crop ≥900px via media query —
- * same mechanism the legacy site used, not next/image, since this is a
- * decorative layer, not the page's LCP content).
+ * The recovered illustrated coffee-cart scene, wrapping every public-facing
+ * page's <main> — recovers legacy-static-site's `body::before` treatment
+ * (styles.css), gone in the rewrite. See globals.css's .public-backdrop
+ * rule for the actual image/gradient (plain CSS background, swapped for a
+ * wider crop ≥900px via media query — same mechanism the legacy site used,
+ * not next/image, since this is a decorative layer, not the page's LCP
+ * content).
+ *
+ * Wraps <main> instead of rendering as a `position: fixed; z-index: -1`
+ * sibling INSIDE it, which is what this used to be. That combination —
+ * fixed position, negative z-index — reliably goes unpainted in Chromium
+ * after a BACK-direction document.startViewTransition() finishes: not just
+ * this element, ANY negative-z-index layer, freshly created ones included
+ * (confirmed live, repeatedly — GPU-layer promotion, a forced repaint, and
+ * giving it its own view-transition-name to opt out of the root capture
+ * all failed to fix it). `background-attachment: fixed` on a container that
+ * naturally paints behind its own children sidesteps the whole stacking
+ * question — there is no z-index anywhere in this scheme for the browser
+ * to get wrong.
  */
-export default function PublicBackdrop() {
-  return <div className="public-backdrop" aria-hidden="true" />
+export default function PublicBackdrop({ children }: { children: ReactNode }) {
+  return <div className="public-backdrop">{children}</div>
 }

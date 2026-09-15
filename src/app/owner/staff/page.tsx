@@ -25,7 +25,7 @@ export default async function OwnerStaffPage() {
   const { data: branches } = await service.from('branches').select('id, slug, name').order('slug')
 
   return (
-    <main style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="צוות" backHref="/owner/dashboard" />
       <StaffManager branches={branches ?? []} />
     </main>

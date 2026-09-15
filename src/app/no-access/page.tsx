@@ -23,91 +23,92 @@ export default function NoAccessPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        position: 'relative',
-      }}
-    >
-      <PublicBackdrop />
-      <section
-        className="rise"
+    <PublicBackdrop>
+      <main id="main" tabIndex={-1}
         style={{
-          width: '100%',
-          maxWidth: 360,
-          background: 'var(--glass-strong)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid var(--line)',
-          borderRadius: 20,
-          padding: '32px 24px',
+          minHeight: '100dvh',
           display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-          textAlign: 'center',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+          position: 'relative',
         }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            width: 48,
-            height: 48,
-            margin: '0 auto',
-            borderRadius: 14,
-            background: 'rgba(255,107,107,0.14)',
-            display: 'grid',
-            placeItems: 'center',
-            color: '#ff6b6b',
-          }}
-        >
-          <ShieldAlert size={24} strokeWidth={2} />
-        </div>
-        <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>אין הרשאת גישה</h1>
-        <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
-          החשבון המחובר לא מורשה לגשת למערכת הזו. אם זו טעות, פנו למנהל/ת.
-        </p>
-
-        {/* TODO: wire to a real contact number once the owner provides one
-            (app_settings key, not hardcoded) — never invent a business
-            phone number as a placeholder. */}
-
-        <button
-          type="button"
-          className="press"
-          onClick={switchAccount}
+        <section
+          className="rise"
           style={{
             width: '100%',
-            minHeight: 'var(--tap-min)',
-            borderRadius: 999,
-            border: '1px solid var(--line-strong)',
-            background: 'var(--bg-elev-2)',
-            color: 'var(--text)',
-            fontWeight: 600,
-            fontSize: '0.9rem',
-            cursor: 'pointer',
+            maxWidth: 360,
+            background: 'var(--glass-strong)',
+            backdropFilter: 'blur(24px)',
+            border: '1px solid var(--line)',
+            borderRadius: 20,
+            padding: '32px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            textAlign: 'center',
           }}
         >
-          התחברות עם חשבון אחר
-        </button>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 48,
+              height: 48,
+              margin: '0 auto',
+              borderRadius: 14,
+              background: 'rgba(255,107,107,0.14)',
+              display: 'grid',
+              placeItems: 'center',
+              color: '#ff6b6b',
+            }}
+          >
+            <ShieldAlert size={24} strokeWidth={2} />
+          </div>
+          <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>אין הרשאת גישה</h1>
+          <p style={{ margin: 0, color: 'var(--text-dim)', fontSize: '0.9rem' }}>
+            החשבון המחובר לא מורשה לגשת למערכת הזו. אם זו טעות, פנו למנהל/ת.
+          </p>
 
-        <p style={{ margin: 0, color: 'var(--text-faint)', fontSize: '0.78rem' }}>
-          יש לך כמה חשבונות Google? יכול להיות שבחרת בטעות בחשבון הלא נכון.
-        </p>
+          {/* TODO: wire to a real contact number once the owner provides one
+              (app_settings key, not hardcoded) — never invent a business
+              phone number as a placeholder. */}
 
-        <Link
-          href="/"
-          className="press"
-          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-dim)', fontSize: '0.85rem' }}
-        >
-          <ArrowRight size={15} aria-hidden="true" />
-          חזרה לדף הבית
-        </Link>
-      </section>
+          <button
+            type="button"
+            className="press"
+            onClick={switchAccount}
+            style={{
+              width: '100%',
+              minHeight: 'var(--tap-min)',
+              borderRadius: 999,
+              border: '1px solid var(--line-strong)',
+              background: 'var(--bg-elev-2)',
+              color: 'var(--text)',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+            }}
+          >
+            התחברות עם חשבון אחר
+          </button>
 
-      <AuthHandoff open={handoffOpen} onClose={() => setHandoffOpen(false)} lang="he" />
-    </main>
+          <p style={{ margin: 0, color: 'var(--text-faint)', fontSize: '0.78rem' }}>
+            יש לך כמה חשבונות Google? יכול להיות שבחרת בטעות בחשבון הלא נכון.
+          </p>
+
+          <Link
+            href="/"
+            className="press"
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-dim)', fontSize: '0.85rem' }}
+          >
+            <ArrowRight size={15} aria-hidden="true" />
+            חזרה לדף הבית
+          </Link>
+        </section>
+
+        <AuthHandoff open={handoffOpen} onClose={() => setHandoffOpen(false)} lang="he" />
+      </main>
+    </PublicBackdrop>
   )
 }

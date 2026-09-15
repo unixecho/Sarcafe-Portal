@@ -14,6 +14,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="he" dir="rtl">
       <body>
+        {/* First focusable element in the document — WCAG 2.4.1 (Level A).
+            It sits ahead of PageTransitions and the a11y-scope wrapper so
+            nothing can get in front of it in the tab order. Its target is
+            the <main id="main" tabIndex={-1}> that every route renders;
+            the tabIndex is what makes this MOVE focus rather than merely
+            scroll, without which the link is decorative. */}
+        <a href="#main" className="skip-link">
+          דילוג לתוכן הראשי
+        </a>
         <PageTransitions />
         {/* Everything except fixed/portalled chrome lives inside this
             wrapper — the accessibility widget's contrast/grayscale/invert

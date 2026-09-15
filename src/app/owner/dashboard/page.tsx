@@ -47,7 +47,7 @@ export default async function OwnerDashboardPage() {
       ]
 
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח בקרה" />
 
       <div className="rise" style={{ animationDelay: '60ms' }}>

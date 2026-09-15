@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
+import SelectSheet from '@/components/SelectSheet'
 
 type BranchOption = { id: string; slug: string; name: { he?: string; en?: string; ar?: string } }
 
@@ -70,8 +71,22 @@ export default function StaffManager({ branches }: { branches: BranchOption[] })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Entrance cadence copied from the owner dashboard: the header is at
+          0ms (it rises inside OwnerHeader on the page above this component),
+          so the first card here takes 60ms and the team list 140ms — the
+          dashboard's own two body delays. Hand-written rather than a delay()
+          counter because both sections are unconditional: nothing here can be
+          skipped, so there is no hole for a counter to close. Reduced motion
+          is already handled — globals.css REMOVEs .rise, which is also what
+          makes these visible at all, since rise-in fills `backwards` from
+          opacity 0. The <p role="alert"> inside this card is NOT animated
+          itself: it does not exist at mount, and this animation (0.55s, no
+          `forwards` fill) is finished and leaves nothing behind long before a
+          failed invite can put text in it. */}
       <section
+        className="rise"
         style={{
+          animationDelay: '60ms',
           background: 'var(--bg-elev)',
           border: '1px solid var(--line)',
           borderRadius: 'var(--radius-md)',
@@ -89,22 +104,29 @@ export default function StaffManager({ branches }: { branches: BranchOption[] })
             style={inputStyle}
           />
           <div style={{ display: 'flex', gap: 8 }}>
-            <select value={badge} onChange={(e) => setBadge(e.target.value as Badge)} style={{ ...inputStyle, flex: 1 }}>
-              <option value="">תפקיד</option>
-              {(Object.keys(BADGES) as Badge[]).map((b) => (
-                <option key={b} value={b}>
-                  {BADGES[b].he}
-                </option>
-              ))}
-            </select>
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-              <option value="">כל הסניפים</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name.he}
-                </option>
-              ))}
-            </select>
+            {/* Both of these were native <select>s, which §5.9 forbids
+                outright — a native select paints in the OS's own chrome
+                (Latin-first, light, platform-positioned) and cannot be
+                reached by the token system, so it is the one control on
+                the page that ignores the design entirely. SelectSheet is
+                the iOS equivalent, built on SheetShell so it inherits the
+                real focus trap rather than reimplementing one. */}
+            <SelectSheet
+              label="תפקיד"
+              placeholder="תפקיד"
+              value={badge}
+              options={(Object.keys(BADGES) as Badge[]).map((b) => ({ value: b, label: BADGES[b].he }))}
+              onChange={(v) => setBadge(v as Badge | '')}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <SelectSheet
+              label="סניף"
+              placeholder="כל הסניפים"
+              value={branchId}
+              options={branches.map((b) => ({ value: b.id, label: b.name.he ?? b.slug }))}
+              onChange={setBranchId}
+              style={{ ...inputStyle, flex: 1 }}
+            />
           </div>
           {error && (
             <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.8rem', margin: 0 }}>
@@ -132,7 +154,12 @@ export default function StaffManager({ branches }: { branches: BranchOption[] })
         </div>
       </section>
 
-      <section>
+      {/* The team list: one rise for the whole section at 140ms. The rows
+          inside are deliberately NOT staggered — they arrive from a fetch
+          after mount, so a per-row entrance would be animating data landing
+          rather than the page arriving, and a manager checking who is on
+          shift should not wait on rows fading in one at a time. */}
+      <section className="rise" style={{ animationDelay: '140ms' }}>
         <h2 style={{ margin: '0 0 10px', fontSize: '0.95rem', fontWeight: 700 }}>הצוות</h2>
         {!staff ? (
           <div className="sk" style={{ height: 120 }} />

@@ -20,7 +20,7 @@ export default function LogoMark({
    * pairs with in AuthHandoff's handshake animation. */
   radius?: number
 }) {
-  const pad = Math.round(size * 0.06)
+  const pad = Math.round(size * 0.03)
   return (
     <div
       style={{

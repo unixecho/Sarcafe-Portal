@@ -53,6 +53,7 @@ export function recordNavigation(path: string) {
 }
 
 let settleResolver: (() => void) | null = null
+let activeTransition: ViewTransition | null = null
 
 /** Called once the newly-navigated route has actually painted, to let the
  * browser un-freeze the outgoing screenshot. Safe to call even if no
@@ -63,6 +64,50 @@ export function settleNavigation() {
     settleResolver()
     settleResolver = null
   }
+}
+
+/**
+ * A second navigation (fast double-tap on a link, or a link tapped right
+ * after a back-gesture) can start before the first one ever settles.
+ * `settleResolver` is a single module-level slot, so without this guard the
+ * *first* transition's eventual settle would resolve whatever the *second*
+ * transition's resolver currently sitting in that slot is — releasing its
+ * screenshot before its route has actually painted. Visually that reads as
+ * the two page animations blending into each other. Explicitly skipping the
+ * still-active transition first (the View Transition API's own supported
+ * way to abandon one) keeps exactly one transition, and one resolver, live
+ * at a time.
+ */
+function supersedeActiveTransition() {
+  if (!activeTransition) return
+  try {
+    activeTransition.skipTransition()
+  } catch {
+    // Already finished/skipped — nothing to do.
+  }
+  activeTransition = null
+  settleResolver = null
+}
+
+function trackTransition(transition: ViewTransition) {
+  activeTransition = transition
+  // `.ready` (and, on some engines, `.finished`) rejects with
+  // InvalidStateError when a transition is skipped/superseded before it
+  // gets to run — an expected outcome now that supersedeActiveTransition()
+  // does exactly that, not a bug. Nothing here needs to react to it, but an
+  // un-awaited rejection would otherwise surface as an "Uncaught (in
+  // promise)" console error on every fast double-navigation.
+  transition.ready.catch(() => {})
+  transition.finished.catch(() => {})
+  transition.finished.finally(() => {
+    if (activeTransition === transition) activeTransition = null
+    // data-nav is set (never toggled) at the start of navigateWithTransition/
+    // beginBackTransition purely for the ::view-transition-old/new(root)
+    // selectors to read during the animation — nothing outside that reads
+    // it, but it was never being cleared afterward either, left permanently
+    // on <html> after the very first navigation.
+    document.documentElement.removeAttribute('data-nav')
+  })
 }
 
 /**
@@ -83,9 +128,10 @@ export function navigateWithTransition(path: string, direction: NavDirection, co
     return
   }
 
+  supersedeActiveTransition()
   document.documentElement.dataset.vt = 'running'
 
-  document.startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     return new Promise<void>((resolve) => {
       settleResolver = resolve
       commit()
@@ -97,6 +143,7 @@ export function navigateWithTransition(path: string, direction: NavDirection, co
       }, COMMIT_TIMEOUT_MS)
     })
   })
+  trackTransition(transition)
 }
 
 /**
@@ -120,9 +167,10 @@ export function beginBackTransition() {
     typeof document !== 'undefined' && 'startViewTransition' in document && !prefersReducedMotion()
   if (!supportsViewTransitions) return
 
+  supersedeActiveTransition()
   document.documentElement.dataset.vt = 'running'
 
-  document.startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     return new Promise<void>((resolve) => {
       settleResolver = resolve
       // Backstop: same reasoning as navigateWithTransition — if the
@@ -133,6 +181,7 @@ export function beginBackTransition() {
       }, COMMIT_TIMEOUT_MS)
     })
   })
+  trackTransition(transition)
 }
 
 /**
@@ -164,8 +213,24 @@ export function runLocalTransition(name: string, direction: NavDirection, commit
     return
   }
 
+  // Shares supersedeActiveTransition/trackTransition with the root-level
+  // functions above — this used to call startViewTransition() directly,
+  // untracked. A real page nav (Menu button) sits right inside the panel
+  // this animates in, so "pick a branch, immediately tap Menu" was a
+  // completely ordinary sequence — and with this untracked, that second,
+  // *root* transition would start while the document's own native view
+  // transition (this local one) was still mid-flight. The browser silently
+  // aborts the loser itself in that case, but hands it a mid-animation DOM
+  // as its "old" snapshot — which reads as the two animations blending
+  // into each other, and can leave a stale captured frame on top of fixed
+  // layers like PublicBackdrop until a hard reload clears it. Going
+  // through the same supersede/track path makes the cancellation ours
+  // (skipTransition(), before the conflicting transition ever starts)
+  // instead of the browser's.
+  supersedeActiveTransition()
   document.documentElement.dataset.localNav = direction
   const transition = document.startViewTransition(commit)
+  trackTransition(transition)
   transition.finished.finally(() => {
     // Only this transition owns the attribute at a time in practice (a
     // second local transition can't start mid-flight — the sheet/section

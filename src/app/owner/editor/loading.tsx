@@ -2,7 +2,7 @@ import OwnerHeaderSkeleton from '@/components/OwnerHeaderSkeleton'
 
 export default function EditorLoading() {
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeaderSkeleton />
       <div className="sk" style={{ height: 44, borderRadius: 999, marginBottom: 16 }} />
       {[0, 1, 2].map((i) => (

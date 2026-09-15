@@ -1,11 +1,26 @@
 /* ==========================================================================
-   Fonts — kept from the current Sarcafe site (Heebo + Noto Sans Arabic),
-   not switched to AyekaBar's Rubik. Listing both in one font-family stack
-   lets the browser pick whichever actually has glyphs for the script in
-   use, so Hebrew renders in Heebo and any Arabic text automatically falls
-   through to Noto Sans Arabic with no per-element font-family switching.
+   Fonts — Rubik alone (blueprint §3.3: one family must cover every language
+   the project ships, and Sarcafe ships he/en/ar). Rubik's Google Fonts
+   subsets include hebrew, arabic and latin, so a single family renders all
+   three with no per-element font-family switching — which is what the old
+   Heebo + Noto Sans Arabic pair was buying, at the cost of a second font
+   download and two typefaces whose x-heights never quite matched across a
+   mixed he/ar line.
+
+   Only the weights this codebase actually renders are requested. 400 is in
+   the list even though NOTHING sets it explicitly: `html, body` below sets
+   no font-weight, so every unstyled element inherits the CSS initial value
+   of 400. Omit it and the font-matching algorithm snaps all that text up to
+   500 — most body copy on the site silently gets heavier. 500/600/700/800
+   are the values components actually select (verified by grep over src/).
+
+   Do NOT "simplify" this back to a wght@300..900 range: that ships the whole
+   variable axis for weights nothing renders, which is the loaded-and-unused
+   waste §3.3 calls out. If a component ever needs 300 or 900, add that number
+   here in ascending order — the css2 API rejects an unsorted wght list, and a
+   weight that is not listed is silently snapped to the nearest one that is.
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300..900&family=Noto+Sans+Arabic:wght@300..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -37,6 +52,18 @@
   --line-strong: rgba(253, 246, 236, 0.14);
   --line-interactive: rgba(253, 246, 236, 0.4); /* clears WCAG 1.4.11's 3:1
                                                      non-text contrast floor */
+
+  /* Sage — pulled straight from the logo's bottom leaf, not from AyekaBar's
+     cyan --neon-2. Used ONLY on the reviews wall and the portal's post-wall
+     CTA (see .rw-* below): a second accent that reads as "this cart's own
+     garden" rather than a recolored neon secondary. --neon stays the one
+     interactive primary everywhere else (hero CTA, chips, focus rings) so
+     the portal never ends up with two competing "primary" oranges. */
+  --sage: #93a36f;
+  --sage-soft: #c3ceac;
+  --paper: rgba(253, 246, 236, 0.05); /* a card tint, not a color — a hint of
+                                          the logo's cream ground on top of
+                                          the app's dark glass, never opaque */
 
   /* Glass surfaces — recovered from the legacy static site's --glass/
      --glass-strong (legacy-static-site/styles.css), recolored to this
@@ -79,7 +106,14 @@ html,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Heebo', 'Noto Sans Arabic', system-ui, sans-serif;
+  /* The fallback stack is not decoration — it is what renders he/en/ar
+     during the display=swap window before Rubik arrives, and permanently
+     for anyone who blocks Google Fonts. Browsers fall through the stack
+     per glyph, so Arial sits ahead of the generic sans-serif as a face
+     that actually ships Hebrew and Arabic on Windows/macOS/Android;
+     without it the first paint can land on a Latin-only UI font and show
+     tofu boxes for the Hebrew copy that is most of this site. */
+  font-family: 'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-size: var(--a11y-font-scale, 100%);
 }
@@ -127,6 +161,55 @@ body {
   transform: scaleX(-1);
 }
 
+/* Skip link — WCAG 2.4.1 (Level A), and under IS 5568 this is legally
+   required in Israel, not a nicety. It must be the FIRST focusable element
+   in the document, which is why it lives in layout.tsx and not in any page.
+
+   Three details here are load-bearing:
+
+   1. color: var(--bg), NOT white. White on --neon measures 2.59:1; --bg on
+      --neon measures 7.35:1. A warm accent carries dark text, not light.
+   2. Hidden with transform, NOT display:none or visibility:hidden — a
+      hidden element cannot receive focus, so the link would never appear
+      and the whole control would be decorative.
+   3. :focus is matched alongside :focus-visible. A skip link is reached by
+      Tab, so :focus-visible does fire, but the plain :focus is kept as a
+      belt-and-braces for engines that disagree about programmatic focus.
+
+   The label is Hebrew-only on purpose (§6.2): language is chosen client-side
+   after hydration, and a control that must be correct on the very first Tab
+   cannot wait for that. The site's default language is the honest answer. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 1000;
+  padding: 12px 18px;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  background: var(--neon);
+  color: var(--bg);
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.18s var(--ease);
+}
+.skip-link:focus-visible,
+.skip-link:focus {
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* COLLAPSE: the slide was the appearance. The link must still arrive —
+     it just arrives instantly instead of sliding down. */
+  .skip-link {
+    transition: none;
+  }
+}
+
 /* Visible everywhere, deliberately with !important — this overrides the
    many inline `outline: none`s that show up in third-party/reset styles,
    because a missing focus ring is a WCAG 2.4.7 failure, not a style choice
@@ -145,6 +228,21 @@ body {
 .press:active {
   transform: scale(0.96);
   filter: brightness(1.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* SUBSTITUTE, not remove. A press is FEEDBACK — it tells you the tap
+     registered — so it must not vanish, but the movement can. The scale is
+     dropped and the brightness lift is kept, which confirms the tap without
+     moving anything. Blanket-killing this (the * { animation: none } rule
+     that used to live at the bottom of this file) took the confirmation
+     with it, which is worse for a motion-sensitive user, not kinder. */
+  .press {
+    transition: filter 0.12s ease;
+  }
+  .press:active {
+    transform: none;
+    filter: brightness(1.18);
+  }
 }
 /* Real mouse/trackpad only — guards against "sticky hover" on touch,
    where the last-tapped button would otherwise stay visually hovered
@@ -187,6 +285,18 @@ body {
 .pop {
   animation: pop-in 0.32s var(--spring) backwards;
 }
+@media (prefers-reduced-motion: reduce) {
+  /* REMOVE: both are pure decoration on content that is already there.
+     Dropping the animation entirely is correct AND is what makes them
+     visible — both use `backwards` fill, so their pre-animation state is
+     opacity 0. An override that only zeroed the duration would leave the
+     element invisible; removing the animation outright means the element
+     simply renders in its natural state. */
+  .rise,
+  .pop {
+    animation: none;
+  }
+}
 
 /* ==========================================================================
    Skeleton loading — one shared class for every loading.tsx in the app, so
@@ -210,6 +320,14 @@ body {
 @keyframes sk-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* REMOVE: the shimmer is decoration. The skeleton block itself stays —
+     it is the thing communicating "content is loading", and the sweep only
+     made it feel alive. */
+  .sk::after {
+    animation: none;
   }
 }
 
@@ -324,6 +442,27 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  /* COLLAPSE: for the opening pair the motion WAS the appearance, so the
+     sheet must still appear — it simply appears instead of rising. */
+  .sheet-scrim,
+  .sheet-panel {
+    animation: none;
+  }
+  /* The closing pair needs care rather than a blanket none. fade-out /
+     sheet-down / fall-out run with `forwards`, so they are what visually
+     removes the sheet during the ~200ms useSheetExit waits before it
+     actually unmounts. Kill them naively and the sheet sits fully opaque
+     for that window and then blinks out of existence. Collapsing them to
+     an instant opacity 0 keeps the disappearance immediate and motionless,
+     which is the honest reduced-motion equivalent of closing. */
+  .sheet-scrim--closing,
+  .sheet-scrim--closing .sheet-panel {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* ==========================================================================
    Accordion body — animated expand/collapse via the grid-template-rows
    0fr/1fr trick (ported verbatim from legacy-static-site/menu.css's
@@ -341,6 +480,99 @@ body {
 }
 .accordion-body.is-open {
   grid-template-rows: 1fr;
+}
+
+/* ==========================================================================
+   Menu item cascade + typewriter reveal (blueprint §4.8).
+
+   Items inside an opened category arrive one after another, and each item's
+   NAME types itself in. Both are driven by one inline custom property --i,
+   the item's index, set in MenuView.tsx.
+
+   TWO THINGS HERE ARE TRAPS, and both have bitten this pattern before:
+
+   1. THE DELAY MUST BE FOLDED INTO ONLY THE ENTRIES THAT NEED IT. CSS cycles
+      the transition-delay list against the property list, so writing a single
+      `transition-delay: calc(var(--i) * 35ms)` on its own line hands that
+      same staggered delay to background/border-color too — and item #10 then
+      sits for ~350ms before its hover state even begins to respond. The
+      entrance properties below carry their delay inline in the shorthand;
+      the interaction properties deliberately carry none.
+
+   2. --rest EXISTS BECAUSE INLINE STYLE BEATS A CLASS RULE. The sold-out
+      dimming used to be an inline `opacity: 0.5` on the <li>, which would
+      win over anything written here and pin the item visible at 0.5 through
+      its own entrance. The <li> now passes its resting opacity as --rest
+      instead, so the resting value and the animated value both live in CSS
+      and can't fight.
+   ========================================================================== */
+.menu-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.45s ease calc(var(--i, 0) * 35ms),
+    transform 0.45s var(--ease) calc(var(--i, 0) * 35ms),
+    background 0.16s var(--ease);
+}
+.accordion-body.is-open .menu-item {
+  opacity: var(--rest, 1);
+  transform: none;
+}
+
+/* steps(14, end) is what makes this read as TYPING rather than wiping — 14
+   discrete jumps instead of one smooth slide. The +90ms holds the name back
+   until its row has started arriving, so the text types onto a row that is
+   already there rather than racing it. */
+.menu-item-name {
+  display: inline-block;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.5s steps(14, end) calc(var(--i, 0) * 35ms + 90ms);
+}
+/* RTL types from the other edge — a name that wipes in from the left on a
+   Hebrew menu reads backwards. */
+html[dir='rtl'] .menu-item-name {
+  clip-path: inset(0 0 0 100%);
+}
+.accordion-body.is-open .menu-item .menu-item-name {
+  clip-path: inset(0 0 0 0);
+}
+
+/* Desktop only, and BOTH conditions are required: a touch screen fires a
+   phantom :hover after every tap which then sticks until the next tap
+   elsewhere, so on a phone this would read as a menu row randomly stuck
+   "selected". Note the selector is .accordion-body.is-open .menu-item:hover
+   (0,4,0) and not .menu-item:hover (0,2,0) — the latter would silently lose
+   to the .accordion-body.is-open .menu-item rule above. No transform lift
+   here on purpose: these rows are separated by a hairline border, not cards,
+   and lifting one would break the rule between it and its neighbour. */
+@media (hover: hover) and (pointer: fine) {
+  .accordion-body.is-open .menu-item:hover {
+    background: rgba(255, 122, 69, 0.045);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* REMOVE — the cascade is decoration. But the items MUST end up visible:
+     this animation ships broken when someone kills the transition and leaves
+     the base opacity: 0 / clip-path: inset(0 100% 0 0) in place, which hides
+     every menu item on the site for anyone with reduced motion on. The
+     resting values are restored explicitly here. */
+  .menu-item,
+  .menu-item-name {
+    transition: none;
+  }
+  .menu-item {
+    opacity: var(--rest, 1);
+    transform: none;
+  }
+  .menu-item-name,
+  html[dir='rtl'] .menu-item-name {
+    clip-path: none;
+  }
 }
 .accordion-inner {
   min-height: 0;
@@ -367,7 +599,19 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   margin: 0 0 10px;
-  background: linear-gradient(180deg, rgba(253, 246, 236, 0.025), rgba(253, 246, 236, 0.01));
+  /* The top-light wash alone (2.5% cream over nothing) was effectively
+     transparent, and this page sits on .public-backdrop — an ILLUSTRATED
+     scene, not a flat colour. The result was the coffee-cart artwork and the
+     sārcāfe logo reading straight through the category cards, so a card
+     looked like a window rather than a surface.
+     --glass is the token that already exists for precisely this ("used ONLY
+     on the public-facing pages that sit on top of the backdrop"), so the
+     wash now sits ON a glass ground instead of on the illustration. Keep the
+     wash: it is what gives the card a lit top edge. */
+  background: linear-gradient(180deg, rgba(253, 246, 236, 0.045), rgba(253, 246, 236, 0.012)),
+    var(--glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   overflow: hidden;
   scroll-margin-top: calc(var(--sticky-h, 108px) + 10px);
   transition: border-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
@@ -395,6 +639,21 @@ body {
 .menu-cat.is-open .menu-chev {
   transform: rotate(180deg);
   color: var(--neon);
+}
+.menu-cat-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 12px 14px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 @media (hover: hover) and (pointer: fine) {
   .menu-cat-head {
@@ -442,8 +701,11 @@ body {
   min-height: 44px;
   box-sizing: border-box;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--bg-elev);
+  /* --line-interactive, not --line: an unselected chip's border is the only
+     thing drawing it as a control (WCAG 1.4.11's 3:1 floor). The selected
+     one swaps to the accent gradient and needs no border. */
+  border: 1px solid var(--line-interactive);
+  background: var(--glass-strong);
   color: var(--text-dim);
   font: inherit;
   font-weight: 500;
@@ -468,7 +730,12 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--glass-strong);
+  /* Deliberately more transparent than --glass-strong (which login/no-access
+     use over a mostly-static crop) — this bar is pinned over the one
+     backdrop image users actually scroll content past, so a near-opaque
+     fill read as "there's no illustration here at all." The blur is what
+     keeps text legible, not the tint, so it can carry more of the load. */
+  background: rgba(21, 15, 12, 0.45);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
@@ -486,15 +753,74 @@ body {
   justify-content: center;
   padding: 0 56px;
 }
-.menu-brand {
+.menu-brand-wrap {
   margin: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+/* The brand title doubles as the branch-switch trigger — a plain button
+   made to read as a heading, not a heading with a button glued on. */
+.menu-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
   font-weight: 800;
   font-size: 1.3rem;
   letter-spacing: 0.3px;
   color: var(--text);
+  cursor: pointer;
+  min-width: 0;
+}
+.menu-brand-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+.menu-brand-chev {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-brand:hover {
+    background: rgba(253, 246, 236, 0.06);
+  }
+}
+
+/* Branch-switch sheet rows — same row shape the portal's own action list
+   uses, kept local since MenuView doesn't share a stylesheet module with
+   PortalPage. */
+.branch-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  border-radius: 15px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--text);
+  text-decoration: none;
+}
+.branch-switch-row--current {
+  border-color: var(--line-interactive);
+  background: var(--bg-elev-2);
+}
+.branch-switch-current-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--neon-soft);
 }
 .menu-back {
   position: absolute;
@@ -527,30 +853,404 @@ body {
 }
 
 /* ==========================================================================
-   Public-page background — a fixed, full-bleed illustration behind a glass
-   UI, recovered from the legacy static site (legacy-static-site/styles.css
-   `body::before`). Mounted only on public-facing pages via
-   components/PublicBackdrop.tsx — the owner app never uses this.
+   Portal — branch actions. A staggered rise-in on every action row (reusing
+   the shared `.rise` keyframe above, one incrementing `animationDelay` per
+   row, same technique MenuView already uses for its topbar) — the one piece
+   of AyekaBar's portal that hadn't been ported yet: buttons used to just
+   appear, with no per-row entrance at all.
+   ========================================================================== */
+.portal-hero-mark {
+  animation: rise-in 0.6s var(--ease) 0.1s backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* REMOVE. This was the one animation in the portal block with no opt-out.
+     It ends at transform:none so nothing went blank, but it still moved for
+     a user who asked it not to. */
+  .portal-hero-mark {
+    animation: none;
+  }
+}
+
+/* The one hero action per screen (the digital-menu link) — warm gradient +
+   glow built from --neon, same treatment every other primary CTA in the app
+   already uses, not a new one-off invented for this button. */
+.portal-cta-hero {
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, rgba(255, 122, 69, 0.2), rgba(255, 171, 122, 0.1));
+  box-shadow: var(--glow);
+}
+
+/* iOS-style "more below" affordance, pointing at the reviews wall — a real
+   button (44px target), not a decorative chevron: a glass pill with a soft
+   sage breathing glow (see .rw-cue-badge) so it visibly invites a tap
+   instead of waiting to be noticed. Sage rather than the hero's amber-orange
+   on purpose — it's pointing at the wall below, which is itself sage-toned,
+   so the cue previews the section it leads to. */
+.portal-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 8px 16px 8px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+[dir='rtl'] .portal-cue {
+  padding: 8px 10px 8px 16px;
+}
+.portal-cue-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--sage-soft);
+  background: rgba(147, 163, 111, 0.16);
+  box-shadow: 0 0 0 1px rgba(147, 163, 111, 0.3);
+  animation: cue-breathe 2.6s ease-in-out infinite;
+}
+@keyframes cue-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(147, 163, 111, 0.3), 0 0 0 0 rgba(147, 163, 111, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(147, 163, 111, 0.3), 0 0 14px 3px rgba(147, 163, 111, 0.22);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* SUBSTITUTE (§4.11): this badge's job is to INVITE — it is the only
+     thing telling a visitor there is a review wall below the fold on a
+     page that otherwise fits the screen. Removing the breathing motion
+     without replacing it would remove the invitation too, so the glow
+     stays, just static. The motion goes; the meaning does not. */
+  .portal-cue-badge {
+    animation: none;
+    box-shadow: 0 0 10px 1px rgba(255, 171, 122, 0.22);
+  }
+}
+
+/* Sits below the wall — same footprint (padding/radius/icon slot/arrow) as
+   every other action row, so it reads as a member of the same button
+   family, but a distinct sage-on-paper finish rather than the hero's
+   orange: the wall just made the case for leaving a review, this is a
+   quieter close, not a second hero button competing with the first one. */
+.portal-cta-review {
+  border: 1px solid rgba(147, 163, 111, 0.35);
+  background: linear-gradient(135deg, rgba(147, 163, 111, 0.22), var(--paper));
+  box-shadow: 0 0 22px rgba(147, 163, 111, 0.16);
+}
+
+/* ==========================================================================
+   Reviews wall — a real `overflow-x:auto` scroller nudged forward by rAF
+   (mechanics ported from AyekaBar's ReviewWall: see that component's own
+   doc comment for the five non-obvious reasons a marquee wouldn't work
+   here). Recolored top to bottom: warm paper cards instead of dark glass
+   tiles, sage rather than cyan/orange as the accent, a coffee-cup glyph
+   standing in for an avatar instead of a repeated star.
+   ========================================================================== */
+.rw {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 30px;
+  /* Where the cue button's scrollIntoView({ block: 'start' }) lands. Without
+     this the section's top edge goes to y=0 and the wall's eyebrow sits under
+     the one piece of fixed chrome on this page — the language globe
+     (LanguageSwitch variant="fixed": 44px tall at env(safe-area-inset-top) +
+     14px, so its bottom edge is safe-area + 58). 72 clears it with the same
+     14px of breathing room the menu's own scroll-margin-top leaves. Note the
+     portal has no sticky header — .menu-sticky belongs to the menu route —
+     so the globe is the only thing to clear here. */
+  scroll-margin-top: calc(env(safe-area-inset-top) + 72px);
+}
+.rw-head {
+  text-align: center;
+  margin-bottom: 14px;
+  padding: 0 20px;
+}
+.rw-eyebrow {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--sage-soft);
+  text-transform: uppercase;
+}
+.rw-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.rw-rating {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rw-stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--sage-soft);
+}
+.rw-count {
+  display: block;
+  margin-top: 7px;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rw-stage {
+  position: relative;
+}
+.rw-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(21, 15, 12, 0.65);
+  backdrop-filter: blur(6px);
+  color: var(--text-dim);
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease), transform 0.15s var(--ease);
+}
+.rw-arrow-back {
+  left: 6px;
+}
+.rw-arrow-fwd {
+  right: 6px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rw-arrow:hover {
+    color: var(--text);
+    border-color: rgba(147, 163, 111, 0.5);
+  }
+}
+.rw-arrow:active {
+  transform: translateY(-50%) scale(0.9);
+}
+.rw-arrow:focus-visible {
+  outline: 2px solid var(--neon-2) !important;
+  outline-offset: 2px !important;
+}
+
+.rw-scroller {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  direction: ltr; /* marquee order is decorative — see note 1 in ReviewWall.tsx */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.rw-scroller::-webkit-scrollbar {
+  display: none;
+}
+.rw-scroller:focus-visible {
+  outline: 2px solid var(--neon-2);
+  outline-offset: 3px;
+  border-radius: 20px;
+}
+.rw-track {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 6px 34px;
+  width: max-content;
+}
+.rw-slot {
+  scroll-snap-align: center;
+  display: flex;
+}
+.rw-card {
+  width: min(78vw, 300px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, var(--paper), rgba(253, 246, 236, 0.015));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+}
+.rw.in .rw-card {
+  opacity: 1;
+  transform: none;
+}
+.rw-slot:nth-child(1) .rw-card {
+  transition-delay: 0ms;
+}
+.rw-slot:nth-child(2) .rw-card {
+  transition-delay: 70ms;
+}
+.rw-slot:nth-child(3) .rw-card {
+  transition-delay: 140ms;
+}
+.rw-slot:nth-child(4) .rw-card {
+  transition-delay: 210ms;
+}
+.rw-slot:nth-child(n + 5) .rw-card {
+  transition-delay: 280ms;
+}
+.rw-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text);
+  flex: 1;
+}
+.rw-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.rw-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(147, 163, 111, 0.16);
+  color: var(--sage-soft);
+}
+
+@media (min-width: 480px) {
+  .rw-card {
+    width: 320px;
+  }
+  .rw-track {
+    gap: 16px;
+    padding: 6px 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rw-card {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .rw-dot {
+    transition: none;
+  }
+}
+
+.rw-dots {
+  /* Pinned LTR to match the track, which is itself pinned LTR (§6.3 rule 6).
+     Without this the dots run right-to-left on a Hebrew page while the cards
+     they index run left-to-right, so the "active" dot travels the wrong way. */
+  direction: ltr;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Was 8px. Each dot grows an invisible 24x44 hit area via ::after below
+     (inset: -19px -9px = 25px wide), so at an 8px gap neighbouring targets
+     OVERLAPPED by ~10px — and two overlapping targets are worse than one
+     small target, because the tap becomes ambiguous rather than merely
+     fiddly. 18px is the smallest gap that keeps them disjoint. */
+  gap: 18px;
+  margin-top: 18px;
+}
+.rw-dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  /* 999px, NOT 50%. The active state animates width 6px -> 20px, and a 50%
+     radius on a 20x6 box resolves to an ELLIPSE — a pointed oval, not the
+     iOS pill this is imitating. 999px clamps to a true capsule at every
+     width in between, which is what makes the stretch read as a page
+     control rather than a blob. */
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  /* WCAG 1.4.11: --line-strong is 0.14 alpha and computes to ~1.5:1 against
+     the page, under the 3:1 floor for a control's own graphical identity —
+     and an inactive dot's fill is the ONLY thing drawing it. --line-interactive
+     (0.4 alpha) is the token already verified for exactly this job (§3.2
+     pass 3); this deliberately reuses it rather than inventing a third alpha. */
+  background: var(--line-interactive);
+  cursor: pointer;
+  transition: width 0.4s var(--ease), background 0.4s var(--ease), box-shadow 0.4s var(--ease);
+}
+/* Enlarges the tap target to 44px without moving anything visually — same
+   technique as `.tap44`, kept local since a dot's own box must stay tiny. */
+.rw-dot::after {
+  content: '';
+  position: absolute;
+  inset: -19px -9px;
+}
+.rw-dot.is-on {
+  /* The width change is the point: a 6px dot that merely brightens is not
+     legible at arm's length on a phone, where a shape change is. */
+  width: 20px;
+  background: var(--sage);
+  box-shadow: 0 0 12px rgba(147, 163, 111, 0.5);
+}
+.rw-dot:focus-visible {
+  outline: 2px solid var(--neon-2);
+  outline-offset: 3px;
+}
+
+/* ==========================================================================
+   Public-page background — a full-bleed illustration behind a glass UI,
+   recovered from the legacy static site (legacy-static-site/styles.css
+   `body::before`). Wraps <main> via components/PublicBackdrop.tsx — the
+   owner app never uses this.
+
+   Deliberately NOT `position: fixed` + negative z-index on a separate
+   layer (what this used to be, with the image on one element and the
+   darkening gradient on its ::after). That combination reliably goes
+   unpainted in Chromium after a BACK-direction document.startViewTransition
+   finishes — not just this element, ANY negative-z-index layer, confirmed
+   live with a freshly-created test element that had zero transition
+   history. GPU-layer promotion, a forced repaint, and opting the layer out
+   of the root capture via its own view-transition-name all failed to fix
+   it — the paint is genuinely stuck, not just stale, until a hard refresh.
+
+   `background-attachment: fixed` gets the same visual result (the image
+   stays put while content scrolls over it) as a genuine background of this
+   wrapping element instead — painted behind its own children automatically,
+   no z-index/stacking involved anywhere, so there's nothing for that bug to
+   land on. The darkening gradients are extra layers in this same
+   background (first-listed paints on top) instead of a separate ::after,
+   since multiple layers of ONE element's background need no stacking
+   order of their own either.
    ========================================================================== */
 .public-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  background: url('/background.jpg') center 18% / cover no-repeat, var(--bg);
+  background-image: linear-gradient(180deg, rgba(21, 15, 12, 0.55) 0%, rgba(21, 15, 12, 0.72) 45%, var(--bg) 92%),
+    radial-gradient(circle at 50% 0%, rgba(21, 15, 12, 0.2), transparent 55%), url('/background.jpg');
+  background-position: 0 0, 0 0, center 25%;
+  background-size: auto, auto, cover;
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-attachment: fixed, fixed, fixed;
+  background-color: var(--bg);
 }
 @media (min-width: 900px) {
   .public-backdrop {
-    background: url('/background-wide.jpg') center 30% / cover no-repeat, var(--bg);
+    background-image: linear-gradient(180deg, rgba(21, 15, 12, 0.55) 0%, rgba(21, 15, 12, 0.72) 45%, var(--bg) 92%),
+      radial-gradient(circle at 50% 0%, rgba(21, 15, 12, 0.2), transparent 55%), url('/background-wide.jpg');
+    background-position: 0 0, 0 0, center 40%;
+    background-size: auto, auto, cover;
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-attachment: fixed, fixed, fixed;
   }
-}
-.public-backdrop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(21, 15, 12, 0.55) 0%, rgba(21, 15, 12, 0.72) 45%, var(--bg) 92%),
-    radial-gradient(circle at 50% 0%, rgba(21, 15, 12, 0.2), transparent 55%);
 }
 
 /* ==========================================================================
@@ -596,12 +1296,33 @@ html[dir='ltr'][data-nav='back']::view-transition-new(root) {
   animation-name: vt-in-from-right;
 }
 
-/* Same iOS push/pop, for an in-page state swap that isn't a navigation
+/* Same iOS push/pop SHAPE, for an in-page state swap that isn't a navigation
    (the portal's branch-picker -> branch-actions swap, driven by
    lib/nav/viewTransition.ts's runLocalTransition). Keyed off
-   `data-local-nav`, not `data-nav`, and scoped to a named group
-   (`view-transition-name` set inline on the swapping element) so the
-   root/background never animates — only the panel itself does. */
+   `data-local-nav`, never `data-nav`.
+
+   It deliberately does NOT reuse the root push's keyframes above, and that is
+   the whole point of this block. `vt-out-to-left` / `vt-out-to-right` are PARK
+   animations: the outgoing thing stops at a quarter offset and 55% opacity and
+   stays there. Correct for a root push, where the arriving page is an opaque
+   full-viewport screenshot that completely covers the parked one. This panel
+   is not that — it is a transparent container of 360px rows with 10px gaps, so
+   a parked old panel stayed legible straight through the gaps of the new one:
+   two headings and two stacks of buttons overlapping mid-swap. Here the
+   outgoing panel genuinely leaves. It fades to opacity 0 on the same --ease
+   curve the incoming one fades in on, so the two opacities are exact
+   complements at every frame and there is never a readable double image.
+
+   The GROUP pseudo gets the same duration and curve as its two halves, which
+   it did not before. Left alone it keeps the UA defaults — 0.25s on `ease`, a
+   third timing curve against the house rule — while old/new ran 0.42s on
+   --ease. That is not academic here: the two panels differ in height by
+   hundreds of pixels, so this group animation is doing visible work morphing
+   the panel's box while its contents animate on different timing. */
+::view-transition-group(portal-panel) {
+  animation-duration: 0.42s;
+  animation-timing-function: var(--ease);
+}
 ::view-transition-old(portal-panel),
 ::view-transition-new(portal-panel) {
   animation-duration: 0.42s;
@@ -609,34 +1330,60 @@ html[dir='ltr'][data-nav='back']::view-transition-new(root) {
   mix-blend-mode: normal;
 }
 
+/* The root group exists during a LOCAL transition too. `view-transition-name:
+   root` is set by the UA on the document element and there is no way to opt
+   out of it for one transition. `data-nav` is absent here, so none of the
+   directional rules above match and the root's two halves fell through to the
+   UA's own `-ua-view-transition-fade-out` / `-fade-in`: the entire rest of the
+   page — logo, language switch, backdrop, review wall — cross-faded for 0.42s
+   on top of the panel's slide, every single time someone picked a branch. The
+   comment that used to head this block claimed "the root/background never
+   animates — only the panel itself does"; it did animate, and that second,
+   unasked-for animation is the other half of "animations mix together".
+   Holding both halves still means the panel group is the only thing moving.
+
+   `html[dir]` is in the selector purely to reach specificity (0,2,2), the same
+   as the `html[dir=…][data-nav=…]` rules above, so that if `data-nav` is ever
+   left on <html> while a local swap runs this still wins on source order
+   instead of losing to a directional rule. */
+html[dir][data-local-nav]::view-transition-old(root),
+html[dir][data-local-nav]::view-transition-new(root) {
+  animation-name: none;
+}
+
 html[dir='rtl'][data-local-nav='forward']::view-transition-old(portal-panel) {
-  animation-name: vt-out-to-left;
+  animation-name: vt-panel-out-to-left;
 }
 html[dir='rtl'][data-local-nav='forward']::view-transition-new(portal-panel) {
-  animation-name: vt-in-from-right;
-  z-index: 1;
+  animation-name: vt-panel-in-from-right;
 }
 html[dir='rtl'][data-local-nav='back']::view-transition-old(portal-panel) {
-  animation-name: vt-out-to-right;
-  z-index: 1;
+  animation-name: vt-panel-out-to-right;
 }
 html[dir='rtl'][data-local-nav='back']::view-transition-new(portal-panel) {
-  animation-name: vt-in-from-left;
+  animation-name: vt-panel-in-from-left;
 }
 
 html[dir='ltr'][data-local-nav='forward']::view-transition-old(portal-panel) {
-  animation-name: vt-out-to-right;
+  animation-name: vt-panel-out-to-right;
 }
 html[dir='ltr'][data-local-nav='forward']::view-transition-new(portal-panel) {
-  animation-name: vt-in-from-left;
-  z-index: 1;
+  animation-name: vt-panel-in-from-left;
 }
 html[dir='ltr'][data-local-nav='back']::view-transition-old(portal-panel) {
-  animation-name: vt-out-to-left;
-  z-index: 1;
+  animation-name: vt-panel-out-to-left;
 }
 html[dir='ltr'][data-local-nav='back']::view-transition-new(portal-panel) {
-  animation-name: vt-in-from-right;
+  animation-name: vt-panel-in-from-right;
+}
+
+/* The arriving panel is on top in BOTH directions — unlike the root push,
+   where on `back` the departing page rides over the one it uncovers. That
+   inversion only earns its keep when the departing thing is opaque and really
+   is covering something. Here it is dissolving to nothing, and laying a
+   dissolving layer over the content the user is waiting for just veils it. */
+::view-transition-new(portal-panel) {
+  z-index: 1;
 }
 
 @keyframes vt-in-from-left {
@@ -655,6 +1402,22 @@ html[dir='ltr'][data-local-nav='back']::view-transition-new(portal-panel) {
     transform: none;
   }
 }
+/* THESE TWO NAMES LIE, AND ARE LEFT ALONE ON PURPOSE. They are PARK
+   animations, not exits. The departing page does not leave — it eases back a
+   quarter screen, dims to 55% and STOPS there (the view-transition pseudos
+   inherit `animation-fill-mode: both` from their group, so the final frame
+   holds). That is precisely what makes a push read as a push: the page you
+   left is still there, underneath the one that covered it. AyekaBar calls the
+   identical keyframes `vt-park-left` / `vt-park-right`, which is the honest
+   name; renaming them here is the right cleanup but has to land in ONE commit
+   with all eight `animation-name:` references above, because a rename that
+   only half-applies leaves the root push with no outgoing animation at all.
+
+   USE THEM ONLY FOR ::view-transition-*(root). Parking is correct only when
+   the thing covering the parked page is opaque and full-bleed. Point them at a
+   named group over transparent content — which is what the portal panel is —
+   and the old content stays 55% legible through the gaps in the new content.
+   That was the bug; the panel's own pair is below. */
 @keyframes vt-out-to-left {
   from {
     transform: none;
@@ -676,39 +1439,295 @@ html[dir='ltr'][data-local-nav='back']::view-transition-new(portal-panel) {
   }
 }
 
+/* The portal panel's own pair. Two differences from the root's park, both
+   deliberate:
+   - opacity ends at 0, not 0.55. The outgoing panel has no background of its
+     own, so anything short of 0 reads through the gaps of the incoming one.
+   - 28% of travel, not the root's 100%. On the root pseudo 100% is 100% of the
+     VIEWPORT; on this pseudo it is 100% of a 360px card, which read as a card
+     flying in from off-screen. 28% is about 100px at that column width —
+     enough to carry direction, small enough to stay one object being replaced.
+   Both halves run the same 0.42s on the same --ease and their opacities are
+   exact complements, so the pair is a true cross-dissolve rather than a
+   fade-out laid over an unrelated fade-in.
+
+   Both `in` keyframes end at `transform: none`. These animate browser
+   pseudo-elements, not live DOM, so the containing-block hazard that forces
+   that rule on .page-enter does not apply here — keeping the convention anyway
+   means nobody has to stop and work out which case they are looking at. */
+@keyframes vt-panel-out-to-left {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-28%);
+    opacity: 0;
+  }
+}
+@keyframes vt-panel-out-to-right {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(28%);
+    opacity: 0;
+  }
+}
+@keyframes vt-panel-in-from-left {
+  from {
+    transform: translateX(-28%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes vt-panel-in-from-right {
+  from {
+    transform: translateX(28%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* Fallback entrance when the View Transitions API is unsupported (or a
    navigation didn't go through the JS push path, e.g. first load). */
+/* This is a SHORT SLIDE, not a push (blueprint §4.3). Only the arriving
+   page exists on this path — there is no departing page parked underneath —
+   and a full-width slide with nothing behind it shows bare background and
+   reads as broken. 3% is enough to carry direction and no more.
+
+   Direction is spelled out per dir because transforms do not follow writing
+   direction. Hebrew-first means "forward" arrives from the LEFT in RTL and
+   from the RIGHT in LTR, matching what iOS does in each. data-nav is set on
+   <html> by lib/nav/viewTransition.ts (and by its popstate handler, which is
+   the main reason this direction-awareness is worth having: browser
+   back/forward never goes through the JS push path, so this fallback is what
+   a hardware back button actually renders).
+
+   BOTH keyframes must end at `transform: none`. animation-fill-mode: both
+   makes the final frame persist, and any lingering transform on this wrapper
+   turns it into the containing block for every position:fixed descendant —
+   which would re-anchor every sheet in the app to the page instead of the
+   viewport (§4.14a). `none` is the only safe final value. */
 .page-enter {
-  animation: page-in 0.32s var(--ease) both;
+  animation: page-in-from-left 0.32s var(--ease) both;
 }
-@keyframes page-in {
+@keyframes page-in-from-left {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateX(-3%);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
-/* Suppresses the CSS entrance on a page that's already being animated by
-   the View Transition API, so it never double-animates. Read once at mount
-   (see template.tsx) — never toggled live on a mounted instance. */
-.page-enter--pushed,
-.page-enter--pushed .rise {
+@keyframes page-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(3%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+html[dir='rtl'][data-nav='back'] .page-enter {
+  animation-name: page-in-from-right;
+}
+html[dir='ltr'] .page-enter {
+  animation-name: page-in-from-right;
+}
+html[dir='ltr'][data-nav='back'] .page-enter {
+  animation-name: page-in-from-left;
+}
+/* A page arriving through the JS push is already being slid across the screen
+   by the View Transition API, so this WRAPPER's own entrance must not run too
+   — that is two animations moving the same content, and cancelling it is what
+   `.page-enter--pushed` is for. The class is set once at mount by template.tsx
+   and never toggled live on a mounted instance.
+
+   Its CHILDREN used to be in this same rule, and that was the bug. Killing
+   .rise / .pop outright meant a pushed page arrived fully assembled — every
+   row already at opacity 1 inside the sliding snapshot — so the staggered
+   entrance only ever existed on a cold load. The sequence asked for is the iOS
+   Settings one: the old screen parks and dims, the new one slides in, and THEN
+   its rows arrive one by one. So the children are no longer cancelled, they
+   are STAGED — see the next rule. */
+.page-enter--pushed {
   animation: none !important;
   opacity: 1 !important;
   transform: none !important;
 }
 
+/* THE 0.28s HOLD, DERIVED. The root push runs 0.42s (::view-transition-old/
+   new(root), above) on --ease = cubic-bezier(0.22, 1, 0.36, 1), a hard
+   ease-out that spends its distance early: it is 83% travelled at 30% of the
+   time, 96% at 50%, and 99.2% at 0.28s — about 3px of movement left on a 390px
+   phone. The page has visibly stopped by then. Waiting the full 0.42s would
+   add 140ms of dead air AFTER all visible motion has ended, which is exactly
+   what reads as lag; starting much before 0.28s puts the cascade back on top
+   of the slide, which is the bug. 0.28s is the last moment the cascade still
+   starts after the slide with no gap the eye can find.
+
+   WHY THE WAIT LIVES INSIDE THE KEYFRAMES, not in animation-delay: every call
+   site sets its stagger as an INLINE `animationDelay` (app/page.tsx,
+   MenuView, the dashboard, AuthHandoff…). An inline style beats any
+   `animation-delay` this rule could set, and !important-ing it would flatten
+   the stagger — the one thing that must survive. A hold at the FRONT of the
+   keyframes composes with each element's inline delay instead of competing
+   with it: only animation-name and animation-duration are overridden here.
+   0.84s = 0.28s hold (0% -> 33.33%) + 0.56s of rise, which is .rise's own
+   0.55s to within a frame. 0.6s = 0.28s hold (0% -> 46.67%) + .pop's own
+   0.32s. The percentages are the contract; change a duration and you move the
+   hold with it.
+
+   AND WHY IT IS NOT JS: nothing gates these. No timer, no attribute to clear,
+   no class added later — one autonomous CSS animation that starts when the
+   element is created and is over at most (inline delay + 0.84s) later,
+   whatever the transition does. A superseded or skipped transition, a
+   backgrounded tab, an error boundary that never calls settleNavigation():
+   none of them is what makes these elements visible, so none of them can
+   strand one. Fill mode stays `backwards` (inherited from the .rise / .pop
+   shorthands, deliberately not raised to `both`), so the instant the animation
+   ends the element reverts to its own natural, visible style. Every failure
+   path degrades to "appears, without the flourish", never "stays invisible".
+
+   .portal-hero-mark is named explicitly because it does NOT carry .rise — it
+   applies the rise-in keyframes through its own class rule, so this selector
+   list would miss it entirely and the portal's logo would be the one element
+   still animating on top of a back-push to `/`.
+
+   .panel-enter--pushed is the same treatment one level down, for the portal's
+   branch-picker <-> branch-actions swap, which is a local view transition and
+   not a navigation at all (app/page.tsx sets it). It has to be a mount-once
+   class for the same reason .page-enter--pushed is one: keying this off the
+   live `html[data-local-nav]` attribute would be §4.3 exactly — that attribute
+   is deleted when the transition finishes, and toggling animation-name off a
+   value starts a BRAND NEW animation from frame zero, so every row would
+   replay its entrance the instant the slide ended. */
+.page-enter--pushed .rise,
+.page-enter--pushed .portal-hero-mark,
+.panel-enter--pushed .rise {
+  animation-name: rise-in-staged;
+  animation-duration: 0.84s;
+}
+.page-enter--pushed .pop,
+.panel-enter--pushed .pop {
+  animation-name: pop-in-staged;
+  animation-duration: 0.6s;
+}
+
+/* Identical to rise-in / pop-in with the stage wait built into the front. The
+   0% and hold frames carry the SAME values on purpose — the element is held at
+   the from-state, not animated, for that stretch; only the final segment
+   actually moves, and it is the segment the timing function applies to. */
+@keyframes rise-in-staged {
+  0%,
+  33.33% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop-in-staged {
+  0%,
+  46.67% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ==========================================================================
-   Reduced motion — a blanket override, last in the cascade on purpose.
+   Reduced motion — the page push and the fallback entrance.
+
+   NOTE FOR ANYONE ADDING AN ANIMATION TO THIS FILE: there is deliberately
+   NO blanket `* { animation: none !important }` rule here any more. One
+   used to sit at the bottom of this file and it was wrong (blueprint
+   §4.13): it deletes feedback along with decoration, which is a worse
+   experience for a motion-sensitive user rather than a kinder one. In
+   particular it would silently kill the in-flight spinner — the one
+   animation §4.12 says MUST survive reduced motion, slowed rather than
+   stopped, because it is the only thing telling someone a send is still
+   running. There is no spinner in this codebase yet; the feedback module
+   will add one, and this note is here so nobody reintroduces the blanket
+   rule and breaks it on arrival.
+
+   Instead, every animation gets an opt-out written next to it, in one of
+   §4.13's three tiers:
+     REMOVE      pure decoration            .rise .pop .sk::after, below
+     COLLAPSE    the motion was the arrival  sheets, the skip link
+     SUBSTITUTE  the motion carried meaning  .press, .portal-cue-badge
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
+  /* REMOVE. The push and the fallback entrance are both decoration over a
+     navigation that has already happened. `page-in` runs with `both`, so
+     removing the animation is also what guarantees the page is visible —
+     the from-frame is opacity 0. */
+  .page-enter {
+    animation: none;
+  }
+  /* The View Transitions pseudo-elements are outside the normal cascade and
+     have to be named explicitly — a rule on .page-enter does not reach them.
+     Zeroing the duration on both halves makes the push resolve instantly to
+     the new page rather than sliding. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms;
+    animation-delay: 0s;
+  }
+  /* REMOVE, and it has to be written out separately from the `.rise, .pop`
+     rule further up this file: that one is a (0,1,0) selector and the staged
+     overrides are (0,2,0), so it would lose to them no matter where it sat.
+     This rule is (0,2,0) as well and lives later in the source, which is the
+     only reason it wins. Safe for the same reason every other REMOVE here is:
+     rise-in-staged and pop-in-staged both fill `backwards` only, so with no
+     animation the element simply renders in its natural, visible state — a
+     0.28s blank hold is exactly what must not survive into reduced motion.
+
+     `.panel-enter--pushed` genuinely reaches a reduced-motion user:
+     runLocalTransition() skips the View Transition entirely under the
+     preference, but app/page.tsx still sets the class, on purpose — the motion
+     preference is answered in exactly one place, and this is it. */
+  .page-enter--pushed .rise,
+  .page-enter--pushed .pop,
+  .page-enter--pushed .portal-hero-mark,
+  .panel-enter--pushed .rise,
+  .panel-enter--pushed .pop {
+    animation: none;
+  }
+  /* The local panel swap's pseudos, for parity with the root's above.
+     runLocalTransition() never starts a transition under reduced motion, so in
+     practice these pseudo-elements do not exist here — this is the CSS half of
+     a guard currently enforced only in JS, so the preference survives if that
+     JS guard is ever refactored. */
+  ::view-transition-group(portal-panel),
+  ::view-transition-old(portal-panel),
+  ::view-transition-new(portal-panel) {
+    animation-duration: 0.01ms;
+    animation-delay: 0s;
+  }
+  /* The accordion body: COLLAPSE. It must still open — it just opens at
+     once instead of growing from 0fr. */
+  .accordion-body {
+    transition: none;
+  }
+  /* html itself, for anchor jumps and the skip link's target. */
+  html {
+    scroll-behavior: auto;
   }
 }

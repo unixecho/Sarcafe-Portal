@@ -37,7 +37,7 @@ export default async function MenuEditorPage() {
   const branches = await getBranches()
 
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="עריכת תפריט" backHref="/owner/dashboard" />
       <EditorWorkspace branches={branches} allowedBranchSlug={allowedBranchSlug} isOwner={isOp(me)} />
     </main>

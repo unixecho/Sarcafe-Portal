@@ -31,6 +31,26 @@ export default function SheetShell({ open, onClose, children, labelledBy, suspen
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const { rendered, closing } = useSheetExit(open)
 
+  // The mount effect below is keyed ONLY on `open` (blueprint §5.2). onClose
+  // and suspended are still read by its keydown handler, so they ride in refs
+  // that this tiny effect keeps current. Putting them in the mount effect's
+  // dep array instead re-runs the whole thing — on every parent render for any
+  // caller passing an inline arrow for onClose (MenuView does), and every time
+  // a nested ConfirmSheet suspends this sheet. A re-run re-captures
+  // previouslyFocused as whatever is focused NOW (by then something inside this
+  // sheet, or inside the nested dialog), and re-fires the 60ms initial-focus
+  // timer, yanking focus out of the nested dialog that just opened. The
+  // teardown also runs on every flip, firing its focus-restore branch while
+  // this sheet is still on screen.
+  const onCloseRef = useRef(onClose)
+  const suspendedRef = useRef(suspended)
+  // No dep array on purpose: two assignments after every render are cheaper
+  // than comparing, and this way the handler can never read a stale value.
+  useEffect(() => {
+    onCloseRef.current = onClose
+    suspendedRef.current = suspended
+  })
+
   useEffect(() => {
     if (!open) return
 
@@ -50,11 +70,13 @@ export default function SheetShell({ open, onClose, children, labelledBy, suspen
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (suspended) return
+      // Read through the ref: the effect is keyed on `open` alone, so the
+      // value captured when this listener was registered would be stale.
+      if (suspendedRef.current) return
 
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
 
@@ -93,7 +115,10 @@ export default function SheetShell({ open, onClose, children, labelledBy, suspen
         previouslyFocused.current?.focus?.({ preventScroll: true })
       }
     }
-  }, [open, onClose, suspended])
+    // Keyed on `open` alone — blueprint §5.2. onClose and suspended are read
+    // through the refs above, so they stay current without re-locking scroll,
+    // re-capturing previouslyFocused, or re-running the 60ms focus timer.
+  }, [open])
 
   if (!rendered) return null
 
