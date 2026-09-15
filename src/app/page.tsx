@@ -507,7 +507,20 @@ export default function PortalPage() {
             animationDelay: '560ms',
           }}
         >
-          <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>{t.footer}</p>
+          {/* The manager door into /login, disguised as the plain copyright
+              line rather than a labeled button — customers scanning the
+              portal have no visual cue this is tappable (inherited colour,
+              no underline, no .press feedback), so it reads as static text.
+              aria-label keeps it honest for screen-reader users instead of
+              a silent, unexplained link — the ONE deliberate exception to
+              the "colour alone must never be the signal" rule the
+              accessibility link below documents, because here blending in
+              IS the point. */}
+          <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>
+            <Link href="/login" aria-label="כניסת צוות" style={{ color: 'inherit', textDecoration: 'none' }}>
+              {t.footer}
+            </Link>
+          </p>
           {/* next/link, not a bare <a>: PageTransitions listens for same-origin
               anchor clicks in the capture phase and re-dispatches them through
               the View Transition API, and <Link> renders exactly such an
