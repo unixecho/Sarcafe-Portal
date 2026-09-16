@@ -11,11 +11,17 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 export const GET = apiRoute(async () => {
   await requireOwner()
   const service = createServiceRoleClient()
-  const { data } = await service
-    .from('staff')
-    .select('id, email, first_name, last_name, display_name, role, badge, branch_id, active, invited_at, claimed_at')
-    .order('invited_at', { ascending: false })
-  return NextResponse.json({ staff: data ?? [] })
+  const [{ data }, { data: scheduleMembers }] = await Promise.all([
+    service
+      .from('staff')
+      .select('id, email, first_name, last_name, display_name, role, badge, branch_id, active, invited_at, claimed_at')
+      .order('invited_at', { ascending: false }),
+    // Read alongside the roster so StaffManager can surface a compact
+    // schedulable toggle per row without a second round trip — the full
+    // flag set (default role, hours cap, delegate) stays in RosterPanel.
+    service.from('schedule_members').select('branch_id, staff_id, schedulable'),
+  ])
+  return NextResponse.json({ staff: data ?? [], scheduleMembers: scheduleMembers ?? [] })
 })
 
 const inviteSchema = z.object({

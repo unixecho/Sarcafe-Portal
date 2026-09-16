@@ -86,11 +86,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/owner/editor`)
   }
   if (isStaff(staffRow)) {
-    // A legitimate staff account without owner/menu-editor rights — Phase
-    // 2/3 gives this a real kitchen/staff destination. For now there is
-    // genuinely nowhere else to send them, so this is honest rather than a
-    // placeholder page built just to have somewhere to land.
-    return NextResponse.redirect(`${origin}/no-access?reason=no_elevated_role`)
+    // A legitimate staff account without owner/menu-editor rights — their
+    // own shift schedule (and, if a branch delegated them as a schedule
+    // manager, /owner/schedule resolves that on its own) is a real
+    // destination now, not a placeholder.
+    return NextResponse.redirect(`${origin}/staff/schedule`)
   }
 
   return NextResponse.redirect(`${origin}/no-access?reason=no_staff_row`)

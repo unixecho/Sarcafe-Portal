@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
 import SelectSheet from '@/components/SelectSheet'
+import Switch from '@/components/Switch'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 
 type BranchOption = { id: string; slug: string; name: { he?: string; en?: string; ar?: string } }
@@ -20,6 +21,8 @@ type StaffRow = {
   claimed_at: string | null
 }
 
+type ScheduleMemberRow = { branch_id: string; staff_id: string; schedulable: boolean }
+
 export default function StaffManager({
   branches,
   initialBranchSlug = '',
@@ -32,12 +35,14 @@ export default function StaffManager({
   initialBranchSlug?: string
 }) {
   const [staff, setStaff] = useState<StaffRow[] | null>(null)
+  const [scheduleMembers, setScheduleMembers] = useState<ScheduleMemberRow[]>([])
   const [email, setEmail] = useState('')
   const [badge, setBadge] = useState<Badge | ''>('')
   const [branchId, setBranchId] = useState<string>('')
   const [inviting, setInviting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filterSlug, setFilterSlug] = useState<string>(initialBranchSlug)
+  const [scheduleBusyKey, setScheduleBusyKey] = useState<string | null>(null)
 
   const visibleStaff = useMemo(() => {
     if (!staff || !filterSlug) return staff
@@ -47,7 +52,41 @@ export default function StaffManager({
 
   async function load() {
     const res = await fetch('/api/owner/staff')
-    if (res.ok) setStaff((await res.json()).staff)
+    if (res.ok) {
+      const payload = await res.json()
+      setStaff(payload.staff)
+      setScheduleMembers(payload.scheduleMembers ?? [])
+    }
+  }
+
+  // Which branch a row's schedulable flag applies to — the filter branch
+  // when one is picked, otherwise the staff member's own home branch. Left
+  // unresolved (null) for an all-branch row while "all branches" is
+  // showing, same as SelectSheet's own placeholder state: ambiguous rather
+  // than guessed.
+  function effectiveBranchId(row: StaffRow): string | null {
+    if (filterSlug) return branches.find((b) => b.slug === filterSlug)?.id ?? null
+    return row.branch_id
+  }
+
+  async function toggleSchedulable(row: StaffRow, targetBranchId: string, next: boolean) {
+    const key = `${targetBranchId}:${row.id}`
+    setScheduleBusyKey(key)
+    try {
+      const res = await fetch('/api/shifts/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'setMember', branchId: targetBranchId, staffId: row.id, patch: { schedulable: next } }),
+      })
+      if (res.ok) {
+        setScheduleMembers((prev) => {
+          const rest = prev.filter((m) => !(m.branch_id === targetBranchId && m.staff_id === row.id))
+          return [...rest, { branch_id: targetBranchId, staff_id: row.id, schedulable: next }]
+        })
+      }
+    } finally {
+      setScheduleBusyKey(null)
+    }
   }
 
   useEffect(() => {
@@ -218,48 +257,70 @@ export default function StaffManager({
           <div className="sk" style={{ height: 120 }} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {visibleStaff.map((row) => (
-              <div
-                key={row.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  background: 'var(--bg-elev)',
-                  opacity: row.active ? 1 : 0.5,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {row.display_name || row.email}
-                  </p>
-                  <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>
-                    {row.role === 'owner' ? 'בעלים' : badgeLabel(row.badge) || 'צוות'}
-                    {row.branch_id && ` · ${branches.find((b) => b.id === row.branch_id)?.name.he ?? ''}`}
-                    {!row.claimed_at && ' · ממתין להתחברות'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="press"
-                  onClick={() => patch(row.id, { active: !row.active })}
+            {visibleStaff.map((row) => {
+              const targetBranchId = effectiveBranchId(row)
+              const schedulable = targetBranchId
+                ? scheduleMembers.some((m) => m.branch_id === targetBranchId && m.staff_id === row.id && m.schedulable)
+                : false
+              const busy = scheduleBusyKey === `${targetBranchId}:${row.id}`
+              return (
+                <div
+                  key={row.id}
                   style={{
-                    minHeight: 32,
-                    padding: '0 10px',
-                    borderRadius: 999,
-                    border: '1px solid var(--line-strong)',
-                    background: 'transparent',
-                    color: row.active ? '#ff6b6b' : 'var(--neon-2)',
-                    fontSize: '0.74rem',
-                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'var(--bg-elev)',
+                    opacity: row.active ? 1 : 0.5,
                   }}
                 >
-                  {row.active ? 'השבתה' : 'הפעלה'}
-                </button>
-              </div>
-            ))}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {row.display_name || row.email}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>
+                      {row.role === 'owner' ? 'בעלים' : badgeLabel(row.badge) || 'צוות'}
+                      {row.branch_id && ` · ${branches.find((b) => b.id === row.branch_id)?.name.he ?? ''}`}
+                      {!row.claimed_at && ' · ממתין להתחברות'}
+                    </p>
+                  </div>
+                  {row.active && targetBranchId && (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={schedulable}
+                      aria-label={`ניתן לשיבוץ במשמרות — ${row.display_name || row.email}`}
+                      title="ניתן לשיבוץ במשמרות"
+                      className="press"
+                      disabled={busy}
+                      onClick={() => toggleSchedulable(row, targetBranchId, !schedulable)}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}
+                    >
+                      <Switch on={schedulable} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="press"
+                    onClick={() => patch(row.id, { active: !row.active })}
+                    style={{
+                      minHeight: 32,
+                      padding: '0 10px',
+                      borderRadius: 999,
+                      border: '1px solid var(--line-strong)',
+                      background: 'transparent',
+                      color: row.active ? '#ff6b6b' : 'var(--neon-2)',
+                      fontSize: '0.74rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {row.active ? 'השבתה' : 'הפעלה'}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
       </section>

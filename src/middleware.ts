@@ -19,8 +19,15 @@ const MENU_EDITOR_PREFIXES = ['/owner/editor', '/owner/audit', '/owner/tablet', 
 // correspondence, sometimes with a contact address attached, and being
 // trusted with the menu has never implied being handed that.
 const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility', '/owner/feedback']
+// /owner/schedule and /staff/* are gated by isStaff() only — a delegated
+// schedule manager can be any active staff member (badge might just be
+// "barista"), so neither the editor nor the op-only check applies here.
+// The real per-branch "can this person actually manage a schedule" check
+// happens inside the page itself (see src/app/owner/schedule/page.tsx),
+// same division of labor the editor/op checks already use elsewhere.
+const STAFF_ONLY_PREFIXES = ['/owner/schedule', '/staff']
 
-const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES]
+const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES, ...STAFF_ONLY_PREFIXES]
 
 function matchesAny(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -70,6 +77,7 @@ export async function middleware(request: NextRequest) {
 
   const editorProtected = matchesAny(pathname, MENU_EDITOR_PREFIXES)
   const opProtected = matchesAny(pathname, OP_ONLY_PREFIXES)
+  const staffProtected = matchesAny(pathname, STAFF_ONLY_PREFIXES)
 
   if (matchesAny(pathname, PROTECTED_ROUTES) && !user) {
     const url = request.nextUrl.clone()
@@ -78,7 +86,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && (editorProtected || opProtected)) {
+  if (user && (editorProtected || opProtected || staffProtected)) {
     // `staff` has zero SELECT policies for `authenticated` on purpose — a
     // staff member shouldn't be able to read their own role/badge directly
     // and reason about privilege escalation client-side. That means the
@@ -101,6 +109,8 @@ export async function middleware(request: NextRequest) {
       !isStaff(staffRow) ||
       (editorProtected && !hasAnyMenuEditAccess(staffRow)) ||
       (opProtected && !isOp(staffRow))
+    // staffProtected needs nothing beyond the isStaff() check already
+    // folded into `denied` above — no additional badge/role requirement.
 
     if (denied) {
       const url = request.nextUrl.clone()
