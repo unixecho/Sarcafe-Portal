@@ -25,6 +25,7 @@ import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
 import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import ReviewWall from '@/components/ReviewWall'
+import FeedbackButton from '@/components/FeedbackButton'
 import { normalizeReviews, PLACEHOLDER_BLOCK } from '@/lib/reviews'
 import type { Branch } from '@/lib/branches'
 
@@ -115,6 +116,20 @@ export default function PortalPage() {
   const [branchSlug, setBranchSlug] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
+  const [feedbackEnabled, setFeedbackEnabled] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/feedback')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { enabled?: boolean } | null) => {
+        if (!cancelled && payload) setFeedbackEnabled(!!payload.enabled)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Whether the panel currently on screen arrived through a local view
   // transition (a branch tap, or a "change branch" tap) rather than being the
@@ -546,6 +561,7 @@ export default function PortalPage() {
           >
             {t.accessibility}
           </Link>
+          <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branch?.slug ?? null} variant="link" />
         </footer>
       </main>
     </PublicBackdrop>

@@ -1,4 +1,4 @@
-import { SETTINGS_TAG } from '@/lib/settings/keys'
+import { SETTINGS_TAG, CUSTOMER_FEEDBACK_ENABLED_KEY, DEFAULT_CUSTOMER_FEEDBACK_ENABLED } from '@/lib/settings/keys'
 
 /**
  * Reads one app_settings row via the Supabase REST endpoint directly
@@ -35,4 +35,8 @@ export async function readSetting<T>(key: string, fallback: T): Promise<T> {
   } catch {
     return fallback
   }
+}
+
+export async function getCustomerFeedbackEnabled(): Promise<boolean> {
+  return readSetting(CUSTOMER_FEEDBACK_ENABLED_KEY, DEFAULT_CUSTOMER_FEEDBACK_ENABLED)
 }

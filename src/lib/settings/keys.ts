@@ -21,3 +21,11 @@ export const DEFAULT_ACCESSIBILITY_STATEMENT: AccessibilityStatement = {}
 // convenience (a local tally cart on the public menu) — failing closed
 // would just remove a nice-to-have for no security benefit.
 export const DEFAULT_MENU_CART_ENABLED = true
+
+// The customer feedback box's own on/off switch (mirrors AyekaBar's
+// customer_feedback_enabled) — re-read server-side on every POST
+// /api/feedback, never trusted from the page. Default true, fails open:
+// same reasoning as the cart above, this gates a convenience, not
+// anything with a security cost when left on.
+export const CUSTOMER_FEEDBACK_ENABLED_KEY = 'customer_feedback_enabled'
+export const DEFAULT_CUSTOMER_FEEDBACK_ENABLED = true

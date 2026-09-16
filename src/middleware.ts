@@ -15,7 +15,10 @@ import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 // availability, and fix its portal links/reviews, same reasoning the
 // page/API routes apply again server-side.
 const MENU_EDITOR_PREFIXES = ['/owner/editor', '/owner/audit', '/owner/tablet', '/owner/links', '/owner/reviews']
-const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility']
+// /owner/feedback is owner-only, not menu-edit-scoped — unsolicited public
+// correspondence, sometimes with a contact address attached, and being
+// trusted with the menu has never implied being handed that.
+const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility', '/owner/feedback']
 
 const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES]
 

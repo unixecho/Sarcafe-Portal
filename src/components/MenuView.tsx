@@ -11,6 +11,7 @@ import { resolveCategoryIcon } from '@/lib/menu/icons'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import SheetShell from '@/components/SheetShell'
+import FeedbackButton from '@/components/FeedbackButton'
 
 const REFRESH_MS = 30_000 // re-checks published_at; also catches a scheduled
 // variant flipping on/off within about this margin. A full resolveVariant
@@ -62,7 +63,15 @@ const T: Record<Lang, MenuCopy> = {
   },
 }
 
-export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSlug; initial: ResolvedMenu }) {
+export default function MenuView({
+  branchSlug,
+  initial,
+  feedbackEnabled = false,
+}: {
+  branchSlug: BranchSlug
+  initial: ResolvedMenu
+  feedbackEnabled?: boolean
+}) {
   const [lang, setLang] = useLanguage()
   const [menu, setMenu] = useState(initial)
   const [openId, setOpenId] = useState<string | null>(initial.categories[0]?.id ?? null)
@@ -413,6 +422,12 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
           >
             <Accessibility size={15} aria-hidden="true" /> {t.accessibility}
           </Link>
+          {/* Same reachable spot the portal's footer gives it — WCAG 2.2
+              3.2.6 Consistent Help wants one predictable place, not a
+              second bespoke control per page. */}
+          <div style={{ marginTop: 4 }}>
+            <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branchSlug} variant="link" />
+          </div>
         </footer>
       </main>
     </PublicBackdrop>
