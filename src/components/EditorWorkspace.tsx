@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import MenuEditor from '@/components/MenuEditor'
 import AddBranchSheet from '@/components/AddBranchSheet'
+import BranchSwitcher from '@/components/BranchSwitcher'
+import { setCurrentBranchCookie } from '@/lib/branches/current'
 import { branchName, type Branch, type BranchSlug } from '@/lib/branches'
 
 /**
@@ -19,15 +21,20 @@ export default function EditorWorkspace({
   branches: initialBranches,
   allowedBranchSlug,
   isOwner,
+  initialBranch,
 }: {
   branches: Branch[]
   allowedBranchSlug: string | null
   isOwner: boolean
+  /** Resolved server-side from the shared sarcafe_branch cookie (see
+   * lib/branches/current.ts) — the fix for branch selection not carrying
+   * over from the dashboard/other owner pages into the editor. */
+  initialBranch: BranchSlug
 }) {
   const [branches, setBranches] = useState(
     allowedBranchSlug ? initialBranches.filter((b) => b.slug === allowedBranchSlug) : initialBranches
   )
-  const [branch, setBranch] = useState<BranchSlug>(branches[0]?.slug ?? '')
+  const [branch, setBranch] = useState<BranchSlug>(initialBranch || branches[0]?.slug || '')
   const [addOpen, setAddOpen] = useState(false)
 
   const showSwitcher = branches.length > 1 || isOwner
@@ -49,55 +56,36 @@ export default function EditorWorkspace({
   return (
     <>
       {showSwitcher && (
-        <div role="group" aria-label="בחירת סניף" className="rise" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', animationDelay: delay() }}>
-          {branches.map((b) => {
-            const selected = b.slug === branch
-            return (
-              <button
-                key={b.slug}
-                type="button"
-                className="press"
-                aria-pressed={selected}
-                onClick={() => setBranch(b.slug)}
-                style={{
-                  flex: '1 1 auto',
-                  minHeight: 'var(--tap-min)',
-                  padding: '0 14px',
-                  borderRadius: 999,
-                  border: `1px solid ${selected ? 'var(--neon)' : 'var(--line-strong)'}`,
-                  background: selected ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-                  color: selected ? 'var(--neon-soft)' : 'var(--text)',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                }}
-              >
-                {b.name.he}
-              </button>
-            )
-          })}
-          {isOwner && (
-            <button
-              type="button"
-              className="press"
-              onClick={() => setAddOpen(true)}
-              aria-label="הוספת סניף חדש"
-              title="הוספת סניף חדש"
-              style={{
-                width: 'var(--tap-min)',
-                minHeight: 'var(--tap-min)',
-                borderRadius: 999,
-                border: '1px dashed var(--line-strong)',
-                background: 'transparent',
-                color: 'var(--text-dim)',
-                display: 'grid',
-                placeItems: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <Plus size={18} strokeWidth={2.25} />
-            </button>
-          )}
+        <div className="rise" style={{ marginBottom: 16, animationDelay: delay() }}>
+          <BranchSwitcher
+            branches={branches}
+            value={branch}
+            onChange={setBranch}
+            extra={
+              isOwner && (
+                <button
+                  type="button"
+                  className="press"
+                  onClick={() => setAddOpen(true)}
+                  aria-label="הוספת סניף חדש"
+                  title="הוספת סניף חדש"
+                  style={{
+                    width: 'var(--tap-min)',
+                    minHeight: 'var(--tap-min)',
+                    borderRadius: 999,
+                    border: '1px dashed var(--line-strong)',
+                    background: 'transparent',
+                    color: 'var(--text-dim)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={18} strokeWidth={2.25} />
+                </button>
+              )
+            }
+          />
         </div>
       )}
 
@@ -122,6 +110,7 @@ export default function EditorWorkspace({
           onCreated={(newBranch) => {
             setBranches((prev) => [...prev, newBranch])
             setBranch(newBranch.slug)
+            setCurrentBranchCookie(newBranch.slug)
           }}
         />
       )}

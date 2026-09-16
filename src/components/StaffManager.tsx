@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
 import SelectSheet from '@/components/SelectSheet'
+import { setCurrentBranchCookie } from '@/lib/branches/current'
 
 type BranchOption = { id: string; slug: string; name: { he?: string; en?: string; ar?: string } }
 
@@ -19,13 +20,30 @@ type StaffRow = {
   claimed_at: string | null
 }
 
-export default function StaffManager({ branches }: { branches: BranchOption[] }) {
+export default function StaffManager({
+  branches,
+  initialBranchSlug = '',
+}: {
+  branches: BranchOption[]
+  /** '' = all branches. Resolved server-side from the shared sarcafe_branch
+   * cookie (lib/branches/current.ts) — staff is legitimately cross-branch,
+   * so unlike the editor/dashboard an unset cookie means "show everyone,"
+   * not "pick the first branch." */
+  initialBranchSlug?: string
+}) {
   const [staff, setStaff] = useState<StaffRow[] | null>(null)
   const [email, setEmail] = useState('')
   const [badge, setBadge] = useState<Badge | ''>('')
   const [branchId, setBranchId] = useState<string>('')
   const [inviting, setInviting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [filterSlug, setFilterSlug] = useState<string>(initialBranchSlug)
+
+  const visibleStaff = useMemo(() => {
+    if (!staff || !filterSlug) return staff
+    const filterBranchId = branches.find((b) => b.slug === filterSlug)?.id
+    return staff.filter((row) => row.branch_id === filterBranchId)
+  }, [staff, filterSlug, branches])
 
   async function load() {
     const res = await fetch('/api/owner/staff')
@@ -161,11 +179,46 @@ export default function StaffManager({ branches }: { branches: BranchOption[] })
           shift should not wait on rows fading in one at a time. */}
       <section className="rise" style={{ animationDelay: '140ms' }}>
         <h2 style={{ margin: '0 0 10px', fontSize: '0.95rem', fontWeight: 700 }}>הצוות</h2>
-        {!staff ? (
+
+        {branches.length > 1 && (
+          <div role="group" aria-label="סינון לפי סניף" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {[{ slug: '', name: { he: 'כל הסניפים' } }, ...branches].map((b) => {
+              const selected = b.slug === filterSlug
+              return (
+                <button
+                  key={b.slug || 'all'}
+                  type="button"
+                  className="press"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setFilterSlug(b.slug)
+                    if (b.slug) setCurrentBranchCookie(b.slug)
+                  }}
+                  style={{
+                    flex: '1 1 auto',
+                    minHeight: 36,
+                    padding: '0 12px',
+                    borderRadius: 999,
+                    border: `1px solid ${selected ? 'var(--neon)' : 'var(--line-strong)'}`,
+                    background: selected ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
+                    color: selected ? 'var(--neon-soft)' : 'var(--text-dim)',
+                    fontWeight: 600,
+                    fontSize: '0.76rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {b.name.he}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {!visibleStaff ? (
           <div className="sk" style={{ height: 120 }} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {staff.map((row) => (
+            {visibleStaff.map((row) => (
               <div
                 key={row.id}
                 style={{

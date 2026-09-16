@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import OwnerHeader from '@/components/OwnerHeader'
 import EditorWorkspace from '@/components/EditorWorkspace'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { hasAnyMenuEditAccess, isOp } from '@/lib/staff/access'
 import { getBranches } from '@/lib/branches/server'
+import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,11 +37,19 @@ export default async function MenuEditorPage() {
   }
 
   const branches = await getBranches()
+  const visibleBranches = allowedBranchSlug ? branches.filter((b) => b.slug === allowedBranchSlug) : branches
+  const cookieStore = await cookies()
+  const initialBranch = resolveCurrentBranchSlug(visibleBranches, cookieStore.get(BRANCH_COOKIE)?.value)
 
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="עריכת תפריט" backHref="/owner/dashboard" />
-      <EditorWorkspace branches={branches} allowedBranchSlug={allowedBranchSlug} isOwner={isOp(me)} />
+      <EditorWorkspace
+        branches={branches}
+        allowedBranchSlug={allowedBranchSlug}
+        isOwner={isOp(me)}
+        initialBranch={initialBranch}
+      />
     </main>
   )
 }

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { ClipboardList, Users, Accessibility } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
@@ -8,6 +9,7 @@ import { isOp } from '@/lib/staff/access'
 import { readDashboardStats } from '@/lib/owner/dashboard-stats'
 import { readDashboardSignals } from '@/lib/owner/signals'
 import { getBranches } from '@/lib/branches/server'
+import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +39,9 @@ export default async function OwnerDashboardPage() {
   if (!isOp(me)) redirect('/no-access')
 
   const branches = await getBranches()
-  const defaultBranch = branches[0] ?? null
+  const cookieStore = await cookies()
+  const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
+  const defaultBranch = branches.find((b) => b.slug === currentSlug) ?? branches[0] ?? null
 
   const [stats, signals] = defaultBranch
     ? await Promise.all([readDashboardStats(defaultBranch.id), readDashboardSignals(defaultBranch.id)])

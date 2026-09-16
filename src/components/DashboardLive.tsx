@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { FileEdit, Package, Bell } from 'lucide-react'
 import StatStrip from '@/components/StatStrip'
+import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
@@ -60,33 +61,7 @@ export default function DashboardLive({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6 }}>
-        {branches.map((b) => {
-          const selected = b.slug === branch
-          return (
-            <button
-              key={b.slug}
-              type="button"
-              className="press"
-              aria-pressed={selected}
-              onClick={() => setBranch(b.slug)}
-              style={{
-                flex: 1,
-                minHeight: 'var(--tap-min)',
-                borderRadius: 999,
-                border: `1px solid ${selected ? 'var(--neon)' : 'var(--line-strong)'}`,
-                background: selected ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-                color: selected ? 'var(--neon-soft)' : 'var(--text)',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-              }}
-            >
-              {b.name.he}
-            </button>
-          )
-        })}
-      </div>
+      <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
 
       <StatStrip stats={data.stats} />
 
