@@ -9,10 +9,13 @@ import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 // authorize as two separate gates, deny-to-/no-access rather than bouncing
 // back to /login once already signed in) is the same shape on purpose.
 
-const MENU_EDITOR_PREFIX = '/owner/editor'
+// /owner/audit is gated the same as the editor (menu-edit access, not
+// owner-only) — whoever can edit a branch's menu can see its change
+// history, same reasoning the page/API route apply again server-side.
+const MENU_EDITOR_PREFIXES = ['/owner/editor', '/owner/audit']
 const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility']
 
-const PROTECTED_ROUTES = [MENU_EDITOR_PREFIX, ...OP_ONLY_PREFIXES]
+const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES]
 
 function matchesAny(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -60,7 +63,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const editorProtected = matchesAny(pathname, [MENU_EDITOR_PREFIX])
+  const editorProtected = matchesAny(pathname, MENU_EDITOR_PREFIXES)
   const opProtected = matchesAny(pathname, OP_ONLY_PREFIXES)
 
   if (matchesAny(pathname, PROTECTED_ROUTES) && !user) {

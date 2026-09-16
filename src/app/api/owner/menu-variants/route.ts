@@ -4,7 +4,13 @@ import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireMenuEditor } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { allItemUids } from '@/lib/menu/variants'
+import { logMenuAudit } from '@/lib/menu/audit'
 import type { MenuDoc } from '@/lib/menu/types'
+
+function variantLabel(name: unknown): string {
+  const n = name as { he?: string; en?: string } | null | undefined
+  return n?.he || n?.en || 'ללא שם'
+}
 
 const MAX_TEMP_DAYS = 30
 
@@ -58,7 +64,7 @@ const createSchema = z.object({
 export const POST = apiRoute(async (request: NextRequest) => {
   const body = createSchema.parse(await request.json())
   const menu = await resolveMenu(body.branch)
-  await requireMenuEditor(menu.branch_id)
+  const staff = await requireMenuEditor(menu.branch_id)
 
   const allUids = new Set(allItemUids(menu.draft as MenuDoc))
   if (body.excludedUids.some((uid) => !allUids.has(uid))) {
@@ -95,6 +101,15 @@ export const POST = apiRoute(async (request: NextRequest) => {
     await service.from('menus').update({ active_variant_id: variant.id }).eq('id', menu.id)
   }
 
+  await logMenuAudit(service, {
+    actor: staff,
+    branchId: menu.branch_id,
+    menuId: menu.id,
+    action: 'variant.create',
+    summary: `יצר גרסת תפריט: ${variantLabel(body.name)}${body.activateNow ? ' (והפעיל אותה)' : ''}`,
+    detail: { variantId: variant.id, excludedCount: body.excludedUids.length },
+  })
+
   return NextResponse.json({ variant })
 })
 
@@ -116,13 +131,13 @@ const patchSchema = z.object({
 export const PATCH = apiRoute(async (request: NextRequest) => {
   const body = patchSchema.parse(await request.json())
   const menu = await resolveMenu(body.branch)
-  await requireMenuEditor(menu.branch_id)
+  const staff = await requireMenuEditor(menu.branch_id)
 
   const service = createServiceRoleClient()
 
   const { data: existing } = await service
     .from('menu_variants')
-    .select('id, menu_id, is_default')
+    .select('id, menu_id, is_default, name')
     .eq('id', body.variantId)
     .eq('menu_id', menu.id)
     .maybeSingle()
@@ -138,16 +153,42 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   if (body.tempUntil !== undefined) updates.active_until = body.tempUntil
   if (body.expireAction) updates.expire_action = body.expireAction
 
+  const label = variantLabel(body.name ?? existing.name)
+
   if (Object.keys(updates).length > 0) {
     updates.updated_at = new Date().toISOString()
     await service.from('menu_variants').update(updates).eq('id', body.variantId)
+    await logMenuAudit(service, {
+      actor: staff,
+      branchId: menu.branch_id,
+      menuId: menu.id,
+      action: 'variant.update',
+      summary: `עדכן גרסת תפריט: ${label}`,
+      detail: { variantId: body.variantId, fields: Object.keys(updates).filter((k) => k !== 'updated_at') },
+    })
   }
 
   if (body.makeDefault) {
     await service.rpc('set_default_variant', { p_variant_id: body.variantId })
+    await logMenuAudit(service, {
+      actor: staff,
+      branchId: menu.branch_id,
+      menuId: menu.id,
+      action: 'variant.update',
+      summary: `קבע כברירת מחדל: ${label}`,
+      detail: { variantId: body.variantId },
+    })
   }
   if (body.activate) {
     await service.from('menus').update({ active_variant_id: body.variantId }).eq('id', menu.id)
+    await logMenuAudit(service, {
+      actor: staff,
+      branchId: menu.branch_id,
+      menuId: menu.id,
+      action: 'variant.activate',
+      summary: `הפעיל את הגרסה: ${label}`,
+      detail: { variantId: body.variantId },
+    })
   }
 
   return NextResponse.json({ ok: true })
@@ -158,12 +199,12 @@ const deleteSchema = z.object({ branch: z.string(), variantId: z.string().uuid()
 export const DELETE = apiRoute(async (request: NextRequest) => {
   const body = deleteSchema.parse(await request.json())
   const menu = await resolveMenu(body.branch)
-  await requireMenuEditor(menu.branch_id)
+  const staff = await requireMenuEditor(menu.branch_id)
 
   const service = createServiceRoleClient()
   const { data: variant } = await service
     .from('menu_variants')
-    .select('id, is_default')
+    .select('id, is_default, name')
     .eq('id', body.variantId)
     .eq('menu_id', menu.id)
     .maybeSingle()
@@ -182,5 +223,15 @@ export const DELETE = apiRoute(async (request: NextRequest) => {
   }
 
   await service.from('menu_variants').delete().eq('id', body.variantId)
+
+  await logMenuAudit(service, {
+    actor: staff,
+    branchId: menu.branch_id,
+    menuId: menu.id,
+    action: 'variant.delete',
+    summary: `מחק גרסת תפריט: ${variantLabel(variant.name)}`,
+    detail: { variantId: body.variantId },
+  })
+
   return NextResponse.json({ ok: true })
 })

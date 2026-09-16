@@ -2,7 +2,18 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { Unauthorized, Forbidden } from '@/lib/http/errors'
 import { isOp, canEditMenu, type AccessRow } from '@/lib/staff/access'
 
-type StaffRow = AccessRow & { id: string; auth_user_id: string }
+// email/display_name/first_name/last_name are carried here (not just
+// role/badge/branch_id) so callers that need to attribute an action — the
+// menu_audit writer in lib/menu/audit.ts — don't need a second staff query
+// just to snapshot who did it.
+export type StaffRow = AccessRow & {
+  id: string
+  auth_user_id: string
+  email: string | null
+  display_name: string | null
+  first_name: string | null
+  last_name: string | null
+}
 
 async function resolveStaff(): Promise<StaffRow | null> {
   const supabase = await createServerSupabaseClient()
@@ -15,7 +26,7 @@ async function resolveStaff(): Promise<StaffRow | null> {
   const service = createServiceRoleClient()
   const { data: row } = await service
     .from('staff')
-    .select('id, auth_user_id, role, badge, branch_id, active')
+    .select('id, auth_user_id, role, badge, branch_id, active, email, display_name, first_name, last_name')
     .eq('auth_user_id', user.id)
     .eq('active', true)
     .maybeSingle()

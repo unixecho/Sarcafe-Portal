@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Package, HelpCircle, Save, Send, Sparkles, ChevronDown } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import MenuVersionBar from '@/components/MenuVersionBar'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import CategoryAccordion from '@/components/CategoryAccordion'
@@ -94,17 +93,24 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     }
   }
 
-  async function saveDoc(doc: MenuDoc): Promise<boolean> {
+  // Both Save and Publish now go through this one server route (instead of
+  // writing to Supabase directly from the browser) so each explicit click
+  // can be logged to menu_audit — service-role only, unreachable from a
+  // direct browser write. The actual RLS/auth semantics are unchanged: the
+  // route runs the mutation as the caller's own session, just adds the
+  // audit insert alongside it.
+  async function saveDoc(doc: MenuDoc, action: 'save' | 'publish'): Promise<boolean> {
     if (!loaded) return false
     setStatus('saving')
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('menus')
-      .update({ draft: doc, updated_at: new Date().toISOString() })
-      .eq('id', loaded.menuId)
-
-    if (error) {
-      flash('שגיאה בשמירה: ' + error.message, true)
+    const res = await fetch('/api/owner/menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch: branchSlug, action, draft: doc }),
+    })
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null)
+      const message = payload?.error?.message ?? 'שגיאה לא צפויה'
+      flash((action === 'publish' ? 'שגיאה בפרסום: ' : 'שגיאה בשמירה: ') + message, true)
       return false
     }
     setDirty(false)
@@ -113,23 +119,16 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
 
   async function save() {
     if (!draft) return
-    const ok = await saveDoc(buildPayload(draft))
+    const ok = await saveDoc(buildPayload(draft), 'save')
     if (ok) flash('נשמר ✓')
   }
 
   async function publish() {
     if (!loaded || !draft) return
     const payload = buildPayload(draft)
-    const ok = await saveDoc(payload)
+    const ok = await saveDoc(payload, 'publish')
     if (!ok) return
     setDraft(payload)
-
-    const supabase = createClient()
-    const { error } = await supabase.rpc('publish_menu', { p_menu_id: loaded.menuId })
-    if (error) {
-      flash('שגיאה בפרסום: ' + error.message, true)
-      return
-    }
     flash('פורסם ללקוחות ✓')
   }
 
