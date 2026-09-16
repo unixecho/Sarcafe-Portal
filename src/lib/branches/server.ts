@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { Branch } from '@/lib/branches'
+import type { PortalReviewsBlock } from '@/lib/reviews'
 
 type BranchRow = {
   id: string
@@ -11,10 +12,11 @@ type BranchRow = {
   instagram_url: string | null
   review_url: string | null
   bit_url: string | null
+  reviews: PortalReviewsBlock | null
 }
 
 const COLUMNS =
-  'id, slug, name, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url'
+  'id, slug, name, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
 
 function toBranch(row: BranchRow): Branch {
   return {
@@ -29,6 +31,7 @@ function toBranch(row: BranchRow): Branch {
       review: row.review_url,
       bit: row.bit_url,
     },
+    reviews: row.reviews ?? null,
   }
 }
 

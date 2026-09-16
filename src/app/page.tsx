@@ -25,7 +25,7 @@ import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
 import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import ReviewWall from '@/components/ReviewWall'
-import { getPortalReviews } from '@/lib/reviews'
+import { normalizeReviews, PLACEHOLDER_BLOCK } from '@/lib/reviews'
 import type { Branch } from '@/lib/branches'
 
 type Lang = 'he' | 'en' | 'ar'
@@ -432,7 +432,7 @@ export default function PortalPage() {
             not part of the picker↔actions slide. */}
         {branch && (
           <>
-            <ReviewWall block={getPortalReviews(branch.slug)} reviewUrl={branch.links.review} lang={lang} />
+            <ReviewWall block={normalizeReviews(branch.reviews, PLACEHOLDER_BLOCK)} reviewUrl={branch.links.review} lang={lang} />
 
             {/* The private half of the same ask the wall just made in
                 public — same row shape as every other action, a sage-on-

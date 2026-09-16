@@ -1,26 +1,29 @@
-// Portal review-wall content — pure data, no Supabase.
+// Portal review-wall content — pure data/validation, no Supabase.
 //
-// Sarcafe has no owner-facing settings system for the portal yet (unlike
-// AyekaBar's `app_settings`-backed `getPortalReviews()`), and branches now
-// live in the database rather than a static file (see lib/branches.ts), so
-// this stays a small static module keyed by branch slug rather than a
-// per-branch editor. Swap `PLACEHOLDER_REVIEWS` for real, owner-curated
-// quotes before this goes live — see the warning below.
-//
-// ⚠️ PLACEHOLDER CONTENT — every quote, star count, rating and review count
-// below is a mockup stand-in for the visual redesign, not a real customer
-// review. Nothing here names a real person (reviews stay anonymous by
-// design, same reasoning AyekaBar's ReviewWall documents: never invent an
-// identity for someone else's words) but the numbers ARE fabricated for
-// layout purposes and must not ship to real customers unreplaced.
+// Reviews now live per-branch on public.branches.reviews (see migration
+// 008_branch_reviews.sql), owner-editable via BranchReviewsEditor.tsx —
+// never pulled from Google automatically, by design (the site has no
+// Google API integration). A branch with nothing saved falls back to
+// PLACEHOLDER_BLOCK below via normalizeReviews() rather than rendering an
+// empty wall.
 
 export type ReviewLang = 'he' | 'en' | 'ar'
 
 export type PortalReview = {
   id: string
+  /** Owner's own reference only (e.g. "Google review, Jan 2026") — the
+   *  public wall deliberately never surfaces a reviewer's identity, same
+   *  reasoning AyekaBar's ReviewWall documents: never invent, and never
+   *  publish, an identity for someone else's words. */
+  author?: string
   stars: number // 1-5
   lang: ReviewLang // which language the quote itself is written in — drives the card's `dir`
+  /** Freeform, owner's own reference only — not parsed or displayed. */
+  date?: string
   text: string
+  /** false = kept but hidden from the public wall (an owner "unpublish"
+   *  without deleting). Defaults to visible when absent. */
+  visible?: boolean
 }
 
 export type PortalReviewsBlock = {
@@ -31,9 +34,10 @@ export type PortalReviewsBlock = {
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
-/** Hard cap so a future data source can never make the wall render an
- *  unbounded number of cards. */
+/** Hard cap so the editor (and a malformed row) can never make the wall
+ *  render an unbounded number of cards. */
 export const MAX_REVIEWS = 40
+export const MAX_REVIEW_TEXT_LEN = 600
 
 function normalizeReview(raw: unknown, index: number): PortalReview | null {
   if (typeof raw !== 'object' || raw === null) return null
@@ -42,13 +46,25 @@ function normalizeReview(raw: unknown, index: number): PortalReview | null {
   if (!text) return null
   const lang: ReviewLang = r.lang === 'en' || r.lang === 'ar' ? r.lang : 'he'
   const stars = typeof r.stars === 'number' && Number.isFinite(r.stars) ? clamp(Math.round(r.stars), 1, 5) : 5
-  return { id: typeof r.id === 'string' && r.id ? r.id : `r${index}`, stars, lang, text: text.slice(0, 600) }
+  const author = typeof r.author === 'string' && r.author.trim() ? r.author.trim().slice(0, 120) : undefined
+  const date = typeof r.date === 'string' && r.date.trim() ? r.date.trim().slice(0, 40) : undefined
+  const visible = r.visible !== false
+  return {
+    id: typeof r.id === 'string' && r.id ? r.id : `r${index}`,
+    author,
+    stars,
+    lang,
+    date,
+    text: text.slice(0, MAX_REVIEW_TEXT_LEN),
+    visible,
+  }
 }
 
-/** Coerce whatever a future data source hands back into something safe to
- *  render — same shape of defensiveness AyekaBar's normalizeReviews uses,
- *  kept even though today's only "source" is the literal object below, so
- *  swapping in a real settings table later doesn't need this rewritten. */
+/** Coerce whatever the DB (or a malformed write) hands back into something
+ *  safe to render — same shape of defensiveness AyekaBar's normalizeReviews
+ *  uses. Also the single validator the owner-facing write path
+ *  (PATCH /api/owner/branches) runs input through before saving, so what's
+ *  stored is exactly what will render. */
 export function normalizeReviews(raw: unknown, fallback: PortalReviewsBlock): PortalReviewsBlock {
   if (typeof raw !== 'object' || raw === null) return fallback
   const b = raw as Record<string, unknown>
@@ -67,7 +83,8 @@ export function normalizeReviews(raw: unknown, fallback: PortalReviewsBlock): Po
 // Deliberately generic — no invented specifics (no names, no dates, no
 // hyper-particular anecdotes) precisely BECAUSE these are placeholders:
 // text that reads as "obviously a stand-in" is safer to accidentally ship
-// than text convincing enough to pass as a real customer's words.
+// than text convincing enough to pass as a real customer's words. Shown
+// only when a branch has no reviews of its own saved yet.
 const PLACEHOLDER_ITEMS_HE: PortalReview[] = [
   { id: 'p1', stars: 5, lang: 'he', text: 'הקפה הכי טוב באזור, ותמיד עם חיוך. עוצרים כאן כל בוקר.' },
   { id: 'p2', stars: 5, lang: 'he', text: 'עגלה קטנה עם אווירה ענקית — בדיוק מה שהיה חסר לנו כאן.' },
@@ -80,24 +97,15 @@ const PLACEHOLDER_ITEMS_EN: PortalReview[] = [
   { id: 'p7', stars: 4, lang: 'en', text: 'Quick, consistent, and they always have a good recommendation.' },
 ]
 
-const PLACEHOLDER_BLOCK: PortalReviewsBlock = {
+export const PLACEHOLDER_BLOCK: PortalReviewsBlock = {
   rating: 4.8,
   count: 120,
   items: [...PLACEHOLDER_ITEMS_HE, ...PLACEHOLDER_ITEMS_EN],
 }
 
-/** Same placeholder block for every branch today — there is exactly one
- *  written yet. Keyed by slug (rather than a single flat export) so a real
- *  per-branch source can drop in later without changing any call site. */
-const PORTAL_REVIEWS: Record<string, PortalReviewsBlock> = {}
-
-export function getPortalReviews(branchSlug: string): PortalReviewsBlock {
-  return PORTAL_REVIEWS[branchSlug] ?? PLACEHOLDER_BLOCK
-}
-
-/** The subset the wall actually renders (mirrors AyekaBar's visibleReviews —
- *  kept as its own function so a future "hide this one" flag has somewhere
- *  to live without touching call sites). */
+/** The subset the wall actually renders — visible items only, per the
+ *  owner's show/hide toggle (mirrors AyekaBar's visibleReviews, extended
+ *  with the visibility filter now that one exists). */
 export function visibleReviews(block: PortalReviewsBlock): PortalReview[] {
-  return block.items
+  return block.items.filter((r) => r.visible !== false)
 }

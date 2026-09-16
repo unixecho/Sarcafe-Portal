@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { ClipboardList, Users, Accessibility, History, Tablet } from 'lucide-react'
+import { ClipboardList, Users, Accessibility, History, Tablet, Link2, Star } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import DashboardLive from '@/components/DashboardLive'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
@@ -18,6 +18,8 @@ const TILES = [
   { href: '/owner/tablet', icon: Tablet, label: 'זמינות בזמן אמת' },
   { href: '/owner/staff', icon: Users, label: 'צוות' },
   { href: '/owner/audit', icon: History, label: 'יומן שינויים' },
+  { href: '/owner/links', icon: Link2, label: 'קישורי פורטל' },
+  { href: '/owner/reviews', icon: Star, label: 'ביקורות' },
   { href: '/owner/accessibility', icon: Accessibility, label: 'הצהרת נגישות' },
 ] as const
 

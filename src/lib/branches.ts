@@ -4,7 +4,11 @@
 // AddBranchSheet.tsx). Server code reads them via lib/branches/server.ts;
 // Client Components fetch GET /api/branches. Nothing in this file may
 // import next/headers or supabase/server — that would break every client
-// bundle that imports BranchSlug/branchName from here.
+// bundle that imports BranchSlug/branchName from here. (lib/reviews.ts is
+// safe to import from here — it's the same kind of pure, client-safe
+// module, with no dependency back on this file.)
+
+import type { PortalReviewsBlock } from '@/lib/reviews'
 
 export type BranchSlug = string
 
@@ -24,6 +28,10 @@ export type Branch = {
   slug: BranchSlug
   name: LocalizedText
   links: BranchLinks
+  /** Owner-curated review-wall content, or null when this branch has never
+   * had one saved — callers fall back to lib/reviews.ts's placeholder via
+   * normalizeReviews() rather than treating null as "show nothing." */
+  reviews: PortalReviewsBlock | null
 }
 
 export function branchName(

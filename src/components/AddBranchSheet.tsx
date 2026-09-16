@@ -68,6 +68,7 @@ export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSh
         slug: payload.slug,
         name: { he: nameHe.trim(), en: nameEn.trim() },
         links: { navGoogleMaps: null, navWaze: null, navAppleMaps: null, instagram: null, review: null, bit: null },
+        reviews: null,
       })
       close()
     } catch {

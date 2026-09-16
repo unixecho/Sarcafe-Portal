@@ -9,11 +9,12 @@ import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 // authorize as two separate gates, deny-to-/no-access rather than bouncing
 // back to /login once already signed in) is the same shape on purpose.
 
-// /owner/audit and /owner/tablet are gated the same as the editor
-// (menu-edit access, not owner-only) — whoever can edit a branch's menu
-// can see its change history and toggle its live availability, same
-// reasoning the page/API routes apply again server-side.
-const MENU_EDITOR_PREFIXES = ['/owner/editor', '/owner/audit', '/owner/tablet']
+// /owner/audit, /owner/tablet, /owner/links and /owner/reviews are gated
+// the same as the editor (menu-edit access, not owner-only) — whoever can
+// edit a branch's menu can also see its change history, toggle its live
+// availability, and fix its portal links/reviews, same reasoning the
+// page/API routes apply again server-side.
+const MENU_EDITOR_PREFIXES = ['/owner/editor', '/owner/audit', '/owner/tablet', '/owner/links', '/owner/reviews']
 const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility']
 
 const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES]
