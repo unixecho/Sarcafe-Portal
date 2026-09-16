@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Trash2, Plus, Languages, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2, Plus, Languages, Layers, X } from 'lucide-react'
 import Switch from '@/components/Switch'
 import IconPicker from '@/components/IconPicker'
 import { resolveCategoryIcon, type CategoryIconKey } from '@/lib/menu/icons'
-import type { MenuCategory, MenuItem } from '@/lib/menu/types'
+import { randomId } from '@/lib/menu/id'
+import type { MenuCategory, MenuItem, MenuItemType } from '@/lib/menu/types'
 
 type CategoryAccordionProps = {
   category: MenuCategory
@@ -244,6 +245,8 @@ function ItemRow({
         onChangeAr={(v) => onEdit({ ar: v })}
       />
 
+      <ItemTypesEditor types={item.types ?? []} onChange={(types) => onEdit({ types })} />
+
       {showNote ? (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
@@ -349,6 +352,101 @@ function TranslationsDisclosure({
     <div className="rise" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
       <input dir="ltr" placeholder="English" value={en ?? ''} onChange={(e) => onChangeEn(e.target.value)} style={smallInputStyle} />
       <input placeholder="العربية" value={ar ?? ''} onChange={(e) => onChangeAr(e.target.value)} style={smallInputStyle} />
+    </div>
+  )
+}
+
+/** Selectable types/flavors for one item (e.g. a pastry's fillings, a
+ * shake's flavors, a cookie's varieties) — each with its own out-of-stock
+ * switch, same interaction as the item-level Switch above. Collapsed by
+ * default (matches TranslationsDisclosure's shape) unless the item already
+ * has types. */
+function ItemTypesEditor({ types, onChange }: { types: MenuItemType[]; onChange: (next: MenuItemType[]) => void }) {
+  const [open, setOpen] = useState(types.length > 0)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="press"
+        onClick={() => setOpen(true)}
+        style={{
+          alignSelf: 'flex-start',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-faint)',
+          fontSize: '0.76rem',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+      >
+        <Layers size={13} aria-hidden="true" /> הוספת סוגים/טעמים
+      </button>
+    )
+  }
+
+  function addType() {
+    onChange([...types, { uid: randomId('t'), he: '', en: '', ar: '' }])
+  }
+  function updateType(index: number, patch: Partial<MenuItemType>) {
+    onChange(types.map((t, i) => (i === index ? { ...t, ...patch } : t)))
+  }
+  function removeType(index: number) {
+    onChange(types.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div
+      className="rise"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        padding: 8,
+        borderRadius: 10,
+        background: 'var(--bg)',
+        border: '1px dashed var(--line-strong)',
+      }}
+    >
+      <p style={{ margin: '0 0 2px', fontSize: '0.72rem', color: 'var(--text-faint)' }}>
+        סוגים/טעמים — לכל אחד זמינות נפרדת במלאי
+      </p>
+      {types.map((type, index) => (
+        <div key={type.uid} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            placeholder="שם הסוג (לדוגמה: שוקולד)"
+            value={type.he ?? ''}
+            onChange={(e) => updateType(index, { he: e.target.value })}
+            style={{ ...smallInputStyle, flex: 1 }}
+          />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={type.available !== false}
+            aria-label="זמין במלאי"
+            title="זמין במלאי"
+            className="press"
+            onClick={() => updateType(index, { available: type.available === false ? true : false })}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+          >
+            <Switch on={type.available !== false} />
+          </button>
+          <IconButton label="מחיקת הסוג" small onClick={() => removeType(index)}>
+            <X size={13} />
+          </IconButton>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="press"
+        onClick={addType}
+        style={{ ...dashedButtonStyle, minHeight: 34, fontSize: '0.78rem' }}
+      >
+        <Plus size={14} aria-hidden="true" /> הוספת סוג
+      </button>
     </div>
   )
 }

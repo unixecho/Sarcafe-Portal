@@ -324,7 +324,12 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                       Padding lives one level deeper instead. */}
                   <div className="accordion-inner">
                     <ul style={{ listStyle: 'none', margin: 0, padding: '0 14px 14px' }}>
-                      {category.items.map((item, itemIndex) => (
+                      {category.items.map((item, itemIndex) => {
+                      // An item with types but every type sold out reads as
+                      // sold out itself — there's nothing left to choose.
+                      const allTypesSoldOut = !!item.types?.length && item.types.every((tp) => tp.available === false)
+                      const soldOut = item.available === false || allTypesSoldOut
+                      return (
                       <li
                         key={item.uid ?? `${category.id}-${itemIndex}`}
                         className="menu-item"
@@ -338,7 +343,7 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                            the class so the entrance has something to own. */
                         style={{
                           '--i': itemIndex,
-                          '--rest': item.available === false ? 0.5 : 1,
+                          '--rest': soldOut ? 0.5 : 1,
                           borderTop: itemIndex === 0 ? 'none' : '1px solid var(--line)',
                         } as React.CSSProperties}
                       >
@@ -348,7 +353,7 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                                 below is status, not content, and must appear
                                 with the row rather than being typed out. */}
                             <span className="menu-item-name">{localized(item, lang)}</span>
-                            {item.available === false && (
+                            {soldOut && (
                               <span style={{ marginInlineStart: 8, fontSize: '0.7rem', color: '#ff8a5c', fontWeight: 700 }}>
                                 {t.soldOut}
                               </span>
@@ -359,12 +364,38 @@ export default function MenuView({ branchSlug, initial }: { branchSlug: BranchSl
                               {localized(item.note, lang)}
                             </p>
                           )}
+                          {!!item.types?.length && (
+                            <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {item.types.map((type) => {
+                                const typeSoldOut = type.available === false
+                                return (
+                                  <li
+                                    key={type.uid}
+                                    style={{
+                                      fontSize: '0.74rem',
+                                      padding: '3px 9px',
+                                      borderRadius: 999,
+                                      background: typeSoldOut ? 'transparent' : 'var(--bg-elev-2)',
+                                      border: `1px solid ${typeSoldOut ? 'var(--line)' : 'var(--line-strong)'}`,
+                                      color: typeSoldOut ? 'var(--text-faint)' : 'var(--text-dim)',
+                                    }}
+                                  >
+                                    {localized(type, lang)}
+                                    {typeSoldOut && (
+                                      <span style={{ marginInlineStart: 5, color: '#ff8a5c', fontWeight: 700 }}>· {t.soldOut}</span>
+                                    )}
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          )}
                         </div>
                         <span className="ltr-isolate" style={{ fontWeight: 700, fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
                           {item.price} {t.shekel}
                         </span>
                       </li>
-                      ))}
+                      )
+                      })}
                     </ul>
                   </div>
                 </div>

@@ -199,11 +199,17 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     })
   }
 
-  function returnToStock(uid: string) {
+  function returnToStock(itemUid: string, typeUid?: string) {
     edit((doc) => {
       for (const category of doc.categories) {
-        const item = category.items.find((i) => i.uid === uid)
-        if (item) item.available = true
+        const item = category.items.find((i) => i.uid === itemUid)
+        if (!item) continue
+        if (typeUid) {
+          const type = item.types?.find((t) => t.uid === typeUid)
+          if (type) type.available = true
+        } else {
+          item.available = true
+        }
       }
     })
   }
@@ -231,7 +237,28 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     )
   }
 
-  const outOfStock = draft.categories.flatMap((c) => c.items.filter((i) => i.available === false))
+  // Item-level AND type-level out-of-stock rows, flattened into one rollup —
+  // a type row's label includes its parent item's name since "שוקולד" alone
+  // means nothing out of context.
+  const outOfStock = draft.categories.flatMap((c) =>
+    c.items.flatMap((item) => {
+      const rows: { key: string; label: string; itemUid: string; typeUid?: string }[] = []
+      if (item.available === false && item.uid) {
+        rows.push({ key: item.uid, label: item.he || 'פריט', itemUid: item.uid })
+      }
+      for (const type of item.types ?? []) {
+        if (type.available === false && item.uid) {
+          rows.push({
+            key: `${item.uid}-${type.uid}`,
+            label: `${item.he || 'פריט'} — ${type.he || 'סוג'}`,
+            itemUid: item.uid,
+            typeUid: type.uid,
+          })
+        }
+      }
+      return rows
+    })
+  )
 
   return (
     <div style={{ paddingBottom: 88 }}>
@@ -302,9 +329,9 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
           </button>
           {showOutOfStock && (
             <div className="rise" style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              {outOfStock.map((item) => (
+              {outOfStock.map((row) => (
                 <div
-                  key={item.uid}
+                  key={row.key}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -314,11 +341,11 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
                     background: 'var(--bg-elev)',
                   }}
                 >
-                  <span style={{ fontSize: '0.85rem' }}>{item.he}</span>
+                  <span style={{ fontSize: '0.85rem' }}>{row.label}</span>
                   <button
                     type="button"
                     className="press"
-                    onClick={() => item.uid && returnToStock(item.uid)}
+                    onClick={() => returnToStock(row.itemUid, row.typeUid)}
                     style={{
                       minHeight: 36,
                       padding: '0 12px',

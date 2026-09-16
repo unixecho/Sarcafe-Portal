@@ -14,7 +14,31 @@ export type MenuItem = Localized & {
   price?: number | string | null // number, or a "20/24" range string
   note?: Localized
   image?: string
-  /** false = sold out. Draft-only until published. */
+  /** false = sold out. Draft-only until published — flipping this in the
+   * editor takes effect on the next Publish, same as any other edit.
+   * (The live tablet editor bypasses draft/publish entirely via the
+   * set_availability() RPC — see lib/menu/audit.ts's 'menu.availability'
+   * action — so a toggle made there is NOT gated by this comment.) */
+  available?: boolean
+  /** Selectable types/flavors of this item (e.g. a pastry's fillings, a
+   * shake's flavors, a cookie's varieties) — any item can carry these, not
+   * just the three categories that motivated adding it. Not a schema
+   * change: draft/published are jsonb, so this is purely a content shape
+   * change, same philosophy as every other MenuItem field. */
+  types?: MenuItemType[]
+}
+
+export type MenuItemType = Localized & {
+  /** Minted once, same discipline as MenuItem.uid — set_availability()
+   * (the live tablet editor's RPC) addresses a type by this, not by name
+   * or array position. */
+  uid: string
+  /** Added to (or replacing, if the UI chooses) the parent item's price —
+   * kept loose (number or a literal string) for the same reason
+   * MenuItem.price is: some prices are ranges, not single numbers. */
+  priceDelta?: number | string | null
+  /** false = sold out. Same draft/publish vs. live-tablet split as
+   * MenuItem.available above. */
   available?: boolean
 }
 
