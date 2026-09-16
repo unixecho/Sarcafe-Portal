@@ -1,4 +1,9 @@
-import { SETTINGS_TAG, CUSTOMER_FEEDBACK_ENABLED_KEY, DEFAULT_CUSTOMER_FEEDBACK_ENABLED } from '@/lib/settings/keys'
+import {
+  SETTINGS_TAG,
+  CUSTOMER_FEEDBACK_ENABLED_KEY,
+  DEFAULT_CUSTOMER_FEEDBACK_ENABLED,
+  DEFAULT_MENU_CART_ENABLED,
+} from '@/lib/settings/keys'
 
 /**
  * Reads one app_settings row via the Supabase REST endpoint directly
@@ -39,4 +44,10 @@ export async function readSetting<T>(key: string, fallback: T): Promise<T> {
 
 export async function getCustomerFeedbackEnabled(): Promise<boolean> {
   return readSetting(CUSTOMER_FEEDBACK_ENABLED_KEY, DEFAULT_CUSTOMER_FEEDBACK_ENABLED)
+}
+
+/** Wires up the `menu_cart_enabled` row that's existed since migration 002
+ *  as a stub for exactly this feature — nothing read it until now. */
+export async function getMenuCartEnabled(): Promise<boolean> {
+  return readSetting('menu_cart_enabled', DEFAULT_MENU_CART_ENABLED)
 }

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { fetchMenu } from '@/lib/menu/fetch'
 import MenuView from '@/components/MenuView'
 import { getBranchBySlug } from '@/lib/branches/server'
-import { getCustomerFeedbackEnabled } from '@/lib/settings/server'
+import { getCustomerFeedbackEnabled, getMenuCartEnabled } from '@/lib/settings/server'
 import type { BranchSlug } from '@/lib/branches'
 
 // Deliberately NOT paired with generateStaticParams: Next.js prerenders
@@ -19,7 +19,7 @@ export default async function PublicMenuPage({ params }: { params: Promise<{ bra
   const menu = await fetchMenu(branch)
   if (!menu) notFound()
 
-  const feedbackEnabled = await getCustomerFeedbackEnabled()
+  const [feedbackEnabled, cartEnabled] = await Promise.all([getCustomerFeedbackEnabled(), getMenuCartEnabled()])
 
-  return <MenuView branchSlug={branch as BranchSlug} initial={menu} feedbackEnabled={feedbackEnabled} />
+  return <MenuView branchSlug={branch as BranchSlug} initial={menu} feedbackEnabled={feedbackEnabled} cartEnabled={cartEnabled} />
 }

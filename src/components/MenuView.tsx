@@ -12,6 +12,10 @@ import PublicBackdrop from '@/components/PublicBackdrop'
 import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import SheetShell from '@/components/SheetShell'
 import FeedbackButton from '@/components/FeedbackButton'
+import CartProvider from '@/components/cart/CartProvider'
+import CartFab from '@/components/cart/CartFab'
+import CartTutorial from '@/components/cart/CartTutorial'
+import AddToCartControl from '@/components/cart/AddToCartControl'
 
 const REFRESH_MS = 30_000 // re-checks published_at; also catches a scheduled
 // variant flipping on/off within about this margin. A full resolveVariant
@@ -67,10 +71,12 @@ export default function MenuView({
   branchSlug,
   initial,
   feedbackEnabled = false,
+  cartEnabled = false,
 }: {
   branchSlug: BranchSlug
   initial: ResolvedMenu
   feedbackEnabled?: boolean
+  cartEnabled?: boolean
 }) {
   const [lang, setLang] = useLanguage()
   const [menu, setMenu] = useState(initial)
@@ -198,7 +204,7 @@ export default function MenuView({
   const t = T[lang]
   const brand = localized(menu.name, lang)
 
-  return (
+  const content = (
     <PublicBackdrop>
       <main id="main" tabIndex={-1} style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
         <div className="menu-sticky" ref={stickyRef}>
@@ -399,9 +405,14 @@ export default function MenuView({
                             </ul>
                           )}
                         </div>
-                        <span className="ltr-isolate" style={{ fontWeight: 700, fontSize: '0.88rem', whiteSpace: 'nowrap' }}>
+                        <span className="ltr-isolate" style={{ fontWeight: 700, fontSize: '0.88rem', whiteSpace: 'nowrap', alignSelf: 'center' }}>
                           {item.price} {t.shekel}
                         </span>
+                        {cartEnabled && !soldOut && (
+                          <span style={{ alignSelf: 'center' }}>
+                            <AddToCartControl item={item} categoryId={category.id} categoryTitle={category.title} lang={lang} />
+                          </span>
+                        )}
                       </li>
                       )
                       })}
@@ -431,6 +442,16 @@ export default function MenuView({
         </footer>
       </main>
     </PublicBackdrop>
+  )
+
+  if (!cartEnabled) return content
+
+  return (
+    <CartProvider branchSlug={branchSlug}>
+      {content}
+      <CartFab lang={lang} />
+      <CartTutorial />
+    </CartProvider>
   )
 }
 
