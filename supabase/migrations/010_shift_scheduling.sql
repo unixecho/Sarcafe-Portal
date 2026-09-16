@@ -1,4 +1,9 @@
 -- ============================================================
+-- Safe to re-run: every CREATE TABLE/INDEX/VIEW/POLICY below is
+-- idempotent (IF NOT EXISTS / OR REPLACE / DROP POLICY IF EXISTS first),
+-- so a retry after a partial failure converges to the same end state
+-- instead of erroring on "already exists" or leaving stale objects.
+--
 -- Shift scheduling — adapted from AyekaBar's migration 027
 -- (src/lib/shifts/*, src/components/shifts/*), branch-scoped instead of
 -- AyekaBar's single implicit venue. Every `venue_id` there becomes
@@ -45,7 +50,7 @@
 -- Vocabulary (role/station/preset names) is plain Hebrew text, not
 -- trilingual: unlike menu content, nothing here is ever customer-facing —
 -- matches every other staff/owner-only screen in this app.
-create table public.shift_settings (
+create table if not exists public.shift_settings (
   branch_id          uuid primary key references public.branches(id) on delete cascade,
   working_days       smallint[] not null default '{0,1,2,3,4,5,6}',
   open_time          text not null default '07:00',
@@ -67,7 +72,7 @@ create table public.shift_settings (
 -- not schedulable. Keyed (branch_id, staff_id) rather than just staff_id,
 -- so an all-branch floater (staff.branch_id is null) can carry separate
 -- flags per branch they actually work at.
-create table public.schedule_members (
+create table if not exists public.schedule_members (
   branch_id         uuid not null references public.branches(id) on delete cascade,
   staff_id          uuid not null references public.staff(id) on delete cascade,
   schedulable       boolean not null default true,
@@ -82,7 +87,7 @@ create table public.schedule_members (
 
 -- schedule_weeks — draft/published per branch+week. `published_snapshot`
 -- is a FROZEN jsonb copy staff read from; staff never see live rows.
-create table public.schedule_weeks (
+create table if not exists public.schedule_weeks (
   id                   uuid primary key default gen_random_uuid(),
   branch_id            uuid not null references public.branches(id) on delete cascade,
   week_start           date not null,
@@ -100,7 +105,7 @@ create table public.schedule_weeks (
 
 -- shifts — wall-clock date + "HH:MM" text (never timestamptz), so a
 -- shift's printed hours survive a DST transition unchanged.
-create table public.shifts (
+create table if not exists public.shifts (
   id                 uuid primary key default gen_random_uuid(),
   branch_id          uuid not null references public.branches(id) on delete cascade,
   week_id            uuid not null references public.schedule_weeks(id) on delete cascade,
@@ -114,12 +119,12 @@ create table public.shifts (
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
-create index shifts_week_id_idx on public.shifts (week_id);
-create index shifts_branch_date_idx on public.shifts (branch_id, shift_date);
+create index if not exists shifts_week_id_idx on public.shifts (week_id);
+create index if not exists shifts_branch_date_idx on public.shifts (branch_id, shift_date);
 
 -- shift_assignments — staff snapshotted by name so removing a staff
 -- member later doesn't erase who actually worked a shift.
-create table public.shift_assignments (
+create table if not exists public.shift_assignments (
   id          uuid primary key default gen_random_uuid(),
   branch_id   uuid not null references public.branches(id) on delete cascade,
   shift_id    uuid not null references public.shifts(id) on delete cascade,
@@ -130,12 +135,12 @@ create table public.shift_assignments (
   created_at  timestamptz not null default now(),
   unique (shift_id, staff_id, role_id)
 );
-create index shift_assignments_shift_id_idx on public.shift_assignments (shift_id);
-create index shift_assignments_staff_id_idx on public.shift_assignments (staff_id) where staff_id is not null;
+create index if not exists shift_assignments_shift_id_idx on public.shift_assignments (shift_id);
+create index if not exists shift_assignments_staff_id_idx on public.shift_assignments (staff_id) where staff_id is not null;
 
 -- shift_availability — "available" is absence of a row; only exceptions
 -- are stored. Feature-flagged (shift_settings.features.availability).
-create table public.shift_availability (
+create table if not exists public.shift_availability (
   id          uuid primary key default gen_random_uuid(),
   branch_id   uuid not null references public.branches(id) on delete cascade,
   staff_id    uuid not null references public.staff(id) on delete cascade,
@@ -150,7 +155,7 @@ create table public.shift_availability (
 -- shift_swaps — feature-flagged (shift_settings.features.swaps). All
 -- state transitions (request/accept/decide/cancel) go through the RPCs
 -- below, never a raw UPDATE — see the RLS section for why.
-create table public.shift_swaps (
+create table if not exists public.shift_swaps (
   id              uuid primary key default gen_random_uuid(),
   branch_id       uuid not null references public.branches(id) on delete cascade,
   assignment_id   uuid not null references public.shift_assignments(id) on delete cascade,
@@ -163,10 +168,10 @@ create table public.shift_swaps (
   decision_note   text,
   created_at      timestamptz not null default now()
 );
-create index shift_swaps_branch_status_idx on public.shift_swaps (branch_id, status);
+create index if not exists shift_swaps_branch_status_idx on public.shift_swaps (branch_id, status);
 
 -- shift_audit — append-only, same shape/posture as menu_audit.
-create table public.shift_audit (
+create table if not exists public.shift_audit (
   id           bigint generated always as identity primary key,
   branch_id    uuid not null references public.branches(id) on delete cascade,
   actor_id     uuid references auth.users(id) on delete set null,
@@ -177,7 +182,7 @@ create table public.shift_audit (
   detail       jsonb not null default '{}'::jsonb,
   created_at   timestamptz not null default now()
 );
-create index shift_audit_branch_created_idx on public.shift_audit (branch_id, created_at desc);
+create index if not exists shift_audit_branch_created_idx on public.shift_audit (branch_id, created_at desc);
 
 -- ---------------------------------------------------------------------
 -- Access functions — SQL twins of lib/shifts/access.ts. `current_staff_id`
@@ -646,7 +651,7 @@ grant execute on function public.cancel_shift_swap(uuid) to authenticated, servi
 -- (bypasses RLS on schedule_weeks) with its OWN authorization check in
 -- the WHERE clause, since a definer view carries none automatically.
 -- ---------------------------------------------------------------------
-create view public.published_schedule
+create or replace view public.published_schedule
 with (security_invoker = false) as
 select id, branch_id, week_start, status, version, published_at, day_notes, published_snapshot
 from public.schedule_weeks
@@ -666,26 +671,34 @@ alter table public.shift_availability enable row level security;
 alter table public.shift_swaps enable row level security;
 alter table public.shift_audit enable row level security;
 
+drop policy if exists "schedule settings readable by branch staff" on public.shift_settings;
 create policy "schedule settings readable by branch staff" on public.shift_settings
   for select using (public.can_view_schedule(branch_id));
+drop policy if exists "schedule settings writable by managers" on public.shift_settings;
 create policy "schedule settings writable by managers" on public.shift_settings
   for all using (public.is_schedule_manager(branch_id)) with check (public.is_schedule_manager(branch_id));
 
+drop policy if exists "roster readable by branch staff" on public.schedule_members;
 create policy "roster readable by branch staff" on public.schedule_members
   for select using (public.can_view_schedule(branch_id));
+drop policy if exists "roster writable by managers" on public.schedule_members;
 create policy "roster writable by managers" on public.schedule_members
   for all using (public.is_schedule_manager(branch_id)) with check (public.is_schedule_manager(branch_id));
 
 -- Draft/live tables: manager-only, full stop. Staff read ONLY through
 -- published_schedule above — this is the "staff never read live rows"
 -- guarantee, enforced at the RLS layer independent of the app layer.
+drop policy if exists "schedule weeks manager only" on public.schedule_weeks;
 create policy "schedule weeks manager only" on public.schedule_weeks
   for all using (public.is_schedule_manager(branch_id)) with check (public.is_schedule_manager(branch_id));
+drop policy if exists "shifts manager only" on public.shifts;
 create policy "shifts manager only" on public.shifts
   for all using (public.is_schedule_manager(branch_id)) with check (public.is_schedule_manager(branch_id));
+drop policy if exists "shift assignments manager only" on public.shift_assignments;
 create policy "shift assignments manager only" on public.shift_assignments
   for all using (public.is_schedule_manager(branch_id)) with check (public.is_schedule_manager(branch_id));
 
+drop policy if exists "own availability, manager reads all" on public.shift_availability;
 create policy "own availability, manager reads all" on public.shift_availability
   for all
   using (staff_id = public.current_staff_id() or public.is_schedule_manager(branch_id))
@@ -695,6 +708,7 @@ create policy "own availability, manager reads all" on public.shift_availability
 -- above, so there is no insert/update/delete policy here at all — RLS
 -- enabled with a select-only policy denies every other operation by
 -- construction, which is exactly the point.
+drop policy if exists "swap visibility" on public.shift_swaps;
 create policy "swap visibility" on public.shift_swaps
   for select using (
     public.is_schedule_manager(branch_id)
