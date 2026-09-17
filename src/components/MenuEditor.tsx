@@ -422,6 +422,12 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
                 else cat.title[field] = value
               })
             }
+            onToggleLiveOnTablet={() =>
+              edit((doc) => {
+                const cat = doc.categories[categoryIndex]
+                if (cat) cat.liveOnTablet = cat.liveOnTablet !== true
+              })
+            }
             onAddItem={() => addItem(categoryIndex)}
             onMoveItem={(itemIndex, dir) => moveItem(categoryIndex, itemIndex, dir)}
             onRequestDeleteItem={(itemIndex, itemLabel) => requestDeleteItem(categoryIndex, itemIndex, itemLabel)}

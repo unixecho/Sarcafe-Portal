@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { FileEdit, Package, Bell } from 'lucide-react'
+import { FileEdit, Package, Bell, MessageCircle } from 'lucide-react'
 import StatStrip from '@/components/StatStrip'
 import BranchSwitcher from '@/components/BranchSwitcher'
+import SheetShell from '@/components/SheetShell'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
@@ -17,6 +18,7 @@ const POLL_MS = 30_000
 const SIGNAL_ICONS: Record<string, typeof FileEdit> = {
   'menu-unpublished': FileEdit,
   'menu-out-of-stock': Package,
+  'feedback-new': MessageCircle,
 }
 
 type DashboardPayload = { stats: DashboardStats; signals: Signal[] }
@@ -32,6 +34,12 @@ export default function DashboardLive({
 }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
   const [data, setData] = useState<DashboardPayload>(initial)
+  // Confirmed fresh on every mount (i.e. every visit to the dashboard) —
+  // relying on "whichever branch was last remembered" is exactly the
+  // silent state that causes "which branch am I on" mistakes, especially
+  // with more than one person using the same login. A stats number is
+  // meaningless without knowing which branch it describes.
+  const [branchConfirmed, setBranchConfirmed] = useState(branches.length <= 1)
 
   const refresh = useCallback(async (forBranch: BranchSlug) => {
     try {
@@ -61,6 +69,34 @@ export default function DashboardLive({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <SheetShell open={!branchConfirmed} onClose={() => setBranchConfirmed(true)} labelledBy="branch-confirm-title">
+        <h2 id="branch-confirm-title" style={{ margin: '0 0 4px', fontSize: '1.05rem', fontWeight: 800 }}>
+          איזה סניף?
+        </h2>
+        <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>
+          המספרים והתראות שלמטה יתייחסו לסניף שתבחרו.
+        </p>
+        <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
+        <button
+          type="button"
+          className="press"
+          onClick={() => setBranchConfirmed(true)}
+          style={{
+            marginTop: 16,
+            width: '100%',
+            minHeight: 'var(--tap-min)',
+            borderRadius: 999,
+            border: 'none',
+            background: 'var(--neon)',
+            color: 'var(--bg)',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          המשך ל{branches.find((b) => b.slug === branch)?.name.he ?? 'לוח הבקרה'}
+        </button>
+      </SheetShell>
+
       <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
 
       <StatStrip stats={data.stats} />

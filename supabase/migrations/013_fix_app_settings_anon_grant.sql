@@ -1,0 +1,13 @@
+-- app_settings had RLS correctly scoped ("public settings are readable by
+-- anyone", qual: is_public) from day one, but anon was never actually
+-- GRANTed SELECT on the table itself — the same missing-grant class as
+-- customer_feedback and menu_versions (011_fix_publish_and_feedback_grants.sql).
+-- Confirmed live via a 401/42501 "permission denied for table app_settings"
+-- on every public readSetting() call (lib/settings/server.ts). Silent
+-- today only because readSetting() falls back to a safe default on any
+-- failure and today's defaults happen to match the stored values — but it
+-- means an owner turning OFF a public setting (menu_cart_enabled,
+-- customer_feedback_enabled) would never actually reach the public pages,
+-- since every read would keep silently falling back to the default
+-- instead of the real (now-different) value.
+grant select on public.app_settings to anon;

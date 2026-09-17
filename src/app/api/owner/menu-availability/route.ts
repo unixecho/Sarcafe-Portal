@@ -12,12 +12,17 @@ import type { MenuDoc } from '@/lib/menu/types'
 // and published jsonb atomically, so the public menu reflects it
 // immediately instead of waiting for the next unrelated Publish.
 
-const bodySchema = z.object({
-  branch: z.string(),
-  itemUid: z.string(),
-  typeUid: z.string().nullable().default(null),
-  available: z.boolean(),
-})
+const bodySchema = z
+  .object({
+    branch: z.string(),
+    itemUid: z.string(),
+    typeUid: z.string().nullable().default(null),
+    available: z.boolean().nullable().optional(),
+    quantity: z.number().int().min(0).nullable().optional(),
+  })
+  .refine((b) => b.available !== undefined || b.quantity !== undefined, {
+    message: 'Provide at least one of available or quantity.',
+  })
 
 function findLabel(doc: MenuDoc, itemUid: string, typeUid: string | null): string {
   for (const category of doc.categories) {
@@ -48,17 +53,23 @@ export const POST = apiRoute(async (request: NextRequest) => {
     p_menu_id: menu.id,
     p_item_uid: body.itemUid,
     p_type_uid: body.typeUid,
-    p_available: body.available,
+    p_available: body.available ?? null,
+    p_quantity: body.quantity ?? null,
   })
   if (error) throw BadRequest('Could not update availability.')
+
+  const summary =
+    body.quantity !== undefined && body.quantity !== null
+      ? `עדכן כמות (מהטאבלט): ${label} — ${body.quantity}`
+      : `${body.available ? 'סימן זמין (מהטאבלט)' : 'סימן אזל מהמלאי (מהטאבלט)'}: ${label}`
 
   await logMenuAudit(service, {
     actor: staff,
     branchId: menu.branch_id,
     menuId: menu.id,
     action: 'menu.availability',
-    summary: `${body.available ? 'סימן זמין (מהטאבלט)' : 'סימן אזל מהמלאי (מהטאבלט)'}: ${label}`,
-    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available },
+    summary,
+    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available, quantity: body.quantity },
   })
 
   return NextResponse.json({ ok: true })

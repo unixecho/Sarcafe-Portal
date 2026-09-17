@@ -17,6 +17,7 @@ type CategoryAccordionProps = {
   onMoveCategory: (dir: -1 | 1) => void
   onDeleteCategory: () => void
   onEditCategoryField: (field: 'icon' | 'he' | 'en' | 'ar', value: string) => void
+  onToggleLiveOnTablet: () => void
   onAddItem: () => void
   onMoveItem: (itemIndex: number, dir: -1 | 1) => void
   onRequestDeleteItem: (itemIndex: number, itemLabel: string) => void
@@ -39,6 +40,7 @@ export default function CategoryAccordion({
   onMoveCategory,
   onDeleteCategory,
   onEditCategoryField,
+  onToggleLiveOnTablet,
   onAddItem,
   onMoveItem,
   onRequestDeleteItem,
@@ -133,6 +135,34 @@ export default function CategoryAccordion({
               onChangeEn={(v) => onEditCategoryField('en', v)}
               onChangeAr={(v) => onEditCategoryField('ar', v)}
             />
+
+            <button
+              type="button"
+              className="press"
+              onClick={onToggleLiveOnTablet}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                width: '100%',
+                background: 'var(--bg)',
+                border: '1px solid var(--line-strong)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                color: 'var(--text)',
+                textAlign: 'start',
+              }}
+            >
+              <span>
+                <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600 }}>מנוהל מהטאבלט</span>
+                <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-faint)' }}>
+                  זמינות וכמות לקטגוריה הזו יתעדכנו מ&quot;זמינות בזמן אמת&quot;
+                </span>
+              </span>
+              <Switch on={category.liveOnTablet === true} />
+            </button>
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <IconButton label="הזזת הקטגוריה למעלה" disabled={index === 0} onClick={() => onMoveCategory(-1)}>
@@ -236,6 +266,15 @@ function ItemRow({
         >
           <Switch on={item.available !== false} />
         </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <BadgeToggle label="חדש" active={item.isNew === true} onClick={() => onEdit({ isNew: item.isNew !== true })} />
+        <BadgeToggle
+          label="כדאי לטעום"
+          active={item.recommended === true}
+          onClick={() => onEdit({ recommended: item.recommended !== true })}
+        />
       </div>
 
       <TranslationsDisclosure
@@ -448,6 +487,33 @@ function ItemTypesEditor({ types, onChange }: { types: MenuItemType[]; onChange:
         <Plus size={14} aria-hidden="true" /> הוספת סוג
       </button>
     </div>
+  )
+}
+
+/** A pill toggle for a menu badge ("חדש"/"כדאי לטעום") — a labeled chip
+ * rather than a Switch, since the label itself IS the badge shown on the
+ * public menu, and showing it here doubles as a preview of it. */
+function BadgeToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="press"
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        minHeight: 30,
+        padding: '0 10px',
+        borderRadius: 999,
+        border: `1px solid ${active ? 'var(--neon)' : 'var(--line-strong)'}`,
+        background: active ? 'rgba(255,122,69,0.14)' : 'transparent',
+        color: active ? 'var(--neon-soft)' : 'var(--text-faint)',
+        fontSize: '0.74rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
   )
 }
 

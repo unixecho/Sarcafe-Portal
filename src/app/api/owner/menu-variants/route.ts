@@ -4,7 +4,7 @@ import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireMenuEditor } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { allItemUids } from '@/lib/menu/variants'
-import { logMenuAudit } from '@/lib/menu/audit'
+import { logMenuAudit, resolveItemNames } from '@/lib/menu/audit'
 import type { MenuDoc } from '@/lib/menu/types'
 
 function variantLabel(name: unknown): string {
@@ -107,7 +107,11 @@ export const POST = apiRoute(async (request: NextRequest) => {
     menuId: menu.id,
     action: 'variant.create',
     summary: `יצר גרסת תפריט: ${variantLabel(body.name)}${body.activateNow ? ' (והפעיל אותה)' : ''}`,
-    detail: { variantId: variant.id, excludedCount: body.excludedUids.length },
+    detail: {
+      variantId: variant.id,
+      excludedNames: resolveItemNames(menu.draft as MenuDoc, body.excludedUids),
+      includedCount: allUids.size - body.excludedUids.length,
+    },
   })
 
   return NextResponse.json({ variant })

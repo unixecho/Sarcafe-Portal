@@ -78,11 +78,35 @@ function itemLabel(item: MenuItem): string {
   return item.he || item.en || item.ar || 'פריט'
 }
 
+/** Resolves a set of item uids (e.g. a variant's excluded_uids) to their
+ *  display names against a menu doc, for an audit entry that must read as
+ *  "which items," not a bare count or a uid list. Silently drops any uid
+ *  no longer in the doc (an item deleted after the variant referencing it
+ *  was created) rather than showing a raw id nobody can act on. */
+export function resolveItemNames(doc: MenuDoc, uids: string[]): string[] {
+  const items = flatItems(doc)
+  return uids.map((uid) => items.get(uid)).filter((item): item is MenuItem => !!item).map(itemLabel)
+}
+
+function priceLabel(price: MenuItem['price']): string {
+  if (price === null || price === undefined || price === '') return '—'
+  return String(price)
+}
+
 /** A short summary + structured detail for a draft save/publish — item
- *  add/remove counts, availability flips (name + before/after), category
- *  count delta. Never the full before/after doc: that's what raw jsonb
- *  detail is for on the rare occasion someone opens it, not what a summary
- *  line should try to be. */
+ *  add/remove counts, availability flips (name + before/after), price and
+ *  name edits on items untouched otherwise, category count delta. Never
+ *  the full before/after doc: that's what raw jsonb detail is for on the
+ *  rare occasion someone opens it, not what a summary line should try to
+ *  be.
+ *
+ *  Price/name are checked specifically (not a generic deep-equal over
+ *  every field) because they're the two edits an owner actually makes
+ *  without touching availability or the item list — before this, a plain
+ *  price tweak produced an empty diff, fell back to the "עדכון קל בתפריט"
+ *  placeholder summary, AND had nothing for auditRows() to expand: the
+ *  entry looked like an alert with no way to see what it was an alert
+ *  about. */
 export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: string; detail: Record<string, unknown> } {
   const beforeItems = flatItems(before)
   const afterItems = flatItems(after)
@@ -91,6 +115,8 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
   const removed = [...beforeItems.keys()].filter((uid) => !afterItems.has(uid))
 
   const availabilityFlips: { uid: string; name: string; from: boolean; to: boolean }[] = []
+  const priceChanges: { uid: string; name: string; from: string; to: string }[] = []
+  const renamed: { uid: string; from: string; to: string }[] = []
   for (const [uid, item] of afterItems) {
     const prev = beforeItems.get(uid)
     if (!prev) continue
@@ -98,6 +124,12 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
     const nextAvailable = item.available !== false
     if (prevAvailable !== nextAvailable) {
       availabilityFlips.push({ uid, name: itemLabel(item), from: prevAvailable, to: nextAvailable })
+    }
+    if (String(prev.price ?? '') !== String(item.price ?? '')) {
+      priceChanges.push({ uid, name: itemLabel(item), from: priceLabel(prev.price), to: priceLabel(item.price) })
+    }
+    if ((prev.he || '') !== (item.he || '') && (prev.he || prev.en || prev.ar)) {
+      renamed.push({ uid, from: itemLabel(prev), to: itemLabel(item) })
     }
   }
 
@@ -107,6 +139,8 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
   if (added.length) parts.push(`${added.length} פריטים נוספו`)
   if (removed.length) parts.push(`${removed.length} פריטים נמחקו`)
   if (availabilityFlips.length) parts.push(`${availabilityFlips.length} שינויי זמינות`)
+  if (priceChanges.length) parts.push(`${priceChanges.length} שינויי מחיר`)
+  if (renamed.length) parts.push(`${renamed.length} פריטים שונו שם`)
   if (categoryDelta > 0) parts.push(`${categoryDelta} קטגוריות נוספו`)
   if (categoryDelta < 0) parts.push(`${-categoryDelta} קטגוריות נמחקו`)
 
@@ -116,6 +150,8 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
       added: added.map((uid) => ({ uid, name: itemLabel(afterItems.get(uid)!) })),
       removed: removed.map((uid) => ({ uid, name: itemLabel(beforeItems.get(uid)!) })),
       availabilityFlips,
+      priceChanges,
+      renamed,
       categoryCountBefore: before.categories.length,
       categoryCountAfter: after.categories.length,
     },

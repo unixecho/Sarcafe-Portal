@@ -739,6 +739,43 @@ html[dir='rtl'] .menu-item-name {
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--line);
   padding-bottom: 4px;
+  /* Decoupled from the root page's directional push via its own named
+     view-transition group — without this the whole bar swept sideways
+     with the rest of the page on every navigation, reading as part of the
+     moving content instead of persistent app chrome (the way a native
+     navigation bar stays while only the page beneath it changes). Fades
+     in when a menu page is entered (no matching "old" element on the
+     portal) and fades out on the way back (no matching "new" element).
+     ⚠️ §4.14b: never animate an element carrying backdrop-filter with a
+     TRANSFORM — the blur would need recomputing every frame. Opacity-only
+     is the same exception the sheet scrim already relies on (§4.6): the
+     blurred region never moves or resizes, it only fades in place. */
+  view-transition-name: menu-header;
+}
+@keyframes menu-header-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes menu-header-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+::view-transition-new(menu-header) {
+  animation: menu-header-fade-in 0.32s var(--ease) both;
+}
+::view-transition-old(menu-header) {
+  animation: menu-header-fade-out 0.22s var(--ease) both;
+}
+::view-transition-group(menu-header) {
+  animation-duration: 0.32s;
+  animation-timing-function: var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(menu-header),
+  ::view-transition-old(menu-header),
+  ::view-transition-group(menu-header) {
+    animation: none !important;
+  }
 }
 
 /* Menu topbar — large centered title, back/language pinned to fixed
@@ -941,9 +978,46 @@ html[dir='rtl'] .menu-item-name {
    orange: the wall just made the case for leaving a review, this is a
    quieter close, not a second hero button competing with the first one. */
 .portal-cta-review {
+  position: relative;
+  overflow: hidden;
   border: 1px solid rgba(147, 163, 111, 0.35);
   background: linear-gradient(135deg, rgba(147, 163, 111, 0.22), var(--paper));
   box-shadow: 0 0 22px rgba(147, 163, 111, 0.16);
+}
+/* The periodic glint (BLUEPRINT.md §4.11) — the skeleton shimmer, slowed
+   and mostly idle so it reads as an invitation rather than a loading
+   state. Disabled while the button itself is disabled (no review link
+   yet) — a shimmering dead button invites a tap that does nothing. */
+.portal-cta-review::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.32) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: portal-cta-review-shimmer 4.2s var(--ease) infinite;
+  pointer-events: none;
+}
+.portal-cta-review[aria-disabled='true']::after {
+  animation-play-state: paused;
+  opacity: 0;
+}
+@keyframes portal-cta-review-shimmer {
+  0%,
+  58% {
+    transform: translateX(-130%);
+  }
+  82% {
+    transform: translateX(130%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-cta-review::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 /* ==========================================================================
@@ -1730,4 +1804,192 @@ html[dir='ltr'][data-nav='back'] .page-enter {
   html {
     scroll-behavior: auto;
   }
+}
+
+/* ==========================================================================
+   WheelPicker / TimeWheel — the iOS clock. Ported per BLUEPRINT.md §5.5.
+   ========================================================================== */
+.wheel-picker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: 0 24px;
+}
+/* One rail across the whole picker, the way iOS draws it — a per-column
+   band reads as two chips stapled around the digits. It sits UNDER the
+   numbers (z-index 0 vs 1 below), not on top of them. */
+.wheel-rail {
+  position: absolute;
+  inset-inline: 12px;
+  top: 50%;
+  height: 40px; /* WHEEL_ITEM_H */
+  transform: translateY(-50%);
+  border-radius: 10px;
+  background: rgba(255, 122, 69, 0.12);
+  border-block: 1px solid var(--line-strong);
+  pointer-events: none;
+  z-index: 0;
+}
+.wheel-scroll {
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* UP AND DOWN AND NOTHING ELSE. pan-y stops a slightly-diagonal drag
+     being read as a horizontal swipe and abandoning the dial mid-turn;
+     contain stops a flick that reaches the end from chaining into a
+     parent sheet and scrolling the form out from under the finger. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  cursor: grab;
+  user-select: none;
+  /* Ends fade so the column reads as a cylinder. NOT to zero —
+     neighbouring values stay legible, which is what makes it scannable. */
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), #000 34%, #000 66%, rgba(0, 0, 0, 0.22));
+}
+.wheel-scroll::-webkit-scrollbar {
+  display: none;
+}
+.wheel-scroll:active {
+  cursor: grabbing;
+}
+.wheel-scroll:focus-visible {
+  outline: 2px solid var(--neon-2);
+  outline-offset: 2px;
+}
+.wheel-item {
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.wheel-item[aria-selected='true'] {
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .wheel-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+/* ==========================================================================
+   Accessibility widget (BLUEPRINT.md §7.3) — every class here targets
+   #a11y-scope ONLY, never <html>/<body>. `filter` triggers the identical
+   containing-block behavior `transform` does (§4.14a): applying grayscale/
+   invert/contrast to the root would silently relocate every position:fixed
+   control on the site, this widget's own launcher/panel included — which
+   is exactly why layout.tsx mounts them outside the scope entirely.
+   ========================================================================== */
+#a11y-scope.a11y-font-1 {
+  font-size: 110%;
+}
+#a11y-scope.a11y-font-2 {
+  font-size: 125%;
+}
+#a11y-scope.a11y-font-3 {
+  font-size: 140%;
+}
+#a11y-scope.a11y-font-4 {
+  font-size: 150%;
+}
+
+/* Applied WITHOUT !important, unlike every other effect below — forcing it
+   everywhere collides with the several components that set a precise
+   inline lineHeight for icon+text alignment (e.g. CategoryAccordion's
+   IconButton, the menu's item rows). An honest partial fix, documented at
+   the point of use, not a silent no-op. */
+#a11y-scope.a11y-spacing-1 {
+  letter-spacing: 0.02em;
+  word-spacing: 0.05em;
+  line-height: 1.5;
+}
+#a11y-scope.a11y-spacing-2 {
+  letter-spacing: 0.04em;
+  word-spacing: 0.1em;
+  line-height: 1.65;
+}
+#a11y-scope.a11y-spacing-3 {
+  letter-spacing: 0.06em;
+  word-spacing: 0.16em;
+  line-height: 1.8;
+}
+
+#a11y-scope.a11y-contrast-high {
+  filter: contrast(1.5);
+}
+#a11y-scope.a11y-contrast-grayscale {
+  filter: grayscale(1);
+}
+#a11y-scope.a11y-contrast-invert {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+#a11y-scope.a11y-pause-animations *,
+#a11y-scope.a11y-pause-animations *::before,
+#a11y-scope.a11y-pause-animations *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+#a11y-scope.a11y-highlight-links a {
+  outline: 2px solid var(--neon-2) !important;
+  outline-offset: 1px !important;
+  background: rgba(87, 217, 192, 0.14) !important;
+}
+
+#a11y-scope.a11y-highlight-headings h1,
+#a11y-scope.a11y-highlight-headings h2,
+#a11y-scope.a11y-highlight-headings h3 {
+  outline: 2px dashed var(--neon-soft) !important;
+  outline-offset: 3px !important;
+}
+
+#a11y-scope.a11y-big-cursor,
+#a11y-scope.a11y-big-cursor * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2 L4 26 L11 20 L15 29 L19 27 L15 18 L23 18 Z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E")
+      4 2,
+    auto !important;
+}
+
+.a11y-launcher {
+  position: fixed;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  z-index: 40;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--neon-soft);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.a11y-reading-guide {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 40px;
+  background: rgba(255, 200, 0, 0.14);
+  border-top: 2px solid rgba(255, 200, 0, 0.75);
+  border-bottom: 2px solid rgba(255, 200, 0, 0.75);
+  pointer-events: none;
+  z-index: 39;
+  will-change: transform;
 }

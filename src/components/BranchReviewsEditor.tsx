@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, Star } from 'lucide-react'
 import Switch from '@/components/Switch'
+import SelectSheet from '@/components/SelectSheet'
 import { randomId } from '@/lib/menu/id'
 import type { PortalReview, PortalReviewsBlock, ReviewLang } from '@/lib/reviews'
 
@@ -12,13 +13,26 @@ import type { PortalReview, PortalReviewsBlock, ReviewLang } from '@/lib/reviews
 // save/notice chrome and the same add/reorder/delete interaction shape
 // CategoryAccordion already uses for menu items.
 
+const LANG_LABEL: Record<ReviewLang, string> = { he: 'עברית', en: 'English', ar: 'العربية' }
+const STAR_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n}★` }))
+
 export default function BranchReviewsEditor({ branchId, initial }: { branchId: string; initial: PortalReviewsBlock }) {
   const [block, setBlock] = useState(initial)
   const [saved, setSaved] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
 
-  const dirty = JSON.stringify(block) !== JSON.stringify(saved)
+  // The overall rating is never something an owner types in directly — it's
+  // the average of whichever reviews are currently toggled visible, same as
+  // Ayeka's live site. Falls back to the last saved rating (rather than 0)
+  // when nothing is visible, so deleting every review for a moment doesn't
+  // flash a "0-star business" number.
+  const visibleStars = block.items.filter((it) => it.visible !== false).map((it) => it.stars)
+  const computedRating = visibleStars.length
+    ? visibleStars.reduce((sum, n) => sum + n, 0) / visibleStars.length
+    : saved.rating
+
+  const dirty = JSON.stringify({ ...block, rating: computedRating }) !== JSON.stringify(saved)
 
   function updateItem(index: number, patch: Partial<PortalReview>) {
     setBlock((b) => ({ ...b, items: b.items.map((it, i) => (i === index ? { ...it, ...patch } : it)) }))
@@ -51,7 +65,7 @@ export default function BranchReviewsEditor({ branchId, initial }: { branchId: s
       const res = await fetch('/api/owner/branches', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId, reviews: { ...block, items: cleanItems } }),
+        body: JSON.stringify({ branchId, reviews: { ...block, rating: computedRating, items: cleanItems } }),
       })
       const payload = await res.json()
       if (!res.ok) {
@@ -71,19 +85,20 @@ export default function BranchReviewsEditor({ branchId, initial }: { branchId: s
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 10 }}>
-        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={labelStyle}>דירוג כללי</span>
-          <input
-            type="number"
-            min={0}
-            max={5}
-            step={0.1}
-            value={block.rating}
-            onChange={(e) => setBlock((b) => ({ ...b, rating: Number(e.target.value) }))}
+          {/* Not owner-editable — it's the average of the reviews currently
+              toggled visible below, same as Ayeka's live site. Curate which
+              reviews are shown and what stars they carry; the average
+              follows automatically. */}
+          <div
             className="ltr-isolate"
-            style={inputStyle}
-          />
-        </label>
+            style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text)' }}
+          >
+            <span style={{ fontWeight: 700 }}>{computedRating.toFixed(1)}</span>
+            <Star size={14} aria-hidden="true" fill="currentColor" strokeWidth={0} style={{ color: 'var(--neon-soft)' }} />
+          </div>
+        </div>
         <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={labelStyle}>מספר ביקורות (לתצוגה)</span>
           <input
@@ -109,26 +124,22 @@ export default function BranchReviewsEditor({ branchId, initial }: { branchId: s
               style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }}
             />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={item.stars}
-                onChange={(e) => updateItem(index, { stars: Number(e.target.value) })}
-                style={smallControlStyle}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>
-                    {n}★
-                  </option>
-                ))}
-              </select>
-              <select
+              <SelectSheet
+                label="דירוג"
+                placeholder="דירוג"
+                value={String(item.stars)}
+                options={STAR_OPTIONS}
+                onChange={(v) => updateItem(index, { stars: Number(v) })}
+                style={{ ...smallControlStyle, minWidth: 90 }}
+              />
+              <SelectSheet
+                label="שפת הביקורת"
+                placeholder="שפה"
                 value={item.lang}
-                onChange={(e) => updateItem(index, { lang: e.target.value as ReviewLang })}
-                style={smallControlStyle}
-              >
-                <option value="he">עברית</option>
-                <option value="en">English</option>
-                <option value="ar">العربية</option>
-              </select>
+                options={(Object.keys(LANG_LABEL) as ReviewLang[]).map((l) => ({ value: l, label: LANG_LABEL[l] }))}
+                onChange={(v) => updateItem(index, { lang: v as ReviewLang })}
+                style={{ ...smallControlStyle, minWidth: 110 }}
+              />
               <input
                 placeholder="הערה פנימית (לא מוצג באתר)"
                 value={item.author ?? ''}

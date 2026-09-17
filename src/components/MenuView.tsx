@@ -32,6 +32,7 @@ type MenuCopy = {
   soldOut: string
   switchBranch: string
   currentBranch: string
+  left: (n: number) => string
 }
 
 const T: Record<Lang, MenuCopy> = {
@@ -44,6 +45,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'אזל',
     switchBranch: 'החלפת סניף',
     currentBranch: 'סניף נוכחי',
+    left: (n) => `נותרו ${n}`,
   },
   en: {
     viewOnly: 'This menu is for display only — order and pay at the truck.',
@@ -54,6 +56,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'Sold out',
     switchBranch: 'Change branch',
     currentBranch: 'Current branch',
+    left: (n) => `${n} left`,
   },
   ar: {
     viewOnly: 'القائمة للعرض فقط — الطلب والدفع عند العربة.',
@@ -64,6 +67,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'نفدت الكمية',
     switchBranch: 'تغيير الفرع',
     currentBranch: 'الفرع الحالي',
+    left: (n) => `تبقّى ${n}`,
   },
 }
 
@@ -373,6 +377,11 @@ export default function MenuView({
                                 {t.soldOut}
                               </span>
                             )}
+                            {!soldOut && item.quantity !== undefined && (
+                              <span className="ltr-isolate" style={{ marginInlineStart: 8, fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 600 }}>
+                                {t.left(item.quantity)}
+                              </span>
+                            )}
                           </p>
                           {item.note && (
                             <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
@@ -398,6 +407,9 @@ export default function MenuView({
                                     {localized(type, lang)}
                                     {typeSoldOut && (
                                       <span style={{ marginInlineStart: 5, color: '#ff8a5c', fontWeight: 700 }}>· {t.soldOut}</span>
+                                    )}
+                                    {!typeSoldOut && type.quantity !== undefined && (
+                                      <span className="ltr-isolate" style={{ marginInlineStart: 5 }}>· {t.left(type.quantity)}</span>
                                     )}
                                   </li>
                                 )
@@ -436,8 +448,8 @@ export default function MenuView({
           {/* Same reachable spot the portal's footer gives it — WCAG 2.2
               3.2.6 Consistent Help wants one predictable place, not a
               second bespoke control per page. */}
-          <div style={{ marginTop: 4 }}>
-            <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branchSlug} variant="link" />
+          <div style={{ marginTop: 12 }}>
+            <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branchSlug} variant="card" />
           </div>
         </footer>
       </main>

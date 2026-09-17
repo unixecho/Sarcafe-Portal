@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
 import SelectSheet from '@/components/SelectSheet'
 import Switch from '@/components/Switch'
+import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 
 type BranchOption = { id: string; slug: string; name: { he?: string; en?: string; ar?: string } }
@@ -36,6 +37,7 @@ export default function StaffManager({
 }) {
   const [staff, setStaff] = useState<StaffRow[] | null>(null)
   const [scheduleMembers, setScheduleMembers] = useState<ScheduleMemberRow[]>([])
+  const [firstName, setFirstName] = useState('')
   const [email, setEmail] = useState('')
   const [badge, setBadge] = useState<Badge | ''>('')
   const [branchId, setBranchId] = useState<string>('')
@@ -43,6 +45,7 @@ export default function StaffManager({
   const [error, setError] = useState<string | null>(null)
   const [filterSlug, setFilterSlug] = useState<string>(initialBranchSlug)
   const [scheduleBusyKey, setScheduleBusyKey] = useState<string | null>(null)
+  const [emailPromptFor, setEmailPromptFor] = useState<(PromptRequest & { staffId: string }) | null>(null)
 
   const visibleStaff = useMemo(() => {
     if (!staff || !filterSlug) return staff
@@ -94,20 +97,26 @@ export default function StaffManager({
   }, [])
 
   async function invite() {
-    if (!email.trim()) return
+    if (!email.trim() && !firstName.trim()) return
     setInviting(true)
     setError(null)
     try {
       const res = await fetch('/api/owner/staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), badge: badge || null, branchId: branchId || null }),
+        body: JSON.stringify({
+          email: email.trim() || null,
+          firstName: firstName.trim() || null,
+          badge: badge || null,
+          branchId: branchId || null,
+        }),
       })
       const payload = await res.json()
       if (!res.ok) {
         setError(payload?.error?.message ?? 'שגיאה בהזמנה')
         return
       }
+      setFirstName('')
       setEmail('')
       setBadge('')
       setBranchId('')
@@ -115,6 +124,11 @@ export default function StaffManager({
     } finally {
       setInviting(false)
     }
+  }
+
+  function submitEmail(staffId: string, value: string) {
+    setEmailPromptFor(null)
+    patch(staffId, { email: value.trim() })
   }
 
   async function patch(id: string, body: Record<string, unknown>) {
@@ -151,10 +165,14 @@ export default function StaffManager({
         }}
       >
         <h2 style={{ margin: '0 0 10px', fontSize: '0.95rem', fontWeight: 700 }}>הזמנת איש/אשת צוות</h2>
+        <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
+          אפשר להוסיף לפי שם בלבד ולצרף אימייל בהמשך — לא חובה עכשיו.
+        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input placeholder="שם פרטי" value={firstName} onChange={(e) => setFirstName(e.target.value)} style={inputStyle} />
           <input
             type="email"
-            placeholder="אימייל Google של איש הצוות"
+            placeholder="אימייל Google (אפשר להוסיף בהמשך)"
             dir="ltr"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -194,7 +212,7 @@ export default function StaffManager({
             type="button"
             className="press"
             onClick={invite}
-            disabled={inviting || !email.trim()}
+            disabled={inviting || (!email.trim() && !firstName.trim())}
             style={{
               minHeight: 'var(--tap-min)',
               borderRadius: 999,
@@ -203,7 +221,7 @@ export default function StaffManager({
               color: 'var(--bg)',
               fontWeight: 700,
               cursor: 'pointer',
-              opacity: inviting || !email.trim() ? 0.6 : 1,
+              opacity: inviting || (!email.trim() && !firstName.trim()) ? 0.6 : 1,
             }}
           >
             {inviting ? 'שולח…' : '＋ הזמנה'}
@@ -278,12 +296,33 @@ export default function StaffManager({
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {row.display_name || row.email}
+                      {row.display_name || row.first_name || row.email || 'ללא שם'}
                     </p>
                     <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-faint)' }}>
                       {row.role === 'owner' ? 'בעלים' : badgeLabel(row.badge) || 'צוות'}
                       {row.branch_id && ` · ${branches.find((b) => b.id === row.branch_id)?.name.he ?? ''}`}
-                      {!row.claimed_at && ' · ממתין להתחברות'}
+                      {!row.email ? (
+                        <>
+                          {' · '}
+                          <button
+                            type="button"
+                            className="press"
+                            onClick={() =>
+                              setEmailPromptFor({
+                                staffId: row.id,
+                                title: 'הוספת אימייל',
+                                label: 'אימייל Google',
+                                submitLabel: 'שמירה',
+                              })
+                            }
+                            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--neon-2)', fontSize: 'inherit', cursor: 'pointer' }}
+                          >
+                            הוספת אימייל
+                          </button>
+                        </>
+                      ) : (
+                        !row.claimed_at && ' · ממתין להתחברות'
+                      )}
                     </p>
                   </div>
                   {row.active && targetBranchId && (
@@ -291,7 +330,7 @@ export default function StaffManager({
                       type="button"
                       role="switch"
                       aria-checked={schedulable}
-                      aria-label={`ניתן לשיבוץ במשמרות — ${row.display_name || row.email}`}
+                      aria-label={`ניתן לשיבוץ במשמרות — ${row.display_name || row.first_name || row.email || 'ללא שם'}`}
                       title="ניתן לשיבוץ במשמרות"
                       className="press"
                       disabled={busy}
@@ -324,6 +363,14 @@ export default function StaffManager({
           </div>
         )}
       </section>
+
+      <PromptSheet
+        request={emailPromptFor}
+        onCancel={() => setEmailPromptFor(null)}
+        onSubmit={(value) => {
+          if (emailPromptFor) submitEmail(emailPromptFor.staffId, value)
+        }}
+      />
     </div>
   )
 }

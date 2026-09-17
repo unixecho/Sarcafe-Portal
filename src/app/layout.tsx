@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import PageTransitions from '@/components/PageTransitions'
+import A11yWidget from '@/components/a11y/A11yWidget'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -31,6 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             repositioned or recolored by a visitor's own display
             preferences. See components/a11y. */}
         <div id="a11y-scope">{children}</div>
+        {/* Outside the scope on purpose — see its own file comment. */}
+        <A11yWidget />
       </body>
     </html>
   )

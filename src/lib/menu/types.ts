@@ -26,6 +26,18 @@ export type MenuItem = Localized & {
    * change: draft/published are jsonb, so this is purely a content shape
    * change, same philosophy as every other MenuItem field. */
   types?: MenuItemType[]
+  /** Ayeka-style menu badges — "חדש" / "כדאי לטעום". Independent of
+   * `available` ("אזל"), which already has its own badge treatment; an
+   * item can carry any combination. */
+  isNew?: boolean
+  recommended?: boolean
+  /** Live stock count, written only by the tablet page's set_availability()
+   * RPC (migration 012) — draft-and-published both, immediately, same as
+   * `available`. Absent means "not tracked here" (most items); present
+   * means the public menu should show it. Setting this to 0 also forces
+   * `available` false in the same write; raising it again does not
+   * auto-restore availability. */
+  quantity?: number
 }
 
 export type MenuItemType = Localized & {
@@ -40,6 +52,8 @@ export type MenuItemType = Localized & {
   /** false = sold out. Same draft/publish vs. live-tablet split as
    * MenuItem.available above. */
   available?: boolean
+  /** Same shape as MenuItem.quantity, same RPC, same rules. */
+  quantity?: number
 }
 
 export type MenuCategory = {
@@ -48,6 +62,13 @@ export type MenuCategory = {
   title: Localized
   note?: Localized
   items: MenuItem[]
+  /** Owner-set flag marking this category as one the tablet page
+   * (/owner/tablet, TabletAvailability.tsx) manages — Shakes/Pastries/
+   * Sandwiches/Cookies, not every category. A flag rather than matching
+   * category *names* because those are free-text and owner-edited; a
+   * stable id would work too but this reads directly off the doc with no
+   * extra lookup. */
+  liveOnTablet?: boolean
 }
 
 export type MenuDoc = {

@@ -24,8 +24,15 @@ export const GET = apiRoute(async () => {
   return NextResponse.json({ staff: data ?? [], scheduleMembers: scheduleMembers ?? [] })
 })
 
+// Email is optional at invite time — a name-only row can be created and
+// linked to a Google account later once the email is known (see PATCH
+// below). claim_staff_invite() (000_core_schema.sql) matches staff rows by
+// `lower(email) = lower(auth.users.email)`; a NULL email simply never
+// matches, so an unclaimed name-only row needs no special-casing there —
+// it just sits inert until an email is added.
 const inviteSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().nullable().default(null),
+  firstName: z.string().trim().min(1).nullable().default(null),
   role: z.enum(['staff', 'owner']).default('staff'),
   badge: z.string().nullable().default(null),
   branchId: z.string().uuid().nullable().default(null),
@@ -34,18 +41,17 @@ const inviteSchema = z.object({
 export const POST = apiRoute(async (request: NextRequest) => {
   await requireOwner()
   const body = inviteSchema.parse(await request.json())
+  if (!body.email && !body.firstName) throw BadRequest('Provide a name or an email.')
 
   const service = createServiceRoleClient()
-  const { data: existing } = await service
-    .from('staff')
-    .select('id')
-    .ilike('email', body.email)
-    .maybeSingle()
-  if (existing) throw BadRequest('An invite or account already exists for this email.')
+  if (body.email) {
+    const { data: existing } = await service.from('staff').select('id').ilike('email', body.email).maybeSingle()
+    if (existing) throw BadRequest('An invite or account already exists for this email.')
+  }
 
   const { data: staff, error } = await service
     .from('staff')
-    .insert({ email: body.email, role: body.role, badge: body.badge, branch_id: body.branchId })
+    .insert({ email: body.email, first_name: body.firstName, role: body.role, badge: body.badge, branch_id: body.branchId })
     .select()
     .single()
 
@@ -55,6 +61,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
 const patchSchema = z.object({
   id: z.string().uuid(),
+  email: z.string().email().optional(),
   role: z.enum(['staff', 'owner']).optional(),
   badge: z.string().nullable().optional(),
   branchId: z.string().uuid().nullable().optional(),
@@ -65,7 +72,14 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   await requireOwner()
   const body = patchSchema.parse(await request.json())
 
+  const service = createServiceRoleClient()
+
   const updates: Record<string, unknown> = {}
+  if (body.email) {
+    const { data: existing } = await service.from('staff').select('id').ilike('email', body.email).neq('id', body.id).maybeSingle()
+    if (existing) throw BadRequest('An invite or account already exists for this email.')
+    updates.email = body.email
+  }
   if (body.role) updates.role = body.role
   if (body.badge !== undefined) updates.badge = body.badge
   if (body.branchId !== undefined) updates.branch_id = body.branchId
@@ -79,7 +93,6 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
     if (body.active === false) updates.auth_user_id = null
   }
 
-  const service = createServiceRoleClient()
   const { error } = await service.from('staff').update(updates).eq('id', body.id)
   if (error) throw BadRequest('Could not update staff member.')
 

@@ -27,6 +27,18 @@ export function auditRows(entry: MenuAuditEntry): AuditRow[] {
     }
   }
 
+  if (Array.isArray(d.priceChanges)) {
+    for (const change of d.priceChanges as { name: string; from: string; to: string }[]) {
+      rows.push({ label: change.name, before: `₪${change.from}`, after: `₪${change.to}` })
+    }
+  }
+
+  if (Array.isArray(d.renamed)) {
+    for (const change of d.renamed as { from: string; to: string }[]) {
+      rows.push({ label: 'שם פריט שונה', before: change.from, after: change.to })
+    }
+  }
+
   if (isNamedList(d.added)) {
     for (const item of d.added) rows.push({ label: item.name, after: 'נוסף' })
   }
@@ -47,7 +59,18 @@ export function auditRows(entry: MenuAuditEntry): AuditRow[] {
     rows.push({ label: 'שדות שעודכנו', after: (d.fields as unknown[]).join(', ') })
   }
 
-  if (typeof d.excludedCount === 'number') {
+  if (Array.isArray(d.excludedNames)) {
+    const names = d.excludedNames as string[]
+    rows.push({
+      label: names.length ? `הוסתרו (${names.length})` : 'הוסתרו',
+      after: names.length ? names.join(', ') : 'אף פריט',
+    })
+    if (typeof d.includedCount === 'number') {
+      rows.push({ label: 'מוצגים', after: String(d.includedCount) })
+    }
+  } else if (typeof d.excludedCount === 'number') {
+    // Legacy shape from before excludedNames existed — a count is still
+    // better than nothing for an entry logged before this change shipped.
     rows.push({ label: 'פריטים מוסתרים בגרסה', after: String(d.excludedCount) })
   }
 

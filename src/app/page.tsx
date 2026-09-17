@@ -561,7 +561,7 @@ export default function PortalPage() {
           >
             {t.accessibility}
           </Link>
-          <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branch?.slug ?? null} variant="link" />
+          <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branch?.slug ?? null} variant="card" />
         </footer>
       </main>
     </PublicBackdrop>

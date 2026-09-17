@@ -1,7 +1,10 @@
 'use client'
 
 import { useId, useMemo, useState } from 'react'
+import { Check, ChevronDown } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
+import Switch from '@/components/Switch'
+import { TimeWheel } from '@/components/WheelPicker'
 import type { MenuDoc, MenuVariant } from '@/lib/menu/types'
 import { localized } from '@/lib/menu/types'
 
@@ -22,11 +25,26 @@ type VariantWizardProps = {
  * existing variant by default, never silently vanish from one nobody
  * re-checked. Ported concept from AyekaBar's VariantWizard.
  */
+function allUids(draft: MenuDoc): string[] {
+  return draft.categories.flatMap((c) => c.items.map((i) => i.uid).filter((u): u is string => !!u))
+}
+
 export default function VariantWizard({ open, onClose, branchSlug, draft, onCreated }: VariantWizardProps) {
   const titleId = useId()
   const [step, setStep] = useState<1 | 2>(1)
   const [name, setName] = useState({ he: '', en: '', ar: '' })
-  const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  // Starts with EVERYTHING excluded — the owner builds the variant up by
+  // picking what to include, category by category, rather than starting
+  // from "everything shown" and remembering to turn things off. This is a
+  // UI-default choice only: the wizard still submits excludedUids the same
+  // way either direction, so it doesn't touch the reason the underlying
+  // variant STORAGE is itself subtractive (see the module doc above) — an
+  // item added to the menu after this variant already exists still isn't
+  // in this variant's excluded_uids either way, so it still appears.
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set(allUids(draft)))
+  // Every category starts collapsed — expanding one only reveals it, it
+  // never selects anything.
+  const [openCategoryIds, setOpenCategoryIds] = useState<Set<string>>(new Set())
   const [scheduleEnabled, setScheduleEnabled] = useState(false)
   const [days, setDays] = useState<Set<number>>(new Set())
   const [start, setStart] = useState('')
@@ -40,13 +58,23 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
   function reset() {
     setStep(1)
     setName({ he: '', en: '', ar: '' })
-    setExcluded(new Set())
+    setExcluded(new Set(allUids(draft)))
+    setOpenCategoryIds(new Set())
     setScheduleEnabled(false)
     setDays(new Set())
     setStart('')
     setEnd('')
     setActivateNow(false)
     setError(null)
+  }
+
+  function toggleOpen(id: string) {
+    setOpenCategoryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function close() {
@@ -66,7 +94,11 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
   function toggleCategory(uids: string[], allOff: boolean) {
     setExcluded((prev) => {
       const next = new Set(prev)
-      uids.forEach((uid) => (allOff ? next.delete(uid) : next.add(uid)))
+      // allOff is the TARGET state ("make everything in this category
+      // excluded"), so true adds to the excluded set and false removes —
+      // this was inverted before, which made "הסתרת הכל" show everything
+      // and "החזרת הכל" hide it.
+      uids.forEach((uid) => (allOff ? next.add(uid) : next.delete(uid)))
       return next
     })
   }
@@ -146,53 +178,97 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
             <div className="sheet-scroll" style={{ flex: 1 }}>
               {draft.categories.map((category) => {
                 const uids = category.items.map((i) => i.uid).filter((u): u is string => !!u)
-                const allOff = uids.length > 0 && uids.every((uid) => excluded.has(uid))
+                const selectedCount = uids.filter((uid) => !excluded.has(uid)).length
+                const state: 'all' | 'none' | 'some' = selectedCount === 0 ? 'none' : selectedCount === uids.length ? 'all' : 'some'
+                const isOpen = openCategoryIds.has(category.id)
+                const catLabel = localized(category.title, 'he') || 'קטגוריה'
                 return (
-                  <div key={category.id} style={{ marginBottom: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <strong style={{ fontSize: '0.88rem' }}>
-                        {category.icon} {localized(category.title, 'he')}
-                      </strong>
+                  <div key={category.id} style={{ marginBottom: 8, borderRadius: 12, border: '1px solid var(--line)', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px' }}>
+                      <TriStateCheckbox state={state} onClick={() => toggleCategory(uids, state === 'all')} label={`בחירת הכל — ${catLabel}`} />
                       <button
                         type="button"
                         className="press"
-                        onClick={() => toggleCategory(uids, !allOff)}
-                        style={{ background: 'none', border: 'none', color: 'var(--neon-2)', fontSize: '0.78rem', cursor: 'pointer' }}
+                        onClick={() => toggleOpen(category.id)}
+                        aria-expanded={isOpen}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          background: 'none',
+                          border: 'none',
+                          textAlign: 'start',
+                          cursor: 'pointer',
+                          padding: '4px 0',
+                          color: 'var(--text)',
+                        }}
                       >
-                        {allOff ? 'החזרת הכל' : 'הסתרת הכל'}
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.9rem' }}>
+                          {category.icon} {catLabel}
+                        </span>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-faint)' }}>
+                          {selectedCount}/{uids.length}
+                        </span>
+                        <ChevronDown
+                          size={16}
+                          aria-hidden="true"
+                          style={{ color: 'var(--text-faint)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }}
+                        />
                       </button>
                     </div>
-                    {category.items.map((item) => {
-                      const uid = item.uid
-                      if (!uid) return null
-                      const isOff = excluded.has(uid)
-                      return (
-                        <label
-                          key={uid}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            padding: '8px 4px',
-                            fontSize: '0.85rem',
-                            opacity: isOff ? 0.5 : 1,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <input type="checkbox" checked={!isOff} onChange={() => toggleItem(uid)} style={{ width: 18, height: 18 }} />
-                          {localized(item, 'he')}
-                        </label>
-                      )
-                    })}
+                    {isOpen && (
+                      <div className="rise" style={{ padding: '0 12px 10px 44px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {category.items.map((item) => {
+                          const uid = item.uid
+                          if (!uid) return null
+                          const checked = !excluded.has(uid)
+                          return (
+                            <button
+                              key={uid}
+                              type="button"
+                              role="checkbox"
+                              aria-checked={checked}
+                              className="press"
+                              onClick={() => toggleItem(uid)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                padding: '7px 4px',
+                                fontSize: '0.85rem',
+                                background: 'none',
+                                border: 'none',
+                                textAlign: 'start',
+                                color: 'var(--text)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <ItemCheckbox checked={checked} />
+                              {localized(item, 'he')}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
 
               <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginTop: 4 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', marginBottom: 10 }}>
-                  <input type="checkbox" checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} />
-                  הפעלה אוטומטית לפי לוח זמנים שבועי
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: '0.85rem' }}>הפעלה אוטומטית לפי לוח זמנים שבועי</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={scheduleEnabled}
+                    className="press"
+                    onClick={() => setScheduleEnabled((v) => !v)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    <Switch on={scheduleEnabled} />
+                  </button>
+                </div>
                 {scheduleEnabled && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -224,16 +300,26 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
                         </button>
                       ))}
                     </div>
-                    <div className="ltr-isolate" style={{ display: 'flex', gap: 8 }}>
-                      <input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={inputStyle} />
-                      <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} style={inputStyle} />
+                    <div className="ltr-isolate" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
+                      <TimeWheel value={start || '00:00'} onChange={setStart} label="שעת התחלה" />
+                      <span aria-hidden="true" style={{ color: 'var(--text-faint)' }}>—</span>
+                      <TimeWheel value={end || '00:00'} onChange={setEnd} label="שעת סיום" />
                     </div>
                   </div>
                 )}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem' }}>
-                  <input type="checkbox" checked={activateNow} onChange={(e) => setActivateNow(e.target.checked)} />
-                  הצגה ללקוחות מיד עם השמירה
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.85rem' }}>הצגה ללקוחות מיד עם השמירה</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activateNow}
+                    className="press"
+                    onClick={() => setActivateNow((v) => !v)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    <Switch on={activateNow} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -261,6 +347,63 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
         )}
       </div>
     </SheetShell>
+  )
+}
+
+/** A category's "select all" control — tri-state (none/some/all), the
+ * exact shape Switch's own doc comment reserves for "a category with
+ * mixed items" (§5.4), but built as a checkbox rather than a switch since
+ * this multi-selects a LIST, not a single on/off setting. Border uses
+ * --line-interactive when unchecked — it's the control's entire graphical
+ * identity in that state (WCAG 1.4.11, §3.2 pass 3), same rule Switch's
+ * own off-track follows. */
+function TriStateCheckbox({ state, onClick, label }: { state: 'all' | 'none' | 'some'; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={state === 'some' ? 'mixed' : state === 'all'}
+      aria-label={label}
+      className="press"
+      onClick={onClick}
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: 7,
+        border: `1.5px solid ${state === 'none' ? 'var(--line-interactive)' : 'var(--neon)'}`,
+        background: state === 'none' ? 'transparent' : 'var(--neon)',
+        display: 'grid',
+        placeItems: 'center',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      {state === 'all' && <Check size={15} strokeWidth={3} aria-hidden="true" style={{ color: 'var(--bg)' }} />}
+      {state === 'some' && <span aria-hidden="true" style={{ width: 9, height: 2, borderRadius: 1, background: 'var(--bg)' }} />}
+    </button>
+  )
+}
+
+/** One item's checkbox inside an expanded category — decoration only; the
+ * whole row is the actual button (see the item's onClick above), same
+ * "the caller owns the semantics" split Switch itself uses. */
+function ItemCheckbox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        border: `1.5px solid ${checked ? 'var(--neon)' : 'var(--line-interactive)'}`,
+        background: checked ? 'var(--neon)' : 'transparent',
+        display: 'grid',
+        placeItems: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {checked && <Check size={14} strokeWidth={3} style={{ color: 'var(--bg)' }} />}
+    </span>
   )
 }
 
