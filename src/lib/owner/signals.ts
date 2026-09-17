@@ -8,6 +8,11 @@ export type Signal = {
   title: string
   detail?: string
   href?: string
+  /** True when `detail` can run long (a customer's own written message,
+   *  not a fixed-shape line the app itself composed) — DashboardLive
+   *  renders these collapsed-by-default with a toggle instead of the
+   *  plain always-visible detail line the other signals use. */
+  expandable?: boolean
 }
 
 /**
@@ -52,8 +57,8 @@ export async function readDashboardSignals(branchId: string): Promise<Signal[]> 
   }
 
   try {
-    const count = await readNewFeedbackCount(branchId)
-    if (count > 0) {
+    const feedback = await readNewFeedback(branchId)
+    if (feedback.count > 0) {
       // Bottom of the stack, same reasoning Ayeka's own feedback signal
       // documents: every other row describes something happening on the
       // floor right now, and a message that will still be there tomorrow
@@ -62,7 +67,14 @@ export async function readDashboardSignals(branchId: string): Promise<Signal[]> 
         id: 'feedback-new',
         rank: 15,
         icon: '💬',
-        title: count === 1 ? 'הודעת משוב חדשה אחת' : `${count} הודעות משוב חדשות`,
+        title: feedback.count === 1 ? 'הודעת משוב חדשה אחת' : `${feedback.count} הודעות משוב חדשות`,
+        // The most recent message itself, not just the count — a customer's
+        // own written text, so it can run long; DashboardLive collapses it
+        // behind a toggle (expandable: true) rather than showing it in full
+        // unconditionally the way the other signals' short, app-composed
+        // detail lines do.
+        detail: feedback.latestMessage ?? undefined,
+        expandable: true,
         href: '/owner/feedback',
       })
     }
@@ -73,15 +85,21 @@ export async function readDashboardSignals(branchId: string): Promise<Signal[]> 
   return signals.sort((a, b) => b.rank - a.rank)
 }
 
-async function readNewFeedbackCount(branchId: string): Promise<number> {
+async function readNewFeedback(branchId: string): Promise<{ count: number; latestMessage: string | null }> {
   const service = createServiceRoleClient()
   const { data: branch } = await service.from('branches').select('slug').eq('id', branchId).maybeSingle()
-  if (!branch) return 0
+  if (!branch) return { count: 0, latestMessage: null }
 
-  const { count } = await service
-    .from('customer_feedback')
-    .select('id', { count: 'exact', head: true })
-    .eq('branch_slug', branch.slug)
-    .eq('status', 'new')
-  return count ?? 0
+  const [{ count }, { data: latest }] = await Promise.all([
+    service.from('customer_feedback').select('id', { count: 'exact', head: true }).eq('branch_slug', branch.slug).eq('status', 'new'),
+    service
+      .from('customer_feedback')
+      .select('message')
+      .eq('branch_slug', branch.slug)
+      .eq('status', 'new')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+  return { count: count ?? 0, latestMessage: latest?.message ?? null }
 }

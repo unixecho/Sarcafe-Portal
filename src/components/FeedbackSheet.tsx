@@ -113,8 +113,16 @@ export default function FeedbackSheet({
           </button>
         </div>
       ) : (
-        <div>
-          <div style={{ paddingBottom: 4 }}>
+        // flex/column/minHeight:0 here (not just on .sheet-scroll below) is
+        // what actually lets .sheet-scroll's flex:1 do anything — .sheet-panel
+        // is the flex container, but THIS div is its one direct child, so
+        // without its own flex context the scroll region has no bounded
+        // parent to grow/shrink within and just grows to fit its content,
+        // pushing the button row below .sheet-panel's max-height with
+        // nothing to clip it. Confirmed live: the send/close buttons were
+        // cut off below the visible sheet on a real phone.
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: '1 1 auto' }}>
+          <div style={{ paddingBottom: 4, flex: '0 0 auto' }}>
             <h2 id={titleId} style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
               {t('title')}
             </h2>
@@ -228,7 +236,7 @@ export default function FeedbackSheet({
             )}
           </div>
 
-          <div style={{ paddingTop: 12, display: 'flex', gap: 8 }}>
+          <div style={{ paddingTop: 12, display: 'flex', gap: 8, flex: '0 0 auto' }}>
             <button type="button" className="press" onClick={onClose} style={{ ...secondaryBtn, flex: 1 }}>
               {t('close')}
             </button>

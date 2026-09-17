@@ -103,14 +103,16 @@ check('every emitted class across the full combination space is in ALL_A11Y_CLAS
 check('every class in ALL_A11Y_CLASSES was actually reachable', sawEveryClassAtLeastOnce.size === ALL_A11Y_CLASSES.length, `saw ${sawEveryClassAtLeastOnce.size}/${ALL_A11Y_CLASSES.length}`)
 
 // ---- applyPrefs — toggles cleanly removes classes no longer applicable ----
-section('applyPrefs — clean toggle, no leftover classes')
+section('applyPrefs — clean toggle, no leftover classes, correct target split')
 {
-  const fakeEl = { classList: { set: new Set(), toggle(cls, on) { on ? this.set.add(cls) : this.set.delete(cls) } } }
-  applyPrefs(fakeEl, { ...DEFAULT_A11Y_PREFS, fontScale: 3, contrast: 'invert', bigCursor: true })
-  const afterFirst = new Set(fakeEl.classList.set)
-  check('applies exactly the expected classes', afterFirst.has('a11y-font-3') && afterFirst.has('a11y-contrast-invert') && afterFirst.has('a11y-big-cursor'))
-  applyPrefs(fakeEl, DEFAULT_A11Y_PREFS)
-  check('resetting to defaults leaves no a11y-* class behind', fakeEl.classList.set.size === 0, `left over: ${[...fakeEl.classList.set]}`)
+  const makeFakeEl = () => ({ classList: { set: new Set(), toggle(cls, on) { on ? this.set.add(cls) : this.set.delete(cls) } } })
+  const scopeEl = makeFakeEl()
+  const htmlEl = makeFakeEl()
+  applyPrefs(scopeEl, htmlEl, { ...DEFAULT_A11Y_PREFS, fontScale: 3, contrast: 'invert', bigCursor: true })
+  check('font-scale class lands on the html target, not the scope', htmlEl.classList.set.has('a11y-font-3') && !scopeEl.classList.set.has('a11y-font-3'))
+  check('contrast/other classes land on the scope target, not html', scopeEl.classList.set.has('a11y-contrast-invert') && scopeEl.classList.set.has('a11y-big-cursor') && !htmlEl.classList.set.has('a11y-contrast-invert'))
+  applyPrefs(scopeEl, htmlEl, DEFAULT_A11Y_PREFS)
+  check('resetting to defaults leaves no a11y-* class behind on either target', scopeEl.classList.set.size === 0 && htmlEl.classList.set.size === 0, `left over: scope=${[...scopeEl.classList.set]} html=${[...htmlEl.classList.set]}`)
 }
 
 // ---- i18n completeness ------------------------------------------------------

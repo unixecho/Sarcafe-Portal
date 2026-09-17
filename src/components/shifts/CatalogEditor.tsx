@@ -235,7 +235,7 @@ function PresetList({ items, onSave }: { items: ShiftPreset[]; onSave: (v: Shift
                 </button>
               </div>
               {open && (
-                <div className="rise" style={{ padding: '4px 10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <div className="rise ltr-isolate" style={{ padding: '4px 10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                   <TimeWheel value={preset.startTime} onChange={(v) => update(preset.id, { startTime: v })} label="שעת התחלה" />
                   <span aria-hidden="true" style={{ color: 'var(--text-faint)' }}>—</span>
                   <TimeWheel value={preset.endTime} onChange={(v) => update(preset.id, { endTime: v })} label="שעת סיום" />

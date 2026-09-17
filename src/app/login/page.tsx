@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import AuthHandoff from '@/components/AuthHandoff'
+import AuthHandoff, { GoogleG } from '@/components/AuthHandoff'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
 
@@ -81,7 +81,7 @@ export default function LoginPage() {
               cursor: 'pointer',
             }}
           >
-            <span aria-hidden="true">G</span>
+            <GoogleG />
             המשך עם Google
           </button>
 

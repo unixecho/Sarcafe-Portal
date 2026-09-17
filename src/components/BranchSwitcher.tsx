@@ -15,12 +15,18 @@ export default function BranchSwitcher({
   value,
   onChange,
   extra,
+  disabled,
 }: {
   branches: Branch[]
   value: BranchSlug
   onChange: (slug: BranchSlug) => void
   /** e.g. EditorWorkspace's "+ add branch" tile, appended after the chips. */
   extra?: React.ReactNode
+  /** True while a caller is mid-fetch for the currently-selected branch —
+   *  blocks re-switching until that data actually lands, so a second tap
+   *  can't race the first and leave the page showing branch A's number
+   *  under branch B's chip. */
+  disabled?: boolean
 }) {
   function select(slug: BranchSlug) {
     setCurrentBranchCookie(slug)
@@ -28,7 +34,7 @@ export default function BranchSwitcher({
   }
 
   return (
-    <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', opacity: disabled ? 0.6 : 1 }}>
       {branches.map((b) => {
         const selected = b.slug === value
         return (
@@ -37,6 +43,7 @@ export default function BranchSwitcher({
             type="button"
             className="press"
             aria-pressed={selected}
+            disabled={disabled}
             onClick={() => select(b.slug)}
             style={{
               flex: '1 1 auto',
@@ -48,7 +55,7 @@ export default function BranchSwitcher({
               color: selected ? 'var(--neon-soft)' : 'var(--text)',
               fontWeight: 600,
               fontSize: '0.85rem',
-              cursor: 'pointer',
+              cursor: disabled ? 'default' : 'pointer',
             }}
           >
             {b.name.he}

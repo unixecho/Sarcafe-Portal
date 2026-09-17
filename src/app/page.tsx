@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import Link from 'next/link'
-import { prefersReducedMotion, runLocalTransition } from '@/lib/nav/viewTransition'
+import { useRouter } from 'next/navigation'
+import { prefersReducedMotion, runLocalTransition, navigateWithTransition, directionFor } from '@/lib/nav/viewTransition'
 import {
   MapPin,
   Car,
@@ -110,13 +111,39 @@ const T: Record<Lang, PortalCopy> = {
 
 const CURRENT_TAG: Record<Lang, string> = { he: 'סניף נוכחי', en: 'Current', ar: 'الحالي' }
 
+const LOGO_TAP_STAFF_ENTRANCE = 5
+const LOGO_TAP_WINDOW_MS = 600
+
 export default function PortalPage() {
+  const router = useRouter()
   const [lang, setLang] = useLanguage()
   const [branches, setBranches] = useState<Branch[] | null>(null)
   const [branchSlug, setBranchSlug] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [feedbackEnabled, setFeedbackEnabled] = useState(false)
+  const logoTapCount = useRef(0)
+  const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Every tap resets to the portal home instantly (branchSlug back to the
+  // picker) — never delayed waiting to see if more taps are coming, since
+  // "go home" must feel immediate on a single tap. 5 taps within the
+  // window additionally routes to the hidden staff entrance instead
+  // (already reachable via the "© Sarcafe" footer link — this is a second,
+  // discoverable-by-anyone-who-knows path, same idea).
+  function onLogoTap() {
+    setBranchSlug(null)
+    logoTapCount.current += 1
+    if (logoTapTimer.current) clearTimeout(logoTapTimer.current)
+    if (logoTapCount.current >= LOGO_TAP_STAFF_ENTRANCE) {
+      logoTapCount.current = 0
+      navigateWithTransition('/login', directionFor('/login'), () => router.push('/login'))
+      return
+    }
+    logoTapTimer.current = setTimeout(() => {
+      logoTapCount.current = 0
+    }, LOGO_TAP_WINDOW_MS)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -246,9 +273,15 @@ export default function PortalPage() {
             minHeight: 'calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 44px)',
           }}
         >
-          <div className="portal-hero-mark">
+          <button
+            type="button"
+            className="portal-hero-mark press"
+            onClick={onLogoTap}
+            aria-label={t.welcome}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+          >
             <LogoMark size={92} />
-          </div>
+          </button>
 
           {!branch ? (
             <section

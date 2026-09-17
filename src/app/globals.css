@@ -388,6 +388,15 @@ body {
   margin: 0 auto 14px;
 }
 .sheet-scroll {
+  /* flex: 1 belongs here, not on each caller — a sheet whose top-level
+     children aren't [fixed header, .sheet-scroll, fixed footer] all as
+     DIRECT children of .sheet-panel (no extra wrapping div breaking the
+     flex chain) grows past .sheet-panel's max-height with nothing to
+     clip it, pushing a footer's buttons below the visible sheet. Every
+     consumer wanting this needing to remember an inline flex:1 override
+     is exactly how that happened (FeedbackSheet never did; confirmed live
+     as a cut-off send button on a real phone). */
+  flex: 1 1 auto;
   overflow-y: auto;
   min-height: 0;
   display: flex;
@@ -1811,6 +1820,14 @@ html[dir='ltr'][data-nav='back'] .page-enter {
    ========================================================================== */
 .wheel-picker {
   position: relative;
+  /* A numeric control (hour column, then minute column) reads left-to-right
+     even on an RTL page, same reasoning as .price's isolation — baked in
+     here rather than relying on every call site to remember an
+     `ltr-isolate` wrapper, which is exactly how this shipped broken: two
+     of three TimeWheel call sites forgot it, and under RTL a flex row's
+     children lay out right-to-left by default, silently swapping the
+     hour and minute columns. */
+  direction: ltr;
   display: flex;
   justify-content: center;
   gap: 16px;
@@ -1891,16 +1908,22 @@ html[dir='ltr'][data-nav='back'] .page-enter {
    control on the site, this widget's own launcher/panel included — which
    is exactly why layout.tsx mounts them outside the scope entirely.
    ========================================================================== */
-#a11y-scope.a11y-font-1 {
+/* On <html>, not #a11y-scope — rem is always relative to the root element
+   specifically, no matter how an intermediate ancestor is scoped, and this
+   codebase's type scale is rem-based throughout. font-size isn't one of
+   the properties that creates a position:fixed containing block
+   (transform/filter/perspective/…), so this carries none of §4.14a's risk
+   the way putting a filter on <html> would. */
+html.a11y-font-1 {
   font-size: 110%;
 }
-#a11y-scope.a11y-font-2 {
+html.a11y-font-2 {
   font-size: 125%;
 }
-#a11y-scope.a11y-font-3 {
+html.a11y-font-3 {
   font-size: 140%;
 }
-#a11y-scope.a11y-font-4 {
+html.a11y-font-4 {
   font-size: 150%;
 }
 

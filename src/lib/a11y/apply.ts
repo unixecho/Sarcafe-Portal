@@ -6,7 +6,7 @@ const CONTRAST_CLASSES = ['a11y-contrast-high', 'a11y-contrast-grayscale', 'a11y
 const OTHER_CLASSES = ['a11y-pause-animations', 'a11y-highlight-links', 'a11y-highlight-headings', 'a11y-big-cursor'] as const
 
 /** Every class classesFor() can ever emit, in one place — the provider
- *  diffs the scope element against this exact list to know what to
+ *  diffs the target elements against this exact list to know what to
  *  remove, so a drift here is a class that gets added and never cleaned
  *  up. scripts/check-a11y.mjs loops every combination of the boolean
  *  flags and asserts nothing outside this list is ever produced
@@ -14,9 +14,23 @@ const OTHER_CLASSES = ['a11y-pause-animations', 'a11y-highlight-links', 'a11y-hi
  *  small"). */
 export const ALL_A11Y_CLASSES: readonly string[] = [...FONT_SCALE_CLASSES, ...SPACING_CLASSES, ...CONTRAST_CLASSES, ...OTHER_CLASSES]
 
-export function classesFor(prefs: A11yPrefs): string[] {
+/** Font scale specifically goes on <html>, everything else on #a11y-scope
+ *  — the one deliberate exception to "never <html>/<body>." This
+ *  codebase's type scale is rem-based throughout (verified: MenuView,
+ *  CategoryAccordion, the cart, all of it), and `rem` is ALWAYS relative
+ *  to the root element's font-size, full stop — no intermediate ancestor,
+ *  however it's scoped, can change what rem resolves against. Setting it
+ *  on #a11y-scope compiled and shipped but visibly did nothing (confirmed
+ *  live on a real phone). `font-size` isn't in the small set of
+ *  properties that create a containing block for position:fixed
+ *  (transform/filter/perspective/…), so unlike the filter-based contrast
+ *  modes, putting it on <html> carries none of §4.14a's risk. */
+export function htmlClassesFor(prefs: A11yPrefs): string[] {
+  return prefs.fontScale > 0 ? [FONT_SCALE_CLASSES[prefs.fontScale - 1]!] : []
+}
+
+export function scopeClassesFor(prefs: A11yPrefs): string[] {
   const classes: string[] = []
-  if (prefs.fontScale > 0) classes.push(FONT_SCALE_CLASSES[prefs.fontScale - 1]!)
   if (prefs.spacing > 0) classes.push(SPACING_CLASSES[prefs.spacing - 1]!)
   if (prefs.contrast !== 'default') classes.push(`a11y-contrast-${prefs.contrast}` as (typeof CONTRAST_CLASSES)[number])
   if (prefs.pauseAnimations) classes.push('a11y-pause-animations')
@@ -26,16 +40,24 @@ export function classesFor(prefs: A11yPrefs): string[] {
   return classes
 }
 
-/** Applies (and un-applies) the computed classes on the given element —
- *  #a11y-scope, and ONLY #a11y-scope. Never <html>/<body>: `filter`
- *  triggers the identical containing-block behavior `transform` does
- *  (BLUEPRINT.md §4.14a) — putting it on the root would silently
- *  relocate every position:fixed control on the site, this widget's own
- *  launcher/panel included, which is exactly why those are mounted
- *  outside the scope entirely. */
-export function applyPrefs(el: HTMLElement, prefs: A11yPrefs): void {
-  const next = new Set(classesFor(prefs))
-  for (const cls of ALL_A11Y_CLASSES) {
+/** Kept for the harness's exhaustive-enumeration pass — the union of both
+ *  targets' output, since ALL_A11Y_CLASSES tracks everything either one
+ *  can ever emit regardless of which element it lands on. */
+export function classesFor(prefs: A11yPrefs): string[] {
+  return [...htmlClassesFor(prefs), ...scopeClassesFor(prefs)]
+}
+
+function setClasses(el: HTMLElement, wanted: string[], universe: readonly string[]): void {
+  const next = new Set(wanted)
+  for (const cls of universe) {
     el.classList.toggle(cls, next.has(cls))
   }
+}
+
+/** Applies (and un-applies) the computed classes across both targets —
+ *  font scale on documentElement (<html>), everything else on
+ *  #a11y-scope. See htmlClassesFor()'s comment for why the split exists. */
+export function applyPrefs(scopeEl: HTMLElement, htmlEl: HTMLElement, prefs: A11yPrefs): void {
+  setClasses(htmlEl, htmlClassesFor(prefs), FONT_SCALE_CLASSES)
+  setClasses(scopeEl, scopeClassesFor(prefs), ALL_A11Y_CLASSES.filter((c) => !(FONT_SCALE_CLASSES as readonly string[]).includes(c)))
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
 import Switch from '@/components/Switch'
 import { TimeWheel } from '@/components/WheelPicker'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
@@ -80,11 +81,36 @@ export default function ManagerPanel() {
     db?.settings ?? EMPTY_SETTINGS,
     (p) => dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: p }),
   )
+  const [openDayOverride, setOpenDayOverride] = useState<number | null>(null)
+
   if (!db) return null
 
   function toggleWorkingDay(day: number) {
     const next = settings.workingDays.includes(day) ? settings.workingDays.filter((d) => d !== day) : [...settings.workingDays, day].sort()
     patch({ workingDays: next })
+  }
+
+  // Friday/Saturday running short hours is the whole reason this exists —
+  // dayHours (already in the settings shape and already read by
+  // lib/shifts/config.ts's hoursForDay(), just never had an editor) is a
+  // sparse override map, so a day with no entry simply falls back to the
+  // global openTime/closeTime above. Adding an override seeds it FROM the
+  // current global hours (a sensible starting point to then shorten),
+  // rather than an empty "00:00" nobody would recognize as "not set yet."
+  function addDayOverride(day: number) {
+    patch({ dayHours: { ...settings.dayHours, [day]: { open: settings.openTime, close: settings.closeTime } } })
+    setOpenDayOverride(day)
+  }
+  function updateDayOverride(day: number, fields: Partial<{ open: string; close: string }>) {
+    const current = settings.dayHours[day]
+    if (!current) return
+    patch({ dayHours: { ...settings.dayHours, [day]: { ...current, ...fields } } })
+  }
+  function removeDayOverride(day: number) {
+    const next = { ...settings.dayHours }
+    delete next[day]
+    patch({ dayHours: next })
+    if (openDayOverride === day) setOpenDayOverride(null)
   }
 
   return (
@@ -122,7 +148,7 @@ export default function ManagerPanel() {
 
       <section>
         <h3 style={sectionTitleStyle}>שעות פעילות</h3>
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+        <div className="ltr-isolate" style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
           <div>
             <span style={{ ...labelStyle, textAlign: 'center', display: 'block' }}>פתיחה</span>
             <TimeWheel value={settings.openTime} onChange={(v) => patch({ openTime: v })} label="שעת פתיחה" />
@@ -131,6 +157,62 @@ export default function ManagerPanel() {
             <span style={{ ...labelStyle, textAlign: 'center', display: 'block' }}>סגירה</span>
             <TimeWheel value={settings.closeTime} onChange={(v) => patch({ closeTime: v })} label="שעת סגירה" />
           </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 style={sectionTitleStyle}>שעות מותאמות ליום ספציפי</h3>
+        <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
+          למשל שישי ושבת עם שעות קצרות יותר מהרגיל — יום ללא התאמה משתמש בשעות הפעילות הרגילות שלמעלה.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {Array.from({ length: 7 }, (_, d) => d).map((day) => {
+            const override = settings.dayHours[day]
+            const editing = openDayOverride === day
+            return (
+              <div key={day} style={{ borderRadius: 10, border: '1px solid var(--line-strong)', background: 'var(--bg)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
+                  <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }}>{weekdayLabel(day)}</span>
+                  {override ? (
+                    <>
+                      <span className="ltr-isolate" style={{ fontSize: '0.8rem', color: 'var(--neon-soft)', fontWeight: 700 }}>
+                        {override.open}–{override.close}
+                      </span>
+                      <IconBtn label="עריכת השעות" onClick={() => setOpenDayOverride(editing ? null : day)}>
+                        <Pencil size={14} />
+                      </IconBtn>
+                      <IconBtn label="הסרת ההתאמה — חזרה לשעות הרגילות" onClick={() => removeDayOverride(day)}>
+                        <Trash2 size={14} />
+                      </IconBtn>
+                    </>
+                  ) : (
+                    <>
+                      <span className="ltr-isolate" style={{ fontSize: '0.76rem', color: 'var(--text-faint)' }}>
+                        {settings.openTime}–{settings.closeTime}
+                      </span>
+                      <button
+                        type="button"
+                        className="press"
+                        onClick={() => addDayOverride(day)}
+                        style={{ minHeight: 32, padding: '0 10px', borderRadius: 999, border: '1px solid var(--line-strong)', background: 'var(--bg-elev-2)', color: 'var(--text-dim)', fontSize: '0.74rem', cursor: 'pointer' }}
+                      >
+                        שעות מותאמות
+                      </button>
+                    </>
+                  )}
+                </div>
+                {override && editing && (
+                  <div className="rise ltr-isolate" style={{ padding: '4px 10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                    <TimeWheel value={override.open} onChange={(v) => updateDayOverride(day, { open: v })} label="פתיחה" />
+                    <span aria-hidden="true" style={{ color: 'var(--text-faint)' }}>
+                      —
+                    </span>
+                    <TimeWheel value={override.close} onChange={(v) => updateDayOverride(day, { close: v })} label="סגירה" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </section>
 
@@ -194,6 +276,21 @@ export default function ManagerPanel() {
         <RosterPanel />
       </section>
     </div>
+  )
+}
+
+function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="press"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--line-strong)', background: 'var(--bg-elev-2)', color: 'var(--text)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}
+    >
+      {children}
+    </button>
   )
 }
 

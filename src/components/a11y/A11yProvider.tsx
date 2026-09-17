@@ -32,8 +32,8 @@ export default function A11yProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const el = document.getElementById(SCOPE_ID)
-    if (el) applyPrefs(el, prefs)
+    const scopeEl = document.getElementById(SCOPE_ID)
+    if (scopeEl) applyPrefs(scopeEl, document.documentElement, prefs)
     if (hydrated.current) savePrefs(prefs)
   }, [prefs])
 

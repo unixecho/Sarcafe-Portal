@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
+import { clearDashboardBranchConfirmed } from '@/lib/branches/current'
 
 export default function SignOutButton({ className }: { className?: string }) {
   const router = useRouter()
@@ -22,6 +23,7 @@ export default function SignOutButton({ className }: { className?: string }) {
         setBusy(false)
         return
       }
+      clearDashboardBranchConfirmed()
       router.push('/login')
       router.refresh()
     } catch {
