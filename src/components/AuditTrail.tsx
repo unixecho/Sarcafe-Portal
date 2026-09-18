@@ -24,6 +24,8 @@ const AUDIT_LABELS: Record<string, string> = {
   'menu.save': 'שמירת טיוטה',
   'menu.publish': 'פרסום',
   'menu.availability': 'עדכון זמינות',
+  'menu.item.add': 'הוספת פריט מהטאבלט',
+  'menu.item.remove': 'הסרת פריט מהטאבלט',
   'variant.create': 'יצירת גרסה',
   'variant.update': 'עדכון גרסה',
   'variant.delete': 'מחיקת גרסה',

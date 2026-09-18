@@ -1,9 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronLeft, Clock, Minus, Plus } from 'lucide-react'
+import { ChevronLeft, Clock, Minus, Plus, Trash2 } from 'lucide-react'
 import Switch from '@/components/Switch'
+import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { ensureUids } from '@/lib/menu/variants'
+import { randomId } from '@/lib/menu/id'
 import { resolveCategoryIcon } from '@/lib/menu/icons'
 import { useMenuRealtime } from '@/lib/menu/useMenuRealtime'
 import type { MenuCategory, MenuDoc, MenuItem, MenuItemType } from '@/lib/menu/types'
@@ -28,6 +30,7 @@ export default function TabletAvailability({ branchSlug, isOwner }: { branchSlug
   const [withinOperatingHours, setWithinOperatingHours] = useState(true)
   const [pending, setPending] = useState<Set<string>>(new Set())
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [confirmRequest, setConfirmRequest] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/owner/menu-variants?branch=${branchSlug}`)
@@ -98,6 +101,69 @@ export default function TabletAvailability({ branchSlug, isOwner }: { branchSlug
     }
   }
 
+  // Structural changes (add/remove an item) — same live, operating-hours-
+  // gated write path as patch() above (add_menu_item/remove_menu_item,
+  // migration 015), just for the item list itself rather than one item's
+  // fields. Optimistic the same way: update local state immediately, only
+  // reconcile against the server via load() if the request actually fails.
+  async function addItem(categoryId: string, name: string, price: string) {
+    const uid = randomId('i')
+    const newItem: MenuItem = { uid, he: name, ...(price ? { price } : {}) }
+
+    setDoc((prev) => {
+      if (!prev) return prev
+      const next = structuredClone(prev)
+      next.categories.find((c) => c.id === categoryId)?.items.push(newItem)
+      return next
+    })
+
+    try {
+      const res = await fetch('/api/owner/menu-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: branchSlug, categoryId, uid, name, price: price || undefined }),
+      })
+      if (!res.ok) throw new Error('request failed')
+    } catch {
+      load()
+    }
+  }
+
+  async function removeItem(itemUid: string) {
+    setDoc((prev) => {
+      if (!prev) return prev
+      const next = structuredClone(prev)
+      for (const category of next.categories) {
+        category.items = category.items.filter((i) => i.uid !== itemUid)
+      }
+      return next
+    })
+
+    try {
+      const res = await fetch('/api/owner/menu-items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch: branchSlug, itemUid }),
+      })
+      if (!res.ok) throw new Error('request failed')
+    } catch {
+      load()
+    }
+  }
+
+  // A removed item's price/translations/notes (if it has any, from the full
+  // desktop editor) go with it — that's a real loss, not just an
+  // availability flip, so this asks first instead of acting on one tap.
+  function requestRemoveItem(itemUid: string, label: string) {
+    setConfirmRequest({
+      title: 'הסרת פריט?',
+      body: `"${label}" יוסר מהתפריט אצל הלקוחות.`,
+      confirmLabel: 'הסרה',
+      danger: true,
+      onYes: () => removeItem(itemUid),
+    })
+  }
+
   if (!doc) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -163,8 +229,24 @@ export default function TabletAvailability({ branchSlug, isOwner }: { branchSlug
       {!activeCategory ? (
         <CategoryGrid categories={tabletCategories} onSelect={setSelectedCategoryId} />
       ) : (
-        <CategoryDetail category={activeCategory} pending={pending} onPatch={patch} onBack={() => setSelectedCategoryId(null)} />
+        <CategoryDetail
+          category={activeCategory}
+          pending={pending}
+          onPatch={patch}
+          onBack={() => setSelectedCategoryId(null)}
+          onAddItem={(name, price) => addItem(activeCategory.id, name, price)}
+          onRequestRemove={requestRemoveItem}
+        />
       )}
+
+      <ConfirmSheet
+        request={confirmRequest}
+        onCancel={() => setConfirmRequest(null)}
+        onConfirm={() => {
+          confirmRequest?.onYes()
+          setConfirmRequest(null)
+        }}
+      />
     </div>
   )
 }
@@ -256,11 +338,15 @@ function CategoryDetail({
   pending,
   onPatch,
   onBack,
+  onAddItem,
+  onRequestRemove,
 }: {
   category: MenuCategory
   pending: Set<string>
   onPatch: (itemUid: string, typeUid: string | null, patch: { available?: boolean; quantity?: number }) => void
   onBack: () => void
+  onAddItem: (name: string, price: string) => Promise<void>
+  onRequestRemove: (itemUid: string, label: string) => void
 }) {
   const Icon = resolveCategoryIcon(category.icon)
   return (
@@ -291,22 +377,115 @@ function CategoryDetail({
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, alignContent: 'start' }}>
+        <AddItemCard onAdd={onAddItem} />
         {category.items.map((item, itemIndex) => (
-          <ItemCard key={item.uid ?? itemIndex} item={item} pending={pending} onPatch={onPatch} />
+          <ItemCard key={item.uid ?? itemIndex} item={item} pending={pending} onPatch={onPatch} onRequestRemove={onRequestRemove} />
         ))}
       </div>
     </div>
   )
 }
 
+// Deliberately just a name and an optional price — fast enough to fill in
+// between transactions. Renaming, translations, notes, and images stay in
+// the full desktop editor; this is the tablet's own fast path for "a new
+// sandwich filling just became a thing," not a second menu editor.
+function AddItemCard({ onAdd }: { onAdd: (name: string, price: string) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [price, setPrice] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed || busy) return
+    setBusy(true)
+    try {
+      await onAdd(trimmed, price.trim())
+      setName('')
+      setPrice('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      style={{
+        padding: '14px 16px',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px dashed var(--line-strong)',
+        background: 'var(--bg-elev)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        placeholder="שם פריט חדש"
+        disabled={busy}
+        style={addInputStyle}
+      />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={price}
+          onChange={(event) => setPrice(event.target.value)}
+          placeholder="מחיר (לא חובה)"
+          inputMode="decimal"
+          disabled={busy}
+          style={{ ...addInputStyle, flex: 1 }}
+        />
+        <button
+          type="submit"
+          className="press"
+          disabled={!name.trim() || busy}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '0 16px',
+            borderRadius: 12,
+            border: 'none',
+            background: 'var(--neon)',
+            color: 'var(--bg)',
+            fontWeight: 700,
+            fontSize: '0.88rem',
+            cursor: !name.trim() || busy ? 'default' : 'pointer',
+            opacity: !name.trim() || busy ? 0.6 : 1,
+            flexShrink: 0,
+          }}
+        >
+          <Plus size={16} aria-hidden="true" /> הוספה
+        </button>
+      </div>
+    </form>
+  )
+}
+
+const addInputStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: 'var(--tap-min)',
+  borderRadius: 10,
+  border: '1px solid var(--line-strong)',
+  background: 'var(--bg)',
+  color: 'var(--text)',
+  padding: '0 12px',
+  fontSize: '0.9rem',
+}
+
 function ItemCard({
   item,
   pending,
   onPatch,
+  onRequestRemove,
 }: {
   item: MenuItem
   pending: Set<string>
   onPatch: (itemUid: string, typeUid: string | null, patch: { available?: boolean; quantity?: number }) => void
+  onRequestRemove: (itemUid: string, label: string) => void
 }) {
   return (
     <div style={{ padding: '14px 16px', borderRadius: 'var(--radius-lg)', background: 'var(--bg-elev)', border: '1px solid var(--line)' }}>
@@ -326,6 +505,23 @@ function ItemCard({
           disabled={!item.uid || pending.has(`${item.uid}:`)}
           onClick={() => item.uid && onPatch(item.uid, null, { available: item.available === false })}
         />
+        <button
+          type="button"
+          aria-label="הסרת פריט"
+          disabled={!item.uid}
+          onClick={() => item.uid && onRequestRemove(item.uid, item.he || 'פריט')}
+          className="press"
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 8,
+            color: 'var(--text-faint)',
+            cursor: item.uid ? 'pointer' : 'default',
+            flexShrink: 0,
+          }}
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
       </div>
 
       {!!item.types?.length && (

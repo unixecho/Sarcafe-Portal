@@ -1,12 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { apiRoute, BadRequest, Forbidden, NotFound } from '@/lib/http/errors'
-import { requireMenuEditor } from '@/lib/owner/guard'
-import { createServiceRoleClient } from '@/lib/supabase/server'
+import { apiRoute, BadRequest } from '@/lib/http/errors'
 import { logMenuAudit } from '@/lib/menu/audit'
 import { broadcastMenuUpdated } from '@/lib/menu/realtime'
-import { isWithinOperatingHours } from '@/lib/shifts/hours'
-import { isOp } from '@/lib/staff/access'
+import { resolveTabletWrite } from '@/lib/menu/tablet-write'
 import type { MenuDoc } from '@/lib/menu/types'
 
 // The tablet editor's write path — deliberately NOT the draft/publish
@@ -47,30 +44,17 @@ function findLabel(doc: MenuDoc, itemUid: string, typeUid: string | null): strin
 
 export const POST = apiRoute(async (request: NextRequest) => {
   const body = bodySchema.parse(await request.json())
-  const service = createServiceRoleClient()
+  const { service, menuId, branchId, draft, staff, publish } = await resolveTabletWrite(body.branch)
 
-  const { data: menu } = await service
-    .from('menus')
-    .select('id, branch_id, draft')
-    .eq('slug', body.branch)
-    .maybeSingle()
-  if (!menu) throw NotFound('Menu not found for this branch.')
-
-  const staff = await requireMenuEditor(menu.branch_id)
-  const withinHours = await isWithinOperatingHours(menu.branch_id)
-  if (!withinHours && !isOp(staff)) {
-    throw Forbidden('Live availability can only be edited during operating hours.')
-  }
-
-  const label = findLabel(menu.draft as MenuDoc, body.itemUid, body.typeUid)
+  const label = findLabel(draft, body.itemUid, body.typeUid)
 
   const { error } = await service.rpc('set_availability', {
-    p_menu_id: menu.id,
+    p_menu_id: menuId,
     p_item_uid: body.itemUid,
     p_type_uid: body.typeUid,
     p_available: body.available ?? null,
     p_quantity: body.quantity ?? null,
-    p_publish: withinHours,
+    p_publish: publish,
   })
   if (error) throw BadRequest('Could not update availability.')
 
@@ -78,18 +62,18 @@ export const POST = apiRoute(async (request: NextRequest) => {
     body.quantity !== undefined && body.quantity !== null
       ? `עדכן כמות (מהטאבלט): ${label} — ${body.quantity}`
       : `${body.available ? 'סימן זמין (מהטאבלט)' : 'סימן אזל מהמלאי (מהטאבלט)'}: ${label}`
-  const summary = withinHours ? summaryBase : `${summaryBase} (מחוץ לשעות הפעילות — לא פורסם ללקוחות)`
+  const summary = publish ? summaryBase : `${summaryBase} (מחוץ לשעות הפעילות — לא פורסם ללקוחות)`
 
   await logMenuAudit(service, {
     actor: staff,
-    branchId: menu.branch_id,
-    menuId: menu.id,
+    branchId,
+    menuId,
     action: 'menu.availability',
     summary,
-    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available, quantity: body.quantity, published: withinHours },
+    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available, quantity: body.quantity, published: publish },
   })
 
-  if (withinHours) await broadcastMenuUpdated(body.branch)
+  if (publish) await broadcastMenuUpdated(body.branch)
 
-  return NextResponse.json({ ok: true, published: withinHours })
+  return NextResponse.json({ ok: true, published: publish })
 })
