@@ -19,5 +19,11 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const menu = await fetchMenu(branchSlug)
   if (!menu) throw NotFound('Menu not found for this branch.')
 
-  return NextResponse.json({ categories: menu.categories })
+  // Self-serve categories (ice cream, fridge drinks — excludeFromPos,
+  // set in the menu editor) are real menu content customers still see on
+  // the public menu, but staff never ring them up: those are grabbed
+  // straight from the truck's fridge, not made to order by the barista.
+  const orderableCategories = menu.categories.filter((c) => c.excludeFromPos !== true)
+
+  return NextResponse.json({ categories: orderableCategories })
 })

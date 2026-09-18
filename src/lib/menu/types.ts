@@ -69,6 +69,12 @@ export type MenuCategory = {
    * stable id would work too but this reads directly off the doc with no
    * extra lookup. */
   liveOnTablet?: boolean
+  /** Owner-set flag for a category that's self-serve at the truck (e.g.
+   * ice cream, fridge drinks) rather than made to order by the barista —
+   * excluded from the POS register's item picker (/api/orders/catalog)
+   * so staff can't accidentally ring up something a customer just grabs
+   * themselves, while the public menu keeps showing it normally. */
+  excludeFromPos?: boolean
 }
 
 export type MenuDoc = {

@@ -428,6 +428,12 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
                 if (cat) cat.liveOnTablet = cat.liveOnTablet !== true
               })
             }
+            onTogglePosExcluded={() =>
+              edit((doc) => {
+                const cat = doc.categories[categoryIndex]
+                if (cat) cat.excludeFromPos = cat.excludeFromPos !== true
+              })
+            }
             onAddItem={() => addItem(categoryIndex)}
             onMoveItem={(itemIndex, dir) => moveItem(categoryIndex, itemIndex, dir)}
             onRequestDeleteItem={(itemIndex, itemLabel) => requestDeleteItem(categoryIndex, itemIndex, itemLabel)}
