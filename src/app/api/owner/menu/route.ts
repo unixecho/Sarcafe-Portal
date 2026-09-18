@@ -4,6 +4,7 @@ import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireMenuEditor } from '@/lib/owner/guard'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { logMenuAudit, summarizeMenuDiff } from '@/lib/menu/audit'
+import { broadcastMenuUpdated } from '@/lib/menu/realtime'
 import type { MenuDoc } from '@/lib/menu/types'
 
 // Replaces MenuEditor.tsx's previous direct-browser-Supabase writes for
@@ -54,6 +55,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
       summary: `שמר טיוטת תפריט — ${summary}`,
       detail,
     })
+    await broadcastMenuUpdated(body.branch) // nudges the tablet page (reads draft) if it's open elsewhere
     return NextResponse.json({ ok: true })
   }
 
@@ -70,5 +72,6 @@ export const POST = apiRoute(async (request: NextRequest) => {
     detail,
   })
 
+  await broadcastMenuUpdated(body.branch)
   return NextResponse.json({ ok: true })
 })

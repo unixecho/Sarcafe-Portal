@@ -14,12 +14,22 @@ export const dynamic = 'force-dynamic'
 
 export default async function PublicMenuPage({ params }: { params: Promise<{ branch: string }> }) {
   const { branch } = await params
-  if (!(await getBranchBySlug(branch))) notFound()
+  const branchRow = await getBranchBySlug(branch)
+  if (!branchRow) notFound()
 
   const menu = await fetchMenu(branch)
   if (!menu) notFound()
 
   const [feedbackEnabled, cartEnabled] = await Promise.all([getCustomerFeedbackEnabled(), getMenuCartEnabled()])
 
-  return <MenuView branchSlug={branch as BranchSlug} initial={menu} feedbackEnabled={feedbackEnabled} cartEnabled={cartEnabled} />
+  return (
+    <MenuView
+      branchSlug={branch as BranchSlug}
+      initial={menu}
+      feedbackEnabled={feedbackEnabled}
+      cartEnabled={cartEnabled}
+      hoursToday={branchRow.hoursToday}
+      openNow={branchRow.openNow}
+    />
+  )
 }

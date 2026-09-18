@@ -69,6 +69,12 @@ export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSh
         name: { he: nameHe.trim(), en: nameEn.trim() },
         links: { navGoogleMaps: null, navWaze: null, navAppleMaps: null, instagram: null, review: null, bit: null },
         reviews: null,
+        // A brand-new branch has no shift_settings row yet (schedule
+        // settings are seeded lazily, the first time /owner/schedule loads
+        // for it) — same "unconfigured" fail-open default
+        // lib/branches/server.ts falls back to.
+        hoursToday: null,
+        openNow: true,
       })
       close()
     } catch {

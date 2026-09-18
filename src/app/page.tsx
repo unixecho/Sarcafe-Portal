@@ -28,7 +28,7 @@ import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import ReviewWall from '@/components/ReviewWall'
 import FeedbackButton from '@/components/FeedbackButton'
 import { normalizeReviews, PLACEHOLDER_BLOCK } from '@/lib/reviews'
-import type { Branch } from '@/lib/branches'
+import { hoursStatusLabel, type Branch } from '@/lib/branches'
 
 type Lang = 'he' | 'en' | 'ar'
 const PAYBOX_PHONE_NUMBER = '0507437395'
@@ -331,7 +331,9 @@ export default function PortalPage() {
                       >
                         <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
                           <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{b.name[lang] || b.name.he}</span>
-                          <small style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>{t.branchLabel}</small>
+                          <small className="ltr-isolate" style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>
+                            {hoursStatusLabel(b, lang)}
+                          </small>
                         </span>
                         {isCurrent && (
                           <span
@@ -382,6 +384,31 @@ export default function PortalPage() {
               <div className="rise" style={{ animationDelay: '60ms' }}>
                 <p style={{ margin: 0, color: 'var(--neon-soft)', fontSize: '0.8rem', fontWeight: 700 }}>{t.branchLabel}</p>
                 <h1 style={{ margin: '4px 0 6px', fontSize: '1.6rem', fontWeight: 800 }}>{branch.name[lang] || branch.name.he}</h1>
+                <p
+                  className="ltr-isolate"
+                  style={{
+                    margin: '0 0 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: branch.openNow ? 'var(--text-dim)' : 'var(--text-faint)',
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: branch.openNow ? 'var(--sage-soft)' : 'var(--text-faint)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  {hoursStatusLabel(branch, lang)}
+                </p>
                 <p style={{ margin: '0 0 16px', color: 'var(--text-dim)', fontSize: '0.85rem' }}>{t.quickLinks}</p>
               </div>
 

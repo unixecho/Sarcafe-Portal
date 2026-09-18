@@ -5,6 +5,7 @@ import { requireMenuEditor } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { allItemUids } from '@/lib/menu/variants'
 import { logMenuAudit, resolveItemNames } from '@/lib/menu/audit'
+import { isWithinOperatingHours } from '@/lib/shifts/hours'
 import type { MenuDoc } from '@/lib/menu/types'
 
 function variantLabel(name: unknown): string {
@@ -34,17 +35,21 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const service = createServiceRoleClient()
   await service.rpc('reap_expired_variants') // opportunistic housekeeping, never required for correctness
 
-  const { data: variants } = await service
-    .from('menu_variants')
-    .select('*')
-    .eq('menu_id', menu.id)
-    .order('sort_order', { ascending: true })
+  const [{ data: variants }, withinOperatingHours] = await Promise.all([
+    service.from('menu_variants').select('*').eq('menu_id', menu.id).order('sort_order', { ascending: true }),
+    isWithinOperatingHours(menu.branch_id),
+  ])
 
   return NextResponse.json({
     menuId: menu.id,
     activeVariantId: menu.active_variant_id,
     draft: menu.draft as MenuDoc,
     variants: variants ?? [],
+    // Read by TabletAvailability.tsx to show/hide its "outside operating
+    // hours" banner — the same check POST /api/owner/menu-availability uses
+    // to decide draft-only vs. draft+published, so the banner and the
+    // actual write behavior can never disagree.
+    withinOperatingHours,
   })
 })
 

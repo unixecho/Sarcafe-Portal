@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getBranchOpenStates, type BranchOpenState } from '@/lib/shifts/hours'
 import type { Branch } from '@/lib/branches'
 import type { PortalReviewsBlock } from '@/lib/reviews'
 
@@ -6,6 +7,7 @@ type BranchRow = {
   id: string
   slug: string
   name: Record<string, string>
+  timezone: string
   nav_google_maps: string | null
   nav_waze: string | null
   nav_apple_maps: string | null
@@ -16,9 +18,17 @@ type BranchRow = {
 }
 
 const COLUMNS =
-  'id, slug, name, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
+  'id, slug, name, timezone, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
 
-function toBranch(row: BranchRow): Branch {
+// shift_settings (the operating-hours source) is staff-only under RLS —
+// getBranchOpenStates reads it via the service-role client internally, so
+// this stays the one place branches/server.ts reaches past the caller's own
+// session, purely to compute a public-safe derived value (today's hours +
+// open-now), never to expose the settings row itself.
+const UNCONFIGURED_OPEN_STATE: BranchOpenState = { hoursToday: null, openNow: true }
+
+function toBranch(row: BranchRow, openState: BranchOpenState | undefined): Branch {
+  const state = openState ?? UNCONFIGURED_OPEN_STATE
   return {
     id: row.id,
     slug: row.slug,
@@ -32,6 +42,8 @@ function toBranch(row: BranchRow): Branch {
       bit: row.bit_url,
     },
     reviews: row.reviews ?? null,
+    hoursToday: state.hoursToday,
+    openNow: state.openNow,
   }
 }
 
@@ -47,7 +59,9 @@ export async function getBranches(): Promise<Branch[]> {
     .select(COLUMNS)
     .eq('active', true)
     .order('created_at', { ascending: true })
-  return ((data as BranchRow[] | null) ?? []).map(toBranch)
+  const rows = (data as BranchRow[] | null) ?? []
+  const openStates = await getBranchOpenStates(rows.map((r) => ({ id: r.id, timezone: r.timezone })))
+  return rows.map((row) => toBranch(row, openStates[row.id]))
 }
 
 export async function getBranchBySlug(slug: string): Promise<Branch | null> {
@@ -58,5 +72,8 @@ export async function getBranchBySlug(slug: string): Promise<Branch | null> {
     .eq('slug', slug)
     .eq('active', true)
     .maybeSingle()
-  return data ? toBranch(data as BranchRow) : null
+  if (!data) return null
+  const row = data as BranchRow
+  const openStates = await getBranchOpenStates([{ id: row.id, timezone: row.timezone }])
+  return toBranch(row, openStates[row.id])
 }
