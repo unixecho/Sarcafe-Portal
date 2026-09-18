@@ -3,6 +3,7 @@
 import { useEffect, useId, useState, type CSSProperties } from 'react'
 import SheetShell from '@/components/SheetShell'
 import { haptic } from '@/lib/haptics'
+import { parsePrice } from '@/lib/menu/price'
 import type { MenuItem } from '@/lib/menu/types'
 import type { OrderLineInput } from '@/lib/orders/actions'
 
@@ -10,12 +11,6 @@ import type { OrderLineInput } from '@/lib/orders/actions'
 // header for why: MenuItem.price/MenuItemType.priceDelta can be free-text
 // ranges ("20/24"), so there's no reliable auto-charge. This only ever
 // pre-fills a *suggestion* when the menu happens to carry a clean number.
-function parsePrice(value: number | string | null | undefined): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) return Number(value.trim())
-  return null
-}
-
 function suggestPrice(item: MenuItem, typeUid: string | null): number | null {
   const type = item.types?.find((t) => t.uid === typeUid) ?? null
   const base = parsePrice(item.price)

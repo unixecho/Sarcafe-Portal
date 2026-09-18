@@ -1,13 +1,15 @@
 'use client'
 
 import { useId, useState, type CSSProperties } from 'react'
+import { ChevronDown, Pencil, Plus } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import LineEditorSheet from './LineEditorSheet'
 import type { ReceiptData } from './ReceiptSheet'
 import { haptic } from '@/lib/haptics'
 import { randomId } from '@/lib/menu/id'
+import { parsePrice } from '@/lib/menu/price'
 import { useOrders } from './OrdersProvider'
-import type { MenuItem } from '@/lib/menu/types'
+import type { MenuCategory, MenuItem } from '@/lib/menu/types'
 import type { OrderLineInput } from '@/lib/orders/actions'
 
 type CartLine = OrderLineInput & { key: string }
@@ -48,8 +50,22 @@ export default function NewOrderSheet({
   const [pickingItem, setPickingItem] = useState<MenuItem | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Every category starts collapsed — with a full menu on screen, opening
+  // one at a time (not "tap an item, get a modal, every time") is what
+  // actually makes the register fast to use.
+  const [openCategories, setOpenCategories] = useState<Set<string>>(() => new Set())
 
   const total = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
+
+  function toggleCategory(categoryId: string) {
+    haptic('tick')
+    setOpenCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryId)) next.delete(categoryId)
+      else next.add(categoryId)
+      return next
+    })
+  }
 
   function addLine(line: OrderLineInput) {
     setCart((prev) => {
@@ -69,6 +85,25 @@ export default function NewOrderSheet({
 
   function changeQty(key: string, delta: number) {
     setCart((prev) => prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + delta } : l)).filter((l) => l.quantity > 0))
+  }
+
+  // Quick-add: a plain-priced, type-free item (the common case) skips the
+  // modal entirely — tapping "+" adds it straight to the cart at its own
+  // price, and once it's in the cart the same row turns into a stepper.
+  // Anything that needs a real decision (a type to pick, no clean numeric
+  // price to default to) still opens LineEditorSheet, same as before.
+  function findQuickAddLine(itemUid: string, price: number): CartLine | undefined {
+    return cart.find((l) => l.itemUid === itemUid && l.typeUid === null && l.unitPrice === price && !l.notes)
+  }
+
+  function quickAdd(item: MenuItem, price: number) {
+    const existing = findQuickAddLine(item.uid!, price)
+    if (existing) {
+      changeQty(existing.key, 1)
+      return
+    }
+    haptic('select')
+    addLine({ itemUid: item.uid!, itemName: { he: item.he, en: item.en, ar: item.ar }, typeUid: null, typeName: null, unitPrice: price, quantity: 1, notes: null })
   }
 
   async function submit() {
@@ -147,37 +182,18 @@ export default function NewOrderSheet({
           <section>
             <h3 style={sectionTitleStyle}>תפריט</h3>
             {catalog.length === 0 && <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>טוען תפריט…</p>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {catalog.map((category) => (
-                <div key={category.id}>
-                  <p style={categoryTitleStyle}>{category.title.he || 'קטגוריה'}</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {category.items.map((item) => {
-                      const hasTypes = !!item.types?.length
-                      const availableTypes = (item.types ?? []).filter((t) => t.available !== false)
-                      const soldOut = item.available === false || (hasTypes && availableTypes.length === 0)
-                      return (
-                        <button
-                          key={item.uid ?? item.he}
-                          type="button"
-                          className="press"
-                          disabled={soldOut || !item.uid}
-                          onClick={() => item.uid && setPickingItem(item)}
-                          style={{ ...itemRowStyle, opacity: soldOut ? 0.5 : 1, cursor: soldOut ? 'default' : 'pointer' }}
-                        >
-                          <span style={{ flex: 1, textAlign: 'start' }}>{item.he || 'פריט'}</span>
-                          {soldOut ? (
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ff6b6b' }}>אזל</span>
-                          ) : (
-                            item.price != null && item.price !== '' && (
-                              <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)' }}>{String(item.price)} ₪</span>
-                            )
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <CategorySection
+                  key={category.id}
+                  category={category}
+                  open={openCategories.has(category.id)}
+                  onToggle={() => toggleCategory(category.id)}
+                  findQuickAddLine={findQuickAddLine}
+                  onQuickAdd={quickAdd}
+                  onChangeQty={changeQty}
+                  onOpenEditor={setPickingItem}
+                />
               ))}
             </div>
           </section>
@@ -236,8 +252,145 @@ export default function NewOrderSheet({
   )
 }
 
+// Collapsed by default (see NewOrderSheet's openCategories) — a header
+// button toggles it, showing how many items are already in the cart from
+// this category even while closed, so staff don't need to open every
+// category just to check what they've already added.
+function CategorySection({
+  category,
+  open,
+  onToggle,
+  findQuickAddLine,
+  onQuickAdd,
+  onChangeQty,
+  onOpenEditor,
+}: {
+  category: MenuCategory
+  open: boolean
+  onToggle: () => void
+  findQuickAddLine: (itemUid: string, price: number) => CartLine | undefined
+  onQuickAdd: (item: MenuItem, price: number) => void
+  onChangeQty: (key: string, delta: number) => void
+  onOpenEditor: (item: MenuItem) => void
+}) {
+  return (
+    <div>
+      <button type="button" className="press" onClick={onToggle} aria-expanded={open} style={categoryHeaderStyle}>
+        <ChevronDown
+          size={16}
+          aria-hidden="true"
+          style={{ color: 'var(--text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)', flexShrink: 0 }}
+        />
+        <span style={{ flex: 1, textAlign: 'start' }}>{category.title.he || 'קטגוריה'}</span>
+        <span style={{ fontSize: '0.76rem', color: 'var(--text-faint)', fontWeight: 600 }}>{category.items.length}</span>
+      </button>
+
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+          {category.items.map((item) => (
+            <CatalogItemRow
+              key={item.uid ?? item.he}
+              item={item}
+              findQuickAddLine={findQuickAddLine}
+              onQuickAdd={onQuickAdd}
+              onChangeQty={onChangeQty}
+              onOpenEditor={onOpenEditor}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CatalogItemRow({
+  item,
+  findQuickAddLine,
+  onQuickAdd,
+  onChangeQty,
+  onOpenEditor,
+}: {
+  item: MenuItem
+  findQuickAddLine: (itemUid: string, price: number) => CartLine | undefined
+  onQuickAdd: (item: MenuItem, price: number) => void
+  onChangeQty: (key: string, delta: number) => void
+  onOpenEditor: (item: MenuItem) => void
+}) {
+  const hasTypes = !!item.types?.length
+  const availableTypes = (item.types ?? []).filter((t) => t.available !== false)
+  const soldOut = item.available === false || (hasTypes && availableTypes.length === 0)
+  const cleanPrice = parsePrice(item.price)
+  // Only a plain, type-free, cleanly-priced item can skip straight to a
+  // quantity stepper — anything else (a type to pick, a range price like
+  // "20/24") still needs the modal's actual decision, not a guess.
+  const quickAddEligible = !soldOut && !hasTypes && cleanPrice !== null && !!item.uid
+  const existing = quickAddEligible ? findQuickAddLine(item.uid!, cleanPrice!) : undefined
+  const qty = existing?.quantity ?? 0
+
+  return (
+    <div style={{ ...itemRowStyle, opacity: soldOut ? 0.5 : 1 }}>
+      <span style={{ flex: 1, textAlign: 'start' }}>{item.he || 'פריט'}</span>
+
+      {soldOut ? (
+        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ff6b6b' }}>אזל</span>
+      ) : (
+        <>
+          {!quickAddEligible && item.price != null && item.price !== '' && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)' }}>{String(item.price)} ₪</span>
+          )}
+
+          {quickAddEligible &&
+            (qty > 0 ? (
+              <div style={stepperStyle}>
+                <button type="button" className="press" onClick={() => onChangeQty(existing!.key, -1)} aria-label="הפחתה" style={stepBtnStyle}>
+                  −
+                </button>
+                <span style={{ minWidth: 16, textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{qty}</span>
+                <button type="button" className="press" onClick={() => onQuickAdd(item, cleanPrice!)} aria-label="הוספה" style={stepBtnStyle}>
+                  +
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="press" onClick={() => onQuickAdd(item, cleanPrice!)} aria-label={`הוספת ${item.he || 'פריט'}`} style={quickAddBtnStyle}>
+                <Plus size={16} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            ))}
+
+          <button
+            type="button"
+            className="press"
+            onClick={() => onOpenEditor(item)}
+            aria-label={quickAddEligible ? `עריכת מחיר/הערה עבור ${item.he || 'פריט'}` : `הוספת ${item.he || 'פריט'}`}
+            // When there's no quick-add stepper at all (a type to pick, no
+            // clean price), this pencil IS the row's only way to add it —
+            // solid/prominent rather than the subdued secondary style it
+            // gets when a stepper already covers the common case.
+            style={quickAddEligible ? editBtnStyle : quickAddBtnStyle}
+          >
+            <Pencil size={14} aria-hidden="true" />
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 const sectionTitleStyle: CSSProperties = { margin: '0 0 8px', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-faint)' }
-const categoryTitleStyle: CSSProperties = { margin: '0 0 6px', fontSize: '0.9rem', fontWeight: 800, color: 'var(--neon-soft)' }
+const categoryHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  width: '100%',
+  minHeight: 'var(--tap-min)',
+  padding: '0 12px',
+  borderRadius: 12,
+  border: '1px solid var(--line)',
+  background: 'var(--bg-elev)',
+  color: 'var(--text)',
+  fontSize: '0.9rem',
+  fontWeight: 800,
+  cursor: 'pointer',
+}
 const legendStyle: CSSProperties = { display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-dim)' }
 
 const cartRowStyle: CSSProperties = {
@@ -264,6 +417,32 @@ const itemRowStyle: CSSProperties = {
   fontSize: '0.9rem',
   fontWeight: 600,
   textAlign: 'start',
+}
+
+const quickAddBtnStyle: CSSProperties = {
+  width: 30,
+  height: 30,
+  borderRadius: '50%',
+  border: 'none',
+  background: 'var(--neon)',
+  color: 'var(--bg)',
+  display: 'grid',
+  placeItems: 'center',
+  cursor: 'pointer',
+  flexShrink: 0,
+}
+
+const editBtnStyle: CSSProperties = {
+  width: 30,
+  height: 30,
+  borderRadius: '50%',
+  border: '1px solid var(--line-strong)',
+  background: 'transparent',
+  color: 'var(--text-faint)',
+  display: 'grid',
+  placeItems: 'center',
+  cursor: 'pointer',
+  flexShrink: 0,
 }
 
 const stepperStyle: CSSProperties = {
