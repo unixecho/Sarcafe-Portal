@@ -1,7 +1,7 @@
 'use client'
 
 import type { CSSProperties } from 'react'
-import { Clock, Check, Ban } from 'lucide-react'
+import { Clock, Check, Ban, QrCode } from 'lucide-react'
 import type { Order, OrderStatus } from '@/lib/orders/types'
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
@@ -44,6 +44,7 @@ export default function OrderCard({
   onAdvance,
   onCancel,
   onTogglePayment,
+  onReprint,
 }: {
   order: Order
   canCancel: boolean
@@ -53,6 +54,9 @@ export default function OrderCard({
   onAdvance?: () => void
   onCancel?: () => void
   onTogglePayment?: () => void
+  /** Reissues a fresh QR + recovery code for a printer jam / lost
+   *  receipt / second copy — see migration 018's issue_order_access(). */
+  onReprint?: () => void
 }) {
   const nextLabel = NEXT_ACTION_LABEL[order.status]
 
@@ -101,6 +105,12 @@ export default function OrderCard({
         )}
 
         {!readOnly && (nextLabel || canCancel) && <span style={{ flex: 1 }} />}
+
+        {!readOnly && (
+          <button type="button" className="press" onClick={onReprint} disabled={busy} aria-label="הדפסת קבלה מחדש" style={reprintBtnStyle}>
+            <QrCode size={16} aria-hidden="true" />
+          </button>
+        )}
 
         {!readOnly && canCancel && (
           <button type="button" className="press" onClick={onCancel} disabled={busy} aria-label="ביטול הזמנה" style={cancelBtnStyle}>
@@ -159,6 +169,18 @@ const advanceBtnStyle: CSSProperties = {
   color: 'var(--bg)',
   fontSize: '0.82rem',
   fontWeight: 800,
+  cursor: 'pointer',
+}
+
+const reprintBtnStyle: CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: '50%',
+  border: '1px solid var(--line-strong)',
+  background: 'transparent',
+  color: 'var(--text-dim)',
+  display: 'grid',
+  placeItems: 'center',
   cursor: 'pointer',
 }
 

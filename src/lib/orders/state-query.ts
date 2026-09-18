@@ -79,6 +79,23 @@ function serializeOrder(row: OrderRow, items: OrderItem[]): Order {
   }
 }
 
+/** One order by id, items included — the customer-tracking read path
+ *  (/api/order/[token]) as well as anything else that needs a single
+ *  order's full shape. No viewer/permission fields (those are staff-board
+ *  concepts) — callers that need an access check do it themselves before
+ *  calling this (see lib/orders/customer.ts's token resolution). */
+export async function loadOrderById(orderId: string): Promise<Order | null> {
+  const service = createServiceRoleClient()
+
+  const [{ data: orderRow }, { data: itemRows }] = await Promise.all([
+    service.from('orders').select('*').eq('id', orderId).maybeSingle(),
+    service.from('order_items').select('*').eq('order_id', orderId).order('sort_order', { ascending: true }),
+  ])
+
+  if (!orderRow) return null
+  return serializeOrder(orderRow as OrderRow, ((itemRows as OrderItemRow[]) ?? []).map(serializeItem))
+}
+
 export async function loadOrdersBoard(branchId: string, viewer: StaffRow): Promise<OrdersBoard> {
   const service = createServiceRoleClient()
 

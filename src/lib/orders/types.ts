@@ -46,6 +46,11 @@ export type Order = {
   items: OrderItem[]
 }
 
+/** What the customer's own tracking page gets back from
+ *  /api/order/[token] — the staff-only fields (who took the order, any
+ *  internal order-level note) are never sent there. */
+export type CustomerOrder = Omit<Order, 'createdByName' | 'notes'>
+
 export type OrdersBoard = {
   branchId: string
   /** new/preparing/ready, oldest first — the working queue. */
@@ -54,4 +59,16 @@ export type OrdersBoard = {
   history: Order[]
   viewerCanCancel: boolean
   viewerStaffId: string
+}
+
+/** The plaintext access pair — exists ONLY in a create_order()/
+ *  issue_order_access() RPC response, never persisted (see migration
+ *  018's header). Shown to staff exactly once per issuance, for the
+ *  receipt (QR + printed code); a lost/failed print means reprinting via
+ *  the 'regenerateAccess' action, which issues a fresh pair and silently
+ *  invalidates the old one. */
+export type OrderAccess = {
+  token: string
+  recoveryCode: string
+  expiresAt: string
 }

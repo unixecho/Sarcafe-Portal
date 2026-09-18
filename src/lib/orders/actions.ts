@@ -31,5 +31,9 @@ export type OrderAction =
   | { type: 'advanceStatus'; orderId: string; toStatus: OrderStatus }
   | { type: 'cancelOrder'; orderId: string; reason?: string | null }
   | { type: 'setPayment'; orderId: string; status: PaymentStatus; method?: PaymentMethod | null }
+  /** Reprint: issues a fresh QR token + recovery code for an order whose
+   *  receipt didn't print, got lost, or needs a second copy — see
+   *  migration 018's issue_order_access(). Invalidates the old pair. */
+  | { type: 'regenerateAccess'; orderId: string }
 
 export type OrderActionType = OrderAction['type']

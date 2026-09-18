@@ -7,6 +7,7 @@ import { haptic } from '@/lib/haptics'
 import OrdersProvider, { useOrders } from './OrdersProvider'
 import NewOrderSheet from './NewOrderSheet'
 import OrderBoard from './OrderBoard'
+import ReceiptSheet, { type ReceiptData } from './ReceiptSheet'
 import type { Branch, BranchSlug } from '@/lib/branches'
 
 export default function OrdersWorkspace({ branches, initialBranch }: { branches: Branch[]; initialBranch: BranchSlug }) {
@@ -25,6 +26,10 @@ export default function OrdersWorkspace({ branches, initialBranch }: { branches:
 function PosControls() {
   const { error } = useOrders()
   const [sheetOpen, setSheetOpen] = useState(false)
+  // Lifted above both NewOrderSheet (fresh order) and OrderBoard (staff
+  // reprint) — both need to open the SAME receipt sheet, and a reprint
+  // must work with the builder closed.
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null)
 
   return (
     <>
@@ -47,9 +52,18 @@ function PosControls() {
         </p>
       )}
 
-      <OrderBoard />
+      <OrderBoard onReceipt={setReceipt} />
 
-      <NewOrderSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+      <NewOrderSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onReceipt={setReceipt} />
+
+      <ReceiptSheet
+        open={!!receipt}
+        onClose={() => setReceipt(null)}
+        orderNumber={receipt?.orderNumber ?? null}
+        access={receipt?.access ?? null}
+        lines={receipt?.lines ?? []}
+        total={receipt?.total ?? 0}
+      />
     </>
   )
 }

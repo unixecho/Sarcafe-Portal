@@ -3,6 +3,7 @@
 import { useId, useState, type CSSProperties } from 'react'
 import SheetShell from '@/components/SheetShell'
 import LineEditorSheet from './LineEditorSheet'
+import type { ReceiptData } from './ReceiptSheet'
 import { haptic } from '@/lib/haptics'
 import { randomId } from '@/lib/menu/id'
 import { useOrders } from './OrdersProvider'
@@ -24,7 +25,19 @@ function lineLabel(line: CartLine): string {
 // cart's lib/cart/store — that one is explicitly "never a real order",
 // see its own header) and survives an accidental close, resetting only
 // after a successful submit.
-export default function NewOrderSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function NewOrderSheet({
+  open,
+  onClose,
+  onReceipt,
+}: {
+  open: boolean
+  onClose: () => void
+  /** Handed the fresh QR/code the instant an order is created — the
+   *  caller (OrdersWorkspace) owns actually showing ReceiptSheet, since
+   *  a staff-requested reprint (OrderCard) needs to reach the same sheet
+   *  without this builder being open at all. */
+  onReceipt: (receipt: ReceiptData) => void
+}) {
   const { catalog, dispatch, branchSlug } = useOrders()
   const ids = useId()
   const titleId = `${ids}-title`
@@ -75,6 +88,14 @@ export default function NewOrderSheet({ open, onClose }: { open: boolean; onClos
       return
     }
     haptic('impact')
+    if (outcome.access && outcome.orderNumber !== undefined) {
+      onReceipt({
+        orderNumber: outcome.orderNumber,
+        access: outcome.access,
+        lines: cart.map((line) => ({ label: lineLabel(line), qty: line.quantity, unitPrice: line.unitPrice })),
+        total,
+      })
+    }
     setCart([])
     setCustomerName('')
     setOrderNote('')

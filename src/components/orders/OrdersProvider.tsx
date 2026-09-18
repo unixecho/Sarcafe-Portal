@@ -3,12 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useOrdersRealtime } from '@/lib/orders/useOrdersRealtime'
 import type { OrderAction } from '@/lib/orders/actions'
-import type { OrdersBoard } from '@/lib/orders/types'
+import type { OrderAccess, OrdersBoard } from '@/lib/orders/types'
 import type { MenuCategory } from '@/lib/menu/types'
 
 const POLL_MS = 15_000
 
-type DispatchOutcome = { ok: true; orderId?: string; orderNumber?: number } | { ok: false; error: string }
+type DispatchOutcome = { ok: true; orderId?: string; orderNumber?: number; access?: OrderAccess } | { ok: false; error: string }
 
 type OrdersContextValue = {
   branchSlug: string
@@ -88,7 +88,7 @@ export default function OrdersProvider({ branchSlug, children }: { branchSlug: s
           return { ok: false, error: message }
         }
         await load()
-        return { ok: true, orderId: payload.orderId, orderNumber: payload.orderNumber }
+        return { ok: true, orderId: payload.orderId, orderNumber: payload.orderNumber, access: payload.access }
       } catch {
         const message = 'הפעולה נכשלה — בדקו את החיבור לרשת'
         setError(message)

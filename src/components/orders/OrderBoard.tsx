@@ -6,6 +6,7 @@ import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import { haptic } from '@/lib/haptics'
 import { useOrders } from './OrdersProvider'
 import OrderCard from './OrderCard'
+import type { ReceiptData } from './ReceiptSheet'
 import type { Order, OrderStatus } from '@/lib/orders/types'
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = { new: 'preparing', preparing: 'ready', ready: 'completed' }
@@ -14,7 +15,7 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = { new: 'preparing
 // in, first served), plus a collapsed disclosure for today's completed/
 // cancelled history. Reads/writes go through OrdersProvider's context, so
 // this never talks to the API directly.
-export default function OrderBoard() {
+export default function OrderBoard({ onReceipt }: { onReceipt: (receipt: ReceiptData) => void }) {
   const { board, loading, dispatch } = useOrders()
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -49,6 +50,25 @@ export default function OrderBoard() {
     setBusyId(null)
   }
 
+  async function reprint(order: Order) {
+    haptic('select')
+    setBusyId(order.id)
+    const outcome = await dispatch({ type: 'regenerateAccess', orderId: order.id })
+    setBusyId(null)
+    if (outcome.ok && outcome.access) {
+      onReceipt({
+        orderNumber: order.orderNumber,
+        access: outcome.access,
+        lines: order.items.map((item) => ({
+          label: item.typeName?.he ? `${item.itemName.he || '—'} — ${item.typeName.he}` : item.itemName.he || '—',
+          qty: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        total: order.total,
+      })
+    }
+  }
+
   const cancelRequest: PromptRequest | null = cancelTarget
     ? { title: `ביטול הזמנה #${cancelTarget.orderNumber}`, label: 'סיבת הביטול', submitLabel: 'ביטול ההזמנה', cancelLabel: 'חזרה', allowEmpty: true }
     : null
@@ -68,6 +88,7 @@ export default function OrderBoard() {
               onAdvance={() => advance(order)}
               onCancel={() => setCancelTarget(order)}
               onTogglePayment={() => togglePayment(order)}
+              onReprint={() => reprint(order)}
             />
           ))}
         </div>
