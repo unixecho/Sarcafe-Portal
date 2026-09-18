@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check } from 'lucide-react'
+import { Check, Star } from 'lucide-react'
 import NotificationPrimer from './NotificationPrimer'
+import FeedbackButton from '@/components/FeedbackButton'
 import { haptic } from '@/lib/haptics'
 import { useOrderStatusRealtime } from '@/lib/orders/useOrderStatusRealtime'
 import type { CustomerOrder, OrderStatus } from '@/lib/orders/types'
@@ -67,7 +68,22 @@ function playChime() {
   }
 }
 
-export default function OrderStatusView({ token, initialOrder }: { token: string; initialOrder: CustomerOrder }) {
+export default function OrderStatusView({
+  token,
+  initialOrder,
+  branchSlug,
+  reviewUrl,
+  feedbackEnabled,
+}: {
+  token: string
+  initialOrder: CustomerOrder
+  branchSlug: string | null
+  /** The branch's Google review link (Branch.links.review) — surfaced
+   *  only on the completed screen, the one moment a customer is actually
+   *  done and in a position to rate the visit. */
+  reviewUrl: string | null
+  feedbackEnabled: boolean
+}) {
   const [order, setOrder] = useState<CustomerOrder>(initialOrder)
   const [gone, setGone] = useState(false)
   const [justBecameReady, setJustBecameReady] = useState(false)
@@ -136,6 +152,8 @@ export default function OrderStatusView({ token, initialOrder }: { token: string
           <p style={{ margin: 0, fontWeight: 800, color: '#ff6b6b' }}>ההזמנה בוטלה</p>
           {order.cancelReason && <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: 'var(--text-dim)' }}>{order.cancelReason}</p>}
         </div>
+      ) : order.status === 'completed' ? (
+        <CompletedHero reviewUrl={reviewUrl} branchSlug={branchSlug} feedbackEnabled={feedbackEnabled} />
       ) : (
         <>
           <Stepper currentIndex={currentStepIndex} />
@@ -193,6 +211,53 @@ export default function OrderStatusView({ token, initialOrder }: { token: string
   )
 }
 
+// The Wolt-style "you're done" screen — replaces the in-progress stepper
+// once the order is actually in the customer's hands. The item list below
+// (rendered by the caller regardless of status) doubles as the receipt.
+function CompletedHero({
+  reviewUrl,
+  branchSlug,
+  feedbackEnabled,
+}: {
+  reviewUrl: string | null
+  branchSlug: string | null
+  feedbackEnabled: boolean
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ ...cardStyle, textAlign: 'center', borderColor: 'rgba(87,217,192,0.4)', background: 'rgba(87,217,192,0.08)' }}>
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: '50%',
+            background: 'var(--neon-2)',
+            display: 'grid',
+            placeItems: 'center',
+            margin: '0 auto 10px',
+          }}
+        >
+          <Check size={24} color="var(--bg)" strokeWidth={3} aria-hidden="true" />
+        </div>
+        <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: '1.15rem' }}>ההזמנה נמסרה!</p>
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-dim)' }}>תודה שהזמנתם ב-SARCafe ☕ מקווים שנהניתם.</p>
+      </div>
+
+      {(reviewUrl || feedbackEnabled) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {reviewUrl && (
+            <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="press" style={reviewBtnStyle}>
+              <Star size={17} aria-hidden="true" />
+              אהבתם? נשמח לביקורת בגוגל
+            </a>
+          )}
+          {feedbackEnabled && <FeedbackButton lang="he" enabled branchSlug={branchSlug} variant="card" />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Stepper({ currentIndex }: { currentIndex: number }) {
   // The last step has no "next" step to be a mere waypoint toward — when
   // it's the current one (order fully completed), it must render as DONE
@@ -242,3 +307,19 @@ const cardStyle: CSSProperties = {
   border: '1px solid var(--line)',
 }
 const sectionTitleStyle: CSSProperties = { margin: '0 0 8px', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-faint)' }
+
+const reviewBtnStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  minHeight: 'var(--tap-min)',
+  borderRadius: 14,
+  border: 'none',
+  background: 'var(--neon)',
+  color: 'var(--bg)',
+  fontWeight: 800,
+  fontSize: '0.92rem',
+  textDecoration: 'none',
+  cursor: 'pointer',
+}

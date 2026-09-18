@@ -4,6 +4,7 @@
 // (never trusting the client's own idea of who it is), then performs the
 // write via the migration 017/018 RPCs, mirroring lib/shifts/dispatch-write.ts.
 
+import { after } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { BadRequest, NotFound } from '@/lib/http/errors'
 import { requireOrderStaff, requireOrderManager } from './guard'
@@ -82,9 +83,17 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
       if (error) throw BadRequest(error.message || 'Could not update the order.')
 
       await Promise.all([broadcastOrdersUpdated(branchSlug), broadcastOrderStatusChanged(action.orderId)])
-      // Fire-and-forget on purpose — see lib/push/send.ts's own header for
-      // why a push failure must never surface as a failed status update.
-      if (action.toStatus === 'ready') void notifyOrderReady(action.orderId, orderNumber)
+      // Scheduled via after(), NOT a bare `void` call: a serverless
+      // function is liable to be frozen the instant its response is sent,
+      // and notifyOrderReady() does a real DB round trip plus a web-push
+      // HTTP call — both take longer than the response takes to flush, so
+      // a fire-and-forget promise here was a genuine race that could (and
+      // in production, did) kill the push mid-flight. after() is Next's
+      // own primitive for exactly this: guaranteed to run to completion
+      // after the response, without making the customer's status update
+      // wait for it. A push failure still never surfaces as a failed
+      // status update — see lib/push/send.ts's own header for that part.
+      if (action.toStatus === 'ready') after(() => notifyOrderReady(action.orderId, orderNumber))
       return {}
     }
 

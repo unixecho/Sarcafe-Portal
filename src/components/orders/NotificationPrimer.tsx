@@ -37,8 +37,17 @@ type Stage =
  * home-screen-installed PWA) is surfaced honestly instead of presenting
  * a button that would silently do nothing.
  */
+type TestState = 'idle' | 'sending' | 'sent' | 'no-sub' | 'error'
+
+const TEST_RESULT_TEXT: Record<Exclude<TestState, 'idle' | 'sending'>, string> = {
+  sent: 'נשלחה בדיקה — אם לא הגיעה תוך כמה שניות, ההתראות לא באמת פעילות במכשיר הזה.',
+  'no-sub': 'לא נמצא מנוי פעיל — נסו לכבות ולהפעיל את ההתראות שוב.',
+  error: 'שליחת הבדיקה נכשלה — נסו שוב בעוד רגע.',
+}
+
 export default function NotificationPrimer({ token }: { token: string }) {
   const [stage, setStage] = useState<Stage>('checking')
+  const [testState, setTestState] = useState<TestState>('idle')
 
   useEffect(() => {
     // Checked BEFORE feature detection on purpose — this is the actual bug
@@ -114,6 +123,28 @@ export default function NotificationPrimer({ token }: { token: string }) {
     setStage('dismissed')
   }
 
+  async function sendTest() {
+    haptic('select')
+    setTestState('sending')
+    try {
+      const res = await fetch('/api/order/test-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const payload = await res.json()
+      if (!res.ok || !payload.configured) {
+        setTestState('error')
+      } else if (payload.subscriptions === 0) {
+        setTestState('no-sub')
+      } else {
+        setTestState('sent')
+      }
+    } catch {
+      setTestState('error')
+    }
+  }
+
   function turnOff() {
     haptic('tick')
     void unsubscribeFromOrderPush(token)
@@ -171,6 +202,20 @@ export default function NotificationPrimer({ token }: { token: string }) {
             <BellOff size={16} aria-hidden="true" />
           </button>
         </div>
+        <button
+          type="button"
+          className="press"
+          onClick={sendTest}
+          disabled={testState === 'sending'}
+          style={{ ...testBtnStyle, marginTop: 10 }}
+        >
+          {testState === 'sending' ? 'שולח…' : 'שליחת התראת בדיקה'}
+        </button>
+        {testState !== 'idle' && testState !== 'sending' && (
+          <p role="status" style={{ ...bodyStyle, marginTop: 6, fontSize: '0.78rem' }}>
+            {TEST_RESULT_TEXT[testState]}
+          </p>
+        )}
       </div>
     )
   }
@@ -266,6 +311,17 @@ const reopenBtnStyle: CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   alignSelf: 'flex-start',
+}
+const testBtnStyle: CSSProperties = {
+  width: '100%',
+  minHeight: 34,
+  borderRadius: 10,
+  border: '1px solid var(--line-strong)',
+  background: 'transparent',
+  color: 'var(--text-dim)',
+  fontSize: '0.78rem',
+  fontWeight: 600,
+  cursor: 'pointer',
 }
 const iconBtnStyle: CSSProperties = {
   width: 30,
