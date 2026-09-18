@@ -76,3 +76,33 @@ Supabase's free tier pauses a project after 7 days with zero API activity. The Q
 
 - `src/middleware.ts` forwards a stray `?code=` landing on `/` to `/auth/callback`. This exists because the OAuth redirect has intermittently landed on the app root instead of `/auth/callback` despite every relevant config (Supabase redirect_to, Redirect URLs allowlist) being verified correct at the time — the Google Console fix in §1 (the bare-origin redirect URI) is the suspected real root cause, but this middleware forward stays as a safety net since the exact mechanism was never fully confirmed.
 - `src/app/auth/callback/route.ts` surfaces the actual Postgrest/GoTrue error message via `?reason=` and `?detail=` on the `/no-access` redirect instead of swallowing it — keep this; it's what made the two bugs above possible to diagnose at all without direct log access.
+
+## 5. Web Push (order-ready notifications)
+
+The customer order-tracking page (`/order/[token]`) can push a notification when staff mark an order Ready. Nothing about the POS or QR/receipt flow requires this — Web Push not being configured just means that one notification silently never fires (`lib/push/send.ts` logs and returns early); the customer's own page still updates live via polling + realtime regardless.
+
+### 5.1 Generate a real VAPID keypair
+
+```
+npx web-push generate-vapid-keys
+```
+
+Do this once per project/environment — never reuse a keypair across a preview and production deploy, and never commit the private key to git.
+
+### 5.2 Environment variables
+
+| Variable | Value | Gotcha |
+|---|---|---|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | the generated public key | `NEXT_PUBLIC_` on purpose — the customer's browser needs this to call `pushManager.subscribe()`. Public keys are meant to be public; this is not a secret. |
+| `VAPID_PRIVATE_KEY` | the generated private key | Server-only — never prefix this one with `NEXT_PUBLIC_`, or the private key ships to every visitor's browser. |
+| `VAPID_SUBJECT` | `mailto:` address or `https:` URL | Required by the Web Push spec (push services may contact this if your usage looks abusive). A real, monitored address — not a placeholder. |
+
+Same rule as every other env var here (§3.4): scope to Production **and** Preview, add them **before** the deployment you're testing, and redeploy after any change.
+
+### 5.3 iOS Safari's real constraint
+
+Web Push on iPhone/iPad only works inside a **home-screen-installed** PWA (`display-mode: standalone`) — never in a normal Safari tab, even on iOS 16.4+ which otherwise supports the Push API. `NotificationPrimer.tsx` (`src/components/orders/`) detects this explicitly and shows Add-to-Home-Screen instructions instead of a button that would silently do nothing — this is expected behavior, not a bug, if a customer on iOS Safari doesn't see an "Enable notifications" button on first visit.
+
+### 5.4 Migrations 017 and 018
+
+Both are required for the POS to work at all (017: orders/kitchen board; 018: QR/recovery-code customer access + push subscriptions) — run them via the SQL editor in order, same as every other migration (§2.1). 018 alters `create_order()` from 017 (drops and recreates it with extra return columns), so 017 must already be applied first.

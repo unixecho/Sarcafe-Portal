@@ -1,0 +1,17 @@
+{
+  "name": "SARCafe — מעקב הזמנה",
+  "short_name": "SARCafe",
+  "description": "מעקב חי אחרי ההזמנה שלכם ב-SARCafe",
+  "start_url": "/order",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#150f0c",
+  "theme_color": "#150f0c",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/sarcafe-logo.png", "sizes": "1412x1412", "type": "image/png", "purpose": "any" },
+    { "src": "/sarcafe-logo.png", "sizes": "1412x1412", "type": "image/png", "purpose": "maskable" }
+  ]
+}

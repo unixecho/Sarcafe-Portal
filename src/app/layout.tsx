@@ -6,6 +6,27 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Sarcafe',
   description: 'Sarcafe — פורטל, תפריט וניהול.',
+  manifest: '/manifest.json',
+  icons: {
+    // Without an explicit apple-touch-icon, iOS falls back to a
+    // screenshot of the page as the home-screen icon — the single most
+    // visible "this isn't a real app" tell there is.
+    apple: '/sarcafe-logo.png',
+  },
+  appleWebApp: {
+    // Lets a customer's "Add to Home Screen" (the one prerequisite iOS
+    // Safari has for Web Push at all — see lib/push/client.ts's
+    // isIosDevice()) launch as a standalone app pointed at /order,
+    // rather than defaulting to whatever page they happened to add it
+    // from.
+    capable: true,
+    title: 'SARCafe',
+    statusBarStyle: 'black-translucent',
+  },
+}
+
+export const viewport = {
+  themeColor: '#150f0c',
 }
 
 // Default language is Hebrew/RTL, matching the current site and the
