@@ -25,8 +25,13 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || '',
-      icon: '/sarcafe-logo.png',
-      badge: '/sarcafe-logo.png',
+      // A dedicated small icon (192x192, ~9KB) — NOT the full logo
+      // (1412x1412, ~830KB). iOS's push implementation has been reported
+      // to silently drop a notification whose icon is slow/large to
+      // fetch; a notification icon should never be a multi-hundred-KB
+      // asset regardless of platform.
+      icon: '/notification-icon.png',
+      badge: '/notification-icon.png',
       dir: 'rtl',
       lang: 'he',
       // A repeat push for the SAME order replaces its own earlier

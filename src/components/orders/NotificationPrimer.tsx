@@ -37,17 +37,19 @@ type Stage =
  * home-screen-installed PWA) is surfaced honestly instead of presenting
  * a button that would silently do nothing.
  */
-type TestState = 'idle' | 'sending' | 'sent' | 'no-sub' | 'error'
+type TestState = 'idle' | 'sending' | 'sent' | 'no-sub' | 'send-failed' | 'error'
 
 const TEST_RESULT_TEXT: Record<Exclude<TestState, 'idle' | 'sending'>, string> = {
   sent: 'נשלחה בדיקה — אם לא הגיעה תוך כמה שניות, ההתראות לא באמת פעילות במכשיר הזה.',
   'no-sub': 'לא נמצא מנוי פעיל — נסו לכבות ולהפעיל את ההתראות שוב.',
+  'send-failed': 'השרת ניסה לשלוח אבל נכשל — הפרטים למטה (אפשר לשלוח צילום מסך לתמיכה):',
   error: 'שליחת הבדיקה נכשלה — נסו שוב בעוד רגע.',
 }
 
 export default function NotificationPrimer({ token }: { token: string }) {
   const [stage, setStage] = useState<Stage>('checking')
   const [testState, setTestState] = useState<TestState>('idle')
+  const [testDetail, setTestDetail] = useState<string | null>(null)
 
   useEffect(() => {
     // Checked BEFORE feature detection on purpose — this is the actual bug
@@ -126,6 +128,7 @@ export default function NotificationPrimer({ token }: { token: string }) {
   async function sendTest() {
     haptic('select')
     setTestState('sending')
+    setTestDetail(null)
     try {
       const res = await fetch('/api/order/test-notification', {
         method: 'POST',
@@ -135,8 +138,15 @@ export default function NotificationPrimer({ token }: { token: string }) {
       const payload = await res.json()
       if (!res.ok || !payload.configured) {
         setTestState('error')
+        if (payload?.error?.detail) setTestDetail(payload.error.detail)
       } else if (payload.subscriptions === 0) {
         setTestState('no-sub')
+      } else if (payload.sent === 0) {
+        // Subscribed, server tried, push service refused it — the actual
+        // reason (a VAPID mismatch, an expired subscription, etc.) is the
+        // one thing that turns this from "still broken" into "here's why."
+        setTestState('send-failed')
+        setTestDetail(payload.error ? `${payload.error.statusCode ?? '?'} — ${payload.error.detail}` : null)
       } else {
         setTestState('sent')
       }
@@ -212,9 +222,27 @@ export default function NotificationPrimer({ token }: { token: string }) {
           {testState === 'sending' ? 'שולח…' : 'שליחת התראת בדיקה'}
         </button>
         {testState !== 'idle' && testState !== 'sending' && (
-          <p role="status" style={{ ...bodyStyle, marginTop: 6, fontSize: '0.78rem' }}>
-            {TEST_RESULT_TEXT[testState]}
-          </p>
+          <div role="status" style={{ marginTop: 6 }}>
+            <p style={{ ...bodyStyle, fontSize: '0.78rem' }}>{TEST_RESULT_TEXT[testState]}</p>
+            {testDetail && (
+              <p
+                style={{
+                  ...bodyStyle,
+                  fontSize: '0.7rem',
+                  fontFamily: 'ui-monospace, monospace',
+                  color: 'var(--text-faint)',
+                  marginTop: 4,
+                  padding: '6px 8px',
+                  background: 'var(--bg)',
+                  borderRadius: 8,
+                  wordBreak: 'break-word',
+                  userSelect: 'text',
+                }}
+              >
+                {testDetail}
+              </p>
+            )}
+          </div>
         )}
       </div>
     )
