@@ -50,6 +50,7 @@ type PortalCopy = {
   reviewCta: string
   footer: string
   accessibility: string
+  privacy: string
 }
 
 const T: Record<Lang, PortalCopy> = {
@@ -70,6 +71,7 @@ const T: Record<Lang, PortalCopy> = {
     reviewCta: 'השארת ביקורת בגוגל',
     footer: '© Sarcafe',
     accessibility: 'הצהרת נגישות',
+    privacy: 'מדיניות פרטיות',
   },
   en: {
     eyebrow: 'Coffee truck portal',
@@ -88,6 +90,7 @@ const T: Record<Lang, PortalCopy> = {
     reviewCta: 'Leave a review on Google',
     footer: '© Sarcafe',
     accessibility: 'Accessibility statement',
+    privacy: 'Privacy policy',
   },
   ar: {
     eyebrow: 'بوابة عربة القهوة',
@@ -106,6 +109,7 @@ const T: Record<Lang, PortalCopy> = {
     reviewCta: 'ترك تقييم على غوغل',
     footer: '© Sarcafe',
     accessibility: 'بيان إمكانية الوصول',
+    privacy: 'سياسة الخصوصية',
   },
 }
 
@@ -617,6 +621,22 @@ export default function PortalPage() {
             }}
           >
             {t.accessibility}
+          </Link>
+          <Link
+            href="/privacy"
+            className="press"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 'var(--tap-min)',
+              padding: '0 12px',
+              fontSize: '0.78rem',
+              color: 'var(--text-faint)',
+              textDecoration: 'underline',
+            }}
+          >
+            {t.privacy}
           </Link>
           <FeedbackButton lang={lang} enabled={feedbackEnabled} branchSlug={branch?.slug ?? null} variant="card" />
         </footer>

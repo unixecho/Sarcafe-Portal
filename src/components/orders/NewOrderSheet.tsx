@@ -4,6 +4,7 @@ import { useId, useState, type CSSProperties } from 'react'
 import { ChevronDown, Pencil, Plus } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import LineEditorSheet from './LineEditorSheet'
+import OrderReviewSheet from './OrderReviewSheet'
 import type { ReceiptData } from './ReceiptSheet'
 import { haptic } from '@/lib/haptics'
 import { randomId } from '@/lib/menu/id'
@@ -48,6 +49,7 @@ export default function NewOrderSheet({
   const [customerName, setCustomerName] = useState('')
   const [orderNote, setOrderNote] = useState('')
   const [pickingItem, setPickingItem] = useState<MenuItem | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   // Every category starts collapsed — with a full menu on screen, opening
@@ -134,12 +136,13 @@ export default function NewOrderSheet({
     setCart([])
     setCustomerName('')
     setOrderNote('')
+    setReviewOpen(false)
     onClose()
   }
 
   return (
     <>
-      <SheetShell open={open} onClose={onClose} labelledBy={titleId} suspended={!!pickingItem}>
+      <SheetShell open={open} onClose={onClose} labelledBy={titleId} suspended={!!pickingItem || reviewOpen}>
         <h2 id={titleId} style={{ margin: '0 0 12px', fontSize: '1.1rem', fontWeight: 800 }}>
           הזמנה חדשה
         </h2>
@@ -219,12 +222,6 @@ export default function NewOrderSheet({
           </section>
         </div>
 
-        {formError && (
-          <p role="alert" style={{ margin: '10px 0 0', color: '#ff6b6b', fontSize: '0.85rem' }}>
-            {formError}
-          </p>
-        )}
-
         <div style={{ paddingTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ flex: 1 }}>
             <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-faint)' }}>סה״כ</p>
@@ -233,21 +230,36 @@ export default function NewOrderSheet({
           <button
             type="button"
             className="press"
-            disabled={cart.length === 0 || submitting}
-            onClick={submit}
+            disabled={cart.length === 0}
+            onClick={() => {
+              haptic('select')
+              setReviewOpen(true)
+            }}
             style={{
               ...primaryBtnStyle,
               minWidth: 160,
-              opacity: cart.length === 0 || submitting ? 0.5 : 1,
-              cursor: cart.length === 0 || submitting ? 'not-allowed' : 'pointer',
+              opacity: cart.length === 0 ? 0.5 : 1,
+              cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
             }}
           >
-            {submitting ? 'שולח…' : 'שליחה למטבח'}
+            המשך לאישור
           </button>
         </div>
       </SheetShell>
 
       <LineEditorSheet open={!!pickingItem} onClose={() => setPickingItem(null)} item={pickingItem} onAdd={addLine} />
+
+      <OrderReviewSheet
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        onConfirm={submit}
+        lines={cart.map((line) => ({ key: line.key, label: lineLabel(line), qty: line.quantity, unitPrice: line.unitPrice, notes: line.notes }))}
+        total={total}
+        customerName={customerName.trim()}
+        orderNote={orderNote.trim()}
+        submitting={submitting}
+        error={formError}
+      />
     </>
   )
 }

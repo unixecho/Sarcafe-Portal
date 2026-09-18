@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Check } from 'lucide-react'
 import NotificationPrimer from './NotificationPrimer'
+import { haptic } from '@/lib/haptics'
 import { useOrderStatusRealtime } from '@/lib/orders/useOrderStatusRealtime'
 import type { CustomerOrder, OrderStatus } from '@/lib/orders/types'
 
@@ -21,9 +22,59 @@ function lineLabel(item: CustomerOrder['items'][number]): string {
   return type ? `${name} — ${type}` : name
 }
 
+// A system push notification is largely useless if the tracking page is
+// already open and focused — most browsers/OSes suppress the banner (or
+// the person is just looking at the screen) precisely because the app
+// itself is expected to speak up. This is that: a vibration burst + a
+// short chime + a pulsing banner, fired once, the instant THIS SESSION
+// witnesses the live transition into "ready" — never on a page load that
+// simply finds an already-ready order, which would be a false alarm every
+// time someone reopens the link.
+function vibrateAlert() {
+  try {
+    if ('vibrate' in navigator && navigator.vibrate([220, 90, 220, 90, 260])) return
+  } catch {
+    // Fall through to the haptic() fallback below.
+  }
+  haptic('impact')
+  window.setTimeout(() => haptic('impact'), 220)
+  window.setTimeout(() => haptic('impact'), 440)
+}
+
+function playChime() {
+  try {
+    const AudioCtxCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtxCtor) return
+    const ctx = new AudioCtxCtor()
+    const now = ctx.currentTime
+    ;[880, 1318.51].forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const start = now + i * 0.16
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(start)
+      osc.stop(start + 0.4)
+    })
+    window.setTimeout(() => void ctx.close().catch(() => {}), 1200)
+  } catch {
+    // Best-effort — autoplay restrictions or no Web Audio just mean no chime.
+  }
+}
+
 export default function OrderStatusView({ token, initialOrder }: { token: string; initialOrder: CustomerOrder }) {
   const [order, setOrder] = useState<CustomerOrder>(initialOrder)
   const [gone, setGone] = useState(false)
+  const [justBecameReady, setJustBecameReady] = useState(false)
+  // Seeded from the initial server-rendered order, not from a blank
+  // value — so a first load that already finds the order Ready never
+  // fires the alert, only a change witnessed live during this visit.
+  const prevStatusRef = useRef<OrderStatus>(initialOrder.status)
 
   const refresh = useCallback(async () => {
     try {
@@ -34,7 +85,15 @@ export default function OrderStatusView({ token, initialOrder }: { token: string
       }
       if (!res.ok) return
       const payload = await res.json()
-      setOrder(payload.order as CustomerOrder)
+      const next = payload.order as CustomerOrder
+      if (prevStatusRef.current !== 'ready' && next.status === 'ready') {
+        vibrateAlert()
+        playChime()
+        setJustBecameReady(true)
+        window.setTimeout(() => setJustBecameReady(false), 6000)
+      }
+      prevStatusRef.current = next.status
+      setOrder(next)
     } catch {
       // Network hiccup — keep showing the last-good state.
     }
@@ -81,9 +140,29 @@ export default function OrderStatusView({ token, initialOrder }: { token: string
         <>
           <Stepper currentIndex={currentStepIndex} />
           {order.status === 'ready' && (
-            <div style={{ ...cardStyle, borderColor: 'rgba(87,217,192,0.4)', background: 'rgba(87,217,192,0.08)', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontWeight: 800, color: 'var(--neon-2)', fontSize: '1.05rem' }}>ההזמנה מוכנה לאיסוף! ☕</p>
-            </div>
+            <>
+              {justBecameReady && (
+                <style>{`
+                  @keyframes sarcafe-ready-pulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(87,217,192,0.5); }
+                    50% { box-shadow: 0 0 0 10px rgba(87,217,192,0); }
+                  }
+                `}</style>
+              )}
+              <div
+                role="status"
+                aria-live="assertive"
+                style={{
+                  ...cardStyle,
+                  borderColor: 'rgba(87,217,192,0.4)',
+                  background: 'rgba(87,217,192,0.08)',
+                  textAlign: 'center',
+                  animation: justBecameReady ? 'sarcafe-ready-pulse 1.4s ease-in-out 3' : undefined,
+                }}
+              >
+                <p style={{ margin: 0, fontWeight: 800, color: 'var(--neon-2)', fontSize: '1.05rem' }}>ההזמנה מוכנה לאיסוף! ☕</p>
+              </div>
+            </>
           )}
         </>
       )}
@@ -115,11 +194,18 @@ export default function OrderStatusView({ token, initialOrder }: { token: string
 }
 
 function Stepper({ currentIndex }: { currentIndex: number }) {
+  // The last step has no "next" step to be a mere waypoint toward — when
+  // it's the current one (order fully completed), it must render as DONE
+  // (filled + checkmark), not as the same open "active" ring an
+  // in-progress step gets. Before this, a completed order's final step
+  // stayed stuck looking like it was still "in progress" forever — the
+  // exact bug the attached screenshots showed.
+  const isFinalStep = currentIndex === STEPS.length - 1
   return (
     <div role="list" aria-label="סטטוס ההזמנה" style={{ display: 'flex', alignItems: 'flex-start' }}>
       {STEPS.map((step, i) => {
-        const done = i < currentIndex
-        const active = i === currentIndex
+        const done = i < currentIndex || (i === currentIndex && isFinalStep)
+        const active = i === currentIndex && !isFinalStep
         const color = done || active ? 'var(--neon)' : 'var(--line-strong)'
         return (
           <div key={step.status} role="listitem" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>

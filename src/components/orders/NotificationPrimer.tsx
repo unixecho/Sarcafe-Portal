@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Bell, BellOff, Share, CheckCircle2 } from 'lucide-react'
+import { Bell, BellOff, Share, CheckCircle2, Smartphone } from 'lucide-react'
 import { haptic } from '@/lib/haptics'
 import {
   isIosDevice,
@@ -41,8 +41,24 @@ export default function NotificationPrimer({ token }: { token: string }) {
   const [stage, setStage] = useState<Stage>('checking')
 
   useEffect(() => {
+    // Checked BEFORE feature detection on purpose — this is the actual bug
+    // that shipped: iOS Safari 16.4+ exposes `Notification`/`PushManager`/
+    // `serviceWorker` even in a plain browser tab (so isPushSupported()
+    // below returns true), but `pushManager.subscribe()` throws
+    // NotAllowedError unless the page was added to the Home Screen first.
+    // Checking feature presence alone let a visitor sail through
+    // Notification.requestPermission() (which DOES succeed at the origin
+    // level in a regular tab — that's why it looked like it worked) only
+    // to have the actual subscription silently fail right after, so no
+    // push ever arrived. iOS + not-standalone must short-circuit first,
+    // regardless of what the feature-detection APIs claim.
+    if (isIosDevice() && !isStandaloneDisplay()) {
+      setStage('ios-needs-install')
+      return
+    }
+
     if (!isPushSupported()) {
-      setStage(isIosDevice() && !isStandaloneDisplay() ? 'ios-needs-install' : 'unsupported')
+      setStage('unsupported')
       return
     }
 
@@ -113,18 +129,26 @@ export default function NotificationPrimer({ token }: { token: string }) {
 
   if (stage === 'ios-needs-install') {
     return (
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          <Bell size={20} aria-hidden="true" style={iconStyle} />
+      <div style={{ ...cardStyle, borderColor: 'var(--line-interactive)' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
+          <Smartphone size={20} aria-hidden="true" style={iconStyle} />
           <div style={{ flex: 1 }}>
-            <p style={titleStyle}>לקבל התראה כשההזמנה מוכנה?</p>
+            <p style={titleStyle}>הוסיפו את SARCafe למסך הבית</p>
             <p style={bodyStyle}>
-              באייפון צריך קודם להוסיף את הדף הזה למסך הבית: לחצו על כפתור השיתוף{' '}
-              <Share size={14} aria-hidden="true" style={{ verticalAlign: 'middle', display: 'inline' }} /> בסרגל
-              הדפדפן, ואז &quot;הוספה למסך הבית&quot;. אחרי זה אפשר להפעיל התראות מכאן.
+              ככה תוכלו לקבל התראה מיידית ברגע שההזמנה מוכנה — ולא לפספס אותה. זה גם הופך את המעקב לתחושה של
+              אפליקציה אמיתית, לא רק עמוד באינטרנט.
             </p>
           </div>
         </div>
+        <ol style={stepListStyle}>
+          <li>
+            הקישו על כפתור השיתוף{' '}
+            <Share size={14} aria-hidden="true" style={{ verticalAlign: 'middle', display: 'inline' }} /> בסרגל
+            הדפדפן
+          </li>
+          <li>גללו ובחרו &quot;הוספה למסך הבית&quot;</li>
+          <li>פתחו את SARCafe ממסך הבית וחזרו לכאן להפעלת התראות</li>
+        </ol>
       </div>
     )
   }
@@ -196,6 +220,16 @@ const cardStyle: CSSProperties = {
 const iconStyle: CSSProperties = { color: 'var(--neon-soft)', flexShrink: 0, marginTop: 2 }
 const titleStyle: CSSProperties = { margin: '0 0 4px', fontSize: '0.92rem', fontWeight: 800 }
 const bodyStyle: CSSProperties = { margin: 0, fontSize: '0.82rem', color: 'var(--text-dim)', lineHeight: 1.5 }
+const stepListStyle: CSSProperties = {
+  margin: 0,
+  paddingInlineStart: 20,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontSize: '0.82rem',
+  color: 'var(--text-dim)',
+  lineHeight: 1.5,
+}
 const primaryBtnStyle: CSSProperties = {
   flex: 1,
   minHeight: 40,
