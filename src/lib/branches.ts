@@ -50,21 +50,36 @@ export type Branch = {
   openNow: boolean
 }
 
+// U+2066 FIRST STRONG ISOLATE / U+2069 POP DIRECTIONAL ISOLATE — isolates a
+// substring's bidi behavior using its OWN inherent direction (a time like
+// "19:00" resolves LTR from its first digit) without touching the
+// surrounding Hebrew/Arabic text's own flow. This is the fix for a real bug:
+// wrapping the WHOLE mixed phrase in a `direction:ltr` container (the
+// `ltr-isolate` CSS class, meant for a standalone number/price) reverses the
+// Hebrew words' order relative to the time and breaks `margin-inline-start`
+// (which resolves against the element's OWN direction, not the page's) —
+// confirmed live as a quantity badge rendering mashed into the preceding
+// word with no gap. Plain Unicode control characters avoid both: no CSS
+// container, so nothing about surrounding text or spacing changes.
+function isolateDigits(value: string): string {
+  return `⁦${value}⁩`
+}
+
 const HOURS_COPY: Record<Lang, { closedToday: string; openUntil: (close: string) => string; closedNow: (open: string, close: string) => string }> = {
   he: {
     closedToday: 'סגור היום',
-    openUntil: (close) => `פתוח עד ${close}`,
-    closedNow: (open, close) => `סגור כרגע · ${open}–${close}`,
+    openUntil: (close) => `פתוח עד ${isolateDigits(close)}`,
+    closedNow: (open, close) => `סגור כרגע · ${isolateDigits(`${open}–${close}`)}`,
   },
   en: {
     closedToday: 'Closed today',
-    openUntil: (close) => `Open until ${close}`,
-    closedNow: (open, close) => `Closed now · ${open}–${close}`,
+    openUntil: (close) => `Open until ${isolateDigits(close)}`,
+    closedNow: (open, close) => `Closed now · ${isolateDigits(`${open}–${close}`)}`,
   },
   ar: {
     closedToday: 'مغلق اليوم',
-    openUntil: (close) => `مفتوح حتى ${close}`,
-    closedNow: (open, close) => `مغلق الآن · ${open}–${close}`,
+    openUntil: (close) => `مفتوح حتى ${isolateDigits(close)}`,
+    closedNow: (open, close) => `مغلق الآن · ${isolateDigits(`${open}–${close}`)}`,
   },
 }
 

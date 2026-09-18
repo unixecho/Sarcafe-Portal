@@ -33,8 +33,18 @@ type MenuCopy = {
   soldOut: string
   switchBranch: string
   currentBranch: string
-  left: (n: number) => string
+  left: (n: number) => React.ReactNode
 }
+
+// Only the bare number is LTR-isolated, never the whole phrase — wrapping a
+// mixed Hebrew/Arabic-plus-number STRING in ltr-isolate (direction:ltr) was
+// setting that element's own text-align:start to LEFT (misaligning it from
+// everything else on the page) and, worse, made marginInlineStart resolve
+// against the WRONG physical side, collapsing the gap before it entirely —
+// confirmed live as "מלוחהנותרו" instead of "מלוחה · נותרו 1". The Hebrew/
+// Arabic word itself needs no isolation; it's already the page's own
+// direction.
+const numberSpan = (n: number) => <span className="ltr-isolate">{n}</span>
 
 const T: Record<Lang, MenuCopy> = {
   he: {
@@ -46,7 +56,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'אזל',
     switchBranch: 'החלפת סניף',
     currentBranch: 'סניף נוכחי',
-    left: (n) => `נותרו ${n}`,
+    left: (n) => <>נותרו {numberSpan(n)}</>,
   },
   en: {
     viewOnly: 'This menu is for display only — order and pay at the truck.',
@@ -57,7 +67,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'Sold out',
     switchBranch: 'Change branch',
     currentBranch: 'Current branch',
-    left: (n) => `${n} left`,
+    left: (n) => <>{numberSpan(n)} left</>,
   },
   ar: {
     viewOnly: 'القائمة للعرض فقط — الطلب والدفع عند العربة.',
@@ -68,7 +78,7 @@ const T: Record<Lang, MenuCopy> = {
     soldOut: 'نفدت الكمية',
     switchBranch: 'تغيير الفرع',
     currentBranch: 'الفرع الحالي',
-    left: (n) => `تبقّى ${n}`,
+    left: (n) => <>تبقّى {numberSpan(n)}</>,
   },
 }
 
@@ -221,8 +231,9 @@ export default function MenuView({
 
   const content = (
     <PublicBackdrop>
-      <main id="main" tabIndex={-1} style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
+      <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
         <div className="menu-sticky" ref={stickyRef}>
+        <div className="menu-sticky-inner">
           <div className="menu-topbar">
             <div className="menu-lang-slot rise" style={{ animationDelay: '20ms' }}>
               <LanguageSwitch lang={lang} onChange={setLang} variant="inline" />
@@ -247,7 +258,6 @@ export default function MenuView({
           <p style={{ margin: '0 16px 8px', fontSize: '0.76rem', color: 'var(--text-faint)', textAlign: 'center' }}>{t.viewOnly}</p>
 
           <p
-            className="ltr-isolate"
             style={{
               margin: '0 16px 8px',
               display: 'flex',
@@ -302,6 +312,7 @@ export default function MenuView({
               </nav>
             </div>
           )}
+        </div>
         </div>
 
         <SheetShell open={branchSheetOpen} onClose={() => setBranchSheetOpen(false)} labelledBy="branch-switch-title">
@@ -413,7 +424,7 @@ export default function MenuView({
                               same treatment as item.note below, since this
                               is exactly that: a second line of status. */}
                           {!soldOut && item.quantity !== undefined && (
-                            <p className="ltr-isolate" style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)', fontWeight: 600 }}>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)', fontWeight: 600 }}>
                               {t.left(item.quantity)}
                             </p>
                           )}
@@ -443,7 +454,7 @@ export default function MenuView({
                                       <span style={{ marginInlineStart: 5, color: '#ff8a5c', fontWeight: 700 }}>· {t.soldOut}</span>
                                     )}
                                     {!typeSoldOut && type.quantity !== undefined && (
-                                      <span className="ltr-isolate" style={{ marginInlineStart: 5 }}>· {t.left(type.quantity)}</span>
+                                      <span style={{ marginInlineStart: 5 }}>· {t.left(type.quantity)}</span>
                                     )}
                                   </li>
                                 )

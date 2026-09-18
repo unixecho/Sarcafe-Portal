@@ -331,9 +331,7 @@ export default function PortalPage() {
                       >
                         <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
                           <span style={{ fontWeight: 700, fontSize: '1.05rem' }}>{b.name[lang] || b.name.he}</span>
-                          <small className="ltr-isolate" style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>
-                            {hoursStatusLabel(b, lang)}
-                          </small>
+                          <small style={{ color: 'var(--text-faint)', fontSize: '0.72rem' }}>{hoursStatusLabel(b, lang)}</small>
                         </span>
                         {isCurrent && (
                           <span
@@ -385,7 +383,6 @@ export default function PortalPage() {
                 <p style={{ margin: 0, color: 'var(--neon-soft)', fontSize: '0.8rem', fontWeight: 700 }}>{t.branchLabel}</p>
                 <h1 style={{ margin: '4px 0 6px', fontSize: '1.6rem', fontWeight: 800 }}>{branch.name[lang] || branch.name.he}</h1>
                 <p
-                  className="ltr-isolate"
                   style={{
                     margin: '0 0 10px',
                     display: 'flex',

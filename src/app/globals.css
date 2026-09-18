@@ -739,6 +739,18 @@ html[dir='rtl'] .menu-item-name {
   position: sticky;
   top: 0;
   z-index: 10;
+  /* Full-bleed: <main> caps content at a readable column (640px), but a bar
+     only as wide as that column reads as a floating box with a hard edge on
+     a wider viewport (tablet/desktop) — a real nav bar spans whatever the
+     device actually gives it. Physical margins on purpose, not
+     margin-inline-*: this centering trick is a pure geometry calculation
+     against the viewport, and a logical property here would resolve against
+     THIS element's own direction rather than doing the intended symmetric
+     pull from both sides. .menu-sticky-inner below re-applies the column
+     width so the bar's actual content still lines up with the page below it. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   /* Deliberately more transparent than --glass-strong (which login/no-access
      use over a mostly-static crop) — this bar is pinned over the one
      backdrop image users actually scroll content past, so a near-opaque
@@ -760,6 +772,12 @@ html[dir='rtl'] .menu-item-name {
      is the same exception the sheet scrim already relies on (§4.6): the
      blurred region never moves or resizes, it only fades in place. */
   view-transition-name: menu-header;
+}
+/* Re-caps the bar's actual content at the same column <main> uses, since
+   .menu-sticky itself now spans the full viewport for its background/blur. */
+.menu-sticky-inner {
+  max-width: 640px;
+  margin: 0 auto;
 }
 @keyframes menu-header-fade-in {
   from { opacity: 0; }
