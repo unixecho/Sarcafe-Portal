@@ -82,3 +82,48 @@ export const DELETE = apiRoute(async (request: NextRequest) => {
 
   return NextResponse.json({ ok: true, published: publish })
 })
+
+// Flips an item between "plain item" (its own price/availability/quantity)
+// and "subcategory" (a container whose real, sellable entries are its
+// types — see migration 016). Converting to a container is always safe
+// (idempotent); converting back is refused here with a real error, not
+// silently ignored, while the item still has sub-items — set_item_
+// container_in_doc() also protects this at the SQL layer, but the app
+// layer is what turns it into a message the tablet can show instead of a
+// bare RPC failure.
+const containerSchema = z.object({ branch: z.string(), itemUid: z.string(), isContainer: z.boolean() })
+
+export const PATCH = apiRoute(async (request: NextRequest) => {
+  const body = containerSchema.parse(await request.json())
+  const { service, menuId, branchId, draft, staff, publish } = await resolveTabletWrite(body.branch)
+
+  const item = draft.categories.flatMap((c) => c.items).find((i) => i.uid === body.itemUid)
+  const label = item?.he || 'פריט'
+  if (!body.isContainer && item?.types?.length) {
+    throw BadRequest('Remove this item’s sub-items before turning it back into a plain item.')
+  }
+
+  const { error } = await service.rpc('set_menu_item_container', {
+    p_menu_id: menuId,
+    p_item_uid: body.itemUid,
+    p_is_container: body.isContainer,
+    p_publish: publish,
+  })
+  if (error) throw BadRequest('Could not update item.')
+
+  const summaryBase = body.isContainer
+    ? `הפך פריט לתת-קטגוריה (מהטאבלט): ${label}`
+    : `הפך תת-קטגוריה לפריט רגיל (מהטאבלט): ${label}`
+  await logMenuAudit(service, {
+    actor: staff,
+    branchId,
+    menuId,
+    action: 'menu.item.container',
+    summary: publish ? summaryBase : `${summaryBase} (מחוץ לשעות הפעילות — לא פורסם ללקוחות)`,
+    detail: { itemUid: body.itemUid, isContainer: body.isContainer, published: publish },
+  })
+
+  if (publish) await broadcastMenuUpdated(body.branch)
+
+  return NextResponse.json({ ok: true, published: publish })
+})

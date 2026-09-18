@@ -408,12 +408,15 @@ export default function MenuView({
                                 {t.soldOut}
                               </span>
                             )}
-                            {!soldOut && item.quantity !== undefined && (
-                              <span className="ltr-isolate" style={{ marginInlineStart: 8, fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 600 }}>
-                                {t.left(item.quantity)}
-                              </span>
-                            )}
                           </p>
+                          {/* Its own line, not crowded against the name —
+                              same treatment as item.note below, since this
+                              is exactly that: a second line of status. */}
+                          {!soldOut && item.quantity !== undefined && (
+                            <p className="ltr-isolate" style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)', fontWeight: 600 }}>
+                              {t.left(item.quantity)}
+                            </p>
+                          )}
                           {item.note && (
                             <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
                               {localized(item.note, lang)}

@@ -14,6 +14,7 @@ export type MenuAuditAction =
   | 'menu.availability'
   | 'menu.item.add'
   | 'menu.item.remove'
+  | 'menu.item.container'
   | 'variant.create'
   | 'variant.update'
   | 'variant.delete'

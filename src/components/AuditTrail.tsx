@@ -26,6 +26,7 @@ const AUDIT_LABELS: Record<string, string> = {
   'menu.availability': 'עדכון זמינות',
   'menu.item.add': 'הוספת פריט מהטאבלט',
   'menu.item.remove': 'הסרת פריט מהטאבלט',
+  'menu.item.container': 'שינוי מבנה פריט מהטאבלט',
   'variant.create': 'יצירת גרסה',
   'variant.update': 'עדכון גרסה',
   'variant.delete': 'מחיקת גרסה',
