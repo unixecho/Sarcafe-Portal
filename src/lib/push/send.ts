@@ -92,18 +92,31 @@ export async function notifyOrderReady(orderId: string, orderNumber: number): Pr
   }
 }
 
-export type TestNotificationResult = { configured: boolean; subscriptions: number; sent: number }
+export type TestNotificationResult = {
+  configured: boolean
+  subscriptions: number
+  sent: number
+  /** The first failure's detail, verbatim from the push service — surfaced
+   *  all the way to the customer's screen on purpose. There is no server
+   *  log this session can read, so "sent: 0" alone would be a dead end;
+   *  the raw statusCode/body (e.g. a VAPID key mismatch, a expired
+   *  subscription) is the one thing that actually lets a failure get
+   *  diagnosed from a screenshot. */
+  error: { statusCode: number | null; detail: string } | null
+}
 
 /** Customer-triggered self-check ("שליחת התראת בדיקה" in NotificationPrimer) —
  *  answers "does this browser actually have a working push subscription"
  *  immediately, instead of the customer having to wait for a real order
  *  to reach Ready to find out enabling notifications didn't stick. */
 export async function sendTestNotification(orderId: string): Promise<TestNotificationResult> {
-  if (!ensureVapidConfigured()) return { configured: false, subscriptions: 0, sent: 0 }
+  if (!ensureVapidConfigured()) {
+    return { configured: false, subscriptions: 0, sent: 0, error: { statusCode: null, detail: 'VAPID env vars missing or invalid on the server.' } }
+  }
 
   const service = createServiceRoleClient()
   const rows = await loadSubscriptions(service, orderId)
-  if (rows.length === 0) return { configured: true, subscriptions: 0, sent: 0 }
+  if (rows.length === 0) return { configured: true, subscriptions: 0, sent: 0, error: null }
 
   const results = await Promise.all(
     rows.map((row) =>
@@ -119,23 +132,34 @@ export async function sendTestNotification(orderId: string): Promise<TestNotific
       )
     )
   )
-  return { configured: true, subscriptions: rows.length, sent: results.filter(Boolean).length }
+  const sent = results.filter((r) => r.ok).length
+  const firstFailure = results.find((r) => !r.ok)
+  return {
+    configured: true,
+    subscriptions: rows.length,
+    sent,
+    error: firstFailure ? { statusCode: firstFailure.statusCode, detail: firstFailure.detail } : null,
+  }
 }
 
-async function sendToOne(service: ReturnType<typeof createServiceRoleClient>, row: SubscriptionRow, payload: string): Promise<boolean> {
+type SendOutcome = { ok: boolean; statusCode: number | null; detail: string }
+
+async function sendToOne(service: ReturnType<typeof createServiceRoleClient>, row: SubscriptionRow, payload: string): Promise<SendOutcome> {
   try {
     await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload, {
       urgency: 'high',
       TTL: 60 * 60 * 6, // 6h — no point delivering "ready" long after a truck's line has moved on
     })
-    return true
+    return { ok: true, statusCode: null, detail: '' }
   } catch (err) {
-    const statusCode = (err as { statusCode?: number } | null)?.statusCode
+    const webPushErr = err as { statusCode?: number; body?: string; message?: string } | null
+    const statusCode = webPushErr?.statusCode ?? null
+    const detail = webPushErr?.body || webPushErr?.message || String(err)
     if (statusCode === 404 || statusCode === 410) {
       await service.from('order_push_subscriptions').delete().eq('id', row.id)
     } else {
-      console.error('Push send failed:', statusCode, err instanceof Error ? err.message : err)
+      console.error('Push send failed:', statusCode, detail)
     }
-    return false
+    return { ok: false, statusCode, detail }
   }
 }
