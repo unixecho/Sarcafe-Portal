@@ -51,6 +51,23 @@ export async function registerOrderServiceWorker(): Promise<ServiceWorkerRegistr
   }
 }
 
+/** A PushSubscription's applicationServerKey is fixed for the life of the
+ *  subscription — it's whatever key was passed to subscribe() at creation
+ *  time, regardless of what the server is configured with today. If the
+ *  server's VAPID key ever changes (rotated, or fixing a corrupted key
+ *  that was pasted in wrong), a browser that subscribed against the OLD
+ *  key keeps silently failing forever: getSubscription() still returns a
+ *  live-looking subscription, so naive code never re-subscribes. This is
+ *  what lets a single bad key produce a permanent "granted but nothing
+ *  ever arrives" state that no amount of toggling permission fixes. */
+function subscriptionMatchesKey(subscription: PushSubscription, desiredKey: Uint8Array): boolean {
+  const existing = subscription.options.applicationServerKey
+  if (!existing) return false
+  const existingBytes = new Uint8Array(existing)
+  if (existingBytes.length !== desiredKey.length) return false
+  return existingBytes.every((byte, i) => byte === desiredKey[i])
+}
+
 /** Subscribes this browser to push and reports it to the server against
  *  `token`. Returns whether it fully succeeded — every failure mode
  *  (permission denied elsewhere in the flow, subscribe() throwing, the
@@ -64,7 +81,18 @@ export async function subscribeToOrderPush(token: string, pageUrl: string): Prom
     const registration = await registerOrderServiceWorker()
     if (!registration) return false
 
+    const desiredKey = urlBase64ToUint8Array(publicKey)
     let subscription = await registration.pushManager.getSubscription()
+
+    // Self-heal a subscription tied to a stale/mismatched key (see
+    // subscriptionMatchesKey's header) instead of reusing it as-is —
+    // otherwise a server-side VAPID key fix never reaches browsers that
+    // already "succeeded" against the old one.
+    if (subscription && !subscriptionMatchesKey(subscription, desiredKey)) {
+      await subscription.unsubscribe()
+      subscription = null
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -72,7 +100,7 @@ export async function subscribeToOrderPush(token: string, pageUrl: string): Prom
         // generic ArrayBufferLike parameter disagree under current
         // TypeScript/lib versions even though this is exactly the shape
         // every browser's subscribe() expects at runtime.
-        applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+        applicationServerKey: desiredKey as BufferSource,
       })
     }
 
