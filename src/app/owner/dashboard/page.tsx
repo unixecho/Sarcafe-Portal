@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock } from 'lucide-react'
+import { ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, ShoppingBag } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import DashboardLive from '@/components/DashboardLive'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
@@ -14,6 +14,7 @@ import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 export const dynamic = 'force-dynamic'
 
 const TILES = [
+  { href: '/staff/pos', icon: ShoppingBag, label: 'קופה' },
   { href: '/owner/editor', icon: ClipboardList, label: 'עריכת תפריט' },
   { href: '/owner/tablet', icon: Tablet, label: 'זמינות בזמן אמת' },
   { href: '/owner/staff', icon: Users, label: 'צוות' },

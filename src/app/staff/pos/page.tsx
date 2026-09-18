@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import OwnerHeader from '@/components/OwnerHeader'
-import StaffScheduleShell from '@/components/shifts/StaffScheduleShell'
+import OrdersWorkspace from '@/components/orders/OrdersWorkspace'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isStaff } from '@/lib/staff/access'
 import { getBranches } from '@/lib/branches/server'
@@ -9,12 +9,11 @@ import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 
 export const dynamic = 'force-dynamic'
 
-// Self-service schedule view for any active staff member — the read side
-// of canViewSchedule() is just "branch_id is null (all-branch) or matches",
-// so unlike /owner/schedule there's no per-branch delegation to resolve:
-// a staff row scoped to one branch sees only that branch, an all-branch row
-// (or an owner/GM who has no schedules to manage) sees every branch.
-export default async function StaffSchedulePage() {
+// The register — any active staff member's landing page for taking orders
+// and working the live board. Same branch-visibility rule as
+// /staff/schedule: a branch-scoped staff row sees only their branch, an
+// all-branch row sees every branch.
+export default async function StaffPosPage() {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -38,8 +37,8 @@ export default async function StaffSchedulePage() {
 
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
-      <OwnerHeader title="לוח משמרות" backHref="/staff" />
-      <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} />
+      <OwnerHeader title="קופה" backHref="/staff" />
+      <OrdersWorkspace branches={visibleBranches} initialBranch={initialBranch} />
     </main>
   )
 }
