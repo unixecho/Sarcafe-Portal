@@ -1,8 +1,11 @@
-// Server-only Web Push sender. Fires exactly once per order lifecycle —
-// on the READY transition, per SARCafe-ARCHITECTURE-AUDIT.md §7's own
-// scoping ("Triggered server-side on the READY transition only") — never
-// on new/preparing/completed, to avoid notification fatigue over a single
-// short order.
+// Server-only Web Push sender. The real "ready" notification fires
+// exactly once per order lifecycle — on the READY transition, per
+// SARCafe-ARCHITECTURE-AUDIT.md §7's own scoping ("Triggered server-side
+// on the READY transition only") — never on new/preparing/completed, to
+// avoid notification fatigue over a single short order. sendTestNotification
+// is the one deliberate exception: a customer-triggered self-check so
+// "did enabling notifications actually work?" has an answer that doesn't
+// depend on waiting for a real order to reach Ready.
 //
 // BULLETPROOF POSTURE:
 //  - Every call is wrapped so a push failure (missing VAPID config, the
@@ -15,6 +18,14 @@
 //  - Every subscription for the order gets its own independent
 //    try/catch: one dead endpoint must never stop the others (a
 //    household sharing one order might have two phones subscribed).
+//  - Callers in a Route Handler MUST schedule notifyOrderReady() via
+//    next/server's after(), never a bare `void` call — a serverless
+//    function can be frozen the instant its response is sent, and this
+//    does a real DB round trip plus an HTTP call to the push service,
+//    both slower than the response it's riding on. A fire-and-forget
+//    call here was a real production bug: it looked like it worked
+//    (the subscription existed, permission was granted) but the send
+//    itself kept getting cut off mid-flight.
 
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -29,7 +40,7 @@ function ensureVapidConfigured(): boolean {
   const subject = process.env.VAPID_SUBJECT
 
   if (!publicKey || !privateKey || !subject) {
-    console.error('Web Push not configured (missing VAPID env vars) — skipping notifyOrderReady.')
+    console.error('Web Push not configured (missing VAPID env vars) — skipping send.')
     vapidReady = false
     return false
   }
@@ -46,17 +57,17 @@ function ensureVapidConfigured(): boolean {
 
 type SubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string; page_url: string }
 
+async function loadSubscriptions(service: ReturnType<typeof createServiceRoleClient>, orderId: string): Promise<SubscriptionRow[]> {
+  const { data } = await service.from('order_push_subscriptions').select('id, endpoint, p256dh, auth, page_url').eq('order_id', orderId)
+  return (data as SubscriptionRow[] | null) ?? []
+}
+
 export async function notifyOrderReady(orderId: string, orderNumber: number): Promise<void> {
   try {
     if (!ensureVapidConfigured()) return
 
     const service = createServiceRoleClient()
-    const { data: subs } = await service
-      .from('order_push_subscriptions')
-      .select('id, endpoint, p256dh, auth, page_url')
-      .eq('order_id', orderId)
-
-    const rows = (subs as SubscriptionRow[] | null) ?? []
+    const rows = await loadSubscriptions(service, orderId)
     if (rows.length === 0) return
 
     // Built per-subscription (not once, shared) because `url` comes from
@@ -81,16 +92,43 @@ export async function notifyOrderReady(orderId: string, orderNumber: number): Pr
   }
 }
 
-async function sendToOne(
-  service: ReturnType<typeof createServiceRoleClient>,
-  row: SubscriptionRow,
-  payload: string
-): Promise<void> {
+export type TestNotificationResult = { configured: boolean; subscriptions: number; sent: number }
+
+/** Customer-triggered self-check ("שליחת התראת בדיקה" in NotificationPrimer) —
+ *  answers "does this browser actually have a working push subscription"
+ *  immediately, instead of the customer having to wait for a real order
+ *  to reach Ready to find out enabling notifications didn't stick. */
+export async function sendTestNotification(orderId: string): Promise<TestNotificationResult> {
+  if (!ensureVapidConfigured()) return { configured: false, subscriptions: 0, sent: 0 }
+
+  const service = createServiceRoleClient()
+  const rows = await loadSubscriptions(service, orderId)
+  if (rows.length === 0) return { configured: true, subscriptions: 0, sent: 0 }
+
+  const results = await Promise.all(
+    rows.map((row) =>
+      sendToOne(
+        service,
+        row,
+        JSON.stringify({
+          title: 'בדיקת התראות ✓',
+          body: 'אם קיבלתם את זה — ההתראות עובדות! נעדכן אתכם כשההזמנה תהיה מוכנה.',
+          orderId,
+          url: row.page_url,
+        })
+      )
+    )
+  )
+  return { configured: true, subscriptions: rows.length, sent: results.filter(Boolean).length }
+}
+
+async function sendToOne(service: ReturnType<typeof createServiceRoleClient>, row: SubscriptionRow, payload: string): Promise<boolean> {
   try {
     await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload, {
       urgency: 'high',
       TTL: 60 * 60 * 6, // 6h — no point delivering "ready" long after a truck's line has moved on
     })
+    return true
   } catch (err) {
     const statusCode = (err as { statusCode?: number } | null)?.statusCode
     if (statusCode === 404 || statusCode === 410) {
@@ -98,5 +136,6 @@ async function sendToOne(
     } else {
       console.error('Push send failed:', statusCode, err instanceof Error ? err.message : err)
     }
+    return false
   }
 }
