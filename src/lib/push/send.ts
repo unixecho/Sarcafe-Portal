@@ -1,11 +1,16 @@
-// Server-only Web Push sender. The real "ready" notification fires
-// exactly once per order lifecycle — on the READY transition, per
-// SARCafe-ARCHITECTURE-AUDIT.md §7's own scoping ("Triggered server-side
-// on the READY transition only") — never on new/preparing/completed, to
-// avoid notification fatigue over a single short order. sendTestNotification
-// is the one deliberate exception: a customer-triggered self-check so
-// "did enabling notifications actually work?" has an answer that doesn't
-// depend on waiting for a real order to reach Ready.
+// Server-only Web Push sender. Two notifications fire per order
+// lifecycle — PREPARING ("we've started on it") and READY ("come get
+// it") — and nothing on new/completed/cancelled. This widens
+// SARCafe-ARCHITECTURE-AUDIT.md §7's original "READY transition only"
+// scoping at the owner's explicit request: for a walk-up truck, knowing
+// the barista has actually picked up your ticket is the difference
+// between waiting comfortably and hovering at the counter. Two is still
+// well under the fatigue threshold for a single short order, and the
+// service worker tags both with the same `order-<id>` so the second
+// REPLACES the first in the tray rather than stacking (see public/sw.js).
+// sendTestNotification is the one deliberate extra: a customer-triggered
+// self-check so "did enabling notifications actually work?" has an
+// answer that doesn't depend on waiting for a real order to progress.
 //
 // BULLETPROOF POSTURE:
 //  - Every call is wrapped so a push failure (missing VAPID config, the
@@ -18,7 +23,7 @@
 //  - Every subscription for the order gets its own independent
 //    try/catch: one dead endpoint must never stop the others (a
 //    household sharing one order might have two phones subscribed).
-//  - Callers in a Route Handler MUST schedule notifyOrderReady() via
+//  - Callers in a Route Handler MUST schedule notifyOrderStatus() via
 //    next/server's after(), never a bare `void` call — a serverless
 //    function can be frozen the instant its response is sent, and this
 //    does a real DB round trip plus an HTTP call to the push service,
@@ -62,7 +67,22 @@ async function loadSubscriptions(service: ReturnType<typeof createServiceRoleCli
   return (data as SubscriptionRow[] | null) ?? []
 }
 
-export async function notifyOrderReady(orderId: string, orderNumber: number): Promise<void> {
+/** The two order milestones a customer gets told about. `preparing` is
+ *  deliberately phrased as reassurance (nothing to do yet) and `ready` as
+ *  a call to action, so a glance at the lock screen is enough to know
+ *  whether to get up. */
+const NOTIFICATION_COPY: Record<'preparing' | 'ready', (orderNumber: number) => { title: string; body: string }> = {
+  preparing: (orderNumber) => ({
+    title: 'התחלנו להכין ☕',
+    body: `הזמנה #${orderNumber} בהכנה עכשיו — נעדכן אתכם ברגע שתהיה מוכנה.`,
+  }),
+  ready: (orderNumber) => ({
+    title: 'ההזמנה שלכם מוכנה! ☕',
+    body: `הזמנה #${orderNumber} מחכה לכם בדלפק.`,
+  }),
+}
+
+export async function notifyOrderStatus(orderId: string, orderNumber: number, status: 'preparing' | 'ready'): Promise<void> {
   try {
     if (!ensureVapidConfigured()) return
 
@@ -70,25 +90,16 @@ export async function notifyOrderReady(orderId: string, orderNumber: number): Pr
     const rows = await loadSubscriptions(service, orderId)
     if (rows.length === 0) return
 
+    const { title, body } = NOTIFICATION_COPY[status](orderNumber)
+
     // Built per-subscription (not once, shared) because `url` comes from
     // each row's own stored page_url — see migration 018's header on why
     // the server can't reconstruct a token-bearing URL any other way.
     await Promise.all(
-      rows.map((row) =>
-        sendToOne(
-          service,
-          row,
-          JSON.stringify({
-            title: 'ההזמנה שלכם מוכנה! ☕',
-            body: `הזמנה #${orderNumber} מחכה לכם בדלפק.`,
-            orderId,
-            url: row.page_url,
-          })
-        )
-      )
+      rows.map((row) => sendToOne(service, row, JSON.stringify({ title, body, orderId, url: row.page_url })))
     )
   } catch (err) {
-    console.error('notifyOrderReady failed:', err instanceof Error ? err.message : err)
+    console.error(`notifyOrderStatus(${status}) failed:`, err instanceof Error ? err.message : err)
   }
 }
 

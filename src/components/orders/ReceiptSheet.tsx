@@ -162,7 +162,7 @@ function buildReceiptHtml({
 </head>
 <body>
   <div class="receipt">
-    <h1>SARCafe</h1>
+    <h1>SarCafe</h1>
     <p class="sub">הזמנה #${orderNumber}</p>
     <table>${rows}</table>
     <div class="total"><span>סה״כ</span><span>${total.toFixed(2)} ₪</span></div>

@@ -1,4 +1,4 @@
-# SARCafe — Architecture Audit
+# SarCafe — Architecture Audit
 
 Audit date: 2026-09-11
 Repo audited: [unixecho/Sarcafe-Portal](https://github.com/unixecho/Sarcafe-Portal) @ `main` (b5dc969), plus branches `giftcard-demo` and `claude/coffee-truck-digital-menus-eoeqn2`.

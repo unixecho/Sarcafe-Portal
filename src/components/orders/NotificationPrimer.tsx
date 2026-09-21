@@ -174,7 +174,7 @@ export default function NotificationPrimer({ token }: { token: string }) {
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
           <Smartphone size={20} aria-hidden="true" style={iconStyle} />
           <div style={{ flex: 1 }}>
-            <p style={titleStyle}>הוסיפו את SARCafe למסך הבית</p>
+            <p style={titleStyle}>הוסיפו את SarCafe למסך הבית</p>
             <p style={bodyStyle}>
               ככה תוכלו לקבל התראה מיידית ברגע שההזמנה מוכנה — ולא לפספס אותה. זה גם הופך את המעקב לתחושה של
               אפליקציה אמיתית, לא רק עמוד באינטרנט.
@@ -188,7 +188,7 @@ export default function NotificationPrimer({ token }: { token: string }) {
             הדפדפן
           </li>
           <li>גללו ובחרו &quot;הוספה למסך הבית&quot;</li>
-          <li>פתחו את SARCafe ממסך הבית וחזרו לכאן להפעלת התראות</li>
+          <li>פתחו את SarCafe ממסך הבית וחזרו לכאן להפעלת התראות</li>
         </ol>
       </div>
     )

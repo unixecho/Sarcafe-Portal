@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 import { readSetting } from '@/lib/settings/server'
 import { DEFAULT_ACCESSIBILITY_STATEMENT, type AccessibilityStatement } from '@/lib/settings/keys'
 import PublicBackdrop from '@/components/PublicBackdrop'
+import ClientPageFooter from '@/components/ClientPageFooter'
 
 export const metadata = { title: 'Sarcafe | מדיניות פרטיות' }
 // Data-fetching (readSetting → Supabase) at request time, not build time —
@@ -139,6 +140,7 @@ export default async function PrivacyPolicyPage() {
 
           <p style={{ marginTop: 24, fontSize: '0.78rem', color: 'var(--text-faint)' }}>עודכן לאחרונה: ספטמבר 2026</p>
         </div>
+        <ClientPageFooter />
       </main>
     </PublicBackdrop>
   )

@@ -29,6 +29,7 @@ type MenuCopy = {
   back: string
   footer: string
   accessibility: string
+  privacy: string
   shekel: string
   soldOut: string
   switchBranch: string
@@ -52,6 +53,7 @@ const T: Record<Lang, MenuCopy> = {
     back: 'לפורטל',
     footer: 'המחירים בשקלים חדשים וכוללים מע"מ.',
     accessibility: 'הצהרת נגישות',
+    privacy: 'מדיניות פרטיות',
     shekel: '₪',
     soldOut: 'אזל',
     switchBranch: 'החלפת סניף',
@@ -63,6 +65,7 @@ const T: Record<Lang, MenuCopy> = {
     back: 'Back to portal',
     footer: 'Prices are in NIS and include VAT.',
     accessibility: 'Accessibility statement',
+    privacy: 'Privacy policy',
     shekel: '₪',
     soldOut: 'Sold out',
     switchBranch: 'Change branch',
@@ -74,6 +77,7 @@ const T: Record<Lang, MenuCopy> = {
     back: 'إلى البوابة',
     footer: 'الأسعار بالشيكل الجديد وتشمل ضريبة القيمة المضافة.',
     accessibility: 'بيان إمكانية الوصول',
+    privacy: 'سياسة الخصوصية',
     shekel: '₪',
     soldOut: 'نفدت الكمية',
     switchBranch: 'تغيير الفرع',
@@ -489,6 +493,13 @@ export default function MenuView({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, fontSize: '0.78rem', color: 'var(--neon-2)' }}
           >
             <Accessibility size={15} aria-hidden="true" /> {t.accessibility}
+          </Link>
+          <Link
+            href="/privacy"
+            className="press"
+            style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, marginInlineStart: 14, fontSize: '0.78rem', color: 'var(--text-faint)', textDecoration: 'underline' }}
+          >
+            {t.privacy}
           </Link>
           {/* Same reachable spot the portal's footer gives it — WCAG 2.2
               3.2.6 Consistent Help wants one predictable place, not a
