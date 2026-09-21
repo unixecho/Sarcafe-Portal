@@ -22,13 +22,20 @@ import type { OrderAccess } from './types'
 
 type Service = ReturnType<typeof createServiceRoleClient>
 
-type OrderRouting = { branchId: string; branchSlug: string; orderNumber: number }
+type OrderRouting = { branchId: string; branchSlug: string; branchName: string | null; orderNumber: number }
 
 async function loadOrderRouting(service: Service, orderId: string): Promise<OrderRouting> {
   const { data: order } = await service.from('orders').select('branch_id, order_number').eq('id', orderId).maybeSingle()
   if (!order) throw NotFound('Order not found.')
-  const { data: branch } = await service.from('branches').select('slug').eq('id', order.branch_id).maybeSingle()
-  return { branchId: order.branch_id as string, branchSlug: (branch?.slug as string) ?? '', orderNumber: order.order_number as number }
+  // `name` rides along on the branch lookup the slug already needs — it's
+  // what puts the branch into the push notification's title.
+  const { data: branch } = await service.from('branches').select('slug, name').eq('id', order.branch_id).maybeSingle()
+  return {
+    branchId: order.branch_id as string,
+    branchSlug: (branch?.slug as string) ?? '',
+    branchName: (branch?.name as { he?: string } | null)?.he ?? null,
+    orderNumber: order.order_number as number,
+  }
 }
 
 export type DispatchResult = { orderId?: string; orderNumber?: number; access?: OrderAccess }
@@ -84,7 +91,7 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
     }
 
     case 'advanceStatus': {
-      const { branchId, branchSlug, orderNumber } = await loadOrderRouting(service, action.orderId)
+      const { branchId, branchSlug, branchName, orderNumber } = await loadOrderRouting(service, action.orderId)
       await requireOrderStaff(branchId)
       const { error } = await service.rpc('advance_order_status', { p_order_id: action.orderId, p_to_status: action.toStatus })
       if (error) throw BadRequest(error.message || 'Could not update the order.')
@@ -102,7 +109,7 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
       // status update — see lib/push/send.ts's own header for that part.
       const notified = action.toStatus
       if (notified === 'preparing' || notified === 'ready') {
-        after(() => notifyOrderStatus(action.orderId, orderNumber, notified))
+        after(() => notifyOrderStatus(action.orderId, orderNumber, notified, branchName))
       }
       return {}
     }

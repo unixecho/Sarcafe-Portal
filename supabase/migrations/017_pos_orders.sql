@@ -2,7 +2,7 @@
 -- Safe to re-run, same discipline as migration 010: every CREATE is
 -- IF NOT EXISTS / OR REPLACE, every policy is dropped first.
 --
--- The POS order system — Phase 2 from SARCafe-ARCHITECTURE-AUDIT.md §7/§9.
+-- The POS order system — Phase 2 from SarCafe-ARCHITECTURE-AUDIT.md §7/§9.
 -- Scope for this pass: order creation (staff-entered, register-style),
 -- the state machine (new -> preparing -> ready -> completed, cancel as a
 -- separate owner/GM-only branch), and a live order board. NOT in this

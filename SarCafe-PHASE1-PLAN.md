@@ -1,6 +1,6 @@
 # SarCafe — Phase 1 Plan (Portal + Dashboard + Menu Versioning + Login)
 
-Supersedes the "design fresh" direction in `SARCafe-ARCHITECTURE-AUDIT.md` §7 for the pieces AyekaBar already solved well. Source: a full read of [unixecho/AyekaBar](https://github.com/unixecho/AyekaBar) (auth, owner dashboard, menu versioning, design system, accessibility widget, RBAC/schema — 48 migrations read in full).
+Supersedes the "design fresh" direction in `SarCafe-ARCHITECTURE-AUDIT.md` §7 for the pieces AyekaBar already solved well. Source: a full read of [unixecho/AyekaBar](https://github.com/unixecho/AyekaBar) (auth, owner dashboard, menu versioning, design system, accessibility widget, RBAC/schema — 48 migrations read in full).
 
 ## Decision: what's mirrored, what's adapted, what's excluded
 
@@ -16,7 +16,7 @@ Supersedes the "design fresh" direction in `SARCafe-ARCHITECTURE-AUDIT.md` §7 f
 | Accessibility **statement** page/editor (legal IS 5568 text, owner CMS) | **Ported**, copy rewritten for Sarcafe (still Israeli IS 5568 / WCAG 2.2 AA target — same legal requirement applies). |
 | Rate limiting (`rate_limits` table, atomic `check_rate_limit()` RPC, fail-open posture, explicit `revoke ... from public` on every `SECURITY DEFINER` function) | **Mirrored as-is** — this is exactly the pattern Phase 2/3's recovery-code/QR endpoints will need later, so it's worth having in place now. |
 | `app_settings` generic key-value table, `is_public` RLS, Next.js data-cache-tagged reads | **Mirrored**, with a note: any Sarcafe setting that must differ per branch uses a composite key (`key:branchSlug`) — AyekaBar never needed this since it has one venue. |
-| Waiter/floor-plan/table system, shift scheduling, loyalty/QR check-ins, bar-tab/pool-session features | **Excluded from Phase 1 entirely.** These are AyekaBar's bar-specific operational modules (table service, seating, shift dispatch) — Sarcafe is a walk-up food-truck counter with no seating to manage. None of this is requested and adding it would violate "don't overengineer." Phase 2+3's order/kitchen/QR/push system is a different, new build (see `SARCafe-ARCHITECTURE-AUDIT.md`), not a AyekaBar port. |
+| Waiter/floor-plan/table system, shift scheduling, loyalty/QR check-ins, bar-tab/pool-session features | **Excluded from Phase 1 entirely.** These are AyekaBar's bar-specific operational modules (table service, seating, shift dispatch) — Sarcafe is a walk-up food-truck counter with no seating to manage. None of this is requested and adding it would violate "don't overengineer." Phase 2+3's order/kitchen/QR/push system is a different, new build (see `SarCafe-ARCHITECTURE-AUDIT.md`), not a AyekaBar port. |
 | `staff` table (global, no location column) | **Adapted, not mirrored as-is.** AyekaBar's own audit flags this as the one real conflict with multi-branch. Sarcafe's `staff.branch_id` is nullable: `null` = owner/all-branch access, a real branch id = scoped to that branch only. `isOp()`/`canEditMenu()` gain a branch parameter; an owner passes any branch, a branch-scoped editor only their own. |
 
 ## Design tokens (Sarcafe palette, AyekaBar's mechanics)

@@ -252,7 +252,7 @@ function CompletedHero({
           ההזמנה נמסרה!
         </p>
         <p className="order-done-rise" style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-dim)', lineHeight: 1.55, animationDelay: '0.4s' }}>
-          תודה שהזמנתם ב-SarCafe ☕ מקווים שנהניתם.
+          תודה שהזמנתם בשרקפה ☕ מקווים שנהניתם.
         </p>
       </div>
 

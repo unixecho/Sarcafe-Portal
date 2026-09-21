@@ -172,7 +172,7 @@ function buildSteps(platform: Platform, installed: boolean): [Step, ...Step[]] {
   if (!installed && platform !== 'desktop') {
     steps.push({
       key: 'install',
-      title: 'שמרו את SarCafe במסך הבית',
+      title: 'שמרו את שרקפה במסך הבית',
       lines:
         platform === 'ios'
           ? [
@@ -180,14 +180,14 @@ function buildSteps(platform: Platform, installed: boolean): [Step, ...Step[]] {
                 הקישו על כפתור השיתוף <InlineGlyph icon={<Share size={13} />} /> בתחתית המסך.
               </>,
               'גללו למטה ברשימה עד ״הוספה למסך הבית״.',
-              'הקישו ״הוספה״ — וזהו, יש לכם אייקון של SarCafe בטלפון.',
+              'הקישו ״הוספה״ — וזהו, יש לכם אייקון של שרקפה בטלפון.',
             ]
           : [
               <>
                 הקישו על שלוש הנקודות <InlineGlyph icon={<MoreVertical size={13} />} /> בפינת הדפדפן.
               </>,
               'בחרו ״התקנת אפליקציה״ או ״הוספה למסך הבית״.',
-              'אשרו — וזהו, יש לכם אייקון של SarCafe בטלפון.',
+              'אשרו — וזהו, יש לכם אייקון של שרקפה בטלפון.',
             ],
       illustration: <InstallIllo platform={platform} />,
     })

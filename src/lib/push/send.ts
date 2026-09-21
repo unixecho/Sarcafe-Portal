@@ -1,7 +1,7 @@
 // Server-only Web Push sender. Two notifications fire per order
 // lifecycle — PREPARING ("we've started on it") and READY ("come get
 // it") — and nothing on new/completed/cancelled. This widens
-// SARCafe-ARCHITECTURE-AUDIT.md §7's original "READY transition only"
+// SarCafe-ARCHITECTURE-AUDIT.md §7's original "READY transition only"
 // scoping at the owner's explicit request: for a walk-up truck, knowing
 // the barista has actually picked up your ticket is the difference
 // between waiting comfortably and hovering at the counter. Two is still
@@ -67,22 +67,54 @@ async function loadSubscriptions(service: ReturnType<typeof createServiceRoleCli
   return (data as SubscriptionRow[] | null) ?? []
 }
 
+/** The brand in Hebrew. Latin copy says "SarCafe"; Hebrew copy says this
+ *  — one name in two scripts, not two names. */
+const BRAND_HE = 'שרקפה'
+
+/** Every notification title is "<announcement> - <brand> <branch>": each
+ *  branch effectively gets its own preset, keyed off the branch name the
+ *  owner already maintains, with no second place to configure.
+ *
+ *  The branch belongs in the TITLE, not the body: a lock screen truncates
+ *  hard and shows the title first, and a customer standing between two
+ *  SarCafe trucks has to be able to tell which one is calling them. Branch
+ *  names in the database are bare locations ("מאור"), so the brand is
+ *  composed here rather than expected to be typed into each one. */
+function notificationTitle(announcement: string, branchName: string | null): string {
+  return branchName ? `${announcement} - ${BRAND_HE} ${branchName}` : `${announcement} - ${BRAND_HE}`
+}
+
 /** The two order milestones a customer gets told about. `preparing` is
  *  deliberately phrased as reassurance (nothing to do yet) and `ready` as
  *  a call to action, so a glance at the lock screen is enough to know
  *  whether to get up. */
-const NOTIFICATION_COPY: Record<'preparing' | 'ready', (orderNumber: number) => { title: string; body: string }> = {
+const NOTIFICATION_COPY: Record<'preparing' | 'ready', (orderNumber: number) => { announcement: string; body: string }> = {
   preparing: (orderNumber) => ({
-    title: 'התחלנו להכין ☕',
+    announcement: 'התחלנו להכין',
     body: `הזמנה #${orderNumber} בהכנה עכשיו — נעדכן אתכם ברגע שתהיה מוכנה.`,
   }),
   ready: (orderNumber) => ({
-    title: 'ההזמנה שלכם מוכנה! ☕',
+    announcement: 'ההזמנה שלכם מוכנה!',
     body: `הזמנה #${orderNumber} מחכה לכם בדלפק.`,
   }),
 }
 
-export async function notifyOrderStatus(orderId: string, orderNumber: number, status: 'preparing' | 'ready'): Promise<void> {
+/** Resolves the branch label for an order the caller doesn't already have
+ *  routing for — only sendTestNotification, since the real send rides on
+ *  a dispatch that has already loaded it. */
+async function loadBranchName(service: ReturnType<typeof createServiceRoleClient>, orderId: string): Promise<string | null> {
+  const { data: order } = await service.from('orders').select('branch_id').eq('id', orderId).maybeSingle()
+  if (!order) return null
+  const { data: branch } = await service.from('branches').select('name').eq('id', order.branch_id).maybeSingle()
+  return (branch?.name as { he?: string } | null)?.he ?? null
+}
+
+export async function notifyOrderStatus(
+  orderId: string,
+  orderNumber: number,
+  status: 'preparing' | 'ready',
+  branchName: string | null
+): Promise<void> {
   try {
     if (!ensureVapidConfigured()) return
 
@@ -90,7 +122,8 @@ export async function notifyOrderStatus(orderId: string, orderNumber: number, st
     const rows = await loadSubscriptions(service, orderId)
     if (rows.length === 0) return
 
-    const { title, body } = NOTIFICATION_COPY[status](orderNumber)
+    const { announcement, body } = NOTIFICATION_COPY[status](orderNumber)
+    const title = notificationTitle(announcement, branchName)
 
     // Built per-subscription (not once, shared) because `url` comes from
     // each row's own stored page_url — see migration 018's header on why
@@ -129,13 +162,17 @@ export async function sendTestNotification(orderId: string): Promise<TestNotific
   const rows = await loadSubscriptions(service, orderId)
   if (rows.length === 0) return { configured: true, subscriptions: 0, sent: 0, error: null }
 
+  // Titled through the same helper as a real send: a test that renders
+  // differently from the thing it's testing doesn't prove much.
+  const title = notificationTitle('בדיקת התראות ✓', await loadBranchName(service, orderId))
+
   const results = await Promise.all(
     rows.map((row) =>
       sendToOne(
         service,
         row,
         JSON.stringify({
-          title: 'בדיקת התראות ✓',
+          title,
           body: 'אם קיבלתם את זה — ההתראות עובדות! נעדכן אתכם כשההזמנה תהיה מוכנה.',
           orderId,
           url: row.page_url,
