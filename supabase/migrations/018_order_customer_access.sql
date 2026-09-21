@@ -2,7 +2,7 @@
 -- Safe to re-run, same discipline as 010/017.
 --
 -- Customer-facing order access — NOT self-ordering (that still needs the
--- owner's sign-off per SARCafe-ARCHITECTURE-AUDIT.md §9's Phase 2+3 scope
+-- owner's sign-off per SarCafe-ARCHITECTURE-AUDIT.md §9's Phase 2+3 scope
 -- and hasn't been given). Staff take the order via the POS (017); this
 -- migration only adds what a customer needs to TRACK an order staff
 -- already created: a QR code + a written-on-the-receipt 6-digit recovery

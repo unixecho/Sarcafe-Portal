@@ -1,7 +1,7 @@
 {
   "name": "SarCafe — מעקב הזמנה",
   "short_name": "SarCafe",
-  "description": "מעקב חי אחרי ההזמנה שלכם ב-SarCafe",
+  "description": "מעקב חי אחרי ההזמנה שלכם בשרקפה",
   "start_url": "/order",
   "scope": "/",
   "display": "standalone",
