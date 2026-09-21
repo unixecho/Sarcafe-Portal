@@ -1,4 +1,4 @@
-# SARCafe — Phase 1 Plan (Portal + Dashboard + Menu Versioning + Login)
+# SarCafe — Phase 1 Plan (Portal + Dashboard + Menu Versioning + Login)
 
 Supersedes the "design fresh" direction in `SARCafe-ARCHITECTURE-AUDIT.md` §7 for the pieces AyekaBar already solved well. Source: a full read of [unixecho/AyekaBar](https://github.com/unixecho/AyekaBar) (auth, owner dashboard, menu versioning, design system, accessibility widget, RBAC/schema — 48 migrations read in full).
 

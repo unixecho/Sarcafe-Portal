@@ -3,13 +3,20 @@
 // already carry it), authorizes via requireOrderStaff()/requireOrderManager()
 // (never trusting the client's own idea of who it is), then performs the
 // write via the migration 017/018 RPCs, mirroring lib/shifts/dispatch-write.ts.
+//
+// Realtime broadcasts and push sends both run via next/server's after(),
+// never inline: each is an outbound HTTP call that the register is
+// otherwise left waiting on before its own tap registers, and neither can
+// fail the write it reports on (see lib/orders/realtime.ts's own
+// best-effort catch). The write itself is still fully awaited — only the
+// notifying of everyone else moves off the response's critical path.
 
 import { after } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { BadRequest, NotFound } from '@/lib/http/errors'
 import { requireOrderStaff, requireOrderManager } from './guard'
 import { broadcastOrdersUpdated, broadcastOrderStatusChanged } from './realtime'
-import { notifyOrderReady } from '@/lib/push/send'
+import { notifyOrderStatus } from '@/lib/push/send'
 import type { OrderAction } from './actions'
 import type { OrderAccess } from './types'
 
@@ -68,7 +75,7 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
 
       const row = data[0] as { id: string; order_number: number; token: string; recovery_code: string; expires_at: string }
 
-      await broadcastOrdersUpdated(action.branch)
+      after(() => broadcastOrdersUpdated(action.branch))
       return {
         orderId: row.id,
         orderNumber: row.order_number,
@@ -82,10 +89,10 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
       const { error } = await service.rpc('advance_order_status', { p_order_id: action.orderId, p_to_status: action.toStatus })
       if (error) throw BadRequest(error.message || 'Could not update the order.')
 
-      await Promise.all([broadcastOrdersUpdated(branchSlug), broadcastOrderStatusChanged(action.orderId)])
+      after(() => Promise.all([broadcastOrdersUpdated(branchSlug), broadcastOrderStatusChanged(action.orderId)]))
       // Scheduled via after(), NOT a bare `void` call: a serverless
       // function is liable to be frozen the instant its response is sent,
-      // and notifyOrderReady() does a real DB round trip plus a web-push
+      // and notifyOrderStatus() does a real DB round trip plus a web-push
       // HTTP call — both take longer than the response takes to flush, so
       // a fire-and-forget promise here was a genuine race that could (and
       // in production, did) kill the push mid-flight. after() is Next's
@@ -93,7 +100,10 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
       // after the response, without making the customer's status update
       // wait for it. A push failure still never surfaces as a failed
       // status update — see lib/push/send.ts's own header for that part.
-      if (action.toStatus === 'ready') after(() => notifyOrderReady(action.orderId, orderNumber))
+      const notified = action.toStatus
+      if (notified === 'preparing' || notified === 'ready') {
+        after(() => notifyOrderStatus(action.orderId, orderNumber, notified))
+      }
       return {}
     }
 
@@ -106,7 +116,7 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
         p_reason: action.reason ?? null,
       })
       if (error) throw BadRequest(error.message || 'Could not cancel the order.')
-      await Promise.all([broadcastOrdersUpdated(branchSlug), broadcastOrderStatusChanged(action.orderId)])
+      after(() => Promise.all([broadcastOrdersUpdated(branchSlug), broadcastOrderStatusChanged(action.orderId)]))
       return {}
     }
 
@@ -119,7 +129,7 @@ export async function performOrderDispatch(action: OrderAction): Promise<Dispatc
         p_method: action.method ?? null,
       })
       if (error) throw BadRequest(error.message || 'Could not update payment.')
-      await broadcastOrdersUpdated(branchSlug)
+      after(() => broadcastOrdersUpdated(branchSlug))
       return {}
     }
 

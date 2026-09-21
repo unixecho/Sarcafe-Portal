@@ -1,8 +1,9 @@
 // One action union, shared between the client provider and the server
 // dispatch handler — same "one action = one thing that can happen" shape
-// lib/shifts/actions.ts uses. Every dispatch is a round trip (POST
-// /api/orders/dispatch, await, replace state with the server's fresh
-// read), same deliberate trade-off shifts already documents.
+// lib/shifts/actions.ts uses. Unlike shifts, the POS applies an action's
+// expected result locally before the POST and reconciles afterwards: a
+// register is tapped continuously under time pressure, where shifts is
+// edited occasionally. See OrdersProvider's applyOptimistic().
 
 import type { Localized } from '@/lib/menu/types'
 import type { OrderStatus, PaymentMethod, PaymentStatus } from './types'

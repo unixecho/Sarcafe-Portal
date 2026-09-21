@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import LogoMark from '@/components/LogoMark'
+import ClientPageFooter from '@/components/ClientPageFooter'
 import OrderStatusView from '@/components/orders/OrderStatusView'
 import { resolveOrderIdByToken } from '@/lib/orders/customer'
 import { loadOrderById } from '@/lib/orders/state-query'
@@ -10,7 +11,7 @@ import type { CustomerOrder, Order } from '@/lib/orders/types'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = { title: 'מעקב הזמנה — SARCafe' }
+export const metadata: Metadata = { title: 'מעקב הזמנה — SarCafe' }
 
 function toCustomerOrder(order: Order): CustomerOrder {
   const { createdByName: _createdByName, notes: _notes, ...rest } = order
@@ -33,7 +34,11 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const branch = order ? branches.find((b) => b.id === order.branchId) : null
 
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 480, margin: '0 auto', padding: '28px 16px 40px', minHeight: '100dvh' }}>
+    <main
+      id="main"
+      tabIndex={-1}
+      style={{ maxWidth: 480, margin: '0 auto', padding: '28px 16px 40px', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}
+    >
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
         <LogoMark size={56} />
       </div>
@@ -69,6 +74,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
           </Link>
         </div>
       )}
+      <ClientPageFooter />
     </main>
   )
 }

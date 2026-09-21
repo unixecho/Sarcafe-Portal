@@ -1,4 +1,4 @@
-# SARCafe — Deployment & Infra Setup Runbook
+# SarCafe — Deployment & Infra Setup Runbook
 
 Every gotcha below was hit for real getting this app's first deploy working. Follow this in order for a fresh setup (a new environment, a project recreation, or a sibling app built the same way); use it as a checklist when something breaks, since most breakage so far has been one of these exact items.
 

@@ -2034,3 +2034,129 @@ html.a11y-font-4 {
   z-index: 39;
   will-change: transform;
 }
+
+/* ==========================================================================
+   Customer order-tracking motion — the QR scanner's reticle sweep, the
+   "delivered" celebration, and the add-to-home-screen tutorial's mimed
+   gestures. Lives here rather than in per-component <style> tags for the
+   same reason the a11y widget's CSS does: this codebase keeps all CSS in
+   this one file.
+
+   Every keyframe below is paired with a reduce fallback at the bottom of
+   the section. Those fallbacks use `animation: none`, which means each
+   element's BASE css must already be its finished, visible state — an
+   animation that faded something in from opacity 0 via `backwards` fill
+   would otherwise strand it invisible for exactly the visitors who asked
+   for less motion. Same trap .rise documents above.
+   ========================================================================== */
+
+/* `top` rather than translateY: the line is 2px tall, so a percentage
+   transform would resolve against those 2px instead of the reticle it
+   needs to traverse — and the reticle's height varies with the viewport. */
+@keyframes qr-scan-sweep {
+  0% { top: 0; }
+  50% { top: calc(100% - 2px); }
+  100% { top: 0; }
+}
+.qr-scan-line {
+  top: 0;
+  animation: qr-scan-sweep 2.4s ease-in-out infinite;
+}
+
+/* The delivered hero. Rings expand out from under the badge, so they're
+   declared before it in paint order and never sit on top of the check. */
+@keyframes order-done-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes order-done-ring {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+@keyframes order-done-check {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+@keyframes order-done-rise {
+  from { transform: translateY(8px); opacity: 0; }
+}
+.order-done-badge {
+  animation: order-done-pop 0.55s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.order-done-check {
+  animation: order-done-check 0.35s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) 0.3s both;
+}
+.order-done-ring {
+  animation: order-done-ring 1.5s ease-out 0.25s;
+}
+.order-done-ring-2 {
+  animation-delay: 0.7s;
+}
+.order-done-rise {
+  animation: order-done-rise 0.45s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) backwards;
+}
+
+/* Tutorial: a looping mimed gesture inside a phone mock. The dot traces
+   the tap, the sheet slides up under it, the bell tips side to side. */
+@keyframes tutorial-tap {
+  0%, 12% { transform: scale(0.4); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  34% { transform: scale(0.82); opacity: 1; }
+  48%, 100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes tutorial-sheet {
+  0%, 30% { transform: translateY(100%); }
+  45%, 88% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+@keyframes tutorial-bell {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  62% { transform: rotate(16deg); }
+  70% { transform: rotate(-13deg); }
+  78% { transform: rotate(8deg); }
+  86% { transform: rotate(-4deg); }
+}
+@keyframes tutorial-slide-in {
+  from { transform: translateY(10px); opacity: 0; }
+}
+.tutorial-tap {
+  animation: tutorial-tap 3s ease-in-out infinite;
+}
+.tutorial-sheet {
+  animation: tutorial-sheet 3s ease-in-out infinite;
+}
+.tutorial-bell {
+  transform-origin: 50% 20%;
+  animation: tutorial-bell 3s ease-in-out infinite;
+}
+.tutorial-slide-in {
+  animation: tutorial-slide-in 0.35s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan-line,
+  .order-done-badge,
+  .order-done-check,
+  .order-done-ring,
+  .order-done-rise,
+  .tutorial-tap,
+  .tutorial-sheet,
+  .tutorial-bell,
+  .tutorial-slide-in {
+    animation: none;
+  }
+  /* The rings exist only as motion — with nothing to expand, a static
+     ring sitting under the badge is just a stray circle. */
+  .order-done-ring {
+    display: none;
+  }
+  /* Mid-loop resting positions the looping mimes would otherwise never
+     reach: the sheet is what the step is showing, so it stays up. */
+  .tutorial-sheet {
+    transform: translateY(0);
+  }
+  .tutorial-tap {
+    opacity: 1;
+  }
+}

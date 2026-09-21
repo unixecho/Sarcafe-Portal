@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Check, Star } from 'lucide-react'
 import NotificationPrimer from './NotificationPrimer'
+import HowToGuide from './HowToGuide'
 import FeedbackButton from '@/components/FeedbackButton'
 import { haptic } from '@/lib/haptics'
 import { useOrderStatusRealtime } from '@/lib/orders/useOrderStatusRealtime'
@@ -185,7 +186,12 @@ export default function OrderStatusView({
         </>
       )}
 
-      {!cancelled && order.status !== 'completed' && <NotificationPrimer token={token} />}
+      {!cancelled && order.status !== 'completed' && (
+        <>
+          <NotificationPrimer token={token} />
+          <HowToGuide />
+        </>
+      )}
 
       <section>
         <h2 style={sectionTitleStyle}>פירוט ההזמנה</h2>
@@ -214,6 +220,13 @@ export default function OrderStatusView({
 // The Wolt-style "you're done" screen — replaces the in-progress stepper
 // once the order is actually in the customer's hands. The item list below
 // (rendered by the caller regardless of status) doubles as the receipt.
+//
+// The celebration replays on every load of a completed order, not only on
+// the live handover, and that's deliberate: this is a terminal screen
+// whose whole job is to feel like a warm goodbye, and someone reopening
+// their receipt link an hour later should get the same greeting rather
+// than a flat, spent-looking page. Every animated class here degrades to
+// its finished state under prefers-reduced-motion (see globals.css).
 function CompletedHero({
   reviewUrl,
   branchSlug,
@@ -225,26 +238,26 @@ function CompletedHero({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ ...cardStyle, textAlign: 'center', borderColor: 'rgba(87,217,192,0.4)', background: 'rgba(87,217,192,0.08)' }}>
-        <div
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: '50%',
-            background: 'var(--neon-2)',
-            display: 'grid',
-            placeItems: 'center',
-            margin: '0 auto 10px',
-          }}
-        >
-          <Check size={24} color="var(--bg)" strokeWidth={3} aria-hidden="true" />
+      <div style={{ ...cardStyle, padding: '26px 14px 22px', textAlign: 'center', borderColor: 'rgba(87,217,192,0.4)', background: 'rgba(87,217,192,0.08)' }}>
+        <div style={{ position: 'relative', width: 84, height: 84, margin: '0 auto 14px', display: 'grid', placeItems: 'center' }}>
+          {/* Two rings radiating out from under the badge — declared
+              BEFORE it so it always paints on top of them. */}
+          <span aria-hidden="true" className="order-done-ring" style={ringStyle} />
+          <span aria-hidden="true" className="order-done-ring order-done-ring-2" style={ringStyle} />
+          <div className="order-done-badge" style={badgeStyle}>
+            <Check className="order-done-check" size={38} color="var(--bg)" strokeWidth={3} aria-hidden="true" />
+          </div>
         </div>
-        <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: '1.15rem' }}>ההזמנה נמסרה!</p>
-        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-dim)' }}>תודה שהזמנתם ב-SARCafe ☕ מקווים שנהניתם.</p>
+        <p className="order-done-rise" style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '1.35rem', animationDelay: '0.3s' }}>
+          ההזמנה נמסרה!
+        </p>
+        <p className="order-done-rise" style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-dim)', lineHeight: 1.55, animationDelay: '0.4s' }}>
+          תודה שהזמנתם ב-SarCafe ☕ מקווים שנהניתם.
+        </p>
       </div>
 
       {(reviewUrl || feedbackEnabled) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="order-done-rise" style={{ display: 'flex', flexDirection: 'column', gap: 8, animationDelay: '0.55s' }}>
           {reviewUrl && (
             <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="press" style={reviewBtnStyle}>
               <Star size={17} aria-hidden="true" />
@@ -307,6 +320,26 @@ const cardStyle: CSSProperties = {
   border: '1px solid var(--line)',
 }
 const sectionTitleStyle: CSSProperties = { margin: '0 0 8px', fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-faint)' }
+
+const ringStyle: CSSProperties = {
+  position: 'absolute',
+  width: 64,
+  height: 64,
+  borderRadius: '50%',
+  border: '2px solid var(--neon-2)',
+  pointerEvents: 'none',
+}
+
+const badgeStyle: CSSProperties = {
+  position: 'relative',
+  width: 64,
+  height: 64,
+  borderRadius: '50%',
+  background: 'var(--neon-2)',
+  display: 'grid',
+  placeItems: 'center',
+  boxShadow: '0 8px 24px rgba(87,217,192,0.3)',
+}
 
 const reviewBtnStyle: CSSProperties = {
   display: 'flex',

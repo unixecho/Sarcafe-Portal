@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     // rather than defaulting to whatever page they happened to add it
     // from.
     capable: true,
-    title: 'SARCafe',
+    title: 'SarCafe',
     statusBarStyle: 'black-translucent',
   },
 }
