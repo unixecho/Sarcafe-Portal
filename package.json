@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.1",
+    "a11y-widget": "https://github.com/unixecho/a11y-widget/archive/1a444ce79ee70356a5ba9a7240ecdc6a5ac9c982.tar.gz",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.45.0",
     "next": "^15.1.0",

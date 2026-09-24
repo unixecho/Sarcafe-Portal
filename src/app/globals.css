@@ -89,13 +89,6 @@
 
   --tap-min: 52px; /* generous touch-target floor for a tablet POS — above
                        WCAG's 44px minimum on purpose */
-
-  /* Accessibility-widget hooks (see components/a11y). Defaults are inert;
-     the widget only ever sets these three, never touches anything else. */
-  --a11y-font-scale: 100%;
-  --a11y-letter-spacing: normal;
-  --a11y-word-spacing: normal;
-  --a11y-line-height: normal;
 }
 
 * {
@@ -115,7 +108,6 @@ body {
      tofu boxes for the Hebrew copy that is most of this site. */
   font-family: 'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-size: var(--a11y-font-scale, 100%);
 }
 
 body {
@@ -1916,123 +1908,6 @@ html[dir='ltr'][data-nav='back'] .page-enter {
   .wheel-scroll {
     scroll-behavior: auto;
   }
-}
-
-/* ==========================================================================
-   Accessibility widget (BLUEPRINT.md §7.3) — every class here targets
-   #a11y-scope ONLY, never <html>/<body>. `filter` triggers the identical
-   containing-block behavior `transform` does (§4.14a): applying grayscale/
-   invert/contrast to the root would silently relocate every position:fixed
-   control on the site, this widget's own launcher/panel included — which
-   is exactly why layout.tsx mounts them outside the scope entirely.
-   ========================================================================== */
-/* On <html>, not #a11y-scope — rem is always relative to the root element
-   specifically, no matter how an intermediate ancestor is scoped, and this
-   codebase's type scale is rem-based throughout. font-size isn't one of
-   the properties that creates a position:fixed containing block
-   (transform/filter/perspective/…), so this carries none of §4.14a's risk
-   the way putting a filter on <html> would. */
-html.a11y-font-1 {
-  font-size: 110%;
-}
-html.a11y-font-2 {
-  font-size: 125%;
-}
-html.a11y-font-3 {
-  font-size: 140%;
-}
-html.a11y-font-4 {
-  font-size: 150%;
-}
-
-/* Applied WITHOUT !important, unlike every other effect below — forcing it
-   everywhere collides with the several components that set a precise
-   inline lineHeight for icon+text alignment (e.g. CategoryAccordion's
-   IconButton, the menu's item rows). An honest partial fix, documented at
-   the point of use, not a silent no-op. */
-#a11y-scope.a11y-spacing-1 {
-  letter-spacing: 0.02em;
-  word-spacing: 0.05em;
-  line-height: 1.5;
-}
-#a11y-scope.a11y-spacing-2 {
-  letter-spacing: 0.04em;
-  word-spacing: 0.1em;
-  line-height: 1.65;
-}
-#a11y-scope.a11y-spacing-3 {
-  letter-spacing: 0.06em;
-  word-spacing: 0.16em;
-  line-height: 1.8;
-}
-
-#a11y-scope.a11y-contrast-high {
-  filter: contrast(1.5);
-}
-#a11y-scope.a11y-contrast-grayscale {
-  filter: grayscale(1);
-}
-#a11y-scope.a11y-contrast-invert {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-#a11y-scope.a11y-pause-animations *,
-#a11y-scope.a11y-pause-animations *::before,
-#a11y-scope.a11y-pause-animations *::after {
-  animation-play-state: paused !important;
-  transition: none !important;
-}
-
-#a11y-scope.a11y-highlight-links a {
-  outline: 2px solid var(--neon-2) !important;
-  outline-offset: 1px !important;
-  background: rgba(87, 217, 192, 0.14) !important;
-}
-
-#a11y-scope.a11y-highlight-headings h1,
-#a11y-scope.a11y-highlight-headings h2,
-#a11y-scope.a11y-highlight-headings h3 {
-  outline: 2px dashed var(--neon-soft) !important;
-  outline-offset: 3px !important;
-}
-
-#a11y-scope.a11y-big-cursor,
-#a11y-scope.a11y-big-cursor * {
-  cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2 L4 26 L11 20 L15 29 L19 27 L15 18 L23 18 Z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E")
-      4 2,
-    auto !important;
-}
-
-.a11y-launcher {
-  position: fixed;
-  right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
-  z-index: 40;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--bg-elev);
-  color: var(--neon-soft);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-.a11y-reading-guide {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 40px;
-  background: rgba(255, 200, 0, 0.14);
-  border-top: 2px solid rgba(255, 200, 0, 0.75);
-  border-bottom: 2px solid rgba(255, 200, 0, 0.75);
-  pointer-events: none;
-  z-index: 39;
-  will-change: transform;
 }
 
 /* ==========================================================================
