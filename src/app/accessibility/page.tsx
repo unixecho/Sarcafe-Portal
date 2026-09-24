@@ -3,6 +3,7 @@ import { ArrowRight, ExternalLink } from 'lucide-react'
 import { readSetting } from '@/lib/settings/server'
 import { DEFAULT_ACCESSIBILITY_STATEMENT, type AccessibilityStatement } from '@/lib/settings/keys'
 import PublicBackdrop from '@/components/PublicBackdrop'
+import { WIDGET_COVERAGE } from 'a11y-widget'
 
 export const metadata = { title: 'Sarcafe | הצהרת נגישות' }
 
@@ -64,7 +65,19 @@ export default async function AccessibilityStatementPage() {
             ובהתאם לתקן הישראלי (ת״י) 5568 ברמת AA, המבוסס על הנחיות WCAG 2.2.
           </p>
 
-          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>מה נעשה באתר</h2>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>תפריט הנגישות</h2>
+          <p style={{ color: 'var(--text-dim)', lineHeight: 1.7 }}>
+            בפינה הימנית התחתונה של המסך מופיע כפתור נגישות. לחיצה עליו — או הקשה על <strong>F2</strong> מהמקלדת
+            בכל מקום באתר — פותחת תפריט התאמות אישיות לביקור זה; אותה הקשה, או <strong>Esc</strong>, סוגרת אותו.
+            ההתאמות נשמרות במכשיר ונשארות פעילות בביקורים הבאים, עד לאיפוס ידני מתוך התפריט עצמו.
+          </p>
+          <ul style={{ color: 'var(--text-dim)', lineHeight: 1.9, paddingInlineStart: 20 }}>
+            {WIDGET_COVERAGE.map((item) => (
+              <li key={item.id}>{item.labels.he}</li>
+            ))}
+          </ul>
+
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: 24 }}>מה נעשה באתר עצמו</h2>
           <ul style={{ color: 'var(--text-dim)', lineHeight: 1.9, paddingInlineStart: 20 }}>
             <li>מבנה סמנטי ותמיכה בקוראי מסך</li>
             <li>ניגודיות צבעים העומדת ברמה AA</li>
