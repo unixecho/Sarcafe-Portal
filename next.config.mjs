@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // a11y-widget ships TypeScript/TSX source, not a pre-built bundle (see its
+  // own README) — this is what makes Next transpile it like first-party code.
+  transpilePackages: ['a11y-widget'],
   images: {
     remotePatterns: [
       {
