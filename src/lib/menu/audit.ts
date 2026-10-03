@@ -6,7 +6,7 @@
 // not the other way around.
 
 import type { createServiceRoleClient } from '@/lib/supabase/server'
-import type { MenuDoc, MenuItem } from '@/lib/menu/types'
+import type { MenuDoc, MenuItem, ModifierGroup } from '@/lib/menu/types'
 
 export type MenuAuditAction =
   | 'menu.save'
@@ -93,6 +93,42 @@ function priceLabel(price: MenuItem['price']): string {
   return String(price)
 }
 
+const groupLabel = (g: ModifierGroup) => g.title.he || g.title.en || g.title.ar || 'קבוצה'
+const optionLabel = (o: { he?: string; en?: string; ar?: string }) => o.he || o.en || o.ar || 'אפשרות'
+
+/** What changed in the modifier library, as short signed tokens ("+חלב שיבולת שועל",
+ *  "-בלי בצל"), plus whether any group was attached to / detached from a category or
+ *  item. Options are named, not counted, because "which milk did she add" is the
+ *  question an owner asks of this log. Groups are matched by uid, never by name, so a
+ *  rename reads as an edit rather than a delete plus an add. */
+function summarizeModifierDiff(before: MenuDoc, after: MenuDoc): { tokens: string[]; assignmentsChanged: boolean } {
+  const tokens: string[] = []
+  const prev = new Map((before.modifierGroups ?? []).map((g) => [g.uid, g]))
+  const next = new Map((after.modifierGroups ?? []).map((g) => [g.uid, g]))
+  for (const [uid, g] of next) {
+    const old = prev.get(uid)
+    if (!old) {
+      tokens.push(`+קבוצה ${groupLabel(g)}`)
+      continue
+    }
+    const oldOpts = new Map(old.options.map((o) => [o.uid, o]))
+    const newOpts = new Map(g.options.map((o) => [o.uid, o]))
+    for (const [ou, o] of newOpts) if (!oldOpts.has(ou)) tokens.push(`+${optionLabel(o)}`)
+    for (const [ou, o] of oldOpts) if (!newOpts.has(ou)) tokens.push(`-${optionLabel(o)}`)
+    // Anything else about the group or its surviving options (price, default, name,
+    // required…) — one token per group, not per field.
+    const strip = (x: ModifierGroup) => JSON.stringify({ ...x, options: x.options.filter((o) => oldOpts.has(o.uid) && newOpts.has(o.uid)) })
+    if (strip(old) !== strip(g)) tokens.push(`~${groupLabel(g)}`)
+  }
+  for (const [uid, g] of prev) if (!next.has(uid)) tokens.push(`-קבוצה ${groupLabel(g)}`)
+
+  const assigned = (doc: MenuDoc) =>
+    JSON.stringify(
+      doc.categories.map((c) => [c.id, c.modifierGroupUids ?? null, c.items.map((i) => [i.uid, i.modifierGroupUids ?? null])])
+    )
+  return { tokens, assignmentsChanged: assigned(before) !== assigned(after) }
+}
+
 /** A short summary + structured detail for a draft save/publish — item
  *  add/remove counts, availability flips (name + before/after), price and
  *  name edits on items untouched otherwise, category count delta. Never
@@ -135,6 +171,8 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
 
   const categoryDelta = after.categories.length - before.categories.length
 
+  const modifiers = summarizeModifierDiff(before, after)
+
   const parts: string[] = []
   if (added.length) parts.push(`${added.length} פריטים נוספו`)
   if (removed.length) parts.push(`${removed.length} פריטים נמחקו`)
@@ -143,6 +181,12 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
   if (renamed.length) parts.push(`${renamed.length} פריטים שונו שם`)
   if (categoryDelta > 0) parts.push(`${categoryDelta} קטגוריות נוספו`)
   if (categoryDelta < 0) parts.push(`${-categoryDelta} קטגוריות נמחקו`)
+  if (modifiers.tokens.length) {
+    const shown = modifiers.tokens.slice(0, 4).join(', ')
+    const more = modifiers.tokens.length > 4 ? ` ועוד ${modifiers.tokens.length - 4}` : ''
+    parts.push(`עדכן התאמות: ${shown}${more}`)
+  }
+  if (modifiers.assignmentsChanged) parts.push('שויכו התאמות למוצרים')
 
   return {
     summary: parts.length ? parts.join(', ') : 'עדכון קל בתפריט',
@@ -152,6 +196,8 @@ export function summarizeMenuDiff(before: MenuDoc, after: MenuDoc): { summary: s
       availabilityFlips,
       priceChanges,
       renamed,
+      modifierChanges: modifiers.tokens,
+      modifierAssignmentsChanged: modifiers.assignmentsChanged,
       categoryCountBefore: before.categories.length,
       categoryCountAfter: after.categories.length,
     },

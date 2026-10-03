@@ -29,7 +29,7 @@ export default async function OwnerFeedbackPage() {
     .maybeSingle()
   if (!isOp(me)) redirect('/no-access')
 
-  const branches = await getBranches()
+  const branches = await getBranches({ includeEvents: true })
   // Same "all branches" default as /owner/staff — feedback is legitimately
   // cross-branch, so an unset cookie means "show everything," not "pick
   // the first branch." A branch the owner DID pick elsewhere still filters

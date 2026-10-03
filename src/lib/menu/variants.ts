@@ -8,10 +8,23 @@ function randomUid(): string {
  * on every read. Mutates a cloned copy, never the input. */
 export function ensureUids(doc: MenuDoc): MenuDoc {
   return {
+    // Spread first: the document carries more than `categories` (the modifier
+    // library lives beside it), and rebuilding it as { categories } alone would
+    // silently drop everything else on the next read-modify-save.
+    ...doc,
     categories: doc.categories.map((category) => ({
       ...category,
       items: category.items.map((item) => (item.uid ? item : { ...item, uid: randomUid() })),
     })),
+    ...(doc.modifierGroups
+      ? {
+          modifierGroups: doc.modifierGroups.map((group) => ({
+            ...group,
+            uid: group.uid || `g${randomUid().slice(1)}`,
+            options: (group.options ?? []).map((option) => (option.uid ? option : { ...option, uid: `o${randomUid().slice(1)}` })),
+          })),
+        }
+      : {}),
   }
 }
 
@@ -70,6 +83,7 @@ export function applyVariant(doc: MenuDoc, variant: MenuVariant | null): MenuDoc
   if (!variant || variant.excluded_uids.length === 0) return doc
   const excluded = new Set(variant.excluded_uids)
   return {
+    ...doc,
     categories: doc.categories.map((category) => ({
       ...category,
       items: category.items.filter((item) => !item.uid || !excluded.has(item.uid)),

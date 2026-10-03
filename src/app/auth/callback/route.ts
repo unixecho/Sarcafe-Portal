@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp, hasAnyMenuEditAccess, isStaff } from '@/lib/staff/access'
+import { staffLandingPath } from '@/lib/pos/server/landing'
 
 // Mirrors AyekaBar's auth/callback/route.ts. One important difference:
 // Sarcafe's Google login is STAFF-ONLY. Unlike AyekaBar (where customers
@@ -33,14 +34,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth`)
   }
 
+  // Idempotent — links a pre-created staff invite (keyed by email) to this
+  // Google account on first sign-in. No-op if already linked or if no
+  // matching invite exists. It runs BEFORE the ?next redirect on purpose: a
+  // brand-new employee who signs in on the way to /pos would otherwise be sent
+  // there unclaimed and land on /no-access.
+  await supabase.rpc('claim_staff_invite')
+
   if (next) {
     return NextResponse.redirect(`${origin}${next}`)
   }
-
-  // Idempotent — links a pre-created staff invite (keyed by email) to this
-  // Google account on first sign-in. No-op if already linked or if no
-  // matching invite exists.
-  await supabase.rpc('claim_staff_invite')
 
   const {
     data: { user },
@@ -89,8 +92,9 @@ export async function GET(request: NextRequest) {
     // A legitimate staff account without owner/menu-editor rights — their
     // own shift schedule (and, if a branch delegated them as a schedule
     // manager, /owner/schedule resolves that on its own) is a real
-    // destination now, not a placeholder.
-    return NextResponse.redirect(`${origin}/staff/schedule`)
+    // destination now, not a placeholder. When an event they may work is live
+    // right now the POS is where they are headed instead.
+    return NextResponse.redirect(`${origin}${await staffLandingPath(staffRow)}`)
   }
 
   return NextResponse.redirect(`${origin}/no-access?reason=no_staff_row`)

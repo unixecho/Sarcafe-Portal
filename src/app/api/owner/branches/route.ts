@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
+import { apiRoute, ApiError, BadRequest, NotFound } from '@/lib/http/errors'
+import { OWNER_MESSAGES } from '@/lib/pos/owner-api'
 import { requireOwner, requireMenuEditor } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { SLUG_PATTERN } from '@/lib/branches'
@@ -17,6 +18,12 @@ const createSchema = z.object({
     en: z.string().trim().optional(),
     ar: z.string().trim().optional(),
   }),
+  // 'event' branches (a one-off festival, a pop-up) are hidden from the public
+  // site's branch list; the point-of-sale runs on them. Defaults to today's behaviour.
+  kind: z.enum(['permanent', 'event']).default('permanent'),
+  // Start an event from a real menu: the slug of an existing branch whose PUBLISHED
+  // menu is copied into the new one (as both its draft and its published copy).
+  cloneFromSlug: z.string().regex(SLUG_PATTERN).optional(),
 })
 
 export const POST = apiRoute(async (request: Request) => {
@@ -32,6 +39,21 @@ export const POST = apiRoute(async (request: Request) => {
     .maybeSingle()
   if (existing) throw BadRequest('That location name is already taken — try a different one.')
 
+  // Read the source BEFORE creating anything: a missing source must not leave a
+  // half-made location behind.
+  let sourcePublished: unknown = null
+  if (body.cloneFromSlug) {
+    const { data: source } = await service
+      .from('menus')
+      .select('published')
+      .eq('slug', body.cloneFromSlug)
+      .maybeSingle()
+    if (!source || !source.published) {
+      throw new ApiError(404, 'not_found', `${OWNER_MESSAGES.source_menu_missing.he} / ${OWNER_MESSAGES.source_menu_missing.en}`)
+    }
+    sourcePublished = source.published
+  }
+
   const { data, error } = await service.rpc('create_branch_with_menu', {
     p_slug: body.slug,
     p_name: { he: body.name.he, en: body.name.en ?? '', ar: body.name.ar ?? '' },
@@ -39,7 +61,41 @@ export const POST = apiRoute(async (request: Request) => {
   if (error || !data?.[0]) throw BadRequest('Could not create the new location. Please try again.')
 
   const row = data[0] as { branch_id: string; menu_id: string }
-  return NextResponse.json({ branchId: row.branch_id, menuId: row.menu_id, slug: body.slug })
+
+  if (body.kind !== 'permanent') {
+    const { error: kindError } = await service.from('branches').update({ kind: body.kind }).eq('id', row.branch_id)
+    // An event that silently stayed 'permanent' would show up on the public site.
+    if (kindError) {
+      throw new ApiError(500, 'internal_error', 'The location was created but could not be marked as an event. Open it and try again.', {
+        branchId: row.branch_id,
+      })
+    }
+  }
+
+  // The copy goes into draft AND published so the event starts from a menu customers
+  // and the register can both read straight away; variants stay at the default one the
+  // create function made. A failed copy is reported, not fatal: the location exists and
+  // the menu editor can still fill it.
+  let cloneFailed = false
+  if (body.cloneFromSlug) {
+    const now = new Date().toISOString()
+    const { error: cloneError } = await service
+      .from('menus')
+      .update({ draft: sourcePublished, published: sourcePublished, published_at: now, updated_at: now })
+      .eq('id', row.menu_id)
+    if (cloneError) {
+      cloneFailed = true
+      console.error('event menu clone failed:', cloneError.code)
+    }
+  }
+
+  return NextResponse.json({
+    branchId: row.branch_id,
+    menuId: row.menu_id,
+    slug: body.slug,
+    kind: body.kind,
+    ...(cloneFailed ? { cloneFailed: true, message: `${OWNER_MESSAGES.clone_failed.he} / ${OWNER_MESSAGES.clone_failed.en}` } : {}),
+  })
 })
 
 // Branch-scoped, not owner-only — same access level as editing the menu

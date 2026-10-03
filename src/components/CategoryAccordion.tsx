@@ -6,7 +6,8 @@ import Switch from '@/components/Switch'
 import IconPicker from '@/components/IconPicker'
 import { resolveCategoryIcon, type CategoryIconKey } from '@/lib/menu/icons'
 import { randomId } from '@/lib/menu/id'
-import type { MenuCategory, MenuItem, MenuItemType } from '@/lib/menu/types'
+import ModifierAssign from '@/components/owner/pos/ModifierAssign'
+import type { MenuCategory, MenuItem, MenuItemType, ModifierGroup } from '@/lib/menu/types'
 
 type CategoryAccordionProps = {
   category: MenuCategory
@@ -18,6 +19,9 @@ type CategoryAccordionProps = {
   onDeleteCategory: () => void
   onEditCategoryField: (field: 'icon' | 'he' | 'en' | 'ar', value: string) => void
   onToggleLiveOnTablet: () => void
+  /** The modifier library, and the category-level attach handler (undefined = clear the key). */
+  modifierGroups?: ModifierGroup[]
+  onSetCategoryModifierGroups?: (uids: string[] | undefined) => void
   onAddItem: () => void
   onMoveItem: (itemIndex: number, dir: -1 | 1) => void
   onRequestDeleteItem: (itemIndex: number, itemLabel: string) => void
@@ -41,6 +45,8 @@ export default function CategoryAccordion({
   onDeleteCategory,
   onEditCategoryField,
   onToggleLiveOnTablet,
+  modifierGroups = [],
+  onSetCategoryModifierGroups,
   onAddItem,
   onMoveItem,
   onRequestDeleteItem,
@@ -164,6 +170,15 @@ export default function CategoryAccordion({
               <Switch on={category.liveOnTablet === true} />
             </button>
 
+            {onSetCategoryModifierGroups && (
+              <ModifierAssign
+                scope="category"
+                groups={modifierGroups}
+                value={category.modifierGroupUids}
+                onChange={onSetCategoryModifierGroups}
+              />
+            )}
+
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <IconButton label="הזזת הקטגוריה למעלה" disabled={index === 0} onClick={() => onMoveCategory(-1)}>
                 <ChevronUp size={16} />
@@ -203,6 +218,8 @@ export default function CategoryAccordion({
                 item={item}
                 index={itemIndex}
                 total={category.items.length}
+                modifierGroups={modifierGroups}
+                categoryModifierGroupUids={category.modifierGroupUids}
                 onMove={(dir) => onMoveItem(itemIndex, dir)}
                 onRequestDelete={() => onRequestDeleteItem(itemIndex, item.he || 'פריט זה')}
                 onEdit={(patch) => onEditItem(itemIndex, patch)}
@@ -224,6 +241,8 @@ function ItemRow({
   item,
   index,
   total,
+  modifierGroups,
+  categoryModifierGroupUids,
   onMove,
   onRequestDelete,
   onEdit,
@@ -231,6 +250,8 @@ function ItemRow({
   item: MenuItem
   index: number
   total: number
+  modifierGroups: ModifierGroup[]
+  categoryModifierGroupUids: string[] | undefined
   onMove: (dir: -1 | 1) => void
   onRequestDelete: () => void
   onEdit: (patch: Partial<MenuItem>) => void
@@ -285,6 +306,14 @@ function ItemRow({
       />
 
       <ItemTypesEditor types={item.types ?? []} onChange={(types) => onEdit({ types })} />
+
+      <ModifierAssign
+        scope="item"
+        groups={modifierGroups}
+        value={item.modifierGroupUids}
+        inherited={categoryModifierGroupUids}
+        onChange={(next) => onEdit({ modifierGroupUids: next })}
+      />
 
       {showNote ? (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

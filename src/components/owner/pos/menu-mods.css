@@ -1,0 +1,167 @@
+/* Owner-side modifier / staff-handle / event styles. Tokens only (globals.css);
+   the surrounding editor is inline-styled, so this file holds just what inline
+   styles cannot express: focus rings, :has() selection, reduced motion. */
+
+.mm-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.mm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+
+/* One radio card per modifier kind. The native radio is visually hidden but
+   stays the real control, so keyboard and screen readers get a true radiogroup. */
+.mm-kind {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 52px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  cursor: pointer;
+}
+.mm-kind input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+.mm-kind:has(input:checked) {
+  border-color: var(--neon);
+  background: rgba(255, 122, 69, 0.12);
+}
+.mm-kind:has(input:focus-visible),
+.mm-chip:focus-visible,
+.mm-row:focus-visible {
+  outline: 2px solid var(--neon-soft);
+  outline-offset: 2px;
+}
+
+.mm-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mm-chip[aria-pressed='true'],
+.mm-chip[aria-checked='true'] {
+  border-color: var(--neon);
+  background: rgba(255, 122, 69, 0.14);
+  color: var(--neon-soft);
+}
+
+.mm-field {
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 0.88rem;
+  width: 100%;
+}
+
+/* The person disc: first letter of the nickname on their own colour. */
+.mm-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 3px 12px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  max-width: 100%;
+}
+button.mm-handle,
+button.mm-pill {
+  cursor: pointer;
+}
+button.mm-handle:focus-visible,
+button.mm-pill:focus-visible {
+  outline: 2px solid var(--neon-soft);
+  outline-offset: 2px;
+}
+.mm-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.mm-handle-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mm-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-radius: 999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.mm-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.mm-code {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-align: center;
+  padding: 18px 8px;
+  border-radius: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  user-select: all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-card *,
+  .mm-kind,
+  .mm-chip {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock } from 'lucide-react'
+import { ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import DashboardLive from '@/components/DashboardLive'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 const TILES = [
   { href: '/owner/editor', icon: ClipboardList, label: 'עריכת תפריט' },
   { href: '/owner/tablet', icon: Tablet, label: 'זמינות בזמן אמת' },
+  { href: '/owner/pos', icon: Receipt, label: 'קופה' },
   { href: '/owner/staff', icon: Users, label: 'צוות' },
   { href: '/owner/schedule', icon: CalendarClock, label: 'לוח משמרות' },
   { href: '/owner/audit', icon: History, label: 'יומן שינויים' },
@@ -44,7 +45,7 @@ export default async function OwnerDashboardPage() {
 
   if (!isOp(me)) redirect('/no-access')
 
-  const branches = await getBranches()
+  const branches = await getBranches({ includeEvents: true })
   const cookieStore = await cookies()
   const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
   const defaultBranch = branches.find((b) => b.slug === currentSlug) ?? branches[0] ?? null

@@ -90,6 +90,18 @@
   --tap-min: 52px; /* generous touch-target floor for a tablet POS — above
                        WCAG's 44px minimum on purpose */
 
+  /* POS semantic colours. Contrast on --bg / --bg-elev / --bg-elev-2 is
+     12.3/11.3/10.3 (ok), 12.4/11.4/10.3 (warn), 6.9/6.3/5.7 (danger) — all
+     clear 4.5:1 for text. Status is NEVER carried by colour alone (always an
+     icon and/or words beside it). --neon-2 (teal) stays reserved for "the
+     whole order / shared" and is not a status colour. */
+  --ok: #6ee7a0; /* ready / done / connected */
+  --warn: #ffc857; /* warming / closed / needs a look */
+  --danger: #ff6b6b; /* late / critical / voided / failed */
+  --ok-bg: color-mix(in srgb, var(--ok) 14%, var(--bg-elev));
+  --warn-bg: color-mix(in srgb, var(--warn) 12%, var(--bg-elev));
+  --danger-bg: color-mix(in srgb, var(--danger) 16%, var(--bg-elev));
+
   /* Accessibility-widget hooks (see components/a11y). Defaults are inert;
      the widget only ever sets these three, never touches anything else. */
   --a11y-font-scale: 100%;
@@ -328,6 +340,20 @@ body {
      made it feel alive. */
   .sk::after {
     animation: none;
+  }
+}
+
+/* A skeleton that only appears if the wait is real: invisible for the first
+   300 ms, so a fast load never flashes one (Ayeka's theme documented "shown
+   past 300ms" but never implemented it). Combine with .sk on any placeholder
+   that replaces data which usually arrives instantly. */
+.sk-late {
+  opacity: 0;
+  animation: sk-late-in 0.01s linear 0.3s forwards;
+}
+@keyframes sk-late-in {
+  to {
+    opacity: 1;
   }
 }
 

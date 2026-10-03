@@ -1,0 +1,1112 @@
+/* ==========================================================================
+   The selling-point screen (StationView), its Done tray and the timeline.
+   Everything is namespaced `.st*` (station) so nothing leaks: Next keeps a
+   stylesheet loaded after the route that imported it unmounts.
+
+   Type is deliberately LARGE: this is read from across a counter with a tray
+   in one hand. Every control is >= 56px (the station's floor; the top bar's
+   52px does not apply here).
+
+   PHYSICAL vs LOGICAL: text and card layout use logical properties and flip
+   with RTL. Three things are deliberately PHYSICAL and never flip, like every
+   pinned widget in this app: the Done tray and its edge tab (left), the
+   lane reserved for that tab (padding-left), and the slide direction of the
+   timeline. A tablet is held the same way in Hebrew and in English.
+
+   Tokens only: --bg --bg-elev --bg-elev-2 --neon --neon-2 --text* --line*
+   --ok* --warn* --danger* --radius-* --ease --spring.
+
+   MOTION RULES: transform/opacity only; no animation on anything carrying a
+   backdrop-filter; warming is STILL (no animation); under reduced motion the
+   late/critical/shake states drop the movement but keep a still tint, border
+   and icon, so they stay readable and distinguishable.
+   ========================================================================== */
+
+.station,
+.stt {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- header --------------------------------------------------------------- */
+
+.sth,
+.stt-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 10px 16px;
+  background: var(--bg-elev);
+  border-block-end: 1px solid var(--line);
+}
+.sth-point {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-inline-size: 0;
+}
+.sth-icon {
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--bg);
+}
+.sth-name,
+.stt-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.stt-point {
+  color: var(--text-dim);
+  font-weight: 700;
+}
+.sth-tools {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sth-btn {
+  min-inline-size: 56px;
+  min-block-size: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sth-btn--text {
+  padding-inline: 18px;
+}
+.sth-btn[aria-pressed='false'] {
+  color: var(--text-dim);
+}
+.sth-me {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 56px;
+  padding-inline: 4px;
+}
+
+.sth-checkin {
+  min-block-size: 56px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sth-checkin.is-in {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+}
+.sth-checkin--unknown {
+  cursor: default;
+  color: var(--text-dim);
+  border-style: dashed;
+  background: transparent;
+  font-weight: 600;
+}
+
+/* ---- strips + states --------------------------------------------------------- */
+
+/* Sits directly under the header and is never inside the scroller, so it cannot scroll away. */
+.sto {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-block-size: 52px;
+  padding: 8px 16px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-block-end: 2px solid var(--danger);
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: center;
+}
+.sts-stale {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+}
+.sts-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 64px 16px;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  font-weight: 600;
+  text-align: center;
+}
+.sts-empty p {
+  margin: 0;
+}
+
+/* ---- the scroller ---------------------------------------------------------------- */
+
+/* padding-left is PHYSICAL: it reserves the lane the Done tray's edge tab sits in, on whichever
+   side the language starts from. pan-y lets a sideways swipe on bare background reach us as
+   pointer events instead of being swallowed by the browser. */
+.station-body {
+  padding: 14px 14px 110px 50px;
+  touch-action: pan-y;
+}
+@media (max-width: 359px) {
+  .station-body {
+    padding: 10px 10px 110px 44px;
+  }
+}
+.station-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* ---- the card -------------------------------------------------------------------------- */
+
+.stc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+  border: 2px solid var(--line-strong);
+  /* Vertical pan stays the browser's (scrolling); a sideways hold-and-drag reaches us. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.stc:focus-visible {
+  outline: 3px solid var(--neon);
+  outline-offset: 3px;
+}
+.stc--ready {
+  border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+}
+
+/* Aging, by the WORST stage among unaccepted lines. */
+.stc--age-warming {
+  background: color-mix(in srgb, var(--warn) 9%, var(--bg-elev));
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.stc--age-late {
+  background: color-mix(in srgb, var(--danger) 8%, var(--bg-elev));
+  border-color: color-mix(in srgb, var(--danger) 70%, transparent);
+}
+.stc--age-late::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 4px solid var(--danger);
+  pointer-events: none;
+  animation: stc-flash 1.1s ease-in-out infinite;
+}
+.stc--age-critical {
+  background: color-mix(in srgb, var(--danger) 15%, var(--bg-elev));
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+@keyframes stc-flash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.stc.is-new {
+  animation: stc-in 0.38s var(--ease) backwards;
+}
+@keyframes stc-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.stc.is-dragging {
+  opacity: 0.4;
+}
+.stc.is-shake {
+  animation: stc-shake 0.42s var(--ease);
+  outline: 3px solid var(--warn);
+  outline-offset: 2px;
+}
+@keyframes stc-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.stc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.stc-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.stc-name {
+  color: var(--text);
+}
+.stc-clock {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+.stc-clock--warming {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.stc-clock--late {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.stc-clock--critical {
+  background: var(--danger);
+  color: var(--bg);
+}
+.stc-by {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 1rem;
+}
+.stc-cross {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+.stc-cross svg {
+  flex: 0 0 auto;
+  margin-block-start: 2px;
+}
+.stc-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* THE ONE BIG BUTTON. Colour is a second signal; the word is the first. */
+.stc-go {
+  min-block-size: 68px;
+  inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 16px;
+  border-radius: var(--radius-lg);
+  border: none;
+  font-size: 1.5rem;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--bg);
+}
+.stc-go--accept {
+  background: var(--neon);
+}
+.stc-go--ready {
+  background: var(--ok);
+}
+.stc-go--handover {
+  background: var(--neon-2);
+}
+.stc-go:focus-visible,
+.stl-go:focus-visible,
+.stl-revert:focus-visible,
+.std-undo:focus-visible,
+.std-tab:focus-visible,
+.std-close:focus-visible,
+.stg-x:focus-visible,
+.stt-toggle:focus-visible,
+.sth-btn:focus-visible,
+.sth-checkin:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+.stc-go-sub {
+  font-size: 0.9rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+.stc-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: 56px;
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* ---- a line ---------------------------------------------------------------------------------- */
+
+.stl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+  min-block-size: 56px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev-2);
+  border-inline-start: 4px solid transparent;
+}
+.stl.is-fresh {
+  animation: stl-in 0.45s var(--ease) backwards;
+}
+@keyframes stl-in {
+  from {
+    opacity: 0;
+    background: color-mix(in srgb, var(--neon) 30%, var(--bg-elev-2));
+  }
+}
+/* The lines THIS person accepted. Ayeka shipped the class and never styled it. */
+.stl.is-mine {
+  border-inline-start-color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 11%, var(--bg-elev-2));
+}
+.stl--delivered {
+  opacity: 0.62;
+}
+.stl-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 32px;
+  color: var(--text-dim);
+}
+.stl--preparing .stl-icon {
+  color: var(--neon);
+}
+.stl--ready .stl-icon,
+.stl--delivered .stl-icon {
+  color: var(--ok);
+}
+.stl-main {
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stl-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.stl-qty {
+  font-weight: 800;
+  color: var(--neon);
+}
+.stl-name {
+  overflow-wrap: anywhere;
+}
+.stl-badge,
+.stl-mine {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.stl-badge {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.stl-mine {
+  background: color-mix(in srgb, var(--neon) 20%, transparent);
+  color: var(--neon);
+}
+.stl-note {
+  margin: 0;
+  color: var(--warn);
+  font-size: 1.05rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.stl-for {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.stl-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stl-go {
+  min-inline-size: 56px;
+  min-block-size: 56px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.stl-revert {
+  inline-size: 56px;
+  block-size: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+@media (max-width: 479px) {
+  /* A phone: the line's controls drop under its text instead of squeezing it. */
+  .stl {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .stl-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+/* ---- modifier chips -------------------------------------------------------------------------------- */
+
+.stm {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.stm-chip {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+.stm-chip--add {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.stm-chip--remove {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.stm-chip--substitute {
+  background: color-mix(in srgb, var(--neon) 14%, transparent);
+  color: var(--neon);
+  border-color: color-mix(in srgb, var(--neon) 45%, transparent);
+}
+.stm-chip--prep {
+  font-style: italic;
+}
+
+/* ---- cancelled-after-sent ghosts ------------------------------------------------------------------------ */
+
+.stg-stack {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 56px;
+  padding: 6px 6px 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--text-faint);
+}
+.stg-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.stg-what {
+  text-decoration: line-through;
+}
+.stg-note {
+  color: var(--danger);
+  font-weight: 800;
+}
+.stg-x {
+  min-inline-size: 56px;
+  min-block-size: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+@media (max-width: 479px) {
+  .stg-x-text {
+    display: none;
+  }
+}
+
+/* ---- done chip + tray -------------------------------------------------------------------------------------- */
+
+.std-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 56px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--ok-bg);
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.std-chip-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.std-undo {
+  flex: 0 0 auto;
+  min-block-size: 56px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.std-root {
+  --std-w: min(380px, 88vw);
+}
+.std-root button {
+  font-family: inherit;
+}
+/* left / right are PHYSICAL on purpose (see the header). */
+.std-tab {
+  position: fixed;
+  left: 0;
+  top: 40%;
+  z-index: 122;
+  inline-size: 44px;
+  min-block-size: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  border: 1px solid var(--line-interactive);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.28s var(--ease);
+}
+.std-tab-text {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+.std-tab.is-open {
+  transform: translateX(var(--std-w));
+}
+.std-tab.is-open .std-tab-icon {
+  transform: scaleX(-1);
+}
+.std-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 121;
+  inline-size: var(--std-w);
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--bg-elev);
+  color: var(--text);
+  border-right: 1px solid var(--line-strong);
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.5);
+  transform: translateX(-104%);
+  transition: transform 0.28s var(--ease);
+}
+.std-panel.is-open {
+  transform: none;
+}
+.std-tab.is-drop,
+.std-panel.is-drop {
+  outline: 3px dashed var(--ok);
+  outline-offset: -3px;
+}
+.std-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  border-block-end: 1px solid var(--line);
+}
+.std-panel-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.std-close {
+  inline-size: 56px;
+  block-size: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.std-drophint {
+  margin: 10px 16px 0;
+  color: var(--ok);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.std-empty {
+  margin: 0;
+  padding: 32px 16px;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  text-align: center;
+}
+.std-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.std-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+}
+.std-entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.std-entry-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.std-entry-time {
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.std-entry-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-dim);
+  font-size: 1rem;
+}
+.std-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.std-entry-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+
+/* The little label that follows a held card across the screen. */
+.stx-proxy {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 200;
+  pointer-events: none;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 2px solid var(--neon);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  font-size: 1.15rem;
+  font-weight: 800;
+  white-space: nowrap;
+  will-change: transform;
+}
+.stx-proxy.is-near {
+  border-color: var(--ok);
+}
+
+/* ---- timeline ------------------------------------------------------------------------------------------------- */
+
+.stt-body {
+  padding: 14px 16px 48px;
+}
+.stt-list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-inline-size: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.stt-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+  border: 1px solid var(--line-strong);
+}
+.stt-toggle {
+  inline-size: 100%;
+  min-block-size: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+}
+.stt-toggle-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 0;
+}
+.stt-toggle-side {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-dim);
+}
+.stt-ticket {
+  font-size: 1.35rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.stt-by {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 0.98rem;
+}
+.stt-time {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.stt-total {
+  color: var(--text);
+  font-weight: 800;
+}
+.stt-chev {
+  transition: transform 0.2s var(--ease);
+}
+.stt-row.is-open .stt-chev {
+  transform: rotate(180deg);
+}
+.stt-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+.stt-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--line);
+}
+.stt-pointline,
+.stt-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+.stt-stamps,
+.stt-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stt-stamp {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev-2);
+}
+.stt-stamp-what {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.stt-stamp-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+.stt-step {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.stt-event {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 0.98rem;
+}
+.stt-event-time {
+  color: var(--text-faint);
+  font-weight: 700;
+}
+.stt-event-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.stt-event--danger .stt-event-text {
+  color: var(--danger);
+}
+.stt-event--ok .stt-event-text {
+  color: var(--ok);
+}
+.stt-more {
+  display: flex;
+  justify-content: center;
+  padding-block: 18px 6px;
+}
+
+/* ---- the slide into / out of the timeline (physical left/right, both languages) ------------------------------ */
+
+html[data-local-nav] ::view-transition-group(pos-timeline) {
+  animation-duration: 0.34s;
+  animation-timing-function: var(--ease);
+}
+html[data-local-nav] ::view-transition-old(pos-timeline),
+html[data-local-nav] ::view-transition-new(pos-timeline) {
+  animation-duration: 0.34s;
+  animation-timing-function: var(--ease);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+html[data-local-nav='forward']::view-transition-old(pos-timeline) {
+  animation-name: pos-vt-out-left;
+}
+html[data-local-nav='forward']::view-transition-new(pos-timeline) {
+  animation-name: pos-vt-in-from-right;
+  z-index: 1;
+}
+html[data-local-nav='back']::view-transition-old(pos-timeline) {
+  animation-name: pos-vt-out-right;
+  z-index: 1;
+}
+html[data-local-nav='back']::view-transition-new(pos-timeline) {
+  animation-name: pos-vt-in-from-left;
+}
+@keyframes pos-vt-out-left {
+  to {
+    transform: translateX(-28%);
+    opacity: 0.4;
+  }
+}
+@keyframes pos-vt-in-from-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes pos-vt-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes pos-vt-in-from-left {
+  from {
+    transform: translateX(-28%);
+    opacity: 0.4;
+  }
+}
+
+/* ---- reduced motion: SUBSTITUTE, never just delete ----------------------------------------------------------------
+   Movement goes; the state stays readable. late keeps its still border (the flash overlay is shown at
+   a steady 0.9), critical already is still, a new card simply is there, the shake keeps its outline. */
+@media (prefers-reduced-motion: reduce) {
+  .stc.is-new,
+  .stl.is-fresh,
+  .stc.is-shake {
+    animation: none;
+  }
+  .stc--age-late::after {
+    animation: none;
+    opacity: 0.9;
+  }
+  .std-tab,
+  .std-panel,
+  .stt-chev {
+    transition: none;
+  }
+}

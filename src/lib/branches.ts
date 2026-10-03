@@ -23,10 +23,19 @@ export type BranchLinks = {
   bit: string | null
 }
 
+/** 'event' branches (a one-off stall, a festival) are real branches — they own a menu,
+ * staff scoping and audit scope like any other — but they are HIDDEN from the public
+ * portal's branch picker. See getBranches({ includeEvents }) in lib/branches/server.ts. */
+export type BranchKind = 'permanent' | 'event'
+
 export type Branch = {
   id: string
   slug: BranchSlug
   name: LocalizedText
+  /** Always set by getBranches()/getBranchBySlug(). Optional only because a client can
+   * still build a Branch by hand (AddBranchSheet's optimistic row for a branch it just
+   * created) — absent means 'permanent'. Read it through `branch.kind === 'event'`. */
+  kind?: BranchKind
   links: BranchLinks
   /** Owner-curated review-wall content, or null when this branch has never
    * had one saved — callers fall back to lib/reviews.ts's placeholder via

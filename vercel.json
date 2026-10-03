@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/cleanup-feedback",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-pos",
+      "schedule": "45 3 * * *"
     }
   ]
 }

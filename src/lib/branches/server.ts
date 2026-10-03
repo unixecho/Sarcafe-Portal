@@ -6,6 +6,7 @@ type BranchRow = {
   id: string
   slug: string
   name: Record<string, string>
+  kind?: string | null
   nav_google_maps: string | null
   nav_waze: string | null
   nav_apple_maps: string | null
@@ -15,14 +16,16 @@ type BranchRow = {
   reviews: PortalReviewsBlock | null
 }
 
-const COLUMNS =
+const BASE_COLUMNS =
   'id, slug, name, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
+const COLUMNS = `${BASE_COLUMNS}, kind`
 
 function toBranch(row: BranchRow): Branch {
   return {
     id: row.id,
     slug: row.slug,
     name: { he: row.name.he ?? row.slug, en: row.name.en, ar: row.name.ar },
+    kind: row.kind === 'event' ? 'event' : 'permanent',
     links: {
       navGoogleMaps: row.nav_google_maps,
       navWaze: row.nav_waze,
@@ -35,28 +38,55 @@ function toBranch(row: BranchRow): Branch {
   }
 }
 
+/** Postgres "undefined column" — what PostgREST relays when `branches.kind` does not exist yet. */
+function isMissingKindColumn(error: { code?: string; message?: string } | null): boolean {
+  return !!error && (error.code === '42703' || /\bkind\b/.test(error.message ?? ''))
+}
+
+/**
+ * The one read of the `branches` table. `kind` arrived with the POS migration (014);
+ * until that migration is applied the column does not exist and a select that names it
+ * fails — which would turn into an EMPTY branch list and blank the public portal. So if
+ * the first attempt fails because `kind` is missing, it is retried without it and every
+ * branch is treated as permanent (correct: no event can exist before the column does).
+ * Once the migration is in, the first attempt always succeeds and the retry is dead code.
+ */
+async function readBranches(slug: string | null, includeEvents: boolean): Promise<BranchRow[]> {
+  const supabase = await createServerSupabaseClient()
+
+  const attempt = async (withKind: boolean) => {
+    let query = supabase.from('branches').select(withKind ? COLUMNS : BASE_COLUMNS).eq('active', true)
+    if (slug !== null) query = query.eq('slug', slug)
+    if (withKind && !includeEvents) query = query.neq('kind', 'event')
+    return query.order('created_at', { ascending: true })
+  }
+
+  let { data, error } = await attempt(true)
+  if (error && isMissingKindColumn(error)) ({ data, error } = await attempt(false))
+  return (data as unknown as BranchRow[] | null) ?? []
+}
+
 /** Server-side read of every active branch, ordered the way they were
  * created (so a newly-added branch lands at the end, not alphabetically
  * reshuffling the switcher). Branches are public-read (see
  * 000_core_schema.sql) so the plain session-scoped client is fine here —
- * no service-role needed just to list them. */
-export async function getBranches(): Promise<Branch[]> {
-  const supabase = await createServerSupabaseClient()
-  const { data } = await supabase
-    .from('branches')
-    .select(COLUMNS)
-    .eq('active', true)
-    .order('created_at', { ascending: true })
-  return ((data as BranchRow[] | null) ?? []).map(toBranch)
+ * no service-role needed just to list them.
+ *
+ * EVENT branches (kind = 'event': a one-off stall the POS trades at) are EXCLUDED by
+ * default, so a caller that forgets the option fails safe: the public portal, the
+ * public GET /api/branches and the menu's branch switcher can never list one. Every
+ * owner/staff page that must keep seeing events — the menu editor, the schedule, the
+ * audit log — passes `{ includeEvents: true }` explicitly. */
+export async function getBranches(opts: { includeEvents?: boolean } = {}): Promise<Branch[]> {
+  const rows = await readBranches(null, opts.includeEvents === true)
+  return rows.map(toBranch)
 }
 
+/** One branch by slug, events INCLUDED on purpose: an event's own menu link
+ * (/menu/<slug>, printed on a QR at the stall) must keep working — it is simply never
+ * advertised in a list. */
 export async function getBranchBySlug(slug: string): Promise<Branch | null> {
-  const supabase = await createServerSupabaseClient()
-  const { data } = await supabase
-    .from('branches')
-    .select(COLUMNS)
-    .eq('slug', slug)
-    .eq('active', true)
-    .maybeSingle()
-  return data ? toBranch(data as BranchRow) : null
+  const rows = await readBranches(slug, true)
+  const row = rows[0]
+  return row ? toBranch(row) : null
 }

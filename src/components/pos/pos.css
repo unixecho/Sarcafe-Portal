@@ -1,0 +1,918 @@
+/* ==========================================================================
+   The staff app shell (/pos). Imported by PosApp.tsx and by app/pos/loading.tsx
+   so the skeleton and the real thing share one geometry.
+
+   Everything here is namespaced `.pos-*` / `--pos-*`: Next keeps a stylesheet
+   loaded after the route that imported it unmounts, so a generic rule here would
+   leak into the portal and the owner pages. The few rules that reach outside
+   (the accessibility launcher, overscroll) are guarded with :has(.pos-app) and
+   only match while the POS is actually mounted.
+
+   Layout law (blueprint §11): ONE scrolling region per pane, never the page.
+   `.pos-app` is exactly the viewport; the top bar and the dock are flex children
+   that never scroll; each screen puts `.pos-pane-scroll` on the one thing that
+   does. overscroll-behavior stops a flick at the end of a list from dragging the
+   whole app (or triggering pull-to-refresh on a tablet).
+
+   Pinned chrome stays on the same PHYSICAL side in both languages (Ayeka's
+   rule): the language/sound controls sit at the physical left, the person at the
+   physical right, so a cashier who switches to English does not hunt for them.
+   That is why the top bar is dir="ltr" and only its text is localised.
+
+   Tokens only: --bg --bg-elev --bg-elev-2 --neon --text* --line* --ok --warn
+   --danger --radius-* --tap-min --ease --spring. No new colours.
+   ========================================================================== */
+
+:root {
+  /* Primary chrome controls are --tap-min (52px). A landscape phone (844x390)
+     is the shortest viewport this runs on, and two 52px bars would eat a third
+     of it, so below 480px of HEIGHT they drop to the 44px floor. Secondary
+     controls only ever use the floor; nothing goes below it. */
+  --pos-ctl: var(--tap-min);
+  --pos-topbar-h: 60px;
+}
+@media (max-height: 480px) {
+  :root {
+    --pos-ctl: 44px;
+    --pos-topbar-h: 48px;
+  }
+}
+
+/* A tablet that is pulled down at the top of the page must not refresh the POS
+   out from under a half-typed order. Scoped, so no other page loses its bounce. */
+html:has(.pos-app),
+body:has(.pos-app) {
+  overscroll-behavior: none;
+}
+
+/* The accessibility launcher is pinned bottom-right on every page. Here that is
+   exactly where the dock's last button lives, so lift it clear of the dock (and
+   of the safe area). It stays reachable — hiding it would remove an assistive
+   control, which is not ours to take away. */
+body:has(.pos-app) .a11y-launcher {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pos-ctl) + 28px);
+}
+
+/* ---- frame ------------------------------------------------------------------ */
+
+.pos-app {
+  display: flex;
+  flex-direction: column;
+  block-size: 100vh;
+  block-size: 100dvh;
+  min-block-size: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  overscroll-behavior: contain;
+  font-variant-numeric: tabular-nums;
+}
+.pos-app button,
+.pos-app input {
+  font-family: inherit;
+}
+
+.pos-main {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+/* A fresh view fades in. Opacity ONLY: a transform on this wrapper would make it
+   the containing block for anything position:fixed inside it. */
+.pos-view {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  animation: pos-view-in 0.16s var(--ease) backwards;
+}
+@keyframes pos-view-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The one thing on a screen that scrolls. */
+.pos-pane-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Two panes on a tablet: the main work area, and a fixed-width side panel (the
+   register's ticket). Phones get one column; the side panel is not rendered at
+   all there, because a phone shows it as a sheet (useLayout().atLeastTablet).
+   `minmax(0, 1fr)` on both axes so a long unbroken string can never push the
+   side panel off the screen. */
+.pos-split {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.pos-split > * {
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+.pos-split-side {
+  display: none;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-inline-start: 1px solid var(--line);
+}
+@media (min-width: 768px) {
+  .pos-split {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .pos-split-side {
+    display: flex;
+  }
+}
+@media (min-width: 1280px) {
+  .pos-split {
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+}
+
+/* ---- shared controls --------------------------------------------------------- */
+
+.pos-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: var(--tap-min);
+  padding-inline: 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pos-btn--primary {
+  background: var(--neon);
+  border-color: var(--neon);
+  color: var(--bg);
+}
+.pos-btn[disabled],
+.pos-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pos-input {
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.pos-input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.pos-hint {
+  margin: 8px 2px 0;
+  min-block-size: 1.4em;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+.pos-hint--bad {
+  color: var(--danger);
+}
+.pos-sheet-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.pos-sheet-sub {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+/* ---- top bar ------------------------------------------------------------------ */
+
+.pos-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-block-size: var(--pos-topbar-h);
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) calc(env(safe-area-inset-right, 0px) + 10px) 6px
+    calc(env(safe-area-inset-left, 0px) + 10px);
+  background: var(--bg-elev);
+  border-block-end: 1px solid var(--line);
+}
+.pos-tb-left,
+.pos-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-inline-size: 0;
+}
+.pos-tb-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+/* Silent when there is nothing to say: no empty gap pushing the clusters apart. */
+.pos-tb-mid:empty {
+  display: none;
+}
+@media (max-width: 599px) {
+  /* On a phone a warning pill needs its own line to be readable; the row only
+     exists while there IS a warning. */
+  .pos-topbar {
+    flex-wrap: wrap;
+  }
+  .pos-tb-mid {
+    order: 5;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 359px) {
+  .pos-topbar {
+    padding-inline: 6px;
+    row-gap: 6px;
+  }
+}
+
+.pos-iconbtn {
+  inline-size: var(--pos-ctl);
+  block-size: var(--pos-ctl);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pos-iconbtn[aria-pressed='false'] {
+  color: var(--text-dim);
+}
+@media (max-width: 599px) {
+  .pos-iconbtn--wide-only {
+    display: none;
+  }
+}
+
+.pos-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  block-size: var(--pos-ctl);
+  max-inline-size: 190px;
+  padding-inline: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pos-chip[aria-disabled='true'] {
+  cursor: default;
+}
+.pos-chip-text {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+}
+@media (max-width: 599px) {
+  .pos-chip--post .pos-chip-text {
+    display: none;
+  }
+  .pos-chip--post {
+    padding-inline: 8px;
+  }
+}
+@media (max-width: 379px) {
+  .pos-chip--me .pos-chip-text {
+    display: none;
+  }
+  .pos-chip--me {
+    padding-inline: 8px;
+  }
+}
+
+/* The person, in their own colour: first letter on a disc. The disc's text colour
+   is chosen per colour (HandleChip) so it clears 4.5:1 whatever hue the owner picked. */
+.pos-avatar {
+  inline-size: 30px;
+  block-size: 30px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.pos-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  font-weight: 700;
+}
+.pos-handle .pos-avatar {
+  inline-size: 22px;
+  block-size: 22px;
+  font-size: 0.72rem;
+}
+.pos-handle--md .pos-avatar {
+  inline-size: 28px;
+  block-size: 28px;
+  font-size: 0.85rem;
+}
+.pos-handle-name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
+}
+
+/* ---- pills ----------------------------------------------------------------------- */
+
+.pos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+button.pos-pill {
+  min-block-size: 44px;
+  cursor: pointer;
+}
+.pos-pill--ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.pos-pill--warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.pos-pill--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+}
+@media (max-width: 339px) {
+  .pos-pill--event .pos-pill-text {
+    display: none;
+  }
+}
+
+.pos-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-block-end: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---- the switcher (dock) ------------------------------------------------------------ */
+
+.pos-dock {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 6px)
+    calc(env(safe-area-inset-left, 0px) + 10px);
+  background: var(--bg-elev);
+  border-block-start: 1px solid var(--line);
+}
+.pos-dock-points {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.pos-dock-points::-webkit-scrollbar {
+  display: none;
+}
+.pos-dock-item {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  block-size: var(--pos-ctl);
+  min-inline-size: var(--pos-ctl);
+  padding-inline: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pos-dock-item[aria-current='page'] {
+  background: var(--neon);
+  border-color: var(--neon);
+  color: var(--bg);
+}
+@media (max-width: 479px) {
+  /* Register and Orders collapse to their icon; the station chips keep their names. */
+  .pos-dock-label--solo {
+    display: none;
+  }
+  .pos-dock-item--solo {
+    padding-inline: 0;
+  }
+}
+.pos-dot {
+  inline-size: 10px;
+  block-size: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--dot, var(--text-faint));
+  /* a ring in the bar colour keeps the dot visible on the active (orange) chip */
+  box-shadow: 0 0 0 2px var(--bg-elev-2);
+}
+.pos-dock-item[aria-current='page'] .pos-dot {
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.pos-badge {
+  min-inline-size: 22px;
+  block-size: 22px;
+  padding-inline: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.pos-badge--late {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* ---- home: where do you work today ----------------------------------------------------- */
+
+.pos-home {
+  inline-size: 100%;
+  max-inline-size: 1040px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px calc(env(safe-area-inset-right, 0px) + 16px) 28px calc(env(safe-area-inset-left, 0px) + 16px);
+}
+.pos-home-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  font-weight: 800;
+}
+.pos-home-sub {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 1rem;
+}
+.pos-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+  gap: 14px;
+}
+.pos-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-block-size: 152px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+  box-shadow: inset 0 3px 0 var(--tile, var(--neon));
+}
+.pos-tile-top {
+  inline-size: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pos-tile-icon {
+  inline-size: 52px;
+  block-size: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tile, var(--neon)) 18%, var(--bg-elev-2));
+  color: var(--tile, var(--neon));
+}
+.pos-tile-name {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+.pos-tile-hint {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.pos-tile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pos-tile--link {
+  min-block-size: 0;
+  flex-direction: row;
+  align-items: center;
+  box-shadow: none;
+}
+
+/* ---- full-screen states ------------------------------------------------------------------ */
+
+.pos-state {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+.pos-state-card {
+  inline-size: 100%;
+  max-inline-size: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.pos-state-icon {
+  inline-size: 76px;
+  block-size: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line-strong);
+  color: var(--neon-soft);
+}
+.pos-state-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.pos-state-body {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+.pos-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-block-start: 6px;
+}
+
+/* ---- the outbox sheet ------------------------------------------------------------------------ */
+
+.pos-ob-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pos-ob-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+}
+.pos-ob-row--attention {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.pos-ob-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 800;
+}
+.pos-ob-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.pos-ob-reason {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.pos-ob-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pos-ob-actions .pos-btn {
+  flex: 1 1 140px;
+}
+
+/* ---- toasts ------------------------------------------------------------------------------------- */
+
+.pos-toasts {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pos-ctl) + 28px);
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 12px;
+  pointer-events: none;
+}
+.pos-toasts-col {
+  inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pos-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-inline-size: min(520px, 100%);
+  padding: 8px 8px 8px 14px;
+  padding-inline: 14px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  border-inline-start-width: 5px;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.97rem;
+  font-weight: 600;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  animation: pos-toast-in 0.22s var(--ease) backwards;
+}
+@keyframes pos-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.pos-toast--info {
+  border-inline-start-color: var(--neon-2);
+}
+.pos-toast--info .pos-toast-icon {
+  color: var(--neon-2);
+}
+.pos-toast--ok {
+  border-inline-start-color: var(--ok);
+}
+.pos-toast--ok .pos-toast-icon {
+  color: var(--ok);
+}
+.pos-toast--warn {
+  border-inline-start-color: var(--warn);
+}
+.pos-toast--warn .pos-toast-icon {
+  color: var(--warn);
+}
+.pos-toast--error {
+  border-inline-start-color: var(--danger);
+}
+.pos-toast--error .pos-toast-icon {
+  color: var(--danger);
+}
+.pos-toast-icon {
+  flex: 0 0 auto;
+}
+.pos-toast-text {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.pos-toast-action {
+  flex: 0 0 auto;
+  min-block-size: 44px;
+  padding-inline: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-interactive);
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+.pos-toast-x {
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 44px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+/* ---- skeletons (content-shaped; see shell/Skeletons.tsx) ----------------------------------------------- */
+
+.pos-sk-bar {
+  display: block;
+  max-inline-size: 100%;
+  border-radius: 8px;
+}
+.pos-sk-body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding: 14px calc(env(safe-area-inset-right, 0px) + 14px) 14px calc(env(safe-area-inset-left, 0px) + 14px);
+  overflow: hidden;
+}
+.pos-sk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+}
+.pos-sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+}
+.pos-sk-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pos-sk-line {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pos-sk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+}
+.pos-sk-row-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-inline-size: 0;
+}
+.pos-sk-chips {
+  display: flex;
+  gap: 8px;
+}
+.pos-sk-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.pos-sk-strip {
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+.pos-sk-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+}
+.pos-sk-chiprow {
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* The wave-2 placeholder screens ("בבנייה"). */
+.pos-stub {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px calc(env(safe-area-inset-right, 0px) + 16px) 16px calc(env(safe-area-inset-left, 0px) + 16px);
+  overflow: hidden;
+}
+.pos-stub-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pos-stub-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.pos-stub-sub {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* REMOVE: both are arrival decoration on content that is already there. */
+  .pos-view,
+  .pos-toast {
+    animation: none;
+  }
+}
+
+/* The connection pill's refresh glyph while a re-read is running. */
+@keyframes pos-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pos-spin {
+  animation: pos-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pos-spin {
+    animation: none;
+  }
+}

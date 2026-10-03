@@ -1,0 +1,712 @@
+/* ==========================================================================
+   Orders: the list, an order's detail sheet, the cancel + edit sheets.
+   Everything is namespaced `.ord-*` (Next keeps a stylesheet loaded after the
+   route that imported it unmounts). Tokens only; logical properties throughout,
+   so Hebrew (RTL) is the design and English simply mirrors it.
+
+   Layout law (blueprint §11): ONE scrolling region per pane. The search + filters
+   are a flex child that never scrolls; `.pos-pane-scroll` holds the list.
+   ========================================================================== */
+
+.ord {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- header: search + filters ------------------------------------------------ */
+
+.ord-head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 10px;
+  border-block-end: 1px solid var(--line);
+  background: var(--bg);
+}
+.ord-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-inline-size: 900px;
+  inline-size: 100%;
+  margin-inline: auto;
+}
+.ord-search-icon {
+  position: absolute;
+  inset-inline-start: 16px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.ord-search-input {
+  padding-inline: 46px 52px;
+}
+.ord-search-clear {
+  position: absolute;
+  inset-inline-end: 4px;
+  inline-size: 44px;
+  block-size: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.ord-filters {
+  display: flex;
+  gap: 8px;
+  max-inline-size: 900px;
+  inline-size: 100%;
+  margin-inline: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ord-filters::-webkit-scrollbar {
+  display: none;
+}
+.ord-filter {
+  flex: 1 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: var(--tap-min);
+  padding-inline: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ord-filter.is-on {
+  background: var(--neon);
+  border-color: var(--neon);
+  color: var(--bg);
+}
+.ord-filter-n {
+  min-inline-size: 1.7em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.82rem;
+  text-align: center;
+}
+.ord-filter:not(.is-on) .ord-filter-n {
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+}
+.ord-stale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-inline-size: 900px;
+  inline-size: 100%;
+  margin: 0 auto;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--warn-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* ---- list --------------------------------------------------------------------------- */
+
+.ord-scroll {
+  padding: 12px 16px 24px;
+}
+.ord-list-wrap {
+  max-inline-size: 900px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ord-skeleton,
+.ord-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ord-row {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+.ord-row--void {
+  opacity: 0.72;
+}
+.ord-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.ord-row-main:focus-visible {
+  outline: 3px solid var(--neon);
+  outline-offset: -3px;
+}
+.ord-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-inline-size: 0;
+}
+.ord-ticket {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--neon-soft);
+}
+.ord-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.15rem;
+  font-weight: 700;
+  unicode-bidi: plaintext;
+}
+.ord-total {
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.ord-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.ord-by {
+  min-inline-size: 0;
+  color: var(--text);
+}
+
+/* Status chips: the point's colour is a stripe, the status is an icon AND words. */
+.ord-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ord-chip {
+  --pt: var(--line-strong);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 30px;
+  padding-block: 3px;
+  padding-inline: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  border-inline-start: 5px solid var(--pt);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ord-chip-pt {
+  color: var(--pt);
+}
+.ord-chip--sent {
+  background: var(--bg-elev-2);
+}
+.ord-chip--preparing {
+  background: var(--warn-bg);
+}
+.ord-chip--ready {
+  background: var(--ok-bg);
+}
+.ord-chip--delivered {
+  background: var(--bg-elev);
+  color: var(--text-dim);
+}
+.ord-chip--voided {
+  background: var(--danger-bg);
+}
+.ord-done {
+  display: inline-grid;
+  place-items: center;
+  color: var(--ok);
+}
+
+.ord-handover {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+.ord-handover-btn {
+  flex: 1 1 180px;
+  min-block-size: 56px;
+}
+
+/* ---- empty / failed ---------------------------------------------------------------- */
+
+.ord-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.ord-empty-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.ord-empty-body {
+  margin: 0;
+  color: var(--text-dim);
+}
+.ord-empty--bad {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--text);
+}
+.ord-older {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.ord-older-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.ord-older-note--bad {
+  color: var(--danger);
+}
+
+/* ---- shared sheet pieces ---------------------------------------------------------------- */
+
+.ord-section-title {
+  margin: 14px 0 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+.ord-sheet-actions {
+  display: flex;
+  gap: 10px;
+  margin-block-start: 14px;
+}
+.ord-sheet-actions > .pos-btn {
+  flex: 1 1 0;
+}
+.pos-btn.ord-danger {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--text);
+}
+.pos-btn.ord-danger:not([disabled]):active {
+  background: var(--danger);
+}
+
+.ord-reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ord-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: var(--tap-min);
+  padding-inline: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ord-reason.is-on {
+  background: var(--neon);
+  border-color: var(--neon);
+  color: var(--bg);
+}
+
+.ord-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ord-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ord-field > label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.ord-field-note {
+  font-size: 0.84rem;
+  color: var(--text-dim);
+}
+
+/* ---- the detail sheet ---------------------------------------------------------------------- */
+
+.ord-detail-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 8px;
+}
+.ord-detail-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-block-end: 8px;
+}
+.ord-detail-titlewrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-inline-size: 0;
+}
+.ord-detail-titlewrap .pos-sheet-title {
+  overflow-wrap: anywhere;
+}
+.ord-x {
+  flex: 0 0 auto;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.ord-detail-scroll {
+  gap: 4px;
+  padding-block-end: 8px;
+}
+.ord-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+}
+.ord-banner--bad {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+}
+.ord-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+}
+.ord-card .ord-section-title {
+  margin: 0;
+}
+.ord-kv {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ord-customer-name {
+  font-size: 1.2rem;
+  font-weight: 800;
+  unicode-bidi: plaintext;
+}
+.ord-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: var(--tap-min);
+  padding-inline: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-interactive);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+.ord-dim {
+  color: var(--text-dim);
+}
+.ord-strong {
+  font-weight: 800;
+}
+.ord-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+  unicode-bidi: plaintext;
+}
+.ord-note svg {
+  flex: 0 0 auto;
+  margin-block-start: 3px;
+  color: var(--text-dim);
+}
+.ord-by-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ord-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ord-line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+}
+.ord-line.is-voided {
+  opacity: 0.7;
+}
+.ord-line.is-voided .ord-line-name {
+  text-decoration: line-through;
+}
+.ord-line-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ord-line-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  unicode-bidi: plaintext;
+}
+.ord-line-price {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+.ord-line-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.ord-mods {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  padding-inline-start: 14px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+.ord-trail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+}
+.ord-trail li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ord-trail .pos-handle {
+  color: var(--text);
+}
+.ord-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block-start: 4px;
+}
+.ord-line-actions > .pos-btn {
+  flex: 1 1 150px;
+}
+
+.ord-totals {
+  margin-block-start: 6px;
+}
+.ord-total-big {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.ord-slip {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ord-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.ord-flag--ok {
+  background: var(--ok-bg);
+}
+.ord-flag--warn {
+  background: var(--warn-bg);
+}
+
+.ord-timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ord-ev {
+  display: flex;
+  gap: 10px;
+  padding-block: 8px;
+  border-block-end: 1px solid var(--line);
+}
+.ord-ev:last-child {
+  border-block-end: 0;
+}
+.ord-ev-icon {
+  flex: 0 0 auto;
+  inline-size: 28px;
+  block-size: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+}
+.ord-ev--ok .ord-ev-icon {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.ord-ev--warn .ord-ev-icon {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.ord-ev--danger .ord-ev-icon {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.ord-ev-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-inline-size: 0;
+}
+.ord-ev-text {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+.ord-ev-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.ord-detail-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--line);
+}
+.ord-foot-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.ord-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ord-foot-actions > .pos-btn {
+  flex: 1 1 160px;
+}
+
+/* A short landscape phone: the footer's buttons sit in one row and the sheet's own
+   scroll region absorbs the rest, so the primary action never leaves the viewport. */
+@media (max-height: 480px) {
+  .ord-head {
+    padding-block: 8px 6px;
+    gap: 6px;
+  }
+  .ord-detail-foot {
+    padding-block-start: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ord *,
+  .ord-detail-scroll * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

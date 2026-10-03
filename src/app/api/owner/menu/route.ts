@@ -18,7 +18,11 @@ import type { MenuDoc } from '@/lib/menu/types'
 const bodySchema = z.object({
   branch: z.string(),
   action: z.enum(['save', 'publish']),
-  draft: z.object({ categories: z.array(z.record(z.string(), z.unknown())) }),
+  // passthrough(): zod's default for z.object is to STRIP unknown keys, which
+  // would silently delete the modifier library (`modifierGroups`) — and any
+  // future top-level field — on every save. The shape that matters (categories)
+  // is still enforced; MenuDoc content is free-form by design.
+  draft: z.object({ categories: z.array(z.record(z.string(), z.unknown())) }).passthrough(),
 })
 
 export const POST = apiRoute(async (request: NextRequest) => {

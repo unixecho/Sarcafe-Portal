@@ -6,9 +6,11 @@ import MenuVersionBar from '@/components/MenuVersionBar'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import CategoryAccordion from '@/components/CategoryAccordion'
 import MenuOnboardingWizard from '@/components/MenuOnboardingWizard'
+import ModifierLibrary, { modifierProblems } from '@/components/owner/pos/ModifierLibrary'
+import { useT } from '@/lib/pos/useT'
 import { ensureUids } from '@/lib/menu/variants'
 import { randomId } from '@/lib/menu/id'
-import type { MenuCategory, MenuDoc, MenuItem, MenuVariant } from '@/lib/menu/types'
+import type { MenuCategory, MenuDoc, MenuItem, MenuVariant, ModifierGroup } from '@/lib/menu/types'
 
 type LoadedMenu = { menuId: string; activeVariantId: string | null; draft: MenuDoc; variants: MenuVariant[] }
 
@@ -31,6 +33,9 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
   const [showOutOfStock, setShowOutOfStock] = useState(false)
   const [openCategoryIds, setOpenCategoryIds] = useState<Set<string>>(new Set())
   const [onboardingOpen, setOnboardingOpen] = useState(false)
+  // Bumped when Publish is refused over unfinished modifier groups, so the library card opens on the problems.
+  const [modsSignal, setModsSignal] = useState(0)
+  const t = useT()
 
   const onboardingKey = ONBOARDING_SEEN_PREFIX + branchSlug
 
@@ -85,10 +90,21 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
   // range string) into a fresh copy — never mutates the live draft, so
   // editing can continue with the raw typed values still in the inputs.
   function buildPayload(source: MenuDoc): MenuDoc {
+    // A group deleted in this session is stripped from every list at delete time, but a
+    // draft loaded from older data could still carry a dangling uid — drop those on the
+    // way out so the POS never has to guess what a missing group meant.
+    const known = new Set((source.modifierGroups ?? []).map((g) => g.uid))
+    const live = (uids: string[] | undefined) => (uids ? uids.filter((uid) => known.has(uid)) : uids)
     return {
+      ...source, // keep every other top-level key (e.g. the modifier library) — never rebuild the doc as { categories } alone
       categories: source.categories.map((category) => ({
         ...category,
-        items: category.items.map((item) => ({ ...item, price: normalizePrice(item.price) })),
+        ...(category.modifierGroupUids ? { modifierGroupUids: live(category.modifierGroupUids) } : {}),
+        items: category.items.map((item) => ({
+          ...item,
+          price: normalizePrice(item.price),
+          ...(item.modifierGroupUids ? { modifierGroupUids: live(item.modifierGroupUids) } : {}),
+        })),
       })),
     }
   }
@@ -125,6 +141,13 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
 
   async function publish() {
     if (!loaded || !draft) return
+    // Unfinished modifier groups would reach the register as empty or ambiguous
+    // choices, so Publish waits for them. (Save-as-draft never does.)
+    if (modifierProblems(draft.modifierGroups, t).errors.length > 0) {
+      flash(t('owner.menu.mods.publishBlocked'), true)
+      setModsSignal((n) => n + 1)
+      return
+    }
     const payload = buildPayload(draft)
     const ok = await saveDoc(payload, 'publish')
     if (!ok) return
@@ -214,6 +237,29 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
     })
   }
 
+  function saveGroup(group: ModifierGroup) {
+    edit((doc) => {
+      const list = doc.modifierGroups ?? (doc.modifierGroups = [])
+      const at = list.findIndex((g) => g.uid === group.uid)
+      if (at >= 0) list[at] = group
+      else list.push(group)
+    })
+  }
+
+  function deleteGroup(uid: string) {
+    edit((doc) => {
+      doc.modifierGroups = (doc.modifierGroups ?? []).filter((g) => g.uid !== uid)
+      // Remove every reference in the same edit — a list pointing at a group that no
+      // longer exists is a silent no-op on the register and a confusing chip here.
+      for (const category of doc.categories) {
+        if (category.modifierGroupUids) category.modifierGroupUids = category.modifierGroupUids.filter((u) => u !== uid)
+        for (const item of category.items) {
+          if (item.modifierGroupUids) item.modifierGroupUids = item.modifierGroupUids.filter((u) => u !== uid)
+        }
+      }
+    })
+  }
+
   function closeOnboarding() {
     window.localStorage.setItem(onboardingKey, '1')
     setOnboardingOpen(false)
@@ -296,6 +342,17 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
       <p style={{ fontSize: '0.78rem', color: 'var(--text-faint)', margin: '0 0 16px' }}>
         עריכת התפריט של {branchLabel}. השינויים נשמרים כטיוטה — לחיצה על &quot;פרסום&quot; היא מה שהלקוחות רואים בפועל.
       </p>
+
+      {(draft.categories.length > 0 || (draft.modifierGroups?.length ?? 0) > 0) && (
+        <ModifierLibrary
+          groups={draft.modifierGroups ?? []}
+          categories={draft.categories}
+          onSave={saveGroup}
+          onDelete={deleteGroup}
+          confirm={setConfirmRequest}
+          openSignal={modsSignal}
+        />
+      )}
 
       {outOfStock.length > 0 && (
         <section style={{ marginBottom: 20 }}>
@@ -426,6 +483,15 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
               edit((doc) => {
                 const cat = doc.categories[categoryIndex]
                 if (cat) cat.liveOnTablet = cat.liveOnTablet !== true
+              })
+            }
+            modifierGroups={draft.modifierGroups ?? []}
+            onSetCategoryModifierGroups={(uids) =>
+              edit((doc) => {
+                const cat = doc.categories[categoryIndex]
+                if (!cat) return
+                if (uids === undefined) delete cat.modifierGroupUids
+                else cat.modifierGroupUids = uids
               })
             }
             onAddItem={() => addItem(categoryIndex)}

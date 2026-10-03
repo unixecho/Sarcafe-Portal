@@ -38,6 +38,10 @@ export type MenuItem = Localized & {
    * `available` false in the same write; raising it again does not
    * auto-restore availability. */
   quantity?: number
+  /** Which modifier groups (MenuDoc.modifierGroups) apply to this item. When
+   * present it REPLACES the category's list entirely — even an empty array
+   * means "none", so one item can opt out of its category's groups. */
+  modifierGroupUids?: string[]
 }
 
 export type MenuItemType = Localized & {
@@ -69,10 +73,61 @@ export type MenuCategory = {
    * stable id would work too but this reads directly off the doc with no
    * extra lookup. */
   liveOnTablet?: boolean
+  /** Default modifier groups for every item in this category. An item may
+   * override with its own modifierGroupUids. */
+  modifierGroupUids?: string[]
+}
+
+/** What a modifier group's options DO to a line. The structure is identical for
+ * all five; the kind exists because it drives wording and colour on a station
+ * card ("בלי" in red, "+" in green, "במקום X ← Y") and what reports can say
+ * ("how often is oat milk substituted?").
+ *   choice      a pick that defines the item        (size, coffee type)
+ *   add         something extra                     (extra shot, syrup) — may carry qty
+ *   remove      an ingredient taken out             (no onion, no sugar)
+ *   substitute  one ingredient replaced by another  (oat milk instead of milk)
+ *   prep        a preparation request               (very hot, sauce on the side) */
+export type ModifierKind = 'choice' | 'add' | 'remove' | 'substitute' | 'prep'
+
+export type ModifierOption = Localized & {
+  /** Minted once like every other uid; order lines snapshot it, never the array position. */
+  uid: string
+  /** ₪ added to the unit price (may be negative: a discount). Number only —
+   * unlike MenuItem.price there are no "14/16" ranges here. */
+  priceDelta?: number
+  /** Pre-selected. "As-is" (one tap, no sheet) means exactly: the defaults. */
+  default?: boolean
+  /** false = sold out / not offered right now (hidden from selection, kept in history). */
+  available?: boolean
+  /** 'add' options only: allow more than one (extra shot ×2), up to this. Default 1. */
+  maxQty?: number
+}
+
+export type ModifierGroup = {
+  uid: string
+  title: Localized
+  kind: ModifierKind
+  /** The cashier must satisfy min..max before the item can be added. */
+  required: boolean
+  /** More than one option may be picked. */
+  multiple: boolean
+  /** Default: required ? 1 : 0. */
+  min?: number
+  /** Default: multiple ? options.length : 1. */
+  max?: number
+  /** 'substitute' only — what the options REPLACE ("Regular milk"). */
+  source?: Localized
+  options: ModifierOption[]
 }
 
 export type MenuDoc = {
   categories: MenuCategory[]
+  /** The library of reusable modifier groups ("Milk", "Extras", "Remove"…),
+   * defined once and referenced by uid from categories and items — one "Milk"
+   * group for ten coffees, not ten copies. Lives in the menu document like
+   * `types` do: a content change, never a migration, so draft / publish /
+   * versioning / the audit trail all cover it for free. */
+  modifierGroups?: ModifierGroup[]
 }
 
 export type MenuVariant = {

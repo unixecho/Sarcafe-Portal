@@ -1,0 +1,223 @@
+/* ==========================================================================
+   The public Ready board. Namespaced `.board-*`; tokens only; logical properties.
+   Dark and huge: the first name is the largest thing on the screen because the
+   person reading it is three metres away. It is one full-height column (header,
+   the ready zone, a quiet footer) and the ready zone is the ONLY thing that scrolls.
+   Works from a 1920x1080 TV down to a 360x740 phone and an 844x390 landscape phone.
+   ========================================================================== */
+
+.board {
+  min-block-size: 100vh;
+  min-block-size: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 2vh, 28px);
+  padding: clamp(12px, 2.4vw, 40px);
+  background: var(--bg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.board-top {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.board-brand {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.4vw, 2.2rem);
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.board-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.board-tool,
+.board-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+button.board-tool {
+  cursor: pointer;
+}
+.board-tool--on {
+  color: var(--text-dim);
+}
+.board-conn {
+  background: var(--warn-bg);
+  border-color: var(--warn);
+}
+.board-spin {
+  animation: board-spin 1s linear infinite;
+}
+@keyframes board-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- the ready zone ---------------------------------------------------------- */
+
+.board-ready {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.6vh, 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.board-zone-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 3vw, 3rem);
+  font-weight: 800;
+  color: var(--ok);
+}
+.board-empty {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: clamp(1.2rem, 2.4vw, 2.2rem);
+  font-weight: 600;
+}
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: clamp(10px, 1.6vw, 24px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-card {
+  --pt: var(--ok);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 1vh, 12px);
+  padding: clamp(14px, 2vw, 32px);
+  border-radius: var(--radius-lg, 22px);
+  border: 2px solid var(--line-strong);
+  border-inline-start: 14px solid var(--pt);
+  background: var(--bg-elev);
+  min-inline-size: 0;
+}
+.board-card-name {
+  font-size: clamp(2.6rem, 6.4vw, 7rem);
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+.board-card-no {
+  font-size: clamp(2rem, 4.6vw, 5rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--neon-soft);
+}
+.board-card-point {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 4px;
+  font-size: clamp(1.1rem, 2vw, 2.1rem);
+  font-weight: 700;
+  color: var(--text);
+}
+.board-card-point svg {
+  flex: 0 0 auto;
+  color: var(--pt);
+}
+
+/* ONE rise, on arrival. Opacity + transform only; the card carries no backdrop-filter. */
+.board-card--new {
+  animation: board-rise 0.7s var(--ease) backwards;
+}
+@keyframes board-rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+  }
+}
+
+.board-prep {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-size: clamp(1.1rem, 2vw, 2rem);
+  font-weight: 600;
+}
+
+/* ---- the "link is not valid" page ------------------------------------------------ */
+
+.board--state {
+  align-items: center;
+  justify-content: center;
+}
+.board-state {
+  max-inline-size: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.board-state-icon {
+  inline-size: 96px;
+  block-size: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line-strong);
+  color: var(--neon-soft);
+}
+.board-state-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 800;
+}
+.board-state-body {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: clamp(1.05rem, 2vw, 1.4rem);
+  line-height: 1.5;
+}
+
+/* A short landscape phone: the cards shrink to what fits beside each other. */
+@media (max-height: 480px) {
+  .board {
+    gap: 8px;
+    padding: 10px 14px;
+  }
+  .board-card-name {
+    font-size: clamp(2rem, 7vh, 3.4rem);
+  }
+  .board-card-no {
+    font-size: clamp(1.5rem, 5vh, 2.4rem);
+  }
+}
+
+/* Reduced motion: no rise, no spinner — the state is still readable (the words say it). */
+@media (prefers-reduced-motion: reduce) {
+  .board-card--new,
+  .board-spin {
+    animation: none;
+  }
+}

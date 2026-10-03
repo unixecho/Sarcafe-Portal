@@ -34,7 +34,7 @@ export default async function OwnerLinksPage() {
     allowedBranchSlug = branch?.slug ?? null
   }
 
-  const branches = await getBranches()
+  const branches = await getBranches({ includeEvents: true })
   const visibleBranches = allowedBranchSlug ? branches.filter((b) => b.slug === allowedBranchSlug) : branches
   const cookieStore = await cookies()
   const initialBranch = resolveCurrentBranchSlug(visibleBranches, cookieStore.get(BRANCH_COOKIE)?.value)

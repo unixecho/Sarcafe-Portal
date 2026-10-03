@@ -2,10 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import AuthHandoff, { GoogleG } from '@/components/AuthHandoff'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
+import QuickLogin from '@/components/auth/QuickLogin'
+import { useT } from '@/lib/pos/useT'
+
+// Same open-redirect rule as app/auth/callback's safeNext(), tightened to plain path
+// characters because this value is placed UNENCODED in the OAuth redirect URL (so
+// Supabase's wildcard allow-list matches it) and so must not carry a query or fragment.
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('://')) return null
+  return /^\/[A-Za-z0-9/_-]*$/.test(raw) ? raw : null
+}
 
 // Structurally mirrors AyekaBar's /login: a two-step reveal (this page,
 // then the AuthHandoff interstitial) rather than firing OAuth straight off
@@ -16,6 +27,9 @@ import LogoMark from '@/components/LogoMark'
 export default function LoginPage() {
   const [handoffOpen, setHandoffOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [next, setNext] = useState<string | null>(null)
+  const t = useT()
 
   useEffect(() => {
     document.title = 'Sarcafe | כניסה'
@@ -23,6 +37,8 @@ export default function LoginPage() {
     if (params.get('error') || params.get('error_code')) {
       setError('ההתחברות בוטלה או שפג תוקפה. נסה/י שוב.')
     }
+    setNext(safeNext(params.get('next')))
+    if (params.get('quick') === '1') setQuickOpen(true)
   }, [])
 
   return (
@@ -91,6 +107,43 @@ export default function LoginPage() {
             </p>
           )}
 
+          {/* An OPTION for a shared station tablet; the Google door above stays the default. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <button
+              type="button"
+              className="press"
+              aria-expanded={quickOpen}
+              aria-controls="quick-login-panel"
+              onClick={() => setQuickOpen((open) => !open)}
+              style={{
+                alignSelf: 'center',
+                minHeight: 'var(--tap-min)',
+                padding: '0 16px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-dim)',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+              }}
+            >
+              {t('me.quick.login.toggle')}
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                style={{ transform: quickOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }}
+              />
+            </button>
+            {quickOpen && (
+              <div id="quick-login-panel">
+                <QuickLogin />
+              </div>
+            )}
+          </div>
+
           <p style={{ margin: 0, color: 'var(--text-faint)', fontSize: '0.78rem' }}>
             המערכת תיקח אותך לאזור המתאים לך אוטומטית לפי ההרשאה שלך.
           </p>
@@ -105,7 +158,12 @@ export default function LoginPage() {
           </Link>
         </section>
 
-        <AuthHandoff open={handoffOpen} onClose={() => setHandoffOpen(false)} lang="he" />
+        <AuthHandoff
+          open={handoffOpen}
+          onClose={() => setHandoffOpen(false)}
+          lang="he"
+          redirectPath={next ? `/auth/callback?next=${next}` : '/auth/callback'}
+        />
       </main>
     </PublicBackdrop>
   )
