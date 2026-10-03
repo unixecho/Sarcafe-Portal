@@ -13,7 +13,7 @@
 --     false/null and each one raised "not authorized" — always. (Live: 0 audit
 --     rows, 0 assignments, 0 swaps.) The new sched_* functions take the actor
 --     EXPLICITLY (p_actor = staff.id, resolved by the server guard from the
---     session, never from a request body), exactly the pos_* pattern in 014.
+--     session, never from a request body), exactly the pos_* pattern in 020.
 --     They are executable by service_role only.
 --
 --  2. Names. The invite flow stored first_name but never display_name and the
