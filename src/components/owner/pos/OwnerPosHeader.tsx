@@ -24,7 +24,7 @@ export default function OwnerPosHeader({ events, current }: { events: EventLite[
   const [pending, startTransition] = useTransition()
 
   // BranchSwitcher only reads slug + name.he; the rest of Branch is filled so the type holds.
-  const branches: Branch[] = events.map((e) => ({ id: e.id, slug: e.slug, name: { he: e.label }, kind: 'event', links: NO_LINKS, reviews: null }))
+  const branches: Branch[] = events.map((e) => ({ id: e.id, slug: e.slug, name: { he: e.label }, kind: 'event', links: NO_LINKS, reviews: null, hoursToday: null, openNow: true }))
 
   return (
     <>

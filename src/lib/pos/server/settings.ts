@@ -2,7 +2,7 @@
 // switch + Ready-board link, opening and closing the event, and creating / editing
 // / stopping a selling point.
 //
-// Every write is ONE database function (014): check + write + audit event in a single
+// Every write is ONE database function (020): check + write + audit event in a single
 // transaction, executable by service_role only. This file only translates — a
 // validated request in, the function's `{ok, reason}` out as a typed result the
 // routes turn into 200 / 409. The actor is the guarded manager's staff id, passed in

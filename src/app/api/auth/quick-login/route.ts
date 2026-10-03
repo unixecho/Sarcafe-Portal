@@ -7,7 +7,7 @@ import { parseBody, safeLogMessage } from '@/lib/pos/server/guard'
 import { mintQuickSession } from '@/lib/pos/server/quick-login'
 
 // POST /api/auth/quick-login — employee number + 6-digit passcode -> a real session as
-// that person (blueprint §1a.5, migration 016). The OPTION for a shared station tablet;
+// that person (blueprint §1a.5, migration 022). The OPTION for a shared station tablet;
 // the default way in is still the person's own Google account.
 //
 // Trust model. There is no session yet — the caller is a stranger who may be guessing —

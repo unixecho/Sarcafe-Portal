@@ -92,7 +92,7 @@ List (name, role · branch, phone/email, status pills) with search, active/inact
 ## 4. Files
 
 **New**
-- `supabase/migrations/018_scheduling_overhaul.sql`
+- `supabase/migrations/024_scheduling_overhaul.sql`
 - `src/lib/shifts/`: `names.ts` `presets.ts` `coverage.ts` `messages.ts` `schema.ts` `snapshot-diff.ts` `view.ts`
 - `src/components/shifts/`: `ui.tsx` `schedule.css` `ScheduleToast.tsx` `NotificationsSheet.tsx` `StaffPickerSheet.tsx` `MoveShiftSheet.tsx` `ShiftActionSheet.tsx` `SwapSheet.tsx` `MyRequests.tsx`
 - `src/components/staff/`: `AddStaffSheet.tsx` `StaffEditSheet.tsx` `types.ts`
@@ -108,7 +108,7 @@ List (name, role · branch, phone/email, status pills) with search, active/inact
 
 ---
 
-## 5. Migration `018_scheduling_overhaul.sql`
+## 5. Migration `024_scheduling_overhaul.sql`
 
 Re-runnable. Checked against live data first (read-only): PostgreSQL 17.6, no malformed times, no duplicate assignments, no duplicate emails, 0 swaps/assignments, constraint names as expected.
 

@@ -97,7 +97,7 @@ export function formatHours(mins: number): string {
 // One place decides how a shift is written, so the week board, the shift sheet,
 // the employee view, requests, swaps and notifications can never disagree about
 // "07:00–13:00". formatShiftLabel() is the TS twin of sched_fmt() in migration
-// 018 (the same text is baked into notifications server-side) — scripts/
+// 024 (the same text is baked into notifications server-side) — scripts/
 // check-schedule.mjs asserts they agree.
 
 const WEEKDAY_LONG = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'יום שבת']

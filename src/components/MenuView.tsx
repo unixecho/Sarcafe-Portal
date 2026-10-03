@@ -6,8 +6,9 @@ import { ChevronLeft, ChevronDown, UtensilsCrossed, Accessibility, Check } from 
 import { fetchMenuClient } from '@/lib/menu/client'
 import { localized, type Lang } from '@/lib/menu/types'
 import type { ResolvedMenu } from '@/lib/menu/fetch'
-import type { Branch, BranchSlug } from '@/lib/branches'
+import { hoursStatusLabel, type Branch, type BranchHours, type BranchSlug } from '@/lib/branches'
 import { resolveCategoryIcon } from '@/lib/menu/icons'
+import { useMenuRealtime } from '@/lib/menu/useMenuRealtime'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LanguageSwitch, { useLanguage } from '@/components/LanguageSwitch'
 import SheetShell from '@/components/SheetShell'
@@ -28,12 +29,23 @@ type MenuCopy = {
   back: string
   footer: string
   accessibility: string
+  privacy: string
   shekel: string
   soldOut: string
   switchBranch: string
   currentBranch: string
-  left: (n: number) => string
+  left: (n: number) => React.ReactNode
 }
+
+// Only the bare number is LTR-isolated, never the whole phrase — wrapping a
+// mixed Hebrew/Arabic-plus-number STRING in ltr-isolate (direction:ltr) was
+// setting that element's own text-align:start to LEFT (misaligning it from
+// everything else on the page) and, worse, made marginInlineStart resolve
+// against the WRONG physical side, collapsing the gap before it entirely —
+// confirmed live as "מלוחהנותרו" instead of "מלוחה · נותרו 1". The Hebrew/
+// Arabic word itself needs no isolation; it's already the page's own
+// direction.
+const numberSpan = (n: number) => <span className="ltr-isolate">{n}</span>
 
 const T: Record<Lang, MenuCopy> = {
   he: {
@@ -41,33 +53,36 @@ const T: Record<Lang, MenuCopy> = {
     back: 'לפורטל',
     footer: 'המחירים בשקלים חדשים וכוללים מע"מ.',
     accessibility: 'הצהרת נגישות',
+    privacy: 'מדיניות פרטיות',
     shekel: '₪',
     soldOut: 'אזל',
     switchBranch: 'החלפת סניף',
     currentBranch: 'סניף נוכחי',
-    left: (n) => `נותרו ${n}`,
+    left: (n) => <>נותרו {numberSpan(n)}</>,
   },
   en: {
     viewOnly: 'This menu is for display only — order and pay at the truck.',
     back: 'Back to portal',
     footer: 'Prices are in NIS and include VAT.',
     accessibility: 'Accessibility statement',
+    privacy: 'Privacy policy',
     shekel: '₪',
     soldOut: 'Sold out',
     switchBranch: 'Change branch',
     currentBranch: 'Current branch',
-    left: (n) => `${n} left`,
+    left: (n) => <>{numberSpan(n)} left</>,
   },
   ar: {
     viewOnly: 'القائمة للعرض فقط — الطلب والدفع عند العربة.',
     back: 'إلى البوابة',
     footer: 'الأسعار بالشيكل الجديد وتشمل ضريبة القيمة المضافة.',
     accessibility: 'بيان إمكانية الوصول',
+    privacy: 'سياسة الخصوصية',
     shekel: '₪',
     soldOut: 'نفدت الكمية',
     switchBranch: 'تغيير الفرع',
     currentBranch: 'الفرع الحالي',
-    left: (n) => `تبقّى ${n}`,
+    left: (n) => <>تبقّى {numberSpan(n)}</>,
   },
 }
 
@@ -76,11 +91,15 @@ export default function MenuView({
   initial,
   feedbackEnabled = false,
   cartEnabled = false,
+  hoursToday = null,
+  openNow = true,
 }: {
   branchSlug: BranchSlug
   initial: ResolvedMenu
   feedbackEnabled?: boolean
   cartEnabled?: boolean
+  hoursToday?: BranchHours
+  openNow?: boolean
 }) {
   const [lang, setLang] = useLanguage()
   const [menu, setMenu] = useState(initial)
@@ -112,15 +131,21 @@ export default function MenuView({
     }
   }, [])
 
-  useEffect(() => {
-    async function refresh() {
-      const fresh = await fetchMenuClient(branchSlug)
-      if (fresh) {
-        setMenu(fresh)
-        lastPublishedAt.current = fresh.publishedAt
-      }
+  const refresh = useCallback(async () => {
+    const fresh = await fetchMenuClient(branchSlug)
+    if (fresh) {
+      setMenu(fresh)
+      lastPublishedAt.current = fresh.publishedAt
     }
+  }, [branchSlug])
 
+  // Realtime is the primary path now (an owner's Publish or a tablet edit
+  // nudges this instantly via Supabase Realtime broadcast — see
+  // lib/menu/realtime.ts); polling stays on as a fallback for a missed/
+  // dropped websocket message, same reasoning REFRESH_MS's own comment gives.
+  useMenuRealtime(branchSlug, refresh)
+
+  useEffect(() => {
     const interval = window.setInterval(refresh, REFRESH_MS)
     function onVisibilityChange() {
       if (document.visibilityState === 'visible') refresh()
@@ -131,7 +156,7 @@ export default function MenuView({
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [branchSlug])
+  }, [refresh])
 
   // Keeps the active chip scrolled into view (centered once the row is
   // wider than the viewport; the row simply centers itself via .fits
@@ -210,8 +235,9 @@ export default function MenuView({
 
   const content = (
     <PublicBackdrop>
-      <main id="main" tabIndex={-1} style={{ maxWidth: 480, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
+      <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
         <div className="menu-sticky" ref={stickyRef}>
+        <div className="menu-sticky-inner">
           <div className="menu-topbar">
             <div className="menu-lang-slot rise" style={{ animationDelay: '20ms' }}>
               <LanguageSwitch lang={lang} onChange={setLang} variant="inline" />
@@ -234,6 +260,25 @@ export default function MenuView({
           </div>
 
           <p style={{ margin: '0 16px 8px', fontSize: '0.76rem', color: 'var(--text-faint)', textAlign: 'center' }}>{t.viewOnly}</p>
+
+          <p
+            style={{
+              margin: '0 16px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              fontSize: '0.76rem',
+              fontWeight: 600,
+              color: openNow ? 'var(--text-dim)' : 'var(--text-faint)',
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{ width: 7, height: 7, borderRadius: '50%', background: openNow ? 'var(--sage-soft)' : 'var(--text-faint)', flexShrink: 0 }}
+            />
+            {hoursStatusLabel({ hoursToday, openNow }, lang)}
+          </p>
 
           {menu.activeVariant && !menu.isDefaultVariant && (
             <p
@@ -271,6 +316,7 @@ export default function MenuView({
               </nav>
             </div>
           )}
+        </div>
         </div>
 
         <SheetShell open={branchSheetOpen} onClose={() => setBranchSheetOpen(false)} labelledBy="branch-switch-title">
@@ -377,12 +423,15 @@ export default function MenuView({
                                 {t.soldOut}
                               </span>
                             )}
-                            {!soldOut && item.quantity !== undefined && (
-                              <span className="ltr-isolate" style={{ marginInlineStart: 8, fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 600 }}>
-                                {t.left(item.quantity)}
-                              </span>
-                            )}
                           </p>
+                          {/* Its own line, not crowded against the name —
+                              same treatment as item.note below, since this
+                              is exactly that: a second line of status. */}
+                          {!soldOut && item.quantity !== undefined && (
+                            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)', fontWeight: 600 }}>
+                              {t.left(item.quantity)}
+                            </p>
+                          )}
                           {item.note && (
                             <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
                               {localized(item.note, lang)}
@@ -409,7 +458,7 @@ export default function MenuView({
                                       <span style={{ marginInlineStart: 5, color: '#ff8a5c', fontWeight: 700 }}>· {t.soldOut}</span>
                                     )}
                                     {!typeSoldOut && type.quantity !== undefined && (
-                                      <span className="ltr-isolate" style={{ marginInlineStart: 5 }}>· {t.left(type.quantity)}</span>
+                                      <span style={{ marginInlineStart: 5 }}>· {t.left(type.quantity)}</span>
                                     )}
                                   </li>
                                 )
@@ -444,6 +493,13 @@ export default function MenuView({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8, fontSize: '0.78rem', color: 'var(--neon-2)' }}
           >
             <Accessibility size={15} aria-hidden="true" /> {t.accessibility}
+          </Link>
+          <Link
+            href="/privacy"
+            className="press"
+            style={{ display: 'inline-flex', alignItems: 'center', marginTop: 8, marginInlineStart: 14, fontSize: '0.78rem', color: 'var(--text-faint)', textDecoration: 'underline' }}
+          >
+            {t.privacy}
           </Link>
           {/* Same reachable spot the portal's footer gives it — WCAG 2.2
               3.2.6 Consistent Help wants one predictable place, not a

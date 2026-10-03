@@ -124,7 +124,7 @@ export function validateSelections(groups: ModifierGroup[], selections: Modifier
       const qty = inGroup.get(o.uid)
       if (qty === undefined) continue
       const delta = parseDeltaAgorot(o.priceDelta)
-      // The database also bounds EACH snapshot's delta (015: |delta| <= 500000), separately from
+      // The database also bounds EACH snapshot's delta (021: |delta| <= 500000), separately from
       // the line's final price — so +₪6000 in one group and -₪6000 in another would net out to a
       // priceable unit yet be refused as `bad_line`. Refuse it here, with a code the cashier can see.
       if (delta === null || Math.abs(delta) > LIMITS.unitAgorotMax) {
@@ -146,7 +146,7 @@ export function validateSelections(groups: ModifierGroup[], selections: Modifier
   return { ok: true, snapshots, deltaAgorot }
 }
 
-/** Σ price_delta × qty — the same arithmetic the database enforces (015). */
+/** Σ price_delta × qty — the same arithmetic the database enforces (021). */
 export function snapshotsDelta(snapshots: ModifierSnapshot[]): number {
   return snapshots.reduce((sum, m) => sum + m.price_delta_agorot * (m.qty || 1), 0)
 }

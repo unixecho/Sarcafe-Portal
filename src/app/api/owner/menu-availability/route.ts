@@ -1,16 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { apiRoute, BadRequest, NotFound } from '@/lib/http/errors'
-import { requireMenuEditor } from '@/lib/owner/guard'
-import { createServiceRoleClient } from '@/lib/supabase/server'
+import { apiRoute, BadRequest } from '@/lib/http/errors'
 import { logMenuAudit } from '@/lib/menu/audit'
+import { broadcastMenuUpdated } from '@/lib/menu/realtime'
+import { resolveTabletWrite } from '@/lib/menu/tablet-write'
 import type { MenuDoc } from '@/lib/menu/types'
 
 // The tablet editor's write path — deliberately NOT the draft/publish
-// route. It calls the set_availability() Postgres function (see migration
-// 007), which flips one item's (or type's) `available` flag in BOTH draft
-// and published jsonb atomically, so the public menu reflects it
-// immediately instead of waiting for the next unrelated Publish.
+// route. It calls the set_availability() Postgres function (see migrations
+// 007, 012, 014), which flips one item's (or type's) `available`/`quantity`
+// in draft (always) and published (only during operating hours) atomically,
+// so the public menu reflects it immediately instead of waiting for the
+// next unrelated Publish.
+//
+// Outside operating hours the feature is owner-only, and even the owner's
+// edits land in draft only (see set_availability's p_publish) — visible
+// back on the tablet, which reads draft, but never on the published,
+// customer-facing menu. Matches "closed" meaning closed: a live stock count
+// only makes sense while the branch is actually selling.
 
 const bodySchema = z
   .object({
@@ -37,40 +44,36 @@ function findLabel(doc: MenuDoc, itemUid: string, typeUid: string | null): strin
 
 export const POST = apiRoute(async (request: NextRequest) => {
   const body = bodySchema.parse(await request.json())
-  const service = createServiceRoleClient()
+  const { service, menuId, branchId, draft, staff, publish } = await resolveTabletWrite(body.branch)
 
-  const { data: menu } = await service
-    .from('menus')
-    .select('id, branch_id, draft')
-    .eq('slug', body.branch)
-    .maybeSingle()
-  if (!menu) throw NotFound('Menu not found for this branch.')
-
-  const staff = await requireMenuEditor(menu.branch_id)
-  const label = findLabel(menu.draft as MenuDoc, body.itemUid, body.typeUid)
+  const label = findLabel(draft, body.itemUid, body.typeUid)
 
   const { error } = await service.rpc('set_availability', {
-    p_menu_id: menu.id,
+    p_menu_id: menuId,
     p_item_uid: body.itemUid,
     p_type_uid: body.typeUid,
     p_available: body.available ?? null,
     p_quantity: body.quantity ?? null,
+    p_publish: publish,
   })
   if (error) throw BadRequest('Could not update availability.')
 
-  const summary =
+  const summaryBase =
     body.quantity !== undefined && body.quantity !== null
       ? `עדכן כמות (מהטאבלט): ${label} — ${body.quantity}`
       : `${body.available ? 'סימן זמין (מהטאבלט)' : 'סימן אזל מהמלאי (מהטאבלט)'}: ${label}`
+  const summary = publish ? summaryBase : `${summaryBase} (מחוץ לשעות הפעילות — לא פורסם ללקוחות)`
 
   await logMenuAudit(service, {
     actor: staff,
-    branchId: menu.branch_id,
-    menuId: menu.id,
+    branchId,
+    menuId,
     action: 'menu.availability',
     summary,
-    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available, quantity: body.quantity },
+    detail: { itemUid: body.itemUid, typeUid: body.typeUid, available: body.available, quantity: body.quantity, published: publish },
   })
 
-  return NextResponse.json({ ok: true })
+  if (publish) await broadcastMenuUpdated(body.branch)
+
+  return NextResponse.json({ ok: true, published: publish })
 })

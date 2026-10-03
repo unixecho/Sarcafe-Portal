@@ -93,7 +93,7 @@ export type Shift = {
   updatedAt: string | null
 }
 
-/** `swap_pending` is legacy (migration 018 stopped writing it): a pending swap is
+/** `swap_pending` is legacy (migration 024 stopped writing it): a pending swap is
  *  derived from the swaps list and never alters the assignment itself. */
 export type AssignmentStatus = 'assigned' | 'swap_pending'
 

@@ -3,7 +3,7 @@
 //      idea of it),
 //   2. authorises via requireScheduleManager()/requireScheduleViewer() — the
 //      primary gate, resolved from the session, never from the body,
-//   3. calls ONE database function (migration 018) with the caller's staff id as
+//   3. calls ONE database function (migration 024) with the caller's staff id as
 //      the explicit actor. Those functions re-check the same rule, apply the
 //      change atomically, enforce the invariants (no double-booking, a pending
 //      request never edits the schedule) and write the audit row.

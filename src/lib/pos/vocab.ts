@@ -3,11 +3,11 @@
 // than a fact about the business (Ayeka's dashboard rule). Pure; safe anywhere.
 //
 // Several of these are the TS half of a rule the database also enforces
-// (014/015): scripts/check-pos.mjs asserts the two agree.
+// (020/021): scripts/check-pos.mjs asserts the two agree.
 
 import type { ItemStatus } from './types'
 
-// ---- Caps (mirrors of the CHECK constraints in 014/015) ----------------------------
+// ---- Caps (mirrors of the CHECK constraints in 020/021) ----------------------------
 export const LIMITS = {
   customerNameMax: 40,
   phoneDigitsMin: 7,

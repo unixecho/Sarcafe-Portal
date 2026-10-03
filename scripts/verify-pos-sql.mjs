@@ -82,7 +82,14 @@ for (const f of files) {
   }
 }
 try {
-  for (const f of files.filter((x) => /_pos_/.test(x))) await db.exec(readFileSync(MIG + f, 'utf8'))
+  // The event POS is 020+; 017_pos_orders belongs to the separate remote orders POS and is run once, in order.
+  for (const f of files.filter((x) => x >= '020' && /_pos_/.test(x))) {
+    try {
+      await db.exec(readFileSync(MIG + f, 'utf8'))
+    } catch (e) {
+      throw new Error(`${f}: ${String(e.message).split('\n')[0]}`)
+    }
+  }
   check('POS migrations are re-runnable (idempotent)', true)
 } catch (e) {
   check('POS migrations are re-runnable (idempotent)', false, String(e.message).split('\n')[0])
@@ -327,7 +334,7 @@ check('a non-manager cannot void a DELIVERED line', (await rpc('pos_void_items',
 check('a manager can', (await rpc('pos_void_items', { p_staff: owner.id, p_order: o5.order_id, p_item_ids: [l5], p_reason: 'החזר', p_manager: true })).voided.length === 1)
 
 // ============================================================================
-section('structured modifiers (015)')
+section('structured modifiers (021)')
 const mod = (kind, label, delta, over = {}) => ({
   group_uid: 'g-' + kind, group: name('קבוצה', 'Group'), kind, option_uid: 'o-' + label,
   label: name(label, label), price_delta_agorot: delta, qty: 1, source: null, ...over,
@@ -427,7 +434,7 @@ check('names become a placeholder after their window', clear2.names > 0 && (awai
 check('…and the name is scrubbed from the audit payloads too', (await one(`select count(*)::int n from public.pos_events where payload ? 'customer_name'`)).n === 0)
 
 // ============================================================================
-section('quick login (016): employee number + 6-digit passcode')
+section('quick login (022): employee number + 6-digit passcode')
 const empNos = (await q(`select employee_no from public.staff order by employee_no`)).map((r) => r.employee_no)
 check('every staff row has an employee number, all different', empNos.every((x) => Number.isInteger(x)) && new Set(empNos).size === empNos.length)
 check('numbers start small and typeable (>= 101)', Math.min(...empNos) >= 101, String(Math.min(...empNos)))

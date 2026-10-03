@@ -27,7 +27,7 @@ import { LIVE_ITEM_STATUSES } from '@/lib/pos/vocab'
 import type { PosItem, PosOrder, PosPoint } from '@/lib/pos/types'
 import type { Localized } from '@/lib/menu/types'
 
-// The schema only requires >= 24 characters (014's CHECK); the alphabet is whatever
+// The schema only requires >= 24 characters (020's CHECK); the alphabet is whatever
 // the rotate route mints. So this is a cheap sanity screen — printable ASCII, a
 // plausible length — not a format claim: it exists to turn obvious garbage away
 // before a database round trip, and the equality lookup below is the real test.

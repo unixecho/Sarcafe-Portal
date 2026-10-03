@@ -1,11 +1,11 @@
 // Behavioural verification of the staff & scheduling database layer (migrations
-// 010 + 018), run against an in-process Postgres (PGlite — real Postgres compiled
+// 010 + 024), run against an in-process Postgres (PGlite — real Postgres compiled
 // to WASM), so every rule is exercised BEFORE it touches a Supabase project.
 //
 //   node scripts/verify-schedule-sql.mjs
 //
 // It stubs what Supabase provides (roles, auth schema + auth.uid()), applies every
-// migration in order — pausing before 018 to plant LEGACY rows so the data
+// migration in order — pausing before 024 to plant LEGACY rows so the data
 // migration is tested on real-shaped data — then walks the whole product:
 // name-only staff, shifts + times, assignments + conflicts (same branch and across
 // branches), requests, swaps (hand-over and exchange), manager approval, schedule
@@ -83,9 +83,9 @@ await db.exec(`
 `)
 
 const files = readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort()
-const NEW_MIG = files.find((f) => f.startsWith('018_'))
+const NEW_MIG = files.find((f) => f.startsWith('024_'))
 
-// ---- Everything up to 018, then LEGACY rows --------------------------------
+// ---- Everything up to 024, then LEGACY rows --------------------------------
 section('migrations apply in order')
 for (const f of files.filter((x) => x < NEW_MIG)) {
   try {

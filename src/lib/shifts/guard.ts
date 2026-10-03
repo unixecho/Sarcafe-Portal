@@ -2,7 +2,7 @@
 // exactly: re-resolves the caller's staff row via the service-role client
 // (staff has no select policy for authenticated), independent of whatever
 // middleware already decided. This is the PRIMARY authorization layer for
-// every shifts API route; the sched_* SQL functions (migration 018) re-check the
+// every shifts API route; the sched_* SQL functions (migration 024) re-check the
 // same rule from the explicit actor id as a second, independent layer.
 //
 // A quick-login session (employee number + passcode) is floor-work-only

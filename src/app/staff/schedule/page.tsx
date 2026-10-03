@@ -38,7 +38,7 @@ export default async function StaffSchedulePage() {
 
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 1040, margin: '0 auto', padding: '0 16px 32px' }}>
-      <OwnerHeader title="לוח משמרות" />
+      <OwnerHeader title="לוח משמרות" backHref="/staff" />
       <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} />
     </main>
   )

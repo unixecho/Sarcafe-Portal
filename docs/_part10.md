@@ -382,7 +382,7 @@ Each of these cost Ayeka a live-testing round. Where Sarcafe applies it:
 ## 19. File map (planned)
 
 ```
-supabase/migrations/014_pos_core.sql        schema, functions, triggers, grants, realtime, verify block
+supabase/migrations/020_pos_core.sql        schema, functions, triggers, grants, realtime, verify block
 scripts/check-pos.mjs                       pure-logic harness
 scripts/verify-pos-sql.mjs                  PGlite SQL verification
 

@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getBranchOpenStates, type BranchOpenState } from '@/lib/shifts/hours'
 import type { Branch } from '@/lib/branches'
 import type { PortalReviewsBlock } from '@/lib/reviews'
 
@@ -7,6 +8,7 @@ type BranchRow = {
   slug: string
   name: Record<string, string>
   kind?: string | null
+  timezone: string
   nav_google_maps: string | null
   nav_waze: string | null
   nav_apple_maps: string | null
@@ -17,10 +19,18 @@ type BranchRow = {
 }
 
 const BASE_COLUMNS =
-  'id, slug, name, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
+  'id, slug, name, timezone, nav_google_maps, nav_waze, nav_apple_maps, instagram_url, review_url, bit_url, reviews'
 const COLUMNS = `${BASE_COLUMNS}, kind`
 
-function toBranch(row: BranchRow): Branch {
+// shift_settings (the operating-hours source) is staff-only under RLS —
+// getBranchOpenStates reads it via the service-role client internally, so
+// this stays the one place branches/server.ts reaches past the caller's own
+// session, purely to compute a public-safe derived value (today's hours +
+// open-now), never to expose the settings row itself.
+const UNCONFIGURED_OPEN_STATE: BranchOpenState = { hoursToday: null, openNow: true }
+
+function toBranch(row: BranchRow, openState: BranchOpenState | undefined): Branch {
+  const state = openState ?? UNCONFIGURED_OPEN_STATE
   return {
     id: row.id,
     slug: row.slug,
@@ -35,6 +45,8 @@ function toBranch(row: BranchRow): Branch {
       bit: row.bit_url,
     },
     reviews: row.reviews ?? null,
+    hoursToday: state.hoursToday,
+    openNow: state.openNow,
   }
 }
 
@@ -44,7 +56,7 @@ function isMissingKindColumn(error: { code?: string; message?: string } | null):
 }
 
 /**
- * The one read of the `branches` table. `kind` arrived with the POS migration (014);
+ * The one read of the `branches` table. `kind` arrived with the POS migration (020);
  * until that migration is applied the column does not exist and a select that names it
  * fails — which would turn into an EMPTY branch list and blank the public portal. So if
  * the first attempt fails because `kind` is missing, it is retried without it and every
@@ -79,7 +91,8 @@ async function readBranches(slug: string | null, includeEvents: boolean): Promis
  * audit log — passes `{ includeEvents: true }` explicitly. */
 export async function getBranches(opts: { includeEvents?: boolean } = {}): Promise<Branch[]> {
   const rows = await readBranches(null, opts.includeEvents === true)
-  return rows.map(toBranch)
+  const openStates = await getBranchOpenStates(rows.map((r) => ({ id: r.id, timezone: r.timezone })))
+  return rows.map((row) => toBranch(row, openStates[row.id]))
 }
 
 /** One branch by slug, events INCLUDED on purpose: an event's own menu link
@@ -88,5 +101,7 @@ export async function getBranches(opts: { includeEvents?: boolean } = {}): Promi
 export async function getBranchBySlug(slug: string): Promise<Branch | null> {
   const rows = await readBranches(slug, true)
   const row = rows[0]
-  return row ? toBranch(row) : null
+  if (!row) return null
+  const openStates = await getBranchOpenStates([{ id: row.id, timezone: row.timezone }])
+  return toBranch(row, openStates[row.id])
 }

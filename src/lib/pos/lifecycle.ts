@@ -2,7 +2,7 @@
 //
 //   sent ──▶ preparing ──▶ ready ──▶ delivered        (voided is the soft delete)
 //
-// The state machine itself is ENFORCED by pos_advance_items (014); this module is
+// The state machine itself is ENFORCED by pos_advance_items (020); this module is
 // the client's mirror of it — "so the UI can hide a control the server would
 // refuse, not so the UI can decide" (Ayeka). A button that does nothing is worse
 // than no button.

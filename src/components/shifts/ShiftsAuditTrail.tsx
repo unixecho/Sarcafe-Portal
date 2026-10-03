@@ -6,7 +6,7 @@ import { useShifts } from '@/components/shifts/ShiftsProvider'
 
 // Who did what, in plain sentences — newest first. Every change to the schedule
 // is written by the database in the same transaction as the change itself
-// (migration 018), so this list cannot miss one or disagree with what happened.
+// (migration 024), so this list cannot miss one or disagree with what happened.
 // No raw data is shown: the sentence already says what changed.
 const AUDIT_LABELS: Record<string, string> = {
   'shift.create': 'משמרת חדשה',

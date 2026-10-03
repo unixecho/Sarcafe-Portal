@@ -1,5 +1,5 @@
 // Input normalisers — pure, used on both sides of the wire. The DATABASE is the
-// real validator (014/015 re-check everything); these exist so the UI can say
+// real validator (020/021 re-check everything); these exist so the UI can say
 // "that phone number looks wrong" before a round trip, and so the server can
 // reject early with a precise code.
 

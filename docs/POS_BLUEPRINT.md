@@ -82,7 +82,7 @@ point ids, session ids, UUIDs, technical state names, permissions and
 synchronisation are all invisible. The backend stays authoritative and does the
 complicated work so the employee does not have to.
 
-**Unchanged on purpose** (014 is the foundation; nothing here is replaced):
+**Unchanged on purpose** (020 is the foundation; nothing here is replaced):
 `staff.handle` as the only identity shown; `pos_points` / `pos_point_routes` /
 `pos_point_staff` (assignment ≠ authorization — a person can cover any point and
 the audit says who actually did what); the per-line `point_id` / `point_name`
@@ -138,7 +138,7 @@ for free. A group has a **kind**:
 …plus `required`, `multiple`, `min`/`max`, `source` (substitute: what is replaced)
 and `options[]` each with `priceDelta`, `default`, `available`, `maxQty`.
 
-**The order line snapshots the selections** (migration `015_pos_modifiers.sql`):
+**The order line snapshots the selections** (migration `021_pos_modifiers.sql`):
 `pos_order_items.modifiers` is an array of
 `{group_uid, group, kind, option_uid, label, price_delta_agorot, qty, source}` with
 **labels and prices copied in at order time**, plus `base_agorot` (price before
@@ -230,7 +230,7 @@ attributed to whoever actually performed it.
    big keypad, and the tablet is theirs; the next person does the same. Each
    action on that tablet is attributed to the person actually at it.
 
-How quick login works (migration `016_pos_quick_login.sql`): the employee number
+How quick login works (migration `022_pos_quick_login.sql`): the employee number
 is a short auto-assigned, owner-editable integer (`staff.employee_no`); the
 passcode is stored only as a bcrypt hash (`staff.pin_hash`) and appears in no log,
 audit row or payload. `POST /api/auth/quick-login` verifies it with
@@ -394,7 +394,7 @@ security boundary — Sarcafe's own rule).
 ## 5. Data model
 
 Full DDL, constraints, triggers, grants and a verify block live in
-`supabase/migrations/014_pos_core.sql`. This section is the spec it implements.
+`supabase/migrations/020_pos_core.sql`. This section is the spec it implements.
 All tables: RLS on; `select` for authenticated staff via `is_staff_client()`;
 **no insert/update/delete grant for any client role**; `service_role` has all.
 Every `SECURITY DEFINER` function pins `search_path = public, pg_temp` and does
@@ -435,7 +435,7 @@ event slug, which is useful at the event itself.)
 | `pos_point_routes` | `(branch_id, kind 'category'\|'item', ref)` → `point_id`. **`unique (branch_id, kind, ref)`** — an item or category belongs to at most one point, enforced by the database, not the UI. |
 | `pos_point_staff` | Optional "who usually works here" links; used only to choose where a person lands. Not a permission. |
 | `pos_orders` | One per customer. `ticket_no` (per session, atomic), `client_key uuid` (idempotency, `unique (branch_id, client_key)`), `customer_name` (1–40), `customer_phone` (nullable, format-checked), `receipt_ref`, `slip_total_agorot`, `slip_mismatch`, `status` `open`/`completed`/`void`, `total_agorot` (recomputed), `created_by` + `created_by_handle` (snapshot). |
-| `pos_order_items` | One per line. Snapshots (`name`, `type_label`, `category_title`, `point_name`, `unit_agorot`, and — from migration 015 — `base_agorot` + the structured `modifiers` array, §1a.3) and the whole stamped lifecycle: `claimed_*`, `ready_at`, `picked_up_*`, `delivered_*`, `voided_*`, `voided_from`, `void_reason`; `batch_no` (1 = original, 2+ = added later); `is_custom`; `for_name`; `note`. |
+| `pos_order_items` | One per line. Snapshots (`name`, `type_label`, `category_title`, `point_name`, `unit_agorot`, and — from migration 021 — `base_agorot` + the structured `modifiers` array, §1a.3) and the whole stamped lifecycle: `claimed_*`, `ready_at`, `picked_up_*`, `delivered_*`, `voided_*`, `voided_from`, `void_reason`; `batch_no` (1 = original, 2+ = added later); `is_custom`; `for_name`; `note`. |
 | `pos_events` | **The audit log.** Append-only (a trigger rejects update/delete). One table for everything: order/line events *and* configuration events (point created, routes changed, session opened…), each with `actor_id`, `actor_handle` snapshot and a `payload` that carries the display data readers need. Real foreign keys. In the Realtime publication from day one. |
 | `pos_point_checkins` | Append-only presence log: who was on which point, when. |
 | `pos_ticket_counters` | `session_id` → `last_no`, advanced by `insert … on conflict do update … returning` so two cashiers can never draw the same number. |
@@ -1221,7 +1221,7 @@ Each of these cost Ayeka a live-testing round. Where Sarcafe applies it:
 ## 19. File map (planned)
 
 ```
-supabase/migrations/014_pos_core.sql        schema, functions, triggers, grants, realtime, verify block
+supabase/migrations/020_pos_core.sql        schema, functions, triggers, grants, realtime, verify block
 scripts/check-pos.mjs                       pure-logic harness
 scripts/verify-pos-sql.mjs                  PGlite SQL verification
 

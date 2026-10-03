@@ -1,6 +1,6 @@
 // One rule for "what do we call this person", used by the roster, the staff
 // list, audit rows and notifications — and mirrored in SQL by sched_name()
-// (migration 018). KEEP THE TWO IN SYNC: a name that reads one way on the
+// (migration 024). KEEP THE TWO IN SYNC: a name that reads one way on the
 // schedule and another in the audit log is exactly the confusion this exists
 // to remove.
 //

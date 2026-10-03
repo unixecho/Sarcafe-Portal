@@ -1,5 +1,5 @@
 // Quick login (employee number + 6-digit passcode) — the server half. Blueprint §1a.5,
-// migration 016.
+// migration 022.
 //
 // A quick login yields a REAL Supabase session as the person, so every action,
 // every RLS policy and the realtime channel see the actual employee. Because six

@@ -6,7 +6,7 @@
 //
 // It transpiles and runs the REAL TypeScript sources (the check-pos.mjs / check-a11y.mjs
 // technique) — nothing is re-implemented here. The oracle is the product spec
-// (docs/STAFF_SCHEDULING.md) and migration 018, not the code under test.
+// (docs/STAFF_SCHEDULING.md) and migration 024, not the code under test.
 //
 // The "TS == SQL" section boots an in-process Postgres (PGlite), applies every
 // migration, and compares the two implementations of each rule that exists twice:

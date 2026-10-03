@@ -101,13 +101,6 @@
   --ok-bg: color-mix(in srgb, var(--ok) 14%, var(--bg-elev));
   --warn-bg: color-mix(in srgb, var(--warn) 12%, var(--bg-elev));
   --danger-bg: color-mix(in srgb, var(--danger) 16%, var(--bg-elev));
-
-  /* Accessibility-widget hooks (see components/a11y). Defaults are inert;
-     the widget only ever sets these three, never touches anything else. */
-  --a11y-font-scale: 100%;
-  --a11y-letter-spacing: normal;
-  --a11y-word-spacing: normal;
-  --a11y-line-height: normal;
 }
 
 * {
@@ -127,7 +120,6 @@ body {
      tofu boxes for the Hebrew copy that is most of this site. */
   font-family: 'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  font-size: var(--a11y-font-scale, 100%);
 }
 
 body {
@@ -765,6 +757,18 @@ html[dir='rtl'] .menu-item-name {
   position: sticky;
   top: 0;
   z-index: 10;
+  /* Full-bleed: <main> caps content at a readable column (640px), but a bar
+     only as wide as that column reads as a floating box with a hard edge on
+     a wider viewport (tablet/desktop) — a real nav bar spans whatever the
+     device actually gives it. Physical margins on purpose, not
+     margin-inline-*: this centering trick is a pure geometry calculation
+     against the viewport, and a logical property here would resolve against
+     THIS element's own direction rather than doing the intended symmetric
+     pull from both sides. .menu-sticky-inner below re-applies the column
+     width so the bar's actual content still lines up with the page below it. */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   /* Deliberately more transparent than --glass-strong (which login/no-access
      use over a mostly-static crop) — this bar is pinned over the one
      backdrop image users actually scroll content past, so a near-opaque
@@ -786,6 +790,12 @@ html[dir='rtl'] .menu-item-name {
      is the same exception the sheet scrim already relies on (§4.6): the
      blurred region never moves or resizes, it only fades in place. */
   view-transition-name: menu-header;
+}
+/* Re-caps the bar's actual content at the same column <main> uses, since
+   .menu-sticky itself now spans the full viewport for its background/blur. */
+.menu-sticky-inner {
+  max-width: 640px;
+  margin: 0 auto;
 }
 @keyframes menu-header-fade-in {
   from { opacity: 0; }
@@ -1927,118 +1937,127 @@ html[dir='ltr'][data-nav='back'] .page-enter {
 }
 
 /* ==========================================================================
-   Accessibility widget (BLUEPRINT.md §7.3) — every class here targets
-   #a11y-scope ONLY, never <html>/<body>. `filter` triggers the identical
-   containing-block behavior `transform` does (§4.14a): applying grayscale/
-   invert/contrast to the root would silently relocate every position:fixed
-   control on the site, this widget's own launcher/panel included — which
-   is exactly why layout.tsx mounts them outside the scope entirely.
+   Customer order-tracking motion — the QR scanner's reticle sweep, the
+   "delivered" celebration, and the add-to-home-screen tutorial's mimed
+   gestures. Lives here rather than in per-component <style> tags for the
+   same reason the a11y widget's CSS does: this codebase keeps all CSS in
+   this one file.
+
+   Every keyframe below is paired with a reduce fallback at the bottom of
+   the section. Those fallbacks use `animation: none`, which means each
+   element's BASE css must already be its finished, visible state — an
+   animation that faded something in from opacity 0 via `backwards` fill
+   would otherwise strand it invisible for exactly the visitors who asked
+   for less motion. Same trap .rise documents above.
    ========================================================================== */
-/* On <html>, not #a11y-scope — rem is always relative to the root element
-   specifically, no matter how an intermediate ancestor is scoped, and this
-   codebase's type scale is rem-based throughout. font-size isn't one of
-   the properties that creates a position:fixed containing block
-   (transform/filter/perspective/…), so this carries none of §4.14a's risk
-   the way putting a filter on <html> would. */
-html.a11y-font-1 {
-  font-size: 110%;
-}
-html.a11y-font-2 {
-  font-size: 125%;
-}
-html.a11y-font-3 {
-  font-size: 140%;
-}
-html.a11y-font-4 {
-  font-size: 150%;
-}
 
-/* Applied WITHOUT !important, unlike every other effect below — forcing it
-   everywhere collides with the several components that set a precise
-   inline lineHeight for icon+text alignment (e.g. CategoryAccordion's
-   IconButton, the menu's item rows). An honest partial fix, documented at
-   the point of use, not a silent no-op. */
-#a11y-scope.a11y-spacing-1 {
-  letter-spacing: 0.02em;
-  word-spacing: 0.05em;
-  line-height: 1.5;
+/* `top` rather than translateY: the line is 2px tall, so a percentage
+   transform would resolve against those 2px instead of the reticle it
+   needs to traverse — and the reticle's height varies with the viewport. */
+@keyframes qr-scan-sweep {
+  0% { top: 0; }
+  50% { top: calc(100% - 2px); }
+  100% { top: 0; }
 }
-#a11y-scope.a11y-spacing-2 {
-  letter-spacing: 0.04em;
-  word-spacing: 0.1em;
-  line-height: 1.65;
-}
-#a11y-scope.a11y-spacing-3 {
-  letter-spacing: 0.06em;
-  word-spacing: 0.16em;
-  line-height: 1.8;
-}
-
-#a11y-scope.a11y-contrast-high {
-  filter: contrast(1.5);
-}
-#a11y-scope.a11y-contrast-grayscale {
-  filter: grayscale(1);
-}
-#a11y-scope.a11y-contrast-invert {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-#a11y-scope.a11y-pause-animations *,
-#a11y-scope.a11y-pause-animations *::before,
-#a11y-scope.a11y-pause-animations *::after {
-  animation-play-state: paused !important;
-  transition: none !important;
-}
-
-#a11y-scope.a11y-highlight-links a {
-  outline: 2px solid var(--neon-2) !important;
-  outline-offset: 1px !important;
-  background: rgba(87, 217, 192, 0.14) !important;
-}
-
-#a11y-scope.a11y-highlight-headings h1,
-#a11y-scope.a11y-highlight-headings h2,
-#a11y-scope.a11y-highlight-headings h3 {
-  outline: 2px dashed var(--neon-soft) !important;
-  outline-offset: 3px !important;
-}
-
-#a11y-scope.a11y-big-cursor,
-#a11y-scope.a11y-big-cursor * {
-  cursor:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2 L4 26 L11 20 L15 29 L19 27 L15 18 L23 18 Z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E")
-      4 2,
-    auto !important;
-}
-
-.a11y-launcher {
-  position: fixed;
-  right: 16px;
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
-  z-index: 40;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  background: var(--bg-elev);
-  color: var(--neon-soft);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-.a11y-reading-guide {
-  position: fixed;
-  left: 0;
-  right: 0;
+.qr-scan-line {
   top: 0;
-  height: 40px;
-  background: rgba(255, 200, 0, 0.14);
-  border-top: 2px solid rgba(255, 200, 0, 0.75);
-  border-bottom: 2px solid rgba(255, 200, 0, 0.75);
-  pointer-events: none;
-  z-index: 39;
-  will-change: transform;
+  animation: qr-scan-sweep 2.4s ease-in-out infinite;
+}
+
+/* The delivered hero. Rings expand out from under the badge, so they're
+   declared before it in paint order and never sit on top of the check. */
+@keyframes order-done-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes order-done-ring {
+  0% { transform: scale(0.6); opacity: 0.55; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+@keyframes order-done-check {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+@keyframes order-done-rise {
+  from { transform: translateY(8px); opacity: 0; }
+}
+.order-done-badge {
+  animation: order-done-pop 0.55s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+.order-done-check {
+  animation: order-done-check 0.35s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) 0.3s both;
+}
+.order-done-ring {
+  animation: order-done-ring 1.5s ease-out 0.25s;
+}
+.order-done-ring-2 {
+  animation-delay: 0.7s;
+}
+.order-done-rise {
+  animation: order-done-rise 0.45s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) backwards;
+}
+
+/* Tutorial: a looping mimed gesture inside a phone mock. The dot traces
+   the tap, the sheet slides up under it, the bell tips side to side. */
+@keyframes tutorial-tap {
+  0%, 12% { transform: scale(0.4); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  34% { transform: scale(0.82); opacity: 1; }
+  48%, 100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes tutorial-sheet {
+  0%, 30% { transform: translateY(100%); }
+  45%, 88% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+@keyframes tutorial-bell {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  62% { transform: rotate(16deg); }
+  70% { transform: rotate(-13deg); }
+  78% { transform: rotate(8deg); }
+  86% { transform: rotate(-4deg); }
+}
+@keyframes tutorial-slide-in {
+  from { transform: translateY(10px); opacity: 0; }
+}
+.tutorial-tap {
+  animation: tutorial-tap 3s ease-in-out infinite;
+}
+.tutorial-sheet {
+  animation: tutorial-sheet 3s ease-in-out infinite;
+}
+.tutorial-bell {
+  transform-origin: 50% 20%;
+  animation: tutorial-bell 3s ease-in-out infinite;
+}
+.tutorial-slide-in {
+  animation: tutorial-slide-in 0.35s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-scan-line,
+  .order-done-badge,
+  .order-done-check,
+  .order-done-ring,
+  .order-done-rise,
+  .tutorial-tap,
+  .tutorial-sheet,
+  .tutorial-bell,
+  .tutorial-slide-in {
+    animation: none;
+  }
+  /* The rings exist only as motion — with nothing to expand, a static
+     ring sitting under the badge is just a stray circle. */
+  .order-done-ring {
+    display: none;
+  }
+  /* Mid-loop resting positions the looping mimes would otherwise never
+     reach: the sheet is what the step is showing, so it stays up. */
+  .tutorial-sheet {
+    transform: translateY(0);
+  }
+  .tutorial-tap {
+    opacity: 1;
+  }
 }

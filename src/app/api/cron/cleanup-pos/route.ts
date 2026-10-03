@@ -4,7 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { RETENTION } from '@/lib/pos/vocab'
 import { safeLogMessage } from '@/lib/pos/server/guard'
 
-// Runs the POS retention job (migration 014, pos_clear_old_pii): a customer's PHONE is
+// Runs the POS retention job (migration 020, pos_clear_old_pii): a customer's PHONE is
 // cleared N days after the event's session ended, their NAME is replaced by a neutral
 // placeholder after M days — both scrubbed from the audit payloads too. The windows are
 // the RETENTION constants in lib/pos/vocab.ts (blueprint §14), passed as arguments so
@@ -33,7 +33,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
 
   const result = (data ?? {}) as { phones?: number; names?: number }
 
-  // Quick-login sessions older than 3 days stop counting as "quick" (migration 016). Their
+  // Quick-login sessions older than 3 days stop counting as "quick" (migration 022). Their
   // own cookie dies on its own schedule; this only keeps the table from growing. Its own
   // failure must not hide the PII job's result above.
   let quickSessions = 0

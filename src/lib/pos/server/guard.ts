@@ -275,7 +275,7 @@ export type PosStaffRow = AccessRow & {
   /** null = the system picked the nickname; the person has not confirmed it yet */
   handle_set_at: string | null
   colour: string | null
-  /** This session was opened with employee number + passcode (migration 016): floor work only. Set by resolvePosIdentity. */
+  /** This session was opened with employee number + passcode (migration 022): floor work only. Set by resolvePosIdentity. */
   quick?: boolean
 }
 

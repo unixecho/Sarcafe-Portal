@@ -4,7 +4,7 @@
 //
 // It transpiles and runs the REAL TypeScript sources (the check-a11y.mjs
 // technique) — nothing is re-implemented here. The ORACLE is not the code: it is
-// docs/POS_BLUEPRINT.md, the two migrations (014/015), and the rules written in
+// docs/POS_BLUEPRINT.md, the two migrations (020/021), and the rules written in
 // each module's header comment. Where a test and the code disagree, the spec
 // decides which one is wrong.
 //
@@ -231,10 +231,11 @@ function stripSqlComments(s) {
   return out
 }
 const migrationFiles = readdirSync(MIG_DIR).filter((f) => /^\d{3}_.*\.sql$/.test(f)).sort()
-const posMigrationFiles = migrationFiles.filter((f) => Number(f.slice(0, 3)) >= 14 && /pos/.test(f))
+// 020+ only: 014-019 are the separate remote orders POS (017_pos_orders, 018, 019) and tablet work, not this event POS.
+const posMigrationFiles = migrationFiles.filter((f) => Number(f.slice(0, 3)) >= 20 && /pos/.test(f))
 const SQL = posMigrationFiles.map((f) => stripSqlComments(readFileSync(join(MIG_DIR, f), 'utf8'))).join('\n')
-const SQL_014 = stripSqlComments(readFileSync(join(MIG_DIR, '014_pos_core.sql'), 'utf8'))
-const SQL_015 = stripSqlComments(readFileSync(join(MIG_DIR, '015_pos_modifiers.sql'), 'utf8'))
+const SQL_020 = stripSqlComments(readFileSync(join(MIG_DIR, '020_pos_core.sql'), 'utf8'))
+const SQL_021 = stripSqlComments(readFileSync(join(MIG_DIR, '021_pos_modifiers.sql'), 'utf8'))
 const TYPES_SRC = readFileSync(join(POS, 'types.ts'), 'utf8')
 const MENU_TYPES_SRC = readFileSync(MENU_TYPES, 'utf8')
 const API_SRC = readFileSync(join(POS, 'api.ts'), 'utf8')
@@ -967,10 +968,10 @@ check('delivered > ready is refused without the manager flag', L.isAllowedTransi
 check('delivered > ready is allowed with it', L.isAllowedTransition('delivered', 'ready', { manager: true }) === true)
 check('being a manager unlocks nothing else (voided > sent, delivered > sent, ready > sent stay refused)', ['voided>sent', 'delivered>sent', 'ready>sent', 'voided>ready', 'delivered>preparing'].every((p) => { const [a, b] = p.split('>'); return !L.isAllowedTransition(a, b, { manager: true }) }))
 {
-  const m = /v_pair not in \(([^)]*)\)/.exec(SQL_014)
+  const m = /v_pair not in \(([^)]*)\)/.exec(SQL_020)
   const sqlPairs = m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : null
   check('the TS transition table is exactly pos_advance_items\' list', sqlPairs !== null && sameSet(sqlPairs, [...ALLOWED_PAIRS]), `sql ${show(sqlPairs)}`)
-  check('SQL: delivered>ready exists only for p_manager', /v_pair = 'delivered>ready' and p_manager/.test(SQL_014))
+  check('SQL: delivered>ready exists only for p_manager', /v_pair = 'delivered>ready' and p_manager/.test(SQL_020))
 }
 eq('nextStatus: sent -> preparing', L.nextStatus('sent'), 'preparing')
 eq('nextStatus: preparing -> ready', L.nextStatus('preparing'), 'ready')
@@ -1063,7 +1064,7 @@ eq('isFullyDelivered: an all-voided order is void, not delivered', L.isFullyDeli
 sweep('deriveOrderStatus and orderTotalAgorot match the SQL function\'s counts on random orders', Array.from({ length: 800 }, (_, i) => i), (seed) => {
   const r = rng(seed * 7 + 3)
   const lines = Array.from({ length: Math.floor(r() * 7) }, () => ({ status: pick(r, STATUSES), qty: 1 + Math.floor(r() * 5), unit_agorot: Math.floor(r() * 4000) }))
-  // The model is pos_recompute_order, transcribed from 014: live = non-voided; void if 0; completed if delivered = live.
+  // The model is pos_recompute_order, transcribed from 020: live = non-voided; void if 0; completed if delivered = live.
   const live = lines.filter((l) => l.status !== 'voided').length
   const deliv = lines.filter((l) => l.status === 'delivered').length
   const status = live === 0 ? 'void' : deliv === live ? 'completed' : 'open'
@@ -1232,8 +1233,8 @@ eq('formatPhone: an international number is left alone', V.formatPhone('+9725412
 eq('formatPhone: a landline is left alone', V.formatPhone('031234567'), '031234567')
 eq('formatPhone: an 11-digit number is left alone', V.formatPhone('05412345678'), '05412345678')
 {
-  const sqlPhone = /customer_phone ~ '([^']+)'/.exec(SQL_014)?.[1]
-  const sqlStrip = /regexp_replace\(coalesce\(p_customer_phone, ''\), '([^']+)', '', 'g'\)/.exec(SQL_014)?.[1]
+  const sqlPhone = /customer_phone ~ '([^']+)'/.exec(SQL_020)?.[1]
+  const sqlStrip = /regexp_replace\(coalesce\(p_customer_phone, ''\), '([^']+)', '', 'g'\)/.exec(SQL_020)?.[1]
   check('the SQL phone pattern and strip class were found', Boolean(sqlPhone && sqlStrip), `${sqlPhone} / ${sqlStrip}`)
   if (sqlPhone && sqlStrip) {
     const re = new RegExp(sqlPhone)
@@ -1271,9 +1272,9 @@ sweep('handleProblem === null exactly when isValidHandle (random strings)', Arra
 {
   const classOf = (re) => { const m = /\[([^\]]*)\]/.exec(re); return m ? m[1] : null }
   const tsClass = classOf(M.vocab.HANDLE_PATTERN.source)
-  const sqlConstraint = /check \(handle ~ '([^']+)'\)/.exec(SQL_014)?.[1]
-  const sqlSet = /v_handle !~ '([^']+)'/.exec(SQL_014)?.[1]
-  const sqlSuggest = /regexp_replace\(base, '\[\^([^\]]*)\]', '', 'g'\)/.exec(SQL_014)?.[1]
+  const sqlConstraint = /check \(handle ~ '([^']+)'\)/.exec(SQL_020)?.[1]
+  const sqlSet = /v_handle !~ '([^']+)'/.exec(SQL_020)?.[1]
+  const sqlSuggest = /regexp_replace\(base, '\[\^([^\]]*)\]', '', 'g'\)/.exec(SQL_020)?.[1]
   check('all three SQL handle patterns were found', Boolean(sqlConstraint && sqlSet && sqlSuggest))
   eq('HANDLE_PATTERN is character-for-character the staff_handle_format CHECK', M.vocab.HANDLE_PATTERN.source, sqlConstraint)
   eq('…and the pos_set_handle pattern', M.vocab.HANDLE_PATTERN.source, sqlSet)
@@ -1285,7 +1286,7 @@ sweep('handleProblem === null exactly when isValidHandle (random strings)', Arra
       return M.vocab.HANDLE_PATTERN.test(s) === re.test(s)
     })
   }
-  eq('PHONE_PATTERN is the SQL pattern', M.vocab.PHONE_PATTERN.source, /customer_phone ~ '([^']+)'/.exec(SQL_014)?.[1])
+  eq('PHONE_PATTERN is the SQL pattern', M.vocab.PHONE_PATTERN.source, /customer_phone ~ '([^']+)'/.exec(SQL_020)?.[1])
 }
 
 section('validate.ts — normalizeNote / parsePriceInput')
@@ -1494,7 +1495,7 @@ function columnDefs(table) {
   const defs = splitTopLevel(body)
     .filter((p) => !CONSTRAINT_WORDS.has(p.split(/\s+/)[0].toLowerCase()))
     .map((p) => { const [name, ...rest] = p.split(/\s+/); return { name, def: rest.join(' ') } })
-  // columns a later migration ADDs (015 adds base_agorot + modifiers to pos_order_items)
+  // columns a later migration ADDs (021 adds base_agorot + modifiers to pos_order_items)
   for (const m of SQL.matchAll(/alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?public\.(\w+)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?(\w+)\s+([^;]*)/gi)) {
     if (m[1] === table && !defs.some((d) => d.name === m[2])) defs.push({ name: m[2], def: m[3].trim() })
   }
@@ -1518,7 +1519,7 @@ function typeFields(src, name) {
 const splitCols = (s) => s.split(',').map((x) => x.trim()).filter(Boolean)
 
 section('columns.ts — every *_COLUMNS list is its table, and its row type (drift check)')
-check('the POS migrations were found and parsed', posMigrationFiles.includes('014_pos_core.sql') && posMigrationFiles.includes('015_pos_modifiers.sql'), posMigrationFiles.join(', '))
+check('the POS migrations were found and parsed', posMigrationFiles.includes('020_pos_core.sql') && posMigrationFiles.includes('021_pos_modifiers.sql'), posMigrationFiles.join(', '))
 // Bookkeeping columns the browser deliberately never selects. Listed explicitly so a NEW
 // column that nobody remembered to select is a failure, while these four are a decision.
 const NOT_SELECTED = {
@@ -1556,7 +1557,7 @@ for (const [constName, table, typeName] of [
 }
 {
   const snapKeys = (() => {
-    const flat = readFileSync(join(MIG_DIR, '015_pos_modifiers.sql'), 'utf8').replace(/\r?\n--\s*/g, ' ')
+    const flat = readFileSync(join(MIG_DIR, '021_pos_modifiers.sql'), 'utf8').replace(/\r?\n--\s*/g, ' ')
     const m = /\{ (group_uid[\s\S]*?source:\{he,en,ar\}\|null) \}/.exec(flat)
     if (!m) return null
     const body = m[1].replace(/\{[^}]*\}/g, '')
@@ -1564,9 +1565,9 @@ for (const [constName, table, typeName] of [
   })()
   const tsSnapFields = typeFields(TYPES_SRC, 'ModifierSnapshot')
   const emitted = price({ itemUid: 'i-latte', qty: 1 }, fullCtx).line?.modifiers?.[0]
-  check('ModifierSnapshot (015\'s documented shape) == the TS type == what priceLine emits', snapKeys !== null && sameSet(snapKeys, tsSnapFields ?? []) && sameSet(Object.keys(emitted ?? {}), tsSnapFields ?? []), `015 ${show(snapKeys)} ts ${show(tsSnapFields)} emitted ${show(Object.keys(emitted ?? {}))}`)
+  check('ModifierSnapshot (021\'s documented shape) == the TS type == what priceLine emits', snapKeys !== null && sameSet(snapKeys, tsSnapFields ?? []) && sameSet(Object.keys(emitted ?? {}), tsSnapFields ?? []), `021 ${show(snapKeys)} ts ${show(tsSnapFields)} emitted ${show(Object.keys(emitted ?? {}))}`)
   const insertKeys = (() => {
-    const fn = /create or replace function public\.pos_insert_lines[\s\S]*?\$\$;/i.exec(SQL_015)?.[0] ?? ''
+    const fn = /create or replace function public\.pos_insert_lines[\s\S]*?\$\$;/i.exec(SQL_021)?.[0] ?? ''
     return [...new Set([...fn.matchAll(/e\.l ->>? '(\w+)'/g)].map((m) => m[1]))]
   })()
   const resolved = typeFields(TYPES_SRC, 'ResolvedLine') ?? []
@@ -1591,29 +1592,29 @@ section('vocab.ts — the TS caps, patterns and vocabularies are the SQL ones')
   eq('voidReasonMax == pos_order_items.void_reason CHECK', LIMITS.voidReasonMax, grab(items, /char_length\(void_reason\) <= (\d+)/, 'void_reason'))
   eq('qtyMax == pos_order_items.qty CHECK', LIMITS.qtyMax, grab(items, /qty\s+integer not null check \(qty between 1 and (\d+)\)/, 'qty'))
   eq('unitAgorotMax == pos_order_items.unit_agorot CHECK', LIMITS.unitAgorotMax, grab(items, /unit_agorot\s+integer not null check \(unit_agorot between 0 and (\d+)\)/, 'unit_agorot'))
-  eq('unitAgorotMax == the base_agorot CHECK (015)', LIMITS.unitAgorotMax, grab(SQL_015, /base_agorot between 0 and (\d+)/, 'base_agorot'))
-  eq('unitAgorotMax == the per-modifier |delta| bound (015)', LIMITS.unitAgorotMax, grab(SQL_015, /abs\(\(m ->> 'price_delta_agorot'\)::int\) > (\d+)/, 'modifier delta'))
+  eq('unitAgorotMax == the base_agorot CHECK (021)', LIMITS.unitAgorotMax, grab(SQL_021, /base_agorot between 0 and (\d+)/, 'base_agorot'))
+  eq('unitAgorotMax == the per-modifier |delta| bound (021)', LIMITS.unitAgorotMax, grab(SQL_021, /abs\(\(m ->> 'price_delta_agorot'\)::int\) > (\d+)/, 'modifier delta'))
   eq('pointNameMax == pos_points.name CHECK', LIMITS.pointNameMax, grab(points, /char_length\(btrim\(name\)\) between 1 and (\d+)/, 'point name'))
   eq('prepMinutesMin == pos_points.prep_minutes CHECK', LIMITS.prepMinutesMin, grab(points, /prep_minutes between (\d+) and \d+/, 'prep min'))
   eq('prepMinutesMax == pos_points.prep_minutes CHECK', LIMITS.prepMinutesMax, grab(points, /prep_minutes between \d+ and (\d+)/, 'prep max'))
-  eq('linesPerOrderMax == the validator\'s line-count bound (015)', LIMITS.linesPerOrderMax, grab(SQL_015, /jsonb_array_length\(p_lines\) > (\d+)/, 'lines per order'))
-  eq('modifiersPerLineMax == the validator\'s bound (015)', LIMITS.modifiersPerLineMax, grab(SQL_015, /jsonb_array_length\(mods\) > (\d+)/, 'modifiers per line (validator)'))
-  eq('modifiersPerLineMax == the table CHECK (015)', LIMITS.modifiersPerLineMax, grab(SQL_015, /jsonb_array_length\(modifiers\) <= (\d+)/, 'modifiers per line (check)'))
-  check('modifierQtyMax 9 == the validator\'s one-digit quantity pattern (015)', LIMITS.modifierQtyMax === 9 && /m \? 'qty' and coalesce\(m ->> 'qty', ''\) !~ '\^\[1-9\]\$'/.test(SQL_015))
-  const hm = /\{(\d+),(\d+)\}\$/.exec(/check \(handle ~ '([^']+)'\)/.exec(SQL_014)?.[1] ?? '')
+  eq('linesPerOrderMax == the validator\'s line-count bound (021)', LIMITS.linesPerOrderMax, grab(SQL_021, /jsonb_array_length\(p_lines\) > (\d+)/, 'lines per order'))
+  eq('modifiersPerLineMax == the validator\'s bound (021)', LIMITS.modifiersPerLineMax, grab(SQL_021, /jsonb_array_length\(mods\) > (\d+)/, 'modifiers per line (validator)'))
+  eq('modifiersPerLineMax == the table CHECK (021)', LIMITS.modifiersPerLineMax, grab(SQL_021, /jsonb_array_length\(modifiers\) <= (\d+)/, 'modifiers per line (check)'))
+  check('modifierQtyMax 9 == the validator\'s one-digit quantity pattern (021)', LIMITS.modifierQtyMax === 9 && /m \? 'qty' and coalesce\(m ->> 'qty', ''\) !~ '\^\[1-9\]\$'/.test(SQL_021))
+  const hm = /\{(\d+),(\d+)\}\$/.exec(/check \(handle ~ '([^']+)'\)/.exec(SQL_020)?.[1] ?? '')
   eq('handleMin/handleMax == the staff_handle_format repetition {2,16}', [LIMITS.handleMin, LIMITS.handleMax], hm ? [Number(hm[1]), Number(hm[2])] : null)
-  const pm = /\{(\d+),(\d+)\}\$/.exec(/customer_phone ~ '([^']+)'/.exec(SQL_014)?.[1] ?? '')
+  const pm = /\{(\d+),(\d+)\}\$/.exec(/customer_phone ~ '([^']+)'/.exec(SQL_020)?.[1] ?? '')
   eq('phoneDigitsMin/Max == the customer_phone CHECK repetition {7,15}', [LIMITS.phoneDigitsMin, LIMITS.phoneDigitsMax], pm ? [Number(pm[1]), Number(pm[2])] : null)
-  const ret = /pos_clear_old_pii\(p_phone_days int default (\d+), p_name_days int default (\d+)\)/.exec(SQL_014)
+  const ret = /pos_clear_old_pii\(p_phone_days int default (\d+), p_name_days int default (\d+)\)/.exec(SQL_020)
   eq('RETENTION == pos_clear_old_pii\'s defaults (and the blueprint: 30 / 365 days)', [RETENTION.phoneDays, RETENTION.nameDays], ret ? [Number(ret[1]), Number(ret[2])] : null)
   eq('RETENTION is the blueprint\'s 30 / 365', [RETENTION.phoneDays, RETENTION.nameDays], [30, 365])
-  eq('advanceBody\'s id cap == pos_advance_items\' cardinality bound', (() => { const r = rng(1); void r; return 100 })(), grab(SQL_014, /cardinality\(p_ids\) > (\d+)/, 'advance ids'))
+  eq('advanceBody\'s id cap == pos_advance_items\' cardinality bound', (() => { const r = rng(1); void r; return 100 })(), grab(SQL_020, /cardinality\(p_ids\) > (\d+)/, 'advance ids'))
   eq('a hand-typed item\'s ceiling is ₪999.99 (blueprint §7.1)', LIMITS.customUnitAgorotMax, 99999)
 
-  // The pos_events.event CHECK is defined inline in 014 and RE-CREATED by later migrations (016 added
+  // The pos_events.event CHECK is defined inline in 020 and RE-CREATED by later migrations (022 added
   // pin_changed + quick_login). The database enforces the LAST definition in file order, so that is the
-  // one TS must agree with — never 014's. Parenthesis-matched so it does not depend on how the list wraps.
-  const SQL_016 = stripSqlComments(readFileSync(join(MIG_DIR, '016_pos_quick_login.sql'), 'utf8'))
+  // one TS must agree with — never 020's. Parenthesis-matched so it does not depend on how the list wraps.
+  const SQL_022 = stripSqlComments(readFileSync(join(MIG_DIR, '022_pos_quick_login.sql'), 'utf8'))
   const matchParen = (text, openAt) => {
     let depth = 0
     let inQ = false
@@ -1642,9 +1643,9 @@ section('vocab.ts — the TS caps, patterns and vocabularies are the SQL ones')
     if (found) { latestEventCheck = found; latestEventCheckFile = f }
   }
   const events = latestEventCheck
-  check('the pos_events.event CHECK is last defined by a migration at or after 016 (so 016\'s widening is the one compared)', latestEventCheckFile !== null && latestEventCheckFile >= '016', `latest definition is in ${latestEventCheckFile}`)
+  check('the pos_events.event CHECK is last defined by a migration at or after 022 (so 022\'s widening is the one compared)', latestEventCheckFile !== null && latestEventCheckFile >= '022', `latest definition is in ${latestEventCheckFile}`)
   check('POS_EVENT_TYPES == the LATEST pos_events.event CHECK (the audit vocabulary is complete)', events !== null && sameSet([...M.types.POS_EVENT_TYPES], events), `sql ${show(events)}`)
-  check('the 014 definition is a strict subset of the latest (later migrations only widen)', (() => { const first = inList(colDef('pos_events', 'event')); return first !== null && events !== null && first.every((e) => events.includes(e)) && first.length < events.length })())
+  check('the 020 definition is a strict subset of the latest (later migrations only widen)', (() => { const first = inList(colDef('pos_events', 'event')); return first !== null && events !== null && first.every((e) => events.includes(e)) && first.length < events.length })())
   check('…and the PosEventType union lists the same members', sameSet(unionMembers(TYPES_SRC, 'PosEventType') ?? [], events ?? []))
   const blueprintEvents = ['order_created', 'items_added', 'order_edited', 'item_claimed', 'item_ready', 'item_picked_up', 'item_delivered', 'item_reverted', 'item_voided', 'order_voided', 'order_completed', 'session_opened', 'session_closed', 'training_wiped', 'point_created', 'point_updated', 'point_deactivated', 'routes_changed', 'checkin', 'checkout', 'handle_changed', 'board_token_rotated', 'settings_changed', 'pii_cleared', 'pin_changed', 'quick_login']
   check('…and the event list is the blueprint §13.1 list, no more, no fewer', sameSet([...M.types.POS_EVENT_TYPES], blueprintEvents))
@@ -1661,8 +1662,8 @@ section('vocab.ts — the TS caps, patterns and vocabularies are the SQL ones')
   check('PosRoute.kind == the pos_point_routes.kind CHECK', routeKinds !== null && sameSet([...(/kind:\s*([^\n]*)/.exec(/export type PosRoute = \{[\s\S]*?\n\}/.exec(TYPES_SRC)?.[0] ?? '')?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]), routeKinds))
   const checkinEvents = inList(colDef('pos_point_checkins', 'event'))
   check('PosCheckin.event == the pos_point_checkins.event CHECK', checkinEvents !== null && sameSet([...(/event:\s*([^\n]*)/.exec(/export type PosCheckin = \{[\s\S]*?\n\}/.exec(TYPES_SRC)?.[0] ?? '')?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1]), checkinEvents))
-  const sqlKinds = (() => { const m = /coalesce\(m ->> 'kind', ''\) not in \(([^)]*)\)/.exec(SQL_015); return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : null })()
-  check('the five modifier kinds == the CHECK in pos_validate_lines (015) == the ModifierKind type', sqlKinds !== null && sqlKinds.length === 5 && sameSet(sqlKinds, unionMembers(MENU_TYPES_SRC, 'ModifierKind') ?? []), `sql ${show(sqlKinds)}`)
+  const sqlKinds = (() => { const m = /coalesce\(m ->> 'kind', ''\) not in \(([^)]*)\)/.exec(SQL_021); return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : null })()
+  check('the five modifier kinds == the CHECK in pos_validate_lines (021) == the ModifierKind type', sqlKinds !== null && sqlKinds.length === 5 && sameSet(sqlKinds, unionMembers(MENU_TYPES_SRC, 'ModifierKind') ?? []), `sql ${show(sqlKinds)}`)
   check('the IN_FLIGHT / LIVE status lists are the blueprint\'s (sent+preparing / +ready)', sameSet([...M.vocab.IN_FLIGHT_ITEM_STATUSES], ['sent', 'preparing']) && sameSet([...M.vocab.LIVE_ITEM_STATUSES], ['sent', 'preparing', 'ready']))
 }
 
@@ -3014,36 +3015,36 @@ section('i18n — the strings added since wave 1 (every area): Hebrew present, p
 }
 
 // =====================================================================================
-// Quick login (migration 016): the pure pieces, and "a passcode is never logged"
+// Quick login (migration 022): the pure pieces, and "a passcode is never logged"
 // =====================================================================================
 section('quick login — the passcode rules (the SQL is the oracle) and where they are enforced')
 {
-  const SQL_016 = stripSqlComments(readFileSync(join(MIG_DIR, '016_pos_quick_login.sql'), 'utf8'))
+  const SQL_022 = stripSqlComments(readFileSync(join(MIG_DIR, '022_pos_quick_login.sql'), 'utf8'))
   // A JS mirror of pos_pin_is_weak, written from the migration's own plain-language list:
   // one repeated digit, runs up or down, a repeated pair, a repeated triple.
   const weak = (p) => /^(\d)\1{5}$/.test(p) || '01234567890123456789'.includes(p) || '98765432109876543210'.includes(p) || /^(\d\d)\1\1$/.test(p) || /^(\d\d\d)\1$/.test(p)
   for (const p of ['000000', '111111', '999999', '123456', '234567', '345678', '456789', '567890', '678901', '789012', '890123', '901234', '012345', '654321', '987654', '876543', '765432', '098765', '121212', '454545', '090909', '123123', '987987', '505505']) check(`${p} is an obvious passcode and is refused`, weak(p))
   for (const p of ['135790', '482915', '123457', '112233', '102938', '000001', '246810', '908172', '123321']) check(`${p} is acceptable`, !weak(p))
-  const fn = /function public\.pos_pin_is_weak[\s\S]*?\$\$;/.exec(SQL_016)?.[0] ?? ''
+  const fn = /function public\.pos_pin_is_weak[\s\S]*?\$\$;/.exec(SQL_022)?.[0] ?? ''
   check('the SQL function exists and is immutable (so it can be reasoned about)', fn.includes('immutable'))
   check('…it refuses a repeated digit', fn.includes("'^(\\d)\\1{5}$'"))
   check('…ascending runs, via the ring "01234567890123456789"', fn.includes("position(p_pin in '01234567890123456789') > 0"))
   check('…descending runs, via the ring "98765432109876543210"', fn.includes("position(p_pin in '98765432109876543210') > 0"))
   check('…a repeated pair and a repeated triple', fn.includes("'^(\\d\\d)\\1\\1$'") && fn.includes("'^(\\d\\d\\d)\\1$'"))
-  check('pos_set_pin demands exactly six digits BEFORE the weakness test, and refuses a weak one', /pos_set_pin[\s\S]*?!~ '\^\[0-9\]\{6\}\$'[\s\S]*?pos_pin_is_weak\(p_pin\)/.test(SQL_016))
-  check('pos_verify_pin also insists on six digits (a 7-digit guess is never even compared)', /pos_verify_pin[\s\S]*?!~ '\^\[0-9\]\{6\}\$' or s\.pin_hash <> crypt/.test(SQL_016))
-  check('the passcode is stored only as a bcrypt hash', /pin_hash = crypt\(p_pin, gen_salt\('bf', \d+\)\)/.test(SQL_016))
-  const builds = [...SQL_016.matchAll(/jsonb_build_object\(([^;]*?)\)\s*(?:\)|;|,)/g)].map((m) => m[1])
+  check('pos_set_pin demands exactly six digits BEFORE the weakness test, and refuses a weak one', /pos_set_pin[\s\S]*?!~ '\^\[0-9\]\{6\}\$'[\s\S]*?pos_pin_is_weak\(p_pin\)/.test(SQL_022))
+  check('pos_verify_pin also insists on six digits (a 7-digit guess is never even compared)', /pos_verify_pin[\s\S]*?!~ '\^\[0-9\]\{6\}\$' or s\.pin_hash <> crypt/.test(SQL_022))
+  check('the passcode is stored only as a bcrypt hash', /pin_hash = crypt\(p_pin, gen_salt\('bf', \d+\)\)/.test(SQL_022))
+  const builds = [...SQL_022.matchAll(/jsonb_build_object\(([^;]*?)\)\s*(?:\)|;|,)/g)].map((m) => m[1])
   check('no audit payload or result object is built from the passcode or its hash', builds.length > 5 && builds.every((b) => !/\bp_pin\b|pin_hash/.test(b)), builds.find((b) => /\bp_pin\b|pin_hash/.test(b)) ?? '')
-  check('a changed or cleared passcode ends every quick session of that person', (SQL_016.match(/delete from public\.pos_quick_sessions where staff_id = p_target/g) ?? []).length === 2)
-  check('verification gives ONE generic answer: every failure path returns only {ok:false}', (() => { const body = /function public\.pos_verify_pin[\s\S]*?\$\$;/.exec(SQL_016)?.[0] ?? ''; const fails = [...body.matchAll(/jsonb_build_object\('ok', false([^)]*)\)/g)]; return fails.length === 2 && fails.every((m) => m[1].trim() === '') })())
+  check('a changed or cleared passcode ends every quick session of that person', (SQL_022.match(/delete from public\.pos_quick_sessions where staff_id = p_target/g) ?? []).length === 2)
+  check('verification gives ONE generic answer: every failure path returns only {ok:false}', (() => { const body = /function public\.pos_verify_pin[\s\S]*?\$\$;/.exec(SQL_022)?.[0] ?? ''; const fails = [...body.matchAll(/jsonb_build_object\('ok', false([^)]*)\)/g)]; return fails.length === 2 && fails.every((m) => m[1].trim() === '') })())
   const pwdRoute = readFileSync(join(SRC, 'app', 'api', 'pos', 'passcode', 'route.ts'), 'utf8')
   const loginRoute = readFileSync(join(SRC, 'app', 'api', 'auth', 'quick-login', 'route.ts'), 'utf8')
   check('the self-service route accepts exactly six digits and nothing else', /passcode: z\.string\(\)\.regex\(\/\^\\d\{6\}\$\/\)/.test(pwdRoute) && pwdRoute.includes('.strict()'))
   check('the login route accepts exactly six digits and a bounded employee number, strictly', /passcode: z\.string\(\)\.regex\(\/\^\\d\{6\}\$\/\)/.test(loginRoute) && /employeeNo: z\.number\(\)\.int\(\)\.min\(1\)\.max\(99999\)/.test(loginRoute) && loginRoute.includes('.strict()'))
   check('the login route rate-limits BEFORE it verifies (per number and per address)', loginRoute.indexOf('checkRateLimit(`quick:emp:') > 0 && loginRoute.indexOf('checkRateLimit(`quick:emp:') < loginRoute.indexOf("rpc('pos_verify_pin'") && loginRoute.includes('quick:ip:'))
   check('the keypad collects exactly six digits (CODE_LENGTH is 6, matching the server)', /const CODE_LENGTH = 6\b/.test(readFileSync(join(SRC, 'components', 'auth', 'QuickLogin.tsx'), 'utf8')))
-  const empNo = /p_no is null or p_no < 1 or p_no > (\d+)/.exec(SQL_016)
+  const empNo = /p_no is null or p_no < 1 or p_no > (\d+)/.exec(SQL_022)
   check('the employee-number bound agrees between SQL and the login route (1..99999)', empNo !== null && empNo[1] === '99999' && loginRoute.includes('.max(99999)'))
 }
 

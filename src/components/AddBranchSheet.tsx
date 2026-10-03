@@ -110,6 +110,12 @@ export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSh
         kind,
         links: { navGoogleMaps: null, navWaze: null, navAppleMaps: null, instagram: null, review: null, bit: null },
         reviews: null,
+        // A brand-new branch has no shift_settings row yet (schedule
+        // settings are seeded lazily, the first time /owner/schedule loads
+        // for it) — same "unconfigured" fail-open default
+        // lib/branches/server.ts falls back to.
+        hoursToday: null,
+        openNow: true,
       })
       // The event exists either way; a failed menu copy is said out loud rather than
       // leaving someone to discover an empty menu on the day.

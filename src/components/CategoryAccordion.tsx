@@ -22,6 +22,7 @@ type CategoryAccordionProps = {
   /** The modifier library, and the category-level attach handler (undefined = clear the key). */
   modifierGroups?: ModifierGroup[]
   onSetCategoryModifierGroups?: (uids: string[] | undefined) => void
+  onTogglePosExcluded: () => void
   onAddItem: () => void
   onMoveItem: (itemIndex: number, dir: -1 | 1) => void
   onRequestDeleteItem: (itemIndex: number, itemLabel: string) => void
@@ -47,6 +48,7 @@ export default function CategoryAccordion({
   onToggleLiveOnTablet,
   modifierGroups = [],
   onSetCategoryModifierGroups,
+  onTogglePosExcluded,
   onAddItem,
   onMoveItem,
   onRequestDeleteItem,
@@ -178,6 +180,33 @@ export default function CategoryAccordion({
                 onChange={onSetCategoryModifierGroups}
               />
             )}
+            <button
+              type="button"
+              className="press"
+              onClick={onTogglePosExcluded}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                width: '100%',
+                background: 'var(--bg)',
+                border: '1px solid var(--line-strong)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                color: 'var(--text)',
+                textAlign: 'start',
+              }}
+            >
+              <span>
+                <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600 }}>שירות עצמי — לא בקופה</span>
+                <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-faint)' }}>
+                  הקטגוריה תוסתר מהקופה (למשל גלידה ומקררים) אך תמשיך להופיע בתפריט הציבורי
+                </span>
+              </span>
+              <Switch on={category.excludeFromPos === true} />
+            </button>
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <IconButton label="הזזת הקטגוריה למעלה" disabled={index === 0} onClick={() => onMoveCategory(-1)}>

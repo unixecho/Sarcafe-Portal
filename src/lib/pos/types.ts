@@ -4,14 +4,14 @@
 //
 // Row types are snake_case because they mirror the database columns exactly
 // (the browser reads these tables directly over RLS). Request/response DTOs are
-// camelCase. docs/POS_BLUEPRINT.md is the spec; supabase/migrations/014 + 015
+// camelCase. docs/POS_BLUEPRINT.md is the spec; supabase/migrations/020 + 021
 // are the schema.
 
 import type { Localized, MenuCategory, ModifierGroup, ModifierKind } from '@/lib/menu/types'
 
 export type { ModifierKind }
 
-// ---- Vocabularies (each is the TS half of a CHECK constraint in 014/015) ------
+// ---- Vocabularies (each is the TS half of a CHECK constraint in 020/021) ------
 
 /** Per-LINE lifecycle. `picked_up_*` is a stamped fact, NOT a status. */
 export type ItemStatus = 'sent' | 'preparing' | 'ready' | 'delivered' | 'voided'
@@ -79,7 +79,7 @@ export type PosRoute = {
 
 export type PosPointStaff = { point_id: string; staff_id: string }
 
-/** One selection snapshotted onto a line (015). Labels + prices are copied in at
+/** One selection snapshotted onto a line (021). Labels + prices are copied in at
  *  order time so history never depends on the current menu. */
 export type ModifierSnapshot = {
   group_uid: string

@@ -1,5 +1,5 @@
 // Authorization predicates for shift scheduling — TS twin of the SQL
-// functions sched_can_manage / sched_can_view / sched_is_op (migration 018;
+// functions sched_can_manage / sched_can_view / sched_is_op (migration 024;
 // is_schedule_manager / can_view_schedule in 010 are aligned to the same rules).
 // Every predicate here MUST stay in sync with its SQL counterpart, same
 // discipline lib/staff/access.ts documents for is_op()/is_menu_editor().

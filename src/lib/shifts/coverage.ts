@@ -1,6 +1,6 @@
 // "Is this shift staffed?" — pure, shared by the week board, the employee view
 // (which shifts need someone) and the request form. The same rule is applied in
-// SQL by sched_needed() / sched_request_shift() (migration 018): KEEP IN SYNC.
+// SQL by sched_needed() / sched_request_shift() (migration 024): KEEP IN SYNC.
 //
 //   needed   = the sum of the per-role minimums the shift declares (0 = the
 //              manager never said how many are needed);

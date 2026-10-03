@@ -113,7 +113,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // A quick-login session (employee number + passcode, migration 016) is floor work
+  // A quick-login session (employee number + passcode, migration 022) is floor work
   // only — never an /owner page, whatever the person's role. Looked up only for owner
   // paths so every floor request stays as cheap as it was. Fails CLOSED: a lookup
   // error sends the visitor to /pos rather than letting a possibly-weak session in.

@@ -28,7 +28,7 @@ type ShiftsContextValue = {
   goToToday: () => void
   /** Sends an action, awaits the server's authoritative answer, then replaces state
    *  with a fresh read. There is no local optimistic apply: the rules live in the
-   *  database (migration 018) and run once, there. EVERY outcome is visible — a
+   *  database (migration 024) and run once, there. EVERY outcome is visible — a
    *  success toast with the words passed in `success`, or the server's plain-Hebrew
    *  explanation of what went wrong and what to do (unless `quiet`). */
   dispatch: (action: ScheduleAction, options?: DispatchOptions) => Promise<DispatchResult>

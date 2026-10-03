@@ -5,7 +5,7 @@
 // dispatch is a round trip (POST /api/shifts/dispatch, await, then replace state
 // with the server's fresh read). All the rules — conflicts, who may approve what,
 // what a schedule change does to a pending request — live in the database
-// (migration 018) and run exactly once, there. The client only describes intent.
+// (migration 024) and run exactly once, there. The client only describes intent.
 //
 // Nothing here carries "who is acting": the server resolves that from the
 // session, never from the request body.
