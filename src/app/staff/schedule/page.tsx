@@ -30,14 +30,14 @@ export default async function StaffSchedulePage() {
     .maybeSingle()
   if (!isStaff(me)) redirect('/no-access')
 
-  const allBranches = await getBranches()
+  const allBranches = await getBranches({ includeEvents: true })
   const visibleBranches = me!.branch_id ? allBranches.filter((b) => b.id === me!.branch_id) : allBranches
 
   const cookieStore = await cookies()
   const initialBranch = resolveCurrentBranchSlug(visibleBranches, cookieStore.get(BRANCH_COOKIE)?.value)
 
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 1040, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" />
       <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} />
     </main>

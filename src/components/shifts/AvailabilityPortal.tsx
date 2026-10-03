@@ -1,37 +1,41 @@
 'use client'
 
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
-import { addDays, formatDateLabel, weekDates, weekdayLabel } from '@/lib/shifts/time'
+import { InlineError, Notice } from '@/components/shifts/ui'
+import { addDays, formatDateLabel, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import type { AvailabilityEntry, AvailabilityKind } from '@/lib/shifts/types'
 
-const KIND_LABELS: Record<AvailabilityKind, string> = { unavailable: 'לא זמין/ה', partial: 'חלקי', prefer: 'מעדיף/ה' }
+const KIND_LABELS: Record<Exclude<AvailabilityKind, 'partial'>, string> = { unavailable: 'לא זמין/ה', prefer: 'מעדיף/ה לעבוד' }
 
-// Staff-side per-day availability for NEXT week (this week is already
-// being built/published). "Available" is the absence of an entry — only
-// exceptions are stored, matching shift_availability's own design.
+// "Which days can I NOT work?" — for the week after the one on the schedule tab.
+// Only exceptions are stored: a day with nothing marked means "available". The
+// manager sees what is submitted, and the scheduler warns before putting someone
+// on a day they said they cannot do. Saving and submitting both say so, in words.
 export default function AvailabilityPortal() {
-  const { db, dispatch, weekStart } = useShifts()
-  const nextWeekStart = addDays(weekStart, 7)
-  const existing = db?.availability.find((a) => a.weekStart === nextWeekStart && a.staffId === db.viewerStaffId)
+  const { db, dispatch, weekStart, setWeekStart } = useShifts()
+  const target = addDays(weekStart, 7)
+  const existing = db?.availability.find((a) => a.weekStart === target && a.staffId === db.viewerStaffId)
 
   const [entries, setEntries] = useState<AvailabilityEntry[]>(existing?.entries ?? [])
   const [note, setNote] = useState(existing?.note ?? '')
-  const [saving, setSaving] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [saving, setSaving] = useState<'draft' | 'submitted' | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setEntries(existing?.entries ?? [])
     setNote(existing?.note ?? '')
-    // Re-syncs only when the target week changes, deliberately not on
-    // every `existing` identity change (a fresh dispatch reload would
-    // otherwise stomp an in-progress, unsaved edit).
+    setError(null)
+    // Re-syncs only when the target week changes, deliberately not on every `existing`
+    // identity change (a background refresh would otherwise stomp an unsaved edit).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextWeekStart])
+  }, [target])
 
   if (!db || !db.settings.features.availability) return null
-
-  const dates = weekDates(nextWeekStart)
+  const isPast = addDays(target, 6) < db.now.date
+  const dates = weekDates(target)
+  const dirty = JSON.stringify(entries) !== JSON.stringify(existing?.entries ?? []) || note !== (existing?.note ?? '')
 
   function setKind(date: string, kind: AvailabilityKind | null) {
     setEntries((prev) => {
@@ -41,110 +45,85 @@ export default function AvailabilityPortal() {
   }
 
   async function submit(status: 'draft' | 'submitted') {
-    setSaving(true)
-    setNotice(null)
-    const ok = await dispatch({ type: 'submitAvailability', branchId: db!.branchId, weekStart: nextWeekStart, entries, note: note || null, status })
-    setSaving(false)
-    setNotice(ok ? (status === 'submitted' ? 'הזמינות הוגשה ✓' : 'נשמר כטיוטה ✓') : null)
+    setSaving(status)
+    setError(null)
+    const res = await dispatch(
+      { type: 'submitAvailability', branchId: db!.branchId, weekStart: target, entries, note: note.trim() || null, status },
+      {
+        quiet: true,
+        success: status === 'submitted' ? 'הזמינות הוגשה ✓ המנהל/ת יראו אותה, והיא תילקח בחשבון בשיבוץ.' : 'נשמר כטיוטה ✓ (עוד לא הוגש למנהל/ת)',
+      }
+    )
+    setSaving(null)
+    if (!res.ok) setError(res.message)
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-dim)' }}>
-        זמינות לשבוע {formatDateLabel(nextWeekStart)}
-        {existing?.status === 'submitted' && ' · הוגש'}
-      </p>
+    <div className="sch-wrap">
+      <div className="sch-weeknav">
+        <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="שבוע קודם">
+          <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
+            ‹
+          </span>
+        </button>
+        <div className="sch-weeknav__label">
+          <strong className="ltr-isolate">
+            {formatDateLabel(target)} – {formatDateLabel(weekDates(target)[6]!)}
+          </strong>
+          <span>הזמינות שלכם לשבוע הזה</span>
+        </div>
+        <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="שבוע הבא">
+          <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
+            ›
+          </span>
+        </button>
+      </div>
 
-      {dates.map((date, dow) => {
-        const entry = entries.find((e) => e.date === date)
-        return (
-          <div key={date} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ width: 64, fontSize: '0.82rem', fontWeight: 600 }}>{weekdayLabel(dow)}</span>
-            {(['unavailable', 'prefer'] as AvailabilityKind[]).map((k) => {
-              const active = entry?.kind === k
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  className="press"
-                  aria-pressed={active}
-                  onClick={() => setKind(date, active ? null : k)}
-                  style={chipStyle(active)}
-                >
-                  {KIND_LABELS[k]}
-                </button>
-              )
-            })}
-          </div>
-        )
-      })}
+      <p className="sch-sub">סמנו רק את הימים שבהם <strong>אי אפשר</strong> לכם לעבוד (או שאתם מעדיפים לעבוד). יום שלא סימנתם — אתם זמינים.</p>
 
-      <label>
-        <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: 4 }}>הערה</span>
-        <input value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
-      </label>
-
-      {notice && (
-        <p role="status" style={{ margin: 0, fontSize: '0.8rem', color: 'var(--neon-2)' }}>
-          {notice}
+      {existing?.status === 'submitted' && !dirty && (
+        <p className="sch-pill sch-pill--ok" style={{ alignSelf: 'flex-start' }}>
+          <CheckCircle2 size={14} aria-hidden="true" /> הוגש למנהל/ת
         </p>
       )}
+      {isPast && <Notice tone="info">השבוע הזה כבר עבר — אי אפשר לשנות בו זמינות.</Notice>}
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="press" disabled={saving} onClick={() => submit('draft')} style={secondaryBtnStyle}>
-          שמירת טיוטה
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {dates.map((date, dow) => {
+          const entry = entries.find((e) => e.date === date)
+          return (
+            <div key={date} className="sch-card" style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px' }}>
+              <span style={{ flex: '1 1 110px', fontWeight: 700 }}>
+                {weekdayLongLabel(dow)} <span className="sch-faint ltr-isolate" style={{ fontSize: '0.8rem', fontWeight: 600 }}>{formatDateLabel(date)}</span>
+              </span>
+              {(['unavailable', 'prefer'] as const).map((k) => {
+                const active = entry?.kind === k
+                return (
+                  <button key={k} type="button" className="sch-chip press" aria-pressed={active} disabled={isPast} onClick={() => setKind(date, active ? null : k)}>
+                    {KIND_LABELS[k]}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+
+      <label>
+        <span className="sch-label">הערה למנהל/ת (לא חובה)</span>
+        <input className="sch-input" value={note} maxLength={300} disabled={isPast} onChange={(e) => setNote(e.target.value)} placeholder="למשל: אני יכול/ה רק אחרי 10:00" />
+      </label>
+
+      {error && <InlineError>{error}</InlineError>}
+
+      <div className="sch-row">
+        <button type="button" className="sch-btn press" style={{ flex: 1 }} disabled={!!saving || isPast || !dirty} onClick={() => submit('draft')}>
+          {saving === 'draft' ? 'שומר…' : 'שמירת טיוטה'}
         </button>
-        <button type="button" className="press" disabled={saving} onClick={() => submit('submitted')} style={primaryBtnStyle}>
-          {saving ? 'שולח…' : 'הגשה'}
+        <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: 2 }} disabled={!!saving || isPast || (!dirty && existing?.status === 'submitted')} onClick={() => submit('submitted')}>
+          {saving === 'submitted' ? 'שולח…' : existing?.status === 'submitted' ? 'הגשה מחדש' : 'הגשה למנהל/ת'}
         </button>
       </div>
     </div>
   )
-}
-
-function chipStyle(active: boolean): CSSProperties {
-  return {
-    minHeight: 32,
-    padding: '0 12px',
-    borderRadius: 999,
-    border: `1px solid ${active ? 'var(--neon)' : 'var(--line-strong)'}`,
-    background: active ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-    color: active ? 'var(--neon-soft)' : 'var(--text-dim)',
-    fontSize: '0.78rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-  }
-}
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  minHeight: 'var(--tap-min)',
-  borderRadius: 10,
-  border: '1px solid var(--line-strong)',
-  background: 'var(--bg)',
-  color: 'var(--text)',
-  padding: '0 10px',
-  fontSize: '0.85rem',
-}
-const primaryBtnStyle: CSSProperties = {
-  flex: 2,
-  minHeight: 'var(--tap-min)',
-  borderRadius: 999,
-  border: 'none',
-  background: 'var(--neon)',
-  color: 'var(--bg)',
-  fontWeight: 700,
-  fontSize: '0.85rem',
-  cursor: 'pointer',
-}
-const secondaryBtnStyle: CSSProperties = {
-  flex: 1,
-  minHeight: 'var(--tap-min)',
-  borderRadius: 999,
-  border: '1px solid var(--line-strong)',
-  background: 'var(--bg-elev)',
-  color: 'var(--text)',
-  fontWeight: 600,
-  fontSize: '0.85rem',
-  cursor: 'pointer',
 }

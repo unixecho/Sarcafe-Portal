@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:schedule": "node scripts/check-schedule.mjs",
+    "verify:schedule-sql": "node scripts/verify-schedule-sql.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -19,6 +21,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

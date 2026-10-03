@@ -9,15 +9,15 @@ import OwnerHeaderSkeleton from '@/components/OwnerHeaderSkeleton'
  * arrival that fills in.
  *
  * Geometry mirrors page.tsx: same maxWidth, same padding, header first, then
- * the invite card, then roster rows.
+ * the toolbar (title + add button + search), then roster rows.
  */
 export default function OwnerStaffLoading() {
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 960, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeaderSkeleton />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* the invite card — email field, two pickers, submit */}
-        <div className="sk" style={{ height: 196, borderRadius: 'var(--radius-md)' }} />
+        {/* the toolbar — title, add button, search, filters */}
+        <div className="sk" style={{ height: 150, borderRadius: 'var(--radius-md)' }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[0, 1, 2].map((i) => (
             <div key={i} className="sk" style={{ height: 74, borderRadius: 'var(--radius-md)' }} />

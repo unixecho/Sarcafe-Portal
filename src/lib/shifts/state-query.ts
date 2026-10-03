@@ -3,15 +3,19 @@
 // in the route), so this must do by hand what RLS would otherwise enforce
 // for a non-manager: read published-only data from published_snapshot,
 // never the live schedule_weeks/shifts/shift_assignments rows, and scope
-// availability/swaps to what that viewer is actually allowed to see.
+// availability / swaps / requests / notifications to what that viewer is
+// actually allowed to see.
 
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import type { StaffRow } from '@/lib/owner/guard'
-import { addDays, weekStartOf } from './time'
+import { isOp } from '@/lib/staff/access'
+import { addDays, wallClockNow, weekStartOf } from './time'
 import {
   serializeAssignment,
   serializeAuditEntry,
   serializeAvailability,
+  serializeNotification,
+  serializeRequest,
   serializeRosterRow,
   serializeSettings,
   serializeShift,
@@ -21,7 +25,11 @@ import {
 import { DEFAULT_PRESETS, DEFAULT_ROLES, DEFAULT_SAFETY, DEFAULT_STATIONS } from './config'
 import type { Assignment, Shift, ShiftsDB } from './types'
 
-const AUDIT_LIMIT = 50
+const AUDIT_LIMIT = 60
+const HISTORY_LIMIT = 150
+const NOTIFICATION_LIMIT = 40
+
+type Service = ReturnType<typeof createServiceRoleClient>
 
 export async function loadShiftsState(
   branchId: string,
@@ -34,7 +42,7 @@ export async function loadShiftsState(
   const centerWeek = weekStartOf(requestedWeekStart)
   const windowStarts = [addDays(centerWeek, -7), centerWeek, addDays(centerWeek, 7)]
 
-  const settingsRow = await ensureSettingsRow(branchId)
+  const settingsRow = await ensureSettingsRow(service, branchId)
   const settings = serializeSettings(settingsRow)
   // A branch with nothing customized yet starts from the app's own
   // defaults rather than an empty catalog the owner has to build from
@@ -44,16 +52,22 @@ export async function loadShiftsState(
   if (settings.stations.length === 0) settings.stations = DEFAULT_STATIONS
   if (settings.presets.length === 0) settings.presets = DEFAULT_PRESETS
   if (!settingsRow.safety) settings.safety = DEFAULT_SAFETY
+  // Who may manage is the manager's business; it is not something to hand every employee.
+  if (!isManager) settings.scheduleManagers = []
 
-  const roster = await loadRoster(branchId)
+  const [roster, tz] = await Promise.all([loadRoster(service, branchId, isManager), branchTimezone(service, branchId)])
 
   const [weeks, shifts, assignments] = isManager
-    ? await loadLive(branchId, windowStarts)
-    : await loadPublishedOnly(branchId, windowStarts)
+    ? await loadLive(service, branchId, windowStarts)
+    : await loadPublishedOnly(service, branchId, windowStarts)
 
-  const availability = settings.features.availability ? await loadAvailability(branchId, windowStarts, viewer, isManager) : []
-  const swaps = settings.features.swaps ? await loadSwaps(branchId, viewer, isManager) : []
-  const audit = isManager ? await loadAudit(branchId) : []
+  const [availability, swaps, requests, notifications, audit] = await Promise.all([
+    settings.features.availability ? loadAvailability(service, branchId, windowStarts, viewer, isManager) : Promise.resolve([]),
+    settings.features.swaps ? loadSwaps(service, branchId, viewer, isManager) : Promise.resolve([]),
+    loadRequests(service, branchId, viewer, isManager),
+    loadNotifications(service, branchId, viewer),
+    isManager ? loadAudit(service, branchId) : Promise.resolve([]),
+  ])
 
   return {
     branchId,
@@ -64,64 +78,84 @@ export async function loadShiftsState(
     assignments,
     availability,
     swaps,
+    requests,
+    notifications: notifications.items,
+    unreadCount: notifications.unread,
     audit,
+    now: wallClockNow(tz),
     viewerStaffId: viewer.id,
     viewerCanManage: isManager,
     viewerCanDelegate: canDelegate,
   }
 }
 
-async function ensureSettingsRow(branchId: string): Promise<Record<string, unknown>> {
-  const service = createServiceRoleClient()
+async function ensureSettingsRow(service: Service, branchId: string): Promise<Record<string, unknown>> {
   const { data } = await service.from('shift_settings').select('*').eq('branch_id', branchId).maybeSingle()
   if (data) return data as Record<string, unknown>
 
-  // A branch created after this migration ran has no seeded row —
+  // A branch created after the scheduling migration has no seeded row —
   // create one on first access rather than requiring a manual backfill.
-  const { data: created } = await service.from('shift_settings').insert({ branch_id: branchId }).select('*').single()
-  return (created as Record<string, unknown>) ?? { branch_id: branchId }
+  const { data: created } = await service
+    .from('shift_settings')
+    .upsert({ branch_id: branchId }, { onConflict: 'branch_id', ignoreDuplicates: true })
+    .select('*')
+    .maybeSingle()
+  if (created) return created as Record<string, unknown>
+  const { data: again } = await service.from('shift_settings').select('*').eq('branch_id', branchId).maybeSingle()
+  return (again as Record<string, unknown>) ?? { branch_id: branchId }
 }
 
-async function loadRoster(branchId: string) {
-  const service = createServiceRoleClient()
+async function branchTimezone(service: Service, branchId: string): Promise<string> {
+  const { data } = await service.from('branches').select('timezone').eq('id', branchId).maybeSingle()
+  return (data?.timezone as string | undefined) || 'Asia/Jerusalem'
+}
+
+/**
+ * Everyone who can be (or has been) on this branch's schedule, with a REAL name —
+ * resolved from display name / first+last / POS nickname / email (lib/shifts/
+ * names.ts), so a person without an email is never "unnamed".
+ *
+ * A manager also gets the inactive people (so a shift still held by someone who
+ * has left can be flagged); an employee gets only active colleagues, and only
+ * their names — never the manager's private notes or hour caps.
+ */
+async function loadRoster(service: Service, branchId: string, isManager: boolean) {
   const [{ data: staffRows }, { data: memberRows }] = await Promise.all([
-    service.from('staff').select('id, display_name, email, badge, active, branch_id').eq('active', true),
+    service
+      .from('staff')
+      .select('id, display_name, first_name, last_name, handle, email, badge, role, active, branch_id, auth_user_id'),
     service.from('schedule_members').select('*').eq('branch_id', branchId),
   ])
-  const members = new Map((memberRows ?? []).map((m) => [m.staff_id as string, m]))
+  const members = new Map((memberRows ?? []).map((m) => [m.staff_id as string, m as Record<string, unknown>]))
   return (staffRows ?? [])
-    .filter((s) => s.branch_id === null || s.branch_id === branchId)
-    .map((s) => serializeRosterRow({ ...s, staff_id: s.id, ...(members.get(s.id) ?? {}) }))
+    .filter((s) => (isManager || s.active !== false) && (s.branch_id === null || s.branch_id === branchId || isOp(s)))
+    .map((s) => serializeRosterRow(s as Record<string, unknown>, members.get(s.id as string), isManager))
 }
 
-async function loadLive(branchId: string, windowStarts: string[]): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
-  const service = createServiceRoleClient()
-  const { data: weekRows } = await service
-    .from('schedule_weeks')
-    .select('*')
-    .eq('branch_id', branchId)
-    .in('week_start', windowStarts)
+async function loadLive(service: Service, branchId: string, windowStarts: string[]): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
+  const { data: weekRows } = await service.from('schedule_weeks').select('*').eq('branch_id', branchId).in('week_start', windowStarts)
 
   // A manager always gets all three window weeks back, even ones nobody
   // has touched yet — the UI never has to special-case "this week doesn't
   // exist in the database yet" before it can create a first shift.
   const existingStarts = new Set((weekRows ?? []).map((w) => w.week_start as string))
   const missing = windowStarts.filter((s) => !existingStarts.has(s))
+  let rows = weekRows ?? []
   if (missing.length > 0) {
-    await service.from('schedule_weeks').insert(missing.map((week_start) => ({ branch_id: branchId, week_start }))).select('id')
+    await service
+      .from('schedule_weeks')
+      .upsert(
+        missing.map((week_start) => ({ branch_id: branchId, week_start })),
+        { onConflict: 'branch_id,week_start', ignoreDuplicates: true }
+      )
     const { data: refreshed } = await service.from('schedule_weeks').select('*').eq('branch_id', branchId).in('week_start', windowStarts)
-    const weeks = (refreshed ?? []).map(serializeWeek)
-    return loadShiftsAndAssignmentsFor(service, weeks)
+    rows = refreshed ?? []
   }
-
-  const weeks = (weekRows ?? []).map(serializeWeek)
+  const weeks = rows.map(serializeWeek).sort((a, b) => a.weekStart.localeCompare(b.weekStart))
   return loadShiftsAndAssignmentsFor(service, weeks)
 }
 
-async function loadShiftsAndAssignmentsFor(
-  service: ReturnType<typeof createServiceRoleClient>,
-  weeks: ShiftsDB['weeks']
-): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
+async function loadShiftsAndAssignmentsFor(service: Service, weeks: ShiftsDB['weeks']): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
   const weekIds = weeks.map((w) => w.id)
   if (weekIds.length === 0) return [weeks, [], []]
 
@@ -136,8 +170,7 @@ async function loadShiftsAndAssignmentsFor(
 
 /** Staff never read the live tables — everything here comes out of each
  *  published week's frozen snapshot, matching the RLS backstop exactly. */
-async function loadPublishedOnly(branchId: string, windowStarts: string[]): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
-  const service = createServiceRoleClient()
+async function loadPublishedOnly(service: Service, branchId: string, windowStarts: string[]): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {
   const { data: weekRows } = await service
     .from('schedule_weeks')
     .select('id, branch_id, week_start, status, version, published_at, day_notes, dismissed_warnings, published_snapshot')
@@ -145,36 +178,62 @@ async function loadPublishedOnly(branchId: string, windowStarts: string[]): Prom
     .eq('status', 'published')
     .in('week_start', windowStarts)
 
-  const weeks = (weekRows ?? []).map(serializeWeek)
+  const weeks = (weekRows ?? []).map(serializeWeek).sort((a, b) => a.weekStart.localeCompare(b.weekStart))
   const shifts: Shift[] = []
   const assignments: Assignment[] = []
   for (const week of weeks) {
     for (const raw of week.publishedSnapshot?.shifts ?? []) shifts.push(serializeShift(raw as unknown as Record<string, unknown>))
     for (const raw of week.publishedSnapshot?.assignments ?? []) assignments.push(serializeAssignment(raw as unknown as Record<string, unknown>))
   }
-  return [weeks, shifts, assignments]
+  // The frozen copy is the employee's whole world: it is never sent back to them whole.
+  return [weeks.map((w) => ({ ...w, publishedSnapshot: null })), shifts, assignments]
 }
 
-async function loadAvailability(branchId: string, windowStarts: string[], viewer: StaffRow, isManager: boolean) {
-  const service = createServiceRoleClient()
-  let query = service.from('shift_availability').select('*').eq('branch_id', branchId).in('week_start', windowStarts)
+async function loadAvailability(service: Service, branchId: string, windowStarts: string[], viewer: StaffRow, isManager: boolean) {
+  let query = service.from('shift_availability').select('*').eq('branch_id', branchId).in('week_start', [...windowStarts, addDays(windowStarts[2]!, 7)])
   if (!isManager) query = query.eq('staff_id', viewer.id)
   const { data } = await query
   return (data ?? []).map(serializeAvailability)
 }
 
-async function loadSwaps(branchId: string, viewer: StaffRow, isManager: boolean) {
-  const service = createServiceRoleClient()
-  const { data } = await service.from('shift_swaps').select('*').eq('branch_id', branchId).order('created_at', { ascending: false })
-  const all = (data ?? []).map(serializeSwap)
-  if (isManager) return all
-  // Mirrors the RLS "swap visibility" policy exactly: own swaps (either
-  // side) plus anything still open to browse and accept.
-  return all.filter((s) => s.fromStaffId === viewer.id || s.toStaffId === viewer.id || s.status === 'open')
+/** A manager sees every swap of the branch. An employee sees their own (either
+ *  side) plus swaps open to anyone — and NOT a swap one colleague aimed at another. */
+async function loadSwaps(service: Service, branchId: string, viewer: StaffRow, isManager: boolean) {
+  let query = service.from('shift_swaps').select('*').eq('branch_id', branchId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT)
+  if (!isManager) {
+    query = query.or(`from_staff_id.eq.${viewer.id},to_staff_id.eq.${viewer.id},and(status.eq.open,to_staff_id.is.null)`)
+  }
+  const { data } = await query
+  return (data ?? []).map(serializeSwap)
 }
 
-async function loadAudit(branchId: string) {
-  const service = createServiceRoleClient()
+async function loadRequests(service: Service, branchId: string, viewer: StaffRow, isManager: boolean) {
+  let query = service.from('shift_requests').select('*').eq('branch_id', branchId).order('created_at', { ascending: false }).limit(HISTORY_LIMIT)
+  if (!isManager) query = query.eq('staff_id', viewer.id)
+  const { data } = await query
+  return (data ?? []).map(serializeRequest)
+}
+
+async function loadNotifications(service: Service, branchId: string, viewer: StaffRow) {
+  const [{ data }, { count }] = await Promise.all([
+    service
+      .from('schedule_notifications')
+      .select('*')
+      .eq('staff_id', viewer.id)
+      .eq('branch_id', branchId)
+      .order('created_at', { ascending: false })
+      .limit(NOTIFICATION_LIMIT),
+    service
+      .from('schedule_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('staff_id', viewer.id)
+      .eq('branch_id', branchId)
+      .is('read_at', null),
+  ])
+  return { items: (data ?? []).map(serializeNotification), unread: count ?? 0 }
+}
+
+async function loadAudit(service: Service, branchId: string) {
   const { data } = await service
     .from('shift_audit')
     .select('id, actor_name, action, summary, detail, created_at')

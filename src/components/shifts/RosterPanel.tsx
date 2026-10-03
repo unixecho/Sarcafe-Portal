@@ -12,19 +12,28 @@ export default function RosterPanel() {
   const { db, dispatch } = useShifts()
   if (!db) return null
 
-  async function toggleSchedulable(staffId: string, next: boolean) {
-    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { schedulable: next } })
+  async function toggleSchedulable(staffId: string, next: boolean, name: string) {
+    await dispatch(
+      { type: 'setMember', branchId: db!.branchId, staffId, patch: { schedulable: next } },
+      { success: next ? `${name} חזר/ה להיות זמין/ה לשיבוץ` : `${name} לא יופיע/תופיע יותר ברשימת השיבוץ` }
+    )
   }
   async function setDefaultRole(staffId: string, roleId: string) {
-    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { defaultRoleId: roleId || null } })
+    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { defaultRoleId: roleId || null } }, { success: 'תפקיד ברירת המחדל נשמר ✓' })
   }
+  // The cap is typed, so it saves when the field is left, not on every keystroke.
   async function setMaxHours(staffId: string, value: string) {
-    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { maxWeeklyHours: value ? Number(value) : null } })
+    const n = value.trim() === '' ? null : Number(value)
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 168)) return
+    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { maxWeeklyHours: n } }, { success: 'מגבלת השעות נשמרה ✓' })
   }
-  async function toggleDelegate(staffId: string, next: boolean) {
+  async function toggleDelegate(staffId: string, next: boolean, name: string) {
     if (!db) return
     const nextList = next ? [...db.settings.scheduleManagers, staffId] : db.settings.scheduleManagers.filter((id) => id !== staffId)
-    await dispatch({ type: 'updateSettings', branchId: db.branchId, patch: { scheduleManagers: nextList } })
+    await dispatch(
+      { type: 'updateSettings', branchId: db.branchId, patch: { scheduleManagers: nextList } },
+      { success: next ? `${name} יכול/ה עכשיו לנהל את הלוח` : `${name} כבר לא מנהל/ת את הלוח` }
+    )
   }
 
   const active = db.roster.filter((r) => r.active)
@@ -50,7 +59,7 @@ export default function RosterPanel() {
                 aria-checked={row.schedulable}
                 aria-label={`ניתן לשיבוץ — ${row.displayName}`}
                 className="press"
-                onClick={() => toggleSchedulable(row.staffId, !row.schedulable)}
+                onClick={() => toggleSchedulable(row.staffId, !row.schedulable, row.displayName)}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
               >
                 <Switch on={row.schedulable} />
@@ -70,29 +79,37 @@ export default function RosterPanel() {
                 <input
                   type="number"
                   min={0}
+                  max={168}
+                  inputMode="numeric"
+                  aria-label={`מקסימום שעות שבועי — ${row.displayName}`}
                   placeholder="מקסימום שעות שבועי"
-                  value={row.maxWeeklyHours ?? ''}
-                  onChange={(e) => setMaxHours(row.staffId, e.target.value)}
+                  defaultValue={row.maxWeeklyHours ?? ''}
+                  key={`${row.staffId}:${row.maxWeeklyHours ?? ''}`}
+                  onBlur={(e) => {
+                    if (e.target.value !== String(row.maxWeeklyHours ?? '')) void setMaxHours(row.staffId, e.target.value)
+                  }}
                   className="ltr-isolate"
                   style={{ ...smallInputStyle, width: 170 }}
                 />
               </div>
             )}
 
+            {db.viewerCanDelegate && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ flex: 1, fontSize: '0.78rem', color: 'var(--text-dim)' }}>אחראי/ת שיבוץ מוקצה/ית</span>
+              <span style={{ flex: 1, fontSize: '0.78rem', color: 'var(--text-dim)' }}>אחראי/ת שיבוץ מוקצה/ית (יכול/ה לנהל את הלוח)</span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={isDelegate}
                 aria-label={`אחראי/ת שיבוץ מוקצה/ית — ${row.displayName}`}
                 className="press"
-                onClick={() => toggleDelegate(row.staffId, !isDelegate)}
+                onClick={() => toggleDelegate(row.staffId, !isDelegate, row.displayName)}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
               >
                 <Switch on={isDelegate} />
               </button>
             </div>
+            )}
           </div>
         )
       })}

@@ -1,13 +1,16 @@
 // Row (snake_case, straight off Supabase) <-> domain type (camelCase)
 // mapping. Kept in one place so a column rename is a one-file change.
 
+import { staffDisplayName } from './names'
 import type {
   Assignment,
   AvailabilitySubmission,
+  ScheduleNotification,
   ScheduleStaffRow,
   ScheduleWeek,
   Shift,
   ShiftAuditEntry,
+  ShiftRequest,
   ShiftSettings,
   SwapRequest,
 } from './types'
@@ -30,18 +33,27 @@ export function serializeSettings(row: Record<string, unknown>): ShiftSettings {
   }
 }
 
-export function serializeRosterRow(row: Record<string, unknown>): ScheduleStaffRow {
+/**
+ * One person as the scheduler sees them. `manager` is whether the VIEWER may see
+ * the manager's private bookkeeping (default role, hour cap, employment type,
+ * the note) — an ordinary employee gets a name and nothing else, so one person's
+ * private note can never reach a colleague.
+ */
+export function serializeRosterRow(staff: Record<string, unknown>, member: Record<string, unknown> | undefined, manager: boolean): ScheduleStaffRow {
   return {
-    staffId: row.staff_id as string,
-    displayName: (row.display_name as string) || (row.email as string) || 'ללא שם',
-    badge: (row.badge as string | null) ?? null,
-    active: row.active !== false,
-    schedulable: row.schedulable !== false,
-    defaultRoleId: (row.default_role_id as string | null) ?? null,
-    maxWeeklyHours: (row.max_weekly_hours as number | null) ?? null,
-    employmentType: (row.employment_type as string | null) ?? null,
-    sortOrder: (row.sort_order as number | null) ?? null,
-    note: (row.note as string | null) ?? null,
+    staffId: staff.id as string,
+    displayName: staffDisplayName(staff),
+    badge: (staff.badge as string | null) ?? null,
+    active: staff.active !== false,
+    schedulable: member ? member.schedulable !== false : true,
+    defaultRoleId: manager ? ((member?.default_role_id as string | null) ?? null) : null,
+    maxWeeklyHours: manager ? ((member?.max_weekly_hours as number | null) ?? null) : null,
+    employmentType: manager ? ((member?.employment_type as string | null) ?? null) : null,
+    sortOrder: manager ? ((member?.sort_order as number | null) ?? null) : null,
+    note: manager ? ((member?.note as string | null) ?? null) : null,
+    // Not private: it only says whether the person can open the app — which a colleague needs to
+    // know before sending them a swap they could never answer.
+    hasLogin: staff.auth_user_id != null,
   }
 }
 
@@ -71,6 +83,7 @@ export function serializeShift(row: Record<string, unknown>): Shift {
     stationId: (row.station_id as string | null) ?? null,
     requirements: (row.requirements as Shift['requirements']) ?? [],
     note: (row.note as string | null) ?? null,
+    updatedAt: (row.updated_at as string | null) ?? null,
   }
 }
 
@@ -99,13 +112,47 @@ export function serializeAvailability(row: Record<string, unknown>): Availabilit
 export function serializeSwap(row: Record<string, unknown>): SwapRequest {
   return {
     id: row.id as string,
-    assignmentId: row.assignment_id as string,
+    assignmentId: (row.assignment_id as string | null) ?? null,
+    returnAssignmentId: (row.return_assignment_id as string | null) ?? null,
     fromStaffId: row.from_staff_id as string,
+    fromStaffName: (row.from_staff_name as string | null) ?? null,
     toStaffId: (row.to_staff_id as string | null) ?? null,
+    toStaffName: (row.to_staff_name as string | null) ?? null,
     status: row.status as SwapRequest['status'],
     reason: (row.reason as string | null) ?? null,
+    cancelReason: (row.cancel_reason as string | null) ?? null,
     decidedAt: (row.decided_at as string | null) ?? null,
     decisionNote: (row.decision_note as string | null) ?? null,
+    createdAt: row.created_at as string,
+    terms: (row.terms as SwapRequest['terms']) ?? {},
+  }
+}
+
+export function serializeRequest(row: Record<string, unknown>): ShiftRequest {
+  return {
+    id: row.id as string,
+    shiftId: (row.shift_id as string | null) ?? null,
+    staffId: row.staff_id as string,
+    staffName: (row.staff_name as string | null) ?? null,
+    status: row.status as ShiftRequest['status'],
+    note: (row.note as string | null) ?? null,
+    decisionNote: (row.decision_note as string | null) ?? null,
+    cancelReason: (row.cancel_reason as string | null) ?? null,
+    decidedAt: (row.decided_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+    terms: (row.terms as ShiftRequest['terms']) ?? {},
+  }
+}
+
+export function serializeNotification(row: Record<string, unknown>): ScheduleNotification {
+  return {
+    id: row.id as string,
+    kind: row.kind as string,
+    title: row.title as string,
+    body: (row.body as string | null) ?? null,
+    link: (row.link as ScheduleNotification['link']) ?? {},
+    createdAt: row.created_at as string,
+    readAt: (row.read_at as string | null) ?? null,
   }
 }
 

@@ -36,7 +36,7 @@ export default async function OwnerSchedulePage() {
     .maybeSingle()
   if (!isStaff(me)) redirect('/no-access')
 
-  const allBranches = await getBranches()
+  const allBranches = await getBranches({ includeEvents: true })
   const candidateBranches = me!.branch_id ? allBranches.filter((b) => b.id === me!.branch_id) : allBranches
 
   const { data: settingsRows } = await service.from('shift_settings').select('branch_id, schedule_managers').in(
@@ -58,7 +58,7 @@ export default async function OwnerSchedulePage() {
   const backHref = isOp(me) ? '/owner/dashboard' : '/staff/schedule'
 
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 1040, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" backHref={backHref} />
       <ScheduleWorkspaceShell branches={manageableBranches} initialBranch={initialBranch} />
     </main>

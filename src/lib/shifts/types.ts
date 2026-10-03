@@ -12,6 +12,9 @@ export type ISODate = string // "YYYY-MM-DD"
 export type ShiftRole = { id: string; name: string; color: string }
 export type Station = { id: string; name: string; emoji: string }
 export type RoleRequirement = { roleId: string; min: number; max?: number }
+/** A shift TEMPLATE: the times offered by default when a shift is created.
+ *  It is never consulted again once a shift exists — a shift owns its own
+ *  explicit start/end, so editing a template can never move scheduled shifts. */
 export type ShiftPreset = { id: string; name: string; startTime: HM; endTime: HM; roleId?: string; stationId?: string }
 
 export type SafetyRules = {
@@ -37,24 +40,28 @@ export type ShiftSettings = {
   safety: SafetyRules
   ruleSeverity: Record<string, RuleSeverity>
   features: FeatureFlags
-  scheduleManagers: string[] // staff.id[]
+  scheduleManagers: string[] // staff.id[]  (managers only — empty for everyone else)
   onboardedAt: string | null
 }
 
-/** One roster row — a staff member's scheduling flags for one branch.
- *  Absence of a schedule_members row (schedulable defaults true here) is
- *  the "never explicitly configured" state, not "excluded". */
+/** One roster row — a person as the scheduler sees them. `displayName` is ALWAYS
+ *  a real name (lib/shifts/names.ts), never blank, whether or not the person has
+ *  an email. The scheduling fields after `active` are the manager's private
+ *  bookkeeping: they are null/false for any non-manager viewer. */
 export type ScheduleStaffRow = {
   staffId: string
   displayName: string
   badge: string | null
   active: boolean
+  /** Absence of a schedule_members row means "never configured" = schedulable. */
   schedulable: boolean
   defaultRoleId: string | null
   maxWeeklyHours: number | null
   employmentType: string | null
   sortOrder: number | null
   note: string | null
+  /** Has a linked sign-in — i.e. can open the app, see their schedule and answer a swap. */
+  hasLogin: boolean
 }
 
 export type PublishedSnapshot = { shifts: Shift[]; assignments: Assignment[] }
@@ -82,8 +89,12 @@ export type Shift = {
   stationId: string | null
   requirements: RoleRequirement[]
   note: string | null
+  /** Raw timestamp string, echoed back on save so a concurrent edit is detected. */
+  updatedAt: string | null
 }
 
+/** `swap_pending` is legacy (migration 018 stopped writing it): a pending swap is
+ *  derived from the swaps list and never alters the assignment itself. */
 export type AssignmentStatus = 'assigned' | 'swap_pending'
 
 export type Assignment = {
@@ -107,17 +118,75 @@ export type AvailabilitySubmission = {
   status: 'draft' | 'submitted'
 }
 
-export type SwapStatus = 'open' | 'peer_accepted' | 'approved' | 'rejected' | 'cancelled'
+// ---- Swaps ------------------------------------------------------------------
+//   open ──(colleague accepts)──> peer_accepted ──(manager approves)──> approved
+//     │  \──(named colleague declines)──> declined   └─(manager rejects)──> rejected
+//     └──(requester / manager / a schedule change)──> cancelled
+export type SwapStatus = 'open' | 'peer_accepted' | 'approved' | 'rejected' | 'declined' | 'cancelled'
+
+/** What one side of a swap looked like when it was agreed. Kept on the swap
+ *  itself so the record stays readable after the shifts are edited or deleted. */
+export type SwapSide = {
+  assignmentId: string
+  shiftId: string
+  weekId: string
+  date: ISODate
+  start: HM
+  end: HM
+  presetId: string | null
+  roleId: string | null
+  staffId: string | null
+  staffName: string | null
+  label: string
+}
 
 export type SwapRequest = {
   id: string
-  assignmentId: string
+  /** null once the underlying assignment is gone (history survives). */
+  assignmentId: string | null
+  /** The shift the other person gives in return (an exchange); null = a hand-over. */
+  returnAssignmentId: string | null
   fromStaffId: string
+  fromStaffName: string | null
   toStaffId: string | null
+  toStaffName: string | null
   status: SwapStatus
   reason: string | null
+  cancelReason: string | null
   decidedAt: string | null
   decisionNote: string | null
+  createdAt: string
+  terms: { from?: SwapSide; to?: SwapSide | null }
+}
+
+// ---- "I would like to work this shift" ----------------------------------------
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export type ShiftRequest = {
+  id: string
+  shiftId: string | null
+  staffId: string
+  staffName: string | null
+  status: RequestStatus
+  note: string | null
+  decisionNote: string | null
+  cancelReason: string | null
+  decidedAt: string | null
+  createdAt: string
+  terms: { shiftId?: string; weekId?: string; date?: ISODate; start?: HM; end?: HM; label?: string }
+}
+
+// ---- In-app notifications (nothing here depends on email) ----------------------
+export type NotificationLink = { tab?: 'schedule' | 'requests'; weekStart?: ISODate; shiftId?: string }
+
+export type ScheduleNotification = {
+  id: string
+  kind: string
+  title: string
+  body: string | null
+  link: NotificationLink
+  createdAt: string
+  readAt: string | null
 }
 
 export type ShiftAuditEntry = {
@@ -139,6 +208,10 @@ export type Warning = {
   staffId?: string
 }
 
+/** The branch's own wall clock right now — the one thing "has this shift
+ *  already started?" is decided by, on the server and (from this) the client. */
+export type WallClock = { date: ISODate; time: HM }
+
 /** The full window the provider holds: the requested week, ± 1 — enough
  *  for cross-week rest/consecutive-day checks at the boundary. Manager
  *  view reads shifts/assignments live; staff view is built from each
@@ -152,7 +225,11 @@ export type ShiftsDB = {
   assignments: Assignment[]
   availability: AvailabilitySubmission[]
   swaps: SwapRequest[]
+  requests: ShiftRequest[]
+  notifications: ScheduleNotification[]
+  unreadCount: number
   audit: ShiftAuditEntry[]
+  now: WallClock
   viewerStaffId: string | null
   viewerCanManage: boolean
   viewerCanDelegate: boolean

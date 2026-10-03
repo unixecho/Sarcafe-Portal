@@ -1,24 +1,32 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { History } from 'lucide-react'
+import { EmptyState } from '@/components/shifts/ui'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 
-// Same collapsed-by-default pattern as the menu AuditTrail
-// (components/AuditTrail.tsx) — summary always visible, raw detail one
-// tap away. No field-level diff rows here (unlike the menu one): shift
-// audit detail shapes vary a lot across action types (swap ids, week ids,
-// member-patch before/after), so a generic diff renderer isn't as useful
-// as it was for the menu's homogeneous add/remove/availability shape —
-// the summary text (already localized server-side) carries the story.
+// Who did what, in plain sentences — newest first. Every change to the schedule
+// is written by the database in the same transaction as the change itself
+// (migration 018), so this list cannot miss one or disagree with what happened.
+// No raw data is shown: the sentence already says what changed.
 const AUDIT_LABELS: Record<string, string> = {
+  'shift.create': 'משמרת חדשה',
+  'shift.update': 'עריכת משמרת',
+  'shift.delete': 'מחיקת משמרת',
+  'shift.move': 'העברת שיבוץ',
   'schedule.publish': 'פרסום',
   'schedule.unpublish': 'ביטול פרסום',
   'schedule.clear': 'ניקוי שבוע',
   'schedule.copy': 'העתקת שבוע',
+  'schedule.note': 'הערה ליום',
+  'settings.update': 'שינוי הגדרות',
   'member.update': 'עדכון הגדרות צוות',
+  'request.create': 'בקשה להצטרף',
+  'request.approve': 'אישור בקשה',
+  'request.reject': 'דחיית בקשה',
+  'request.cancel': 'ביטול בקשה',
   'swap.request': 'בקשת החלפה',
-  'swap.accept': 'הצעה להחלפה',
+  'swap.accept': 'הסכמה להחלפה',
+  'swap.decline': 'סירוב להחלפה',
   'swap.approve': 'אישור החלפה',
   'swap.reject': 'דחיית החלפה',
   'swap.cancel': 'ביטול החלפה',
@@ -26,84 +34,24 @@ const AUDIT_LABELS: Record<string, string> = {
 
 export default function ShiftsAuditTrail() {
   const { db } = useShifts()
-  const [openId, setOpenId] = useState<string | null>(null)
-
   if (!db) return null
   if (db.audit.length === 0) {
-    return <p style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '28px 0', fontSize: '0.85rem' }}>אין עדיין פעולות רשומות.</p>
+    return <EmptyState icon={<History size={30} aria-hidden="true" />} title="עוד אין פעולות רשומות" hint="כל שינוי בלוח — שיבוץ, פרסום, אישור בקשה — יירשם כאן עם שם מי שעשה אותו." />
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {db.audit.map((entry) => {
-        const expanded = openId === entry.id
-        const hasDetail = entry.detail && Object.keys(entry.detail).length > 0
-        return (
-          <div key={entry.id} style={{ padding: '11px 13px', borderRadius: 'var(--radius-md)', background: 'var(--bg-elev)', border: '1px solid var(--line)' }}>
-            <button
-              type="button"
-              onClick={() => hasDetail && setOpenId(expanded ? null : entry.id)}
-              aria-expanded={hasDetail ? expanded : undefined}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 10,
-                width: '100%',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                font: 'inherit',
-                textAlign: 'start',
-                color: 'var(--text)',
-                cursor: hasDetail ? 'pointer' : 'default',
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span
-                  style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    marginBottom: 5,
-                    background: 'rgba(255,122,69,0.14)',
-                    color: 'var(--neon-soft)',
-                  }}
-                >
-                  {AUDIT_LABELS[entry.action] ?? entry.action}
-                </span>
-                <span style={{ display: 'block', fontSize: '0.85rem', lineHeight: 1.5 }}>{entry.summary}</span>
-                <span style={{ display: 'block', marginTop: 4, fontSize: '0.7rem', color: 'var(--text-faint)' }}>
-                  {[entry.actorName, formatWhen(entry.createdAt)].filter(Boolean).join(' · ')}
-                </span>
-              </span>
-              {hasDetail && (
-                <span aria-hidden style={{ opacity: 0.5, paddingTop: 4 }}>
-                  <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }} />
-                </span>
-              )}
-            </button>
-
-            {expanded && hasDetail && (
-              <pre
-                style={{
-                  marginTop: 10,
-                  fontSize: '0.7rem',
-                  background: 'var(--bg)',
-                  padding: 8,
-                  borderRadius: 8,
-                  overflowX: 'auto',
-                  direction: 'ltr',
-                  textAlign: 'left',
-                }}
-              >
-                {JSON.stringify(entry.detail, null, 2)}
-              </pre>
-            )}
-          </div>
-        )
-      })}
+    <div className="sch-wrap" style={{ gap: 8 }}>
+      {db.audit.map((entry) => (
+        <div key={entry.id} className="sch-card" style={{ gap: 6 }}>
+          <span className="sch-pill sch-pill--neutral" style={{ alignSelf: 'flex-start' }}>
+            {AUDIT_LABELS[entry.action] ?? 'פעולה'}
+          </span>
+          <span style={{ fontSize: '0.92rem', lineHeight: 1.55 }}>{entry.summary}</span>
+          <span className="sch-faint" style={{ fontSize: '0.76rem' }}>
+            {[entry.actorName, formatWhen(entry.createdAt)].filter(Boolean).join(' · ')}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

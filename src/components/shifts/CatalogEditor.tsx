@@ -66,32 +66,38 @@ function useOptimisticList<T>(remote: T[], save: (next: T[]) => Promise<boolean>
   return { list: local, mutate, error }
 }
 
-// Three near-identical add/rename/delete editors (roles, stations,
-// presets) — trimmed from AyekaBar's single CatalogEditor.tsx (which also
-// handles reordering and delete-impact warnings) to a simpler always-append
-// list, given Sarcafe's much smaller, fairly fixed vocabulary for a
-// two-branch coffee truck vs. a full bar's role/station catalog.
-export default function CatalogEditor() {
+// Three near-identical add/rename/delete editors (roles, stations, shift
+// templates) — a simpler always-append list, given Sarcafe's small, fairly fixed
+// vocabulary for a two-branch coffee truck vs. a full bar's role/station catalog.
+// Each saves ITSELF (debounced) and says so: "נשמר" after a success, a plain
+// warning (and the change put back) after a failure.
+function useCatalogSave(key: 'roles' | 'stations' | 'presets') {
   const { db, dispatch } = useShifts()
+  return async (value: unknown[]) => {
+    const res = await dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: { [key]: value } }, { success: 'נשמר ✓' })
+    return res.ok
+  }
+}
+
+export function RoleCatalog() {
+  const { db } = useShifts()
+  const save = useCatalogSave('roles')
   if (!db) return null
+  return <RoleList items={db.settings.roles} onSave={save as (v: ShiftRole[]) => Promise<boolean>} />
+}
 
-  async function saveRoles(roles: ShiftRole[]) {
-    return dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: { roles } })
-  }
-  async function saveStations(stations: Station[]) {
-    return dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: { stations } })
-  }
-  async function savePresets(presets: ShiftPreset[]) {
-    return dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: { presets } })
-  }
+export function StationCatalog() {
+  const { db } = useShifts()
+  const save = useCatalogSave('stations')
+  if (!db) return null
+  return <StationList items={db.settings.stations} onSave={save as (v: Station[]) => Promise<boolean>} />
+}
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <RoleList items={db.settings.roles} onSave={saveRoles} />
-      <StationList items={db.settings.stations} onSave={saveStations} />
-      <PresetList items={db.settings.presets} onSave={savePresets} />
-    </div>
-  )
+export function PresetCatalog() {
+  const { db } = useShifts()
+  const save = useCatalogSave('presets')
+  if (!db) return null
+  return <PresetList items={db.settings.presets} onSave={save as (v: ShiftPreset[]) => Promise<boolean>} defaultStart={db.settings.openTime} defaultEnd={db.settings.closeTime} />
 }
 
 function SaveWarning() {
@@ -196,13 +202,13 @@ function StationList({ items, onSave }: { items: Station[]; onSave: (v: Station[
   )
 }
 
-function PresetList({ items, onSave }: { items: ShiftPreset[]; onSave: (v: ShiftPreset[]) => Promise<boolean> }) {
+function PresetList({ items, onSave, defaultStart, defaultEnd }: { items: ShiftPreset[]; onSave: (v: ShiftPreset[]) => Promise<boolean>; defaultStart: string; defaultEnd: string }) {
   const { list, mutate, error } = useOptimisticList(items, onSave)
   const [name, setName] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   function add() {
     if (!name.trim()) return
-    mutate((prev) => [...prev, { id: randomId('preset'), name: name.trim(), startTime: '08:00', endTime: '16:00' }])
+    mutate((prev) => [...prev, { id: randomId('preset'), name: name.trim(), startTime: defaultStart, endTime: defaultEnd }])
     setName('')
   }
   function update(id: string, patch: Partial<ShiftPreset>) {
@@ -211,6 +217,10 @@ function PresetList({ items, onSave }: { items: ShiftPreset[]; onSave: (v: Shift
   return (
     <section>
       <h3 style={sectionTitleStyle}>תבניות משמרת</h3>
+      <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+        אלה השעות שיוצעו אוטומטית כשיוצרים משמרת חדשה (למשל &quot;בוקר <span className="ltr-isolate">07:00–13:00</span>&quot;). שינוי כאן משפיע רק על משמרות שתיצרו מעכשיו — משמרות שכבר קיימות
+        בלוח שומרות את השעות שלהן.
+      </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {list.map((preset) => {
           const open = openId === preset.id
@@ -224,7 +234,8 @@ function PresetList({ items, onSave }: { items: ShiftPreset[]; onSave: (v: Shift
                 />
                 <button
                   type="button"
-                  className="press"
+                  className="press ltr-isolate"
+                  aria-label={`שעות ${preset.name}: ${preset.startTime} עד ${preset.endTime} — לחצו לשינוי`}
                   onClick={() => setOpenId(open ? null : preset.id)}
                   style={{ ...rowInputStyle, width: 'auto', padding: '0 10px', background: 'var(--bg-elev-2)', fontVariantNumeric: 'tabular-nums' }}
                 >

@@ -1,250 +1,368 @@
-// Server-only write path. One switch over every ScheduleAction — each case
-// resolves the branch a target row belongs to (when the action doesn't
-// already carry it), authorizes via requireScheduleManager()/
-// requireScheduleViewer() (never trusting the client's own idea of who it
-// is), then performs the write via the atomic RPCs from migration 010 or
-// a guarded plain table write, mirroring how dispatch-write.ts works in
-// AyekaBar (a big switch, RPCs for the operations that need atomicity,
-// direct writes for simple CRUD).
+// Server-only write path. One switch over every ScheduleAction. Each case
+//   1. resolves the branch the target row belongs to (never trusting a client's
+//      idea of it),
+//   2. authorises via requireScheduleManager()/requireScheduleViewer() — the
+//      primary gate, resolved from the session, never from the body,
+//   3. calls ONE database function (migration 018) with the caller's staff id as
+//      the explicit actor. Those functions re-check the same rule, apply the
+//      change atomically, enforce the invariants (no double-booking, a pending
+//      request never edits the schedule) and write the audit row.
+//
+// A refusal ({ ok:false, reason }) from the database becomes an ApiError whose
+// message is plain Hebrew (lib/shifts/messages.ts) and whose details carry the
+// machine reason, so the screen can show the words and react to the few reasons
+// it handles specially (needs_confirmation, conflict, stale).
 
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { BadRequest, Forbidden, NotFound } from '@/lib/http/errors'
-import { requireScheduleManager, requireScheduleViewer } from './guard'
+import { ApiError, NotFound } from '@/lib/http/errors'
+import { requireScheduleDelegator, requireScheduleManager, requireScheduleViewer } from './guard'
+import { scheduleMessage, scheduleStatus, type Details } from './messages'
+import { requireStaff } from '@/lib/staff/guard'
+import { addDays, weekStartOf } from './time'
 import type { ScheduleAction } from './actions'
+import type { SettingsPatch } from './schema'
 
 type Service = ReturnType<typeof createServiceRoleClient>
+type Row = Record<string, unknown>
 
-async function branchOfShift(service: Service, shiftId: string): Promise<string> {
-  const { data } = await service.from('shifts').select('branch_id').eq('id', shiftId).maybeSingle()
-  if (!data) throw NotFound('Shift not found.')
-  return data.branch_id as string
+const INTERNAL = 'משהו השתבש אצלנו. נסו שוב בעוד רגע.'
+
+function codeFor(status: number): string {
+  if (status === 403) return 'forbidden'
+  if (status === 404) return 'not_found'
+  if (status === 409) return 'conflict'
+  if (status === 429) return 'rate_limited'
+  return 'bad_request'
+}
+
+/** A database refusal as the one error shape every route returns. */
+export function refusal(reason: string, details: Details = {}): ApiError {
+  const status = scheduleStatus(reason)
+  return new ApiError(status, codeFor(status), scheduleMessage(reason, details), { reason, ...details })
+}
+
+/** Calls one sched_* function and unwraps its { ok, reason, details } result. */
+async function callSched(service: Service, fn: string, args: Row): Promise<Row> {
+  const { data, error } = await service.rpc(fn, args)
+  if (error) {
+    // Never forward database text; the log line carries the function, the SQLSTATE and a short message.
+    console.error(`schedule rpc ${fn} failed:`, error.code, String(error.message ?? '').slice(0, 200))
+    // The deferred constraint trigger is the backstop for a double-booking written around the checks.
+    if (/sched_overlap/.test(error.message ?? '')) throw refusal('conflict')
+    throw new ApiError(500, 'internal_error', INTERNAL)
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    console.error(`schedule rpc ${fn} returned an unexpected shape`)
+    throw new ApiError(500, 'internal_error', INTERNAL)
+  }
+  const res = data as Row & { ok?: boolean; reason?: string; details?: Details }
+  if (res.ok !== true) throw refusal(typeof res.reason === 'string' ? res.reason : 'bad_request', res.details ?? {})
+  return res
 }
 
 async function branchOfWeek(service: Service, weekId: string): Promise<string> {
   const { data } = await service.from('schedule_weeks').select('branch_id').eq('id', weekId).maybeSingle()
-  if (!data) throw NotFound('Week not found.')
+  if (!data) throw NotFound('לא מצאנו את השבוע. רעננו ונסו שוב.')
   return data.branch_id as string
 }
 
-async function branchOfAssignment(service: Service, assignmentId: string): Promise<{ branchId: string; staffId: string | null }> {
-  const { data } = await service.from('shift_assignments').select('branch_id, staff_id').eq('id', assignmentId).maybeSingle()
-  if (!data) throw NotFound('Assignment not found.')
-  return { branchId: data.branch_id as string, staffId: (data.staff_id as string | null) ?? null }
+async function branchOfShift(service: Service, shiftId: string): Promise<string> {
+  const { data } = await service.from('shifts').select('branch_id').eq('id', shiftId).maybeSingle()
+  if (!data) throw NotFound('לא מצאנו את המשמרת — ייתכן שנמחקה. רעננו ונסו שוב.')
+  return data.branch_id as string
+}
+
+async function branchOfAssignment(service: Service, assignmentId: string): Promise<string> {
+  const { data } = await service.from('shift_assignments').select('branch_id').eq('id', assignmentId).maybeSingle()
+  if (!data) throw NotFound('לא מצאנו את השיבוץ. רעננו ונסו שוב.')
+  return data.branch_id as string
 }
 
 async function branchOfSwap(service: Service, swapId: string): Promise<string> {
   const { data } = await service.from('shift_swaps').select('branch_id').eq('id', swapId).maybeSingle()
-  if (!data) throw NotFound('Swap not found.')
+  if (!data) throw NotFound('לא מצאנו את בקשת ההחלפה. רעננו ונסו שוב.')
   return data.branch_id as string
 }
 
-export async function performDispatch(action: ScheduleAction): Promise<void> {
+async function branchOfRequest(service: Service, requestId: string): Promise<string> {
+  const { data } = await service.from('shift_requests').select('branch_id').eq('id', requestId).maybeSingle()
+  if (!data) throw NotFound('לא מצאנו את הבקשה. רעננו ונסו שוב.')
+  return data.branch_id as string
+}
+
+/** The columns a settings patch writes. Delegation (scheduleManagers) is separate: owner/GM only. */
+const SETTINGS_COLUMNS: Record<string, string> = {
+  workingDays: 'working_days',
+  openTime: 'open_time',
+  closeTime: 'close_time',
+  dayHours: 'day_hours',
+  roles: 'roles',
+  stations: 'stations',
+  presets: 'presets',
+  safety: 'safety',
+  ruleSeverity: 'rule_severity',
+  features: 'features',
+}
+
+const SETTINGS_LABELS: Record<string, string> = {
+  workingDays: 'ימי פעילות',
+  openTime: 'שעות פעילות',
+  closeTime: 'שעות פעילות',
+  dayHours: 'שעות מותאמות ליום',
+  roles: 'תפקידים',
+  stations: 'עמדות',
+  presets: 'תבניות משמרת',
+  safety: 'כללי בטיחות',
+  ruleSeverity: 'חומרת התראות',
+  features: 'יכולות',
+  scheduleManagers: 'אחראי/ות שיבוץ',
+}
+
+export async function performDispatch(action: ScheduleAction): Promise<Row> {
   const service = createServiceRoleClient()
 
   switch (action.type) {
-    case 'createShift': {
+    // ======================================================== the manager's board
+    case 'saveShift': {
       const branchId = await branchOfWeek(service, action.weekId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.from('shifts').insert({
-        branch_id: branchId,
-        week_id: action.weekId,
-        shift_date: action.date,
-        start_time: action.startTime,
-        end_time: action.endTime,
-        preset_id: action.presetId ?? null,
-        station_id: action.stationId ?? null,
-        requirements: action.requirements ?? [],
-        note: action.note ?? null,
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_save_shift', {
+        p_actor: actor.id,
+        p_week_id: action.weekId,
+        p_shift_id: action.shiftId ?? null,
+        p_date: action.date,
+        p_start: action.startTime,
+        p_end: action.endTime,
+        p_preset_id: action.presetId ?? null,
+        p_station_id: action.stationId ?? null,
+        p_requirements: action.requirements,
+        p_note: action.note ?? null,
+        p_assignees: action.assignees.map((a) => ({ staffId: a.staffId, roleId: a.roleId ?? null, ...(a.assignmentId ? { assignmentId: a.assignmentId } : {}) })),
+        p_expected_updated: action.expectedUpdatedAt ?? null,
       })
-      if (error) throw BadRequest('Could not create shift.')
-      return
-    }
-
-    case 'updateShift': {
-      const branchId = await branchOfShift(service, action.shiftId)
-      await requireScheduleManager(branchId)
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-      if (action.date !== undefined) patch.shift_date = action.date
-      if (action.startTime !== undefined) patch.start_time = action.startTime
-      if (action.endTime !== undefined) patch.end_time = action.endTime
-      if (action.presetId !== undefined) patch.preset_id = action.presetId
-      if (action.stationId !== undefined) patch.station_id = action.stationId
-      if (action.requirements !== undefined) patch.requirements = action.requirements
-      if (action.note !== undefined) patch.note = action.note
-      const { error } = await service.from('shifts').update(patch).eq('id', action.shiftId)
-      if (error) throw BadRequest('Could not update shift.')
-      return
     }
 
     case 'deleteShift': {
       const branchId = await branchOfShift(service, action.shiftId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.from('shifts').delete().eq('id', action.shiftId)
-      if (error) throw BadRequest('Could not delete shift.')
-      return
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_delete_shift', { p_actor: actor.id, p_shift_id: action.shiftId })
     }
 
-    case 'assign': {
-      const branchId = await branchOfShift(service, action.shiftId)
-      await requireScheduleManager(branchId)
-      const { data: staffRow } = await service.from('staff').select('display_name, email').eq('id', action.staffId).maybeSingle()
-      const staffName = (staffRow?.display_name as string) || (staffRow?.email as string) || null
-      const { error } = await service.from('shift_assignments').insert({
-        branch_id: branchId,
-        shift_id: action.shiftId,
-        staff_id: action.staffId,
-        staff_name: staffName,
-        role_id: action.roleId,
-      })
-      if (error) throw BadRequest('Could not assign — this person may already be assigned to this role on this shift.')
-      return
-    }
-
-    case 'unassign': {
-      const { branchId } = await branchOfAssignment(service, action.assignmentId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.from('shift_assignments').delete().eq('id', action.assignmentId)
-      if (error) throw BadRequest('Could not remove assignment.')
-      return
+    case 'moveAssignment': {
+      const branchId = await branchOfAssignment(service, action.assignmentId)
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_move_assignment', { p_actor: actor.id, p_assignment: action.assignmentId, p_to_shift: action.toShiftId })
     }
 
     case 'publishWeek': {
       const branchId = await branchOfWeek(service, action.weekId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.rpc('publish_schedule_week', { p_week_id: action.weekId })
-      if (error) throw BadRequest('Could not publish week.')
-      return
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_publish_week', { p_actor: actor.id, p_week_id: action.weekId })
     }
 
     case 'unpublishWeek': {
       const branchId = await branchOfWeek(service, action.weekId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.rpc('unpublish_schedule_week', { p_week_id: action.weekId })
-      if (error) throw BadRequest('Could not unpublish week.')
-      return
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_unpublish_week', { p_actor: actor.id, p_week_id: action.weekId })
     }
 
     case 'clearWeek': {
       const branchId = await branchOfWeek(service, action.weekId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.rpc('clear_schedule_week', { p_week_id: action.weekId })
-      if (error) throw BadRequest('Could not clear week.')
-      return
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_clear_week', { p_actor: actor.id, p_week_id: action.weekId })
     }
 
     case 'copyWeek': {
-      await requireScheduleManager(action.branchId)
-      const { error } = await service.rpc('copy_schedule_week', {
-        p_branch_id: action.branchId,
-        p_from_week_start: action.fromWeekStart,
-        p_to_week_start: action.toWeekStart,
+      const actor = await requireScheduleManager(action.branchId)
+      return callSched(service, 'sched_copy_week', {
+        p_actor: actor.id,
+        p_branch: action.branchId,
+        p_from: weekStartOf(action.fromWeekStart),
+        p_to: weekStartOf(action.toWeekStart),
       })
-      if (error) throw BadRequest('Could not copy week.')
-      return
     }
 
     case 'setDayNote': {
       const branchId = await branchOfWeek(service, action.weekId)
-      await requireScheduleManager(branchId)
-      const { data: week } = await service.from('schedule_weeks').select('day_notes').eq('id', action.weekId).maybeSingle()
-      const dayNotes = { ...((week?.day_notes as Record<string, string>) ?? {}) }
-      if (action.note.trim()) dayNotes[action.date] = action.note.trim()
+      const actor = await requireScheduleManager(branchId)
+      const { data: week } = await service.from('schedule_weeks').select('day_notes, week_start').eq('id', action.weekId).maybeSingle()
+      if (!week) throw NotFound('לא מצאנו את השבוע. רעננו ונסו שוב.')
+      const start = week.week_start as string
+      if (action.date < start || action.date > addDays(start, 6)) throw refusal('bad_date')
+      const dayNotes = { ...((week.day_notes as Record<string, string>) ?? {}) }
+      const text = action.note.trim()
+      if (text) dayNotes[action.date] = text
       else delete dayNotes[action.date]
       const { error } = await service.from('schedule_weeks').update({ day_notes: dayNotes, updated_at: new Date().toISOString() }).eq('id', action.weekId)
-      if (error) throw BadRequest('Could not save note.')
-      return
+      if (error) throw new ApiError(500, 'internal_error', INTERNAL)
+      await service.rpc('sched_log', {
+        p_branch: branchId,
+        p_actor: actor.id,
+        p_action: 'schedule.note',
+        p_summary: text ? `עדכן/ה הערה ליום ${action.date}: ${text}` : `הסיר/ה הערה מיום ${action.date}`,
+        p_detail: { weekId: action.weekId, date: action.date },
+      })
+      return {}
     }
 
     case 'updateSettings': {
-      await requireScheduleManager(action.branchId)
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-      const map: Record<string, string> = {
-        workingDays: 'working_days',
-        openTime: 'open_time',
-        closeTime: 'close_time',
-        dayHours: 'day_hours',
-        roles: 'roles',
-        stations: 'stations',
-        presets: 'presets',
-        safety: 'safety',
-        ruleSeverity: 'rule_severity',
-        features: 'features',
+      const patch = action.patch as SettingsPatch
+      const touchesDelegates = 'scheduleManagers' in patch
+      // Choosing WHO may manage the schedule is narrower than managing it: a
+      // delegate must not be able to promote themselves or anyone else.
+      const actor = touchesDelegates ? await requireScheduleDelegator(action.branchId) : await requireScheduleManager(action.branchId)
+
+      const update: Row = { updated_at: new Date().toISOString() }
+      for (const [key, column] of Object.entries(SETTINGS_COLUMNS)) {
+        if (key in patch) update[column] = (patch as Row)[key]
       }
-      for (const [key, column] of Object.entries(map)) {
-        if (key in action.patch) patch[column] = action.patch[key]
+      if (touchesDelegates) {
+        const ids = Array.from(new Set(patch.scheduleManagers ?? []))
+        if (ids.length > 0) {
+          // Only active people who work in this branch can be given the schedule.
+          const { data: found } = await service.from('staff').select('id, branch_id, active').in('id', ids)
+          const ok = (found ?? []).filter((s) => s.active && (s.branch_id === null || s.branch_id === action.branchId)).map((s) => s.id as string)
+          if (ok.length !== ids.length) throw refusal('wrong_branch')
+        }
+        update.schedule_managers = ids
       }
-      const { error } = await service.from('shift_settings').update(patch).eq('branch_id', action.branchId)
-      if (error) throw BadRequest('Could not save settings.')
-      return
+      const { error } = await service.from('shift_settings').update(update).eq('branch_id', action.branchId)
+      if (error) throw new ApiError(500, 'internal_error', INTERNAL)
+
+      const labels = Array.from(new Set(Object.keys(patch).map((k) => SETTINGS_LABELS[k]).filter(Boolean)))
+      await service.rpc('sched_log', {
+        p_branch: action.branchId,
+        p_actor: actor.id,
+        p_action: 'settings.update',
+        p_summary: `עדכן/ה הגדרות לוח: ${labels.join(', ')}`,
+        p_detail: { keys: Object.keys(patch) },
+      })
+      return {}
     }
 
     case 'setMember': {
-      await requireScheduleManager(action.branchId)
-      const { error } = await service.rpc('set_schedule_member', {
-        p_branch_id: action.branchId,
-        p_staff_id: action.staffId,
+      const actor = await requireScheduleManager(action.branchId)
+      return callSched(service, 'sched_set_member', {
+        p_actor: actor.id,
+        p_branch: action.branchId,
+        p_staff: action.staffId,
         p_patch: action.patch,
       })
-      if (error) throw BadRequest('Could not save.')
-      return
     }
 
+    // ============================================================ an employee
     case 'submitAvailability': {
       const staff = await requireScheduleViewer(action.branchId)
-      const { error } = await service
-        .from('shift_availability')
-        .upsert(
-          {
-            branch_id: action.branchId,
-            staff_id: staff.id,
-            week_start: action.weekStart,
-            entries: action.entries,
-            note: action.note ?? null,
-            status: action.status,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'branch_id,staff_id,week_start' }
-        )
-      if (error) throw BadRequest('Could not save availability.')
-      return
+      const start = weekStartOf(action.weekStart)
+      if (start !== action.weekStart) throw refusal('bad_date')
+      // Only this week or later: nobody can change the availability of a week that is over.
+      const thisWeek = weekStartOf(new Date().toISOString().slice(0, 10))
+      if (start < addDays(thisWeek, -7)) throw refusal('past')
+      const end = addDays(start, 6)
+      for (const e of action.entries as { date: string }[]) {
+        if (e.date < start || e.date > end) throw refusal('bad_date')
+      }
+      const { error } = await service.from('shift_availability').upsert(
+        {
+          branch_id: action.branchId,
+          staff_id: staff.id,
+          week_start: start,
+          entries: action.entries,
+          note: action.note ?? null,
+          status: action.status,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'branch_id,staff_id,week_start' }
+      )
+      if (error) throw new ApiError(500, 'internal_error', INTERNAL)
+      if (action.status === 'submitted') {
+        // Managers learn a submission arrived without having to go looking for it.
+        const { data: ids } = await service.rpc('sched_manager_ids', { p_branch: action.branchId })
+        const { data: me } = await service.rpc('sched_name', { p_staff: staff.id })
+        await service.rpc('sched_notify', {
+          p_branch: action.branchId,
+          p_staff: ((ids as string[] | null) ?? []).filter((id) => id !== staff.id),
+          p_kind: 'availability.submitted',
+          p_title: `${(me as string) || 'עובד/ת'} הגיש/ה זמינות`,
+          p_body: `לשבוע שמתחיל ב-${start}`,
+          p_link: { tab: 'requests', weekStart: start },
+        })
+      }
+      return {}
+    }
+
+    case 'requestShift': {
+      const branchId = await branchOfShift(service, action.shiftId)
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_request_shift', { p_actor: actor.id, p_shift: action.shiftId, p_note: action.note ?? null })
+    }
+
+    case 'cancelRequest': {
+      const branchId = await branchOfRequest(service, action.requestId)
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_cancel_request', { p_actor: actor.id, p_request: action.requestId })
     }
 
     case 'requestSwap': {
-      const { branchId, staffId } = await branchOfAssignment(service, action.assignmentId)
-      const staff = await requireScheduleViewer(branchId)
-      if (staffId !== staff.id) throw Forbidden('You can only request a swap for your own shift.')
-      const { error } = await service.rpc('request_shift_swap', { p_assignment_id: action.assignmentId, p_reason: action.reason ?? null })
-      if (error) throw BadRequest('Could not request a swap.')
-      return
+      const branchId = await branchOfAssignment(service, action.assignmentId)
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_request_swap', {
+        p_actor: actor.id,
+        p_assignment: action.assignmentId,
+        p_target: action.targetStaffId ?? null,
+        p_return: action.returnAssignmentId ?? null,
+        p_reason: action.reason ?? null,
+      })
     }
 
-    case 'acceptSwap': {
+    case 'respondSwap': {
       const branchId = await branchOfSwap(service, action.swapId)
-      await requireScheduleViewer(branchId)
-      const { error } = await service.rpc('accept_shift_swap', { p_swap_id: action.swapId })
-      if (error) throw BadRequest('Could not accept this swap.')
-      return
-    }
-
-    case 'decideSwap': {
-      const branchId = await branchOfSwap(service, action.swapId)
-      await requireScheduleManager(branchId)
-      const { error } = await service.rpc('decide_shift_swap', { p_swap_id: action.swapId, p_approve: action.approve, p_note: action.note ?? null })
-      if (error) throw BadRequest('Could not decide this swap.')
-      return
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_respond_swap', { p_actor: actor.id, p_swap: action.swapId, p_accept: action.accept })
     }
 
     case 'cancelSwap': {
       const branchId = await branchOfSwap(service, action.swapId)
-      await requireScheduleViewer(branchId)
-      const { error } = await service.rpc('cancel_shift_swap', { p_swap_id: action.swapId })
-      if (error) throw BadRequest('Could not cancel this swap.')
-      return
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_cancel_swap', { p_actor: actor.id, p_swap: action.swapId })
+    }
+
+    // ===================================================== a manager deciding
+    case 'decideRequest': {
+      const branchId = await branchOfRequest(service, action.requestId)
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_decide_request', {
+        p_actor: actor.id,
+        p_request: action.requestId,
+        p_approve: action.approve,
+        p_note: action.note ?? null,
+        p_force: action.force === true,
+      })
+    }
+
+    case 'decideSwap': {
+      const branchId = await branchOfSwap(service, action.swapId)
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_decide_swap', {
+        p_actor: actor.id,
+        p_swap: action.swapId,
+        p_approve: action.approve,
+        p_note: action.note ?? null,
+      })
+    }
+
+    // ================================================================ anyone
+    case 'markNotificationsRead': {
+      // Notifications are addressed to a person; any active staff row may clear their OWN.
+      const actor = await requireStaff()
+      const { error } = await service.rpc('sched_mark_read', { p_actor: actor.id, p_ids: action.ids ?? null })
+      if (error) throw new ApiError(500, 'internal_error', INTERNAL)
+      return {}
     }
 
     default: {
       const _exhaustive: never = action
-      throw BadRequest(`Unknown action: ${JSON.stringify(_exhaustive)}`)
+      throw new ApiError(400, 'bad_request', `Unknown action: ${JSON.stringify(_exhaustive)}`)
     }
   }
 }

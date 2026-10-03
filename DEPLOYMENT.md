@@ -24,6 +24,8 @@ Missing any of the three has produced real, hard-to-diagnose symptoms in this pr
 
 Run the one-time data seed after the schema migrations: `supabase/seed_legacy_menu_data.sql`.
 
+**Staff & scheduling (`018_scheduling_overhaul.sql`)** must be applied **before** deploying the app version that ships with it: the schedule UI calls its `sched_*` functions, and it replaces the older `auth.uid()`-based scheduling functions, which never worked under the service-role client. It is re-runnable. Rehearse it first with `npm run verify:schedule-sql` (real Postgres, no project touched). Details: `docs/STAFF_SCHEDULING.md`.
+
 ### 2.2 Authentication → URL Configuration
 - **Site URL**: `https://<your-production-domain>/`
 - **Redirect URLs**: add both

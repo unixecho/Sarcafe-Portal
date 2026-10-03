@@ -5,7 +5,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import Switch from '@/components/Switch'
 import { TimeWheel } from '@/components/WheelPicker'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
-import CatalogEditor from '@/components/shifts/CatalogEditor'
+import { PresetCatalog, RoleCatalog, StationCatalog } from '@/components/shifts/CatalogEditor'
 import RosterPanel from '@/components/shifts/RosterPanel'
 import { SAFETY_BOUNDS } from '@/lib/shifts/config'
 import { weekdayLabel } from '@/lib/shifts/time'
@@ -79,7 +79,7 @@ export default function ManagerPanel() {
   const { db, dispatch } = useShifts()
   const { settings, patch, error } = useOptimisticSettings(
     db?.settings ?? EMPTY_SETTINGS,
-    (p) => dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: p }),
+    async (p) => (await dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: p }, { success: 'ההגדרות נשמרו ✓' })).ok,
   )
   const [openDayOverride, setOpenDayOverride] = useState<number | null>(null)
 
@@ -115,6 +115,12 @@ export default function ManagerPanel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <p className="sch-sub">ההגדרות נשמרות לבד, ברגע שמשנים אותן. הן חלות על הסניף שבחרתם למעלה.</p>
+
+      <section>
+        <PresetCatalog />
+      </section>
+
       <section>
         <h3 style={sectionTitleStyle}>ימי פעילות</h3>
         <div role="group" aria-label="ימי פעילות" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -267,8 +273,11 @@ export default function ManagerPanel() {
       )}
 
       <section>
-        <h3 style={sectionTitleStyle}>קטלוגים</h3>
-        <CatalogEditor />
+        <RoleCatalog />
+      </section>
+
+      <section>
+        <StationCatalog />
       </section>
 
       <section>

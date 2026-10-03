@@ -9,7 +9,8 @@ const WEEK_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 // The single read endpoint for both owner/manager and staff self-service
 // views — RLS-equivalent narrowing happens inside loadShiftsState() based
-// on isManager, not by having two routes.
+// on isManager, not by having two routes. Never cached: a schedule is only
+// useful if it is current.
 export const GET = apiRoute(async (request: NextRequest) => {
   const branchSlug = request.nextUrl.searchParams.get('branch')
   const week = request.nextUrl.searchParams.get('week')
@@ -28,5 +29,5 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const canDelegate = canDelegateSchedule(viewer, branch.id)
 
   const db = await loadShiftsState(branch.id, week, viewer, isManager, canDelegate)
-  return NextResponse.json({ db })
+  return NextResponse.json({ db }, { headers: { 'Cache-Control': 'no-store' } })
 })

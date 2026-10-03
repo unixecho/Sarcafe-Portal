@@ -78,7 +78,7 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
               {shown.title}
             </h2>
             {shown.body && (
-              <p style={{ margin: '8px 0 0', color: 'var(--text-dim)', fontSize: '0.9rem' }}>{shown.body}</p>
+              <p style={{ margin: '8px 0 0', color: 'var(--text-dim)', fontSize: '0.9rem', whiteSpace: 'pre-line' }}>{shown.body}</p>
             )}
             <button
               ref={confirmRef}

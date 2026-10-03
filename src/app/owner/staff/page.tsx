@@ -18,7 +18,7 @@ export default async function OwnerStaffPage() {
   const service = createServiceRoleClient()
   const { data: me } = await service
     .from('staff')
-    .select('role, badge')
+    .select('id, role, badge')
     .eq('auth_user_id', user.id)
     .eq('active', true)
     .maybeSingle()
@@ -35,9 +35,9 @@ export default async function OwnerStaffPage() {
   const initialBranchSlug = cookieSlug && (branches ?? []).some((b) => b.slug === cookieSlug) ? cookieSlug : ''
 
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 560, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 960, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="צוות" backHref="/owner/dashboard" />
-      <StaffManager branches={branches ?? []} initialBranchSlug={initialBranchSlug} />
+      <StaffManager branches={branches ?? []} initialBranchSlug={initialBranchSlug} currentStaffId={(me as { id?: string } | null)?.id ?? null} />
     </main>
   )
 }

@@ -1,29 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { z } from 'zod'
-import { apiRoute, BadRequest } from '@/lib/http/errors'
+import { apiRoute, ApiError } from '@/lib/http/errors'
 import { performDispatch } from '@/lib/shifts/dispatch-write'
-import type { ScheduleAction } from '@/lib/shifts/actions'
+import { parseAction } from '@/lib/shifts/schema'
 
-// The single write endpoint — one action in, performDispatch() resolves
-// which branch it touches and authorizes it (requireScheduleManager()/
-// requireScheduleViewer(), per-action — see dispatch-write.ts), then
-// performs the write via an atomic RPC or a guarded table write. Body
-// shape is checked loosely here (an object with a known `type`) rather
-// than with a full per-variant zod schema for all fourteen action kinds —
-// every case still authorizes against a REAL resource id before writing
-// anything, and a malformed field beyond that fails as a Postgres
-// constraint violation, not a security gap. Never returns an optimistic
-// echo — the caller re-fetches /api/shifts/state after a successful
-// dispatch, same as AyekaBar's own dispatch route does.
-const bodySchema = z.object({ type: z.string() }).passthrough()
-
+// The single write endpoint — one action in, performDispatch() resolves which
+// branch it touches and authorizes it (requireScheduleManager()/
+// requireScheduleViewer(), per-action — see dispatch-write.ts), then calls ONE
+// database function that applies it atomically. The body is validated against a
+// strict per-action schema (lib/shifts/schema.ts): an unknown field, a malformed
+// id/date/time or an oversized list is a 400 here, before anything is read or
+// written. Never returns an optimistic echo — the caller re-fetches
+// /api/shifts/state after a successful dispatch.
+//
+// Errors come back as { error: { code, message, details } } with a plain-Hebrew
+// message a screen can show as-is, and details.reason for the few screens that
+// react to a specific refusal (needs_confirmation, conflict, stale).
 export const POST = apiRoute(async (request: NextRequest) => {
-  const body = bodySchema.parse(await request.json())
+  let body: unknown
   try {
-    await performDispatch(body as unknown as ScheduleAction)
-  } catch (err) {
-    if (err instanceof Error && 'status' in err) throw err
-    throw BadRequest('Could not perform that action.')
+    body = await request.json()
+  } catch {
+    throw new ApiError(400, 'bad_request', 'הבקשה לא תקינה. רעננו את הדף ונסו שוב.')
   }
-  return NextResponse.json({ ok: true })
+  const action = parseAction(body)
+  const data = await performDispatch(action)
+  return NextResponse.json({ ok: true, data }, { headers: { 'Cache-Control': 'no-store' } })
 })

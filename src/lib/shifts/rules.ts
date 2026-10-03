@@ -9,7 +9,7 @@
 import type { Assignment, AvailabilitySubmission, ScheduleStaffRow, Shift, ShiftSettings, Warning } from './types'
 import { daysBetween, durationMinutes, intervalOf } from './time'
 
-type EvalInput = {
+export type EvalInput = {
   weekStart: string
   settings: ShiftSettings
   roster: ScheduleStaffRow[]
@@ -186,4 +186,39 @@ export function groupWarnings(warnings: Warning[]): Map<string, Warning[]> {
     grouped.set(w.code, list)
   }
   return grouped
+}
+
+// ---- "What would this approval change?" ----------------------------------------
+// The manager is shown the consequences BEFORE approving: run the same engine on
+// the schedule as it would be afterwards and report only what is NEW and
+// concerns the people involved. Soft rules (rest, weekly hours, consecutive days)
+// are warnings the manager may accept; hard overlaps are refused by the database.
+
+const warningKey = (w: Warning) => `${w.code}|${w.staffId ?? ''}|${w.shiftId ?? ''}`
+
+function newWarnings(before: Warning[], after: Warning[], staffIds: string[]): Warning[] {
+  const had = new Set(before.map(warningKey))
+  return after.filter((w) => !had.has(warningKey(w)) && (!w.staffId || staffIds.includes(w.staffId)) && w.code !== 'unassigned_shift')
+}
+
+/** Warnings an approved swap would introduce for the two people involved. */
+export function swapImpact(
+  input: EvalInput,
+  swap: { assignmentId: string | null; returnAssignmentId: string | null; fromStaffId: string; toStaffId: string | null }
+): Warning[] {
+  if (!swap.assignmentId || !swap.toStaffId) return []
+  const toStaffId = swap.toStaffId
+  const after = input.assignments.map((a) => {
+    if (a.id === swap.assignmentId) return { ...a, staffId: toStaffId }
+    if (swap.returnAssignmentId && a.id === swap.returnAssignmentId) return { ...a, staffId: swap.fromStaffId }
+    return a
+  })
+  return newWarnings(evaluate(input), evaluate({ ...input, assignments: after }), [swap.fromStaffId, toStaffId])
+}
+
+/** Warnings approving a request to join `shiftId` would introduce for that person. */
+export function requestImpact(input: EvalInput, request: { shiftId: string | null; staffId: string }): Warning[] {
+  if (!request.shiftId) return []
+  const extra: Assignment = { id: `hypothetical:${request.staffId}`, shiftId: request.shiftId, staffId: request.staffId, staffName: null, roleId: null, status: 'assigned' }
+  return newWarnings(evaluate(input), evaluate({ ...input, assignments: [...input.assignments, extra] }), [request.staffId])
 }

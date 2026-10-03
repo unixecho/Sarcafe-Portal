@@ -1,245 +1,204 @@
 'use client'
 
 import { useState } from 'react'
+import { CalendarClock } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import WeekGrid from '@/components/shifts/WeekGrid'
 import AvailabilityPortal from '@/components/shifts/AvailabilityPortal'
-import { addDays, durationMinutes, formatDateLabel, formatHours, weekDates } from '@/lib/shifts/time'
+import ShiftActionSheet from '@/components/shifts/ShiftActionSheet'
+import MyRequests from '@/components/shifts/MyRequests'
+import NotificationsSheet, { NotificationsButton } from '@/components/shifts/NotificationsSheet'
+import { InlineError, Notice, Pill } from '@/components/shifts/ui'
+import { addDays, durationMinutes, formatDateLabel, formatHours, formatShiftLabel, hasStarted, relativeDayLabel, weekDates } from '@/lib/shifts/time'
+import { employeeInbox, indexByShift, rosterRow } from '@/lib/shifts/view'
+import type { NotificationLink } from '@/lib/shifts/types'
 
-type Tab = 'schedule' | 'availability'
-type ViewMode = 'mine' | 'everyone'
+type Tab = 'schedule' | 'mine' | 'availability'
 
-// Staff self-service — reads ONLY db.published (never a draft week,
-// enforced both here by only ever loading published_schedule server-side
-// for a non-manager, and by RLS as the backstop). Two views ("only mine" /
-// "everyone"), weekly hours, swap request/accept, and — on a separate
-// tab — next week's availability submission.
+// An employee's whole world, in three plain tabs:
+//   הלוח        my shifts (and, on "כולם", everyone's — where I can ask to join)
+//   הבקשות שלי  what colleagues asked me, what I asked, and how it turned out
+//   זמינות      the days I cannot work next week
+// Reads ONLY the published schedule (never a draft week — enforced by the server,
+// which sends nothing else), and every action explains itself before it is taken.
 export default function StaffWorkspace() {
-  const { db, loading, error, weekStart, setWeekStart, dispatch } = useShifts()
+  const { db, loading, error, weekStart, setWeekStart, goToToday, refresh } = useShifts()
   const [tab, setTab] = useState<Tab>('schedule')
-  const [view, setView] = useState<ViewMode>('mine')
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [view, setView] = useState<'mine' | 'everyone'>('mine')
+  const [shiftId, setShiftId] = useState<string | null>(null)
+  const [notesOpen, setNotesOpen] = useState(false)
 
   if (loading && !db) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="sch-wrap" aria-busy="true" aria-label="טוען את הלוח">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="sk" style={{ height: 70 }} />
+          <div key={i} className="sk" style={{ height: 80 }} />
         ))}
       </div>
     )
   }
-  if (error && !db) return <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.85rem' }}>{error}</p>
+  if (error && !db) {
+    return (
+      <div className="sch-col">
+        <InlineError>{error}</InlineError>
+        <button type="button" className="sch-btn press" onClick={() => void refresh()}>
+          ניסיון נוסף
+        </button>
+      </div>
+    )
+  }
   if (!db) return null
 
+  const me = db.viewerStaffId
+  const myRow = rosterRow(db, me)
   const currentWeek = db.weeks.find((w) => w.weekStart === weekStart)
   const weekShifts = currentWeek ? db.shifts.filter((s) => s.weekId === currentWeek.id) : []
-  const weekAssignments = db.assignments.filter((a) => weekShifts.some((s) => s.id === a.shiftId))
-  const myAssignments = weekAssignments.filter((a) => a.staffId === db.viewerStaffId)
-  const myMinutes = myAssignments.reduce((sum, a) => {
-    const shift = weekShifts.find((s) => s.id === a.shiftId)
-    return shift ? sum + durationMinutes(shift) : sum
-  }, 0)
-  const visibleAssignments = view === 'mine' ? myAssignments : weekAssignments
+  const weekIds = new Set(weekShifts.map((s) => s.id))
+  const weekAssignments = db.assignments.filter((a) => weekIds.has(a.shiftId))
+  const myMinutes = weekAssignments
+    .filter((a) => a.staffId === me)
+    .reduce((sum, a) => {
+      const shift = weekShifts.find((s) => s.id === a.shiftId)
+      return shift ? sum + durationMinutes(shift) : sum
+    }, 0)
+  const isCurrentWeek = weekDates(weekStart).includes(db.now.date)
+  const inbox = employeeInbox(db)
 
-  const mySwaps = db.swaps.filter((s) => s.fromStaffId === db.viewerStaffId && s.status !== 'rejected' && s.status !== 'cancelled')
-  const openFromOthers = db.swaps.filter((s) => s.status === 'open' && s.fromStaffId !== db.viewerStaffId)
+  // The next shift that has not started yet, anywhere in the loaded window.
+  const byShift = indexByShift(db.assignments)
+  const next = db.shifts
+    .filter((s) => !hasStarted(s, db.now) && (byShift.get(s.id) ?? []).some((a) => a.staffId === me))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))[0]
 
-  function staffName(id: string | null) {
-    return id ? db!.roster.find((r) => r.staffId === id)?.displayName ?? '—' : '—'
-  }
-
-  async function requestSwap(assignmentId: string) {
-    setBusyId(assignmentId)
-    await dispatch({ type: 'requestSwap', assignmentId, reason: null })
-    setBusyId(null)
-  }
-  async function acceptSwap(swapId: string) {
-    setBusyId(swapId)
-    await dispatch({ type: 'acceptSwap', swapId })
-    setBusyId(null)
-  }
-  async function cancelSwap(swapId: string) {
-    setBusyId(swapId)
-    await dispatch({ type: 'cancelSwap', swapId })
-    setBusyId(null)
+  function follow(link: NotificationLink) {
+    setNotesOpen(false)
+    if (link.weekStart) setWeekStart(link.weekStart)
+    setTab(link.tab === 'requests' ? 'mine' : 'schedule')
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div role="tablist" aria-label="לוח משמרות" style={{ display: 'flex', gap: 6 }}>
-        <button type="button" role="tab" aria-selected={tab === 'schedule'} className="press" onClick={() => setTab('schedule')} style={tabBtnStyle(tab === 'schedule')}>
-          הלוח שלי
-        </button>
-        {db.settings.features.availability && (
-          <button type="button" role="tab" aria-selected={tab === 'availability'} className="press" onClick={() => setTab('availability')} style={tabBtnStyle(tab === 'availability')}>
-            זמינות
+    <div className="sch-wrap">
+      <div className="sch-row">
+        <div role="tablist" aria-label="הלוח שלי" className="sch-tabs" style={{ flex: 1 }}>
+          <button type="button" role="tab" aria-selected={tab === 'schedule'} className="sch-tab press" onClick={() => setTab('schedule')}>
+            הלוח
           </button>
-        )}
+          <button type="button" role="tab" aria-selected={tab === 'mine'} className="sch-tab press" onClick={() => setTab('mine')}>
+            הבקשות שלי
+            {inbox.count > 0 && (
+              <span className="sch-badge" aria-label={`${inbox.count} מחכים לתשובה שלכם`}>
+                {inbox.count}
+              </span>
+            )}
+          </button>
+          {db.settings.features.availability && (
+            <button type="button" role="tab" aria-selected={tab === 'availability'} className="sch-tab press" onClick={() => setTab('availability')}>
+              זמינות
+            </button>
+          )}
+        </div>
+        <NotificationsButton onOpen={() => setNotesOpen(true)} />
       </div>
 
-      {tab === 'schedule' ? (
+      {loading && <div className="sch-loading" aria-hidden="true" />}
+
+      {tab === 'schedule' && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button type="button" className="press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="שבוע קודם" style={navBtnStyle}>
-              <span className="dir-flip" aria-hidden="true">‹</span>
-            </button>
-            <span style={{ flex: 1, textAlign: 'center', fontSize: '0.88rem', fontWeight: 700 }} className="ltr-isolate">
-              {formatDateLabel(weekStart)} – {formatDateLabel(weekDates(weekStart)[6]!)}
-            </span>
-            <button type="button" className="press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="שבוע הבא" style={navBtnStyle}>
-              <span className="dir-flip" aria-hidden="true">›</span>
-            </button>
-          </div>
-
-          {currentWeek?.status !== 'published' && (
-            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-faint)', textAlign: 'center' }}>הלוח לשבוע הזה עדיין לא פורסם.</p>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div role="group" aria-label="תצוגה" style={{ display: 'flex', gap: 3, background: 'var(--bg-elev-2)', borderRadius: 999, padding: 3 }}>
-              <button type="button" className="press" aria-pressed={view === 'mine'} onClick={() => setView('mine')} style={toggleBtnStyle(view === 'mine')}>
-                שלי
-              </button>
-              <button type="button" className="press" aria-pressed={view === 'everyone'} onClick={() => setView('everyone')} style={toggleBtnStyle(view === 'everyone')}>
-                כולם
+          {next ? (
+            <div className="sch-card sch-card--attention">
+              <div className="sch-row">
+                <CalendarClock size={20} aria-hidden="true" color="var(--neon)" />
+                <span className="sch-label" style={{ margin: 0 }}>
+                  המשמרת הבאה שלכם
+                </span>
+                {relativeDayLabel(next.date, db.now) && <Pill tone="mine">{relativeDayLabel(next.date, db.now)}</Pill>}
+              </div>
+              <button type="button" className="press" onClick={() => setShiftId(next.id)} style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', textAlign: 'start', cursor: 'pointer' }}>
+                <span style={{ fontWeight: 800, fontSize: '1.15rem' }}>{formatShiftLabel(next.date, next.startTime, next.endTime)}</span>
               </button>
             </div>
-            <span style={{ flex: 1, textAlign: 'end', fontSize: '0.82rem', color: 'var(--text-dim)' }}>{formatHours(myMinutes)} השבוע</span>
+          ) : (
+            <p className="sch-sub" style={{ textAlign: 'center' }}>
+              אין לכם משמרות קרובות בלוח שפורסם.
+            </p>
+          )}
+
+          {myRow && !myRow.schedulable && <Notice tone="warn">אתם מוגדרים כרגע כלא זמינים לשיבוץ בסניף הזה. לשינוי — פנו למנהל/ת.</Notice>}
+
+          <div className="sch-weeknav">
+            <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="השבוע הקודם">
+              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
+                ‹
+              </span>
+            </button>
+            <div className="sch-weeknav__label">
+              <strong className="ltr-isolate">
+                {formatDateLabel(weekStart)} – {formatDateLabel(weekDates(weekStart)[6]!)}
+              </strong>
+              <span>{isCurrentWeek ? 'השבוע' : weekStart > db.now.date ? 'שבוע עתידי' : 'שבוע שעבר'}</span>
+            </div>
+            {!isCurrentWeek && (
+              <button type="button" className="sch-btn sch-btn--sm press" onClick={goToToday}>
+                להיום
+              </button>
+            )}
+            <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="השבוע הבא">
+              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
+                ›
+              </span>
+            </button>
           </div>
 
-          <WeekGrid weekStart={weekStart} shifts={weekShifts} assignments={visibleAssignments} settings={db.settings} dayNotes={currentWeek?.dayNotes} />
-
-          {db.settings.features.swaps && myAssignments.length > 0 && (
-            <section>
-              <h3 style={sectionTitleStyle}>המשמרות שלי — בקשת החלפה</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {myAssignments.map((a) => {
-                  const shift = weekShifts.find((s) => s.id === a.shiftId)
-                  const alreadyRequested = mySwaps.some((s) => s.assignmentId === a.id)
-                  return (
-                    <div key={a.id} style={rowCardStyle}>
-                      <span className="ltr-isolate" style={{ fontSize: '0.82rem', fontWeight: 600 }}>
-                        {shift ? `${formatDateLabel(shift.date)} · ${shift.startTime}–${shift.endTime}` : ''}
-                      </span>
-                      <span style={{ flex: 1 }} />
-                      {a.status === 'swap_pending' || alreadyRequested ? (
-                        <span style={{ fontSize: '0.76rem', color: 'var(--text-faint)' }}>ממתין</span>
-                      ) : (
-                        <button type="button" className="press" disabled={busyId === a.id} onClick={() => requestSwap(a.id)} style={smallBtnStyle}>
-                          בקשת החלפה
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
+          {currentWeek?.status !== 'published' ? (
+            <Notice tone="info">הלוח של השבוע הזה עדיין לא פורסם. כשהמנהל/ת יפרסמו אותו — תקבלו הודעה והוא יופיע כאן.</Notice>
+          ) : (
+            <div className="sch-row" style={{ flexWrap: 'wrap' }}>
+              <div className="sch-segment" role="group" aria-label="תצוגה">
+                <button type="button" aria-pressed={view === 'mine'} className="press" onClick={() => setView('mine')}>
+                  שלי
+                </button>
+                <button type="button" aria-pressed={view === 'everyone'} className="press" onClick={() => setView('everyone')}>
+                  כולם
+                </button>
               </div>
-            </section>
+              <span className="sch-sub" style={{ flex: 1, textAlign: 'end' }}>
+                {myMinutes > 0 ? `${formatHours(myMinutes)} השבוע` : 'אין לכם משמרות השבוע'}
+              </span>
+            </div>
           )}
 
-          {db.settings.features.swaps && mySwaps.length > 0 && (
-            <section>
-              <h3 style={sectionTitleStyle}>הבקשות שלי</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {mySwaps.map((s) => (
-                  <div key={s.id} style={rowCardStyle}>
-                    <span style={{ fontSize: '0.8rem' }}>
-                      {s.status === 'open' && 'פתוח להצעות'}
-                      {s.status === 'peer_accepted' && `${staffName(s.toStaffId)} הציע/ה לקחת — ממתין לאישור`}
-                      {s.status === 'approved' && 'אושר'}
-                    </span>
-                    <span style={{ flex: 1 }} />
-                    {(s.status === 'open' || s.status === 'peer_accepted') && (
-                      <button type="button" className="press" disabled={busyId === s.id} onClick={() => cancelSwap(s.id)} style={{ ...smallBtnStyle, color: '#ff6b6b' }}>
-                        ביטול
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {db.settings.features.swaps && openFromOthers.length > 0 && (
-            <section>
-              <h3 style={sectionTitleStyle}>משמרות פתוחות להחלפה</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {openFromOthers.map((s) => (
-                  <div key={s.id} style={rowCardStyle}>
-                    <span style={{ fontSize: '0.8rem' }}>{staffName(s.fromStaffId)} מבקש/ת להחליף משמרת</span>
-                    <span style={{ flex: 1 }} />
-                    <button type="button" className="press" disabled={busyId === s.id} onClick={() => acceptSwap(s.id)} style={smallBtnStyle}>
-                      אני אקח
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
+          {currentWeek?.status === 'published' && (
+            <>
+              {view === 'everyone' && <p className="sch-sub">לחצו על משמרת כדי לראות פרטים — ואם חסרים בה אנשים, אפשר לבקש להצטרף.</p>}
+              {view === 'mine' && weekAssignments.every((a) => a.staffId !== me) && <p className="sch-sub">אין לכם משמרות בשבוע הזה. כדי לראות משמרות של אחרים ולבקש להצטרף — עברו ל״כולם״.</p>}
+              <WeekGrid
+                weekStart={weekStart}
+                db={db}
+                shifts={weekShifts}
+                assignments={weekAssignments}
+                mode="staff"
+                onlyMine={view === 'mine'}
+                dayNotes={currentWeek?.dayNotes}
+                onShiftClick={(s) => setShiftId(s.id)}
+              />
+            </>
           )}
         </>
-      ) : (
-        <AvailabilityPortal />
       )}
+
+      {tab === 'mine' && (
+        <div className="sch-col">
+          <MyRequests />
+        </div>
+      )}
+      {tab === 'availability' && (
+        <div className="sch-col">
+          <AvailabilityPortal />
+        </div>
+      )}
+
+      <ShiftActionSheet shiftId={shiftId} onClose={() => setShiftId(null)} />
+      <NotificationsSheet open={notesOpen} onClose={() => setNotesOpen(false)} onFollow={follow} />
     </div>
   )
-}
-
-function tabBtnStyle(active: boolean): React.CSSProperties {
-  return {
-    minHeight: 34,
-    padding: '0 14px',
-    borderRadius: 999,
-    border: `1px solid ${active ? 'var(--neon)' : 'var(--line-strong)'}`,
-    background: active ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-    color: active ? 'var(--neon-soft)' : 'var(--text-dim)',
-    fontSize: '0.8rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-  }
-}
-function toggleBtnStyle(active: boolean): React.CSSProperties {
-  return {
-    minHeight: 28,
-    padding: '0 12px',
-    borderRadius: 999,
-    border: 'none',
-    background: active ? 'var(--neon)' : 'transparent',
-    color: active ? 'var(--bg)' : 'var(--text-dim)',
-    fontSize: '0.74rem',
-    fontWeight: 700,
-    cursor: 'pointer',
-  }
-}
-const navBtnStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: '50%',
-  border: '1px solid var(--line-strong)',
-  background: 'var(--bg-elev-2)',
-  color: 'var(--text)',
-  display: 'grid',
-  placeItems: 'center',
-  cursor: 'pointer',
-  fontSize: '1.1rem',
-}
-const sectionTitleStyle: React.CSSProperties = { margin: '0 0 8px', fontSize: '0.86rem', fontWeight: 700 }
-const rowCardStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '8px 10px',
-  borderRadius: 10,
-  background: 'var(--bg-elev)',
-  border: '1px solid var(--line)',
-}
-const smallBtnStyle: React.CSSProperties = {
-  minHeight: 30,
-  padding: '0 10px',
-  borderRadius: 8,
-  border: '1px solid var(--line-strong)',
-  background: 'transparent',
-  color: 'var(--neon-soft)',
-  fontSize: '0.76rem',
-  fontWeight: 600,
-  cursor: 'pointer',
 }

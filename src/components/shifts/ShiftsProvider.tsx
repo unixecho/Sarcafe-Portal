@@ -1,24 +1,39 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { weekStartOf, todayISO } from '@/lib/shifts/time'
-import type { ScheduleAction } from '@/lib/shifts/actions'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { todayISO, weekStartOf } from '@/lib/shifts/time'
+import type { DispatchResult, ScheduleAction } from '@/lib/shifts/actions'
 import type { ShiftsDB } from '@/lib/shifts/types'
+import ScheduleToast, { type ToastState } from '@/components/shifts/ScheduleToast'
+import '@/components/shifts/schedule.css'
+
+const POLL_MS = 45_000
+const GENERIC_ERROR = 'משהו השתבש. בדקו את החיבור לרשת ונסו שוב.'
+
+type DispatchOptions = {
+  /** Words shown after the action succeeds (a plain sentence, or built from what the action returned). */
+  success?: string | ((data: Record<string, unknown>) => string)
+  /** The caller shows the failure itself (inside its own sheet) — no error toast. */
+  quiet?: boolean
+}
 
 type ShiftsContextValue = {
   branchSlug: string
   db: ShiftsDB | null
   loading: boolean
+  /** Only meaningful while no data has loaded yet; once `db` exists failures are toasts. */
   error: string | null
   weekStart: string
   setWeekStart: (iso: string) => void
-  /** Sends an action, awaits the server's authoritative result, then
-   *  replaces state with a fresh read. No local optimistic apply — see
-   *  lib/shifts/actions.ts's header for why that's a deliberate
-   *  simplification here. Returns whether it succeeded so callers (a
-   *  sheet's Save button) can decide whether to close. */
-  dispatch: (action: ScheduleAction) => Promise<boolean>
+  goToToday: () => void
+  /** Sends an action, awaits the server's authoritative answer, then replaces state
+   *  with a fresh read. There is no local optimistic apply: the rules live in the
+   *  database (migration 018) and run once, there. EVERY outcome is visible — a
+   *  success toast with the words passed in `success`, or the server's plain-Hebrew
+   *  explanation of what went wrong and what to do (unless `quiet`). */
+  dispatch: (action: ScheduleAction, options?: DispatchOptions) => Promise<DispatchResult>
   refresh: () => Promise<void>
+  toast: (kind: ToastState['kind'], text: string) => void
 }
 
 const ShiftsContext = createContext<ShiftsContextValue | null>(null)
@@ -34,59 +49,109 @@ export default function ShiftsProvider({
   initialWeekStart?: string
   children: ReactNode
 }) {
-  const [weekStart, setWeekStart] = useState(() => (initialWeekStart ? weekStartOf(initialWeekStart) : weekStartOf(todayISO())))
+  const [weekStart, setWeekStartState] = useState(() => (initialWeekStart ? weekStartOf(initialWeekStart) : weekStartOf(todayISO())))
   const [db, setDb] = useState<ShiftsDB | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [toastState, setToastState] = useState<ToastState | null>(null)
+  const requestSeq = useRef(0)
+  const busy = useRef(0)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch(`/api/shifts/state?branch=${branchSlug}&week=${weekStart}`, { cache: 'no-store' })
-      const payload = await res.json()
-      if (!res.ok) throw new Error(payload?.error?.message ?? 'שגיאה בטעינת הלוח')
-      setDb(payload.db as ShiftsDB)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'שגיאה בטעינת הלוח')
-    } finally {
-      setLoading(false)
-    }
-  }, [branchSlug, weekStart])
+  const toast = useCallback((kind: ToastState['kind'], text: string) => {
+    setToastState({ id: Date.now() + Math.random(), kind, text })
+  }, [])
+
+  const load = useCallback(
+    async (silent = false) => {
+      const seq = ++requestSeq.current
+      if (!silent) setLoading(true)
+      try {
+        const res = await fetch(`/api/shifts/state?branch=${encodeURIComponent(branchSlug)}&week=${weekStart}`, { cache: 'no-store' })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok) throw new Error(payload?.error?.message ?? 'שגיאה בטעינת הלוח')
+        // An answer to an older question (the week changed meanwhile) must never overwrite a newer one.
+        if (seq !== requestSeq.current) return
+        setDb(payload.db as ShiftsDB)
+        setError(null)
+      } catch (e) {
+        if (seq !== requestSeq.current) return
+        // A background refresh that fails is not worth interrupting anyone for; the next one will retry.
+        if (!silent) setError(e instanceof Error ? e.message : 'שגיאה בטעינת הלוח')
+      } finally {
+        if (seq === requestSeq.current && !silent) setLoading(false)
+      }
+    },
+    [branchSlug, weekStart]
+  )
 
   useEffect(() => {
     void load()
   }, [load])
 
+  // Keep the board current without anyone pressing refresh: a request that arrives
+  // while the manager has the screen open shows up on its own (and on return to the tab).
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible' && busy.current === 0) void load(true)
+    }
+    const id = window.setInterval(tick, POLL_MS)
+    document.addEventListener('visibilitychange', tick)
+    window.addEventListener('focus', tick)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+      window.removeEventListener('focus', tick)
+    }
+  }, [load])
+
   const dispatch = useCallback(
-    async (action: ScheduleAction) => {
+    async (action: ScheduleAction, options: DispatchOptions = {}): Promise<DispatchResult> => {
+      busy.current++
       try {
         const res = await fetch('/api/shifts/dispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(action),
         })
-        const payload = await res.json()
+        const payload = await res.json().catch(() => null)
         if (!res.ok) {
-          setError(payload?.error?.message ?? 'הפעולה נכשלה')
-          return false
+          const message: string = payload?.error?.message ?? GENERIC_ERROR
+          const details = (payload?.error?.details ?? {}) as Record<string, unknown>
+          const reason = typeof details.reason === 'string' ? details.reason : null
+          // A refusal that needs a decision from the person (confirm / re-load) is handled by the caller.
+          if (!options.quiet) toast('error', message)
+          // The schedule may have moved under us (someone else changed it): show the truth.
+          if (reason === 'stale' || reason === 'not_found' || reason === 'not_pending' || reason === 'assignment_changed') void load(true)
+          return { ok: false, message, reason, details }
         }
-        await load()
-        return true
+        const data = (payload?.data ?? {}) as Record<string, unknown>
+        await load(true)
+        if (options.success) toast('ok', typeof options.success === 'function' ? options.success(data) : options.success)
+        return { ok: true, data }
       } catch {
-        setError('הפעולה נכשלה — בדקו את החיבור לרשת')
-        return false
+        if (!options.quiet) toast('error', GENERIC_ERROR)
+        return { ok: false, message: GENERIC_ERROR, reason: null, details: {} }
+      } finally {
+        busy.current--
       }
     },
-    [load]
+    [load, toast]
   )
+
+  const setWeekStart = useCallback((iso: string) => setWeekStartState(weekStartOf(iso)), [])
+  const goToToday = useCallback(() => setWeekStartState(weekStartOf(todayISO())), [])
 
   const value = useMemo<ShiftsContextValue>(
-    () => ({ branchSlug, db, loading, error, weekStart, setWeekStart, dispatch, refresh: load }),
-    [branchSlug, db, loading, error, weekStart, dispatch, load]
+    () => ({ branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, refresh: () => load(true), toast }),
+    [branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, load, toast]
   )
 
-  return <ShiftsContext.Provider value={value}>{children}</ShiftsContext.Provider>
+  return (
+    <ShiftsContext.Provider value={value}>
+      {children}
+      <ScheduleToast toast={toastState} onDismiss={() => setToastState(null)} />
+    </ShiftsContext.Provider>
+  )
 }
 
 export function useShifts(): ShiftsContextValue {
