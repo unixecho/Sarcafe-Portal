@@ -1,0 +1,354 @@
+/* ============================================================
+   The intro — src/components/intro/Intro.tsx
+
+   A dark screen, the cream badge warming like a café lamp, two lines of copy
+   arriving word by word, then the page. Plays on every full load of the portal,
+   so it is built to be short and to be skippable. The look is Sarcafe's own
+   (espresso, amber, a breath of sage); the mechanics are Ayeka.Bar's
+   (BLUEPRINT §4.15). Design notes: docs/SARCAFE_INTRO.md.
+
+   NO TIMING LIVES HERE. Every duration and delay is a `--intro-*` custom
+   property written onto .intro by the component from
+   src/lib/intro/config.ts (introCssVars()). scripts/check-intro.mjs fails if
+   this file reads a variable that file doesn't provide, or the reverse. The few
+   per-element values (a bulb's --x/--y/--at, a wisp's --x/--h/--at/--v, a
+   word's --i) belong to their own elements.
+
+   HOW IT STAYS HONEST ABOUT THE CODEBASE'S MOTION LAWS (BLUEPRINT §4.14)
+   • (a) The overlay lives in the ROOT LAYOUT, outside #a11y-scope and outside
+     src/app/template.tsx's animated wrapper — both of those can become the
+     containing block for `position: fixed`. That is also what lets it be in the
+     server-rendered HTML, covering the page from the first frame.
+   • (b) Nothing here carries a backdrop-filter, and nothing animated does.
+   • (c) The state attributes (data-lit / data-out / data-skip) are only ever
+     ADDED, never removed — so no animation can be switched off and back on,
+     which is what restarts a CSS animation from frame zero.
+   • (d) Nothing that is positioned with `transform` is also animated with it:
+     the badge, halo, lights, steam and copy are placed with left/top, and the
+     animated transforms live on their children.
+   ============================================================ */
+
+.intro {
+  --coin: min(54vw, 34vh, 224px);
+  --coin-y: 38%;                       /* optical centre, a little above the middle */
+  --copy-w: min(92vw, 560px);
+  /* Follows the SHORTER dimension as well as the width, so a landscape phone
+     (wide, short) does not get bulbs sized for a monitor. */
+  --bulb-size: clamp(6px, min(1.9vw, 1.5vh), 11px);
+
+  position: fixed; inset: 0;
+  /* One notch UNDER the accessibility widget's launcher and panel (a11y-widget
+     uses 2147483000). A decorative layer must never hide the way into the
+     accessibility tools — and it keeps the widget's own first-visit intro
+     visible. scripts/check-intro.mjs reads the widget's real number and fails if
+     this one stops being lower. */
+  z-index: 2147482000;
+  overflow: hidden;
+  color: var(--text);
+  user-select: none; -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* Two light sources, as on Ayeka's — warm amber top-right, and a breath of the
+     logo's sage top-left where Ayeka has coral and cyan. Over --bg, so the dark
+     that lifts away is recognisably the room underneath it. */
+  background:
+    radial-gradient(130% 100% at 50% 44%, transparent 50%, rgba(0, 0, 0, 0.5) 100%),
+    radial-gradient(70% 55% at 78% -8%, rgba(255, 122, 69, 0.11), transparent 60%),
+    radial-gradient(55% 45% at 12% -4%, rgba(147, 163, 111, 0.07), transparent 60%),
+    var(--bg);
+  /* The failsafe: if script never takes over, CSS removes the overlay itself.
+     The component disarms it (data-armed) the moment it mounts. */
+  animation: intro-failsafe 1ms linear var(--intro-failsafe) forwards;
+}
+@supports (height: 1dvh) {
+  .intro {
+    --coin: min(54vw, 34dvh, 224px);
+    --bulb-size: clamp(6px, min(1.9vw, 1.5dvh), 11px);
+  }
+}
+
+/* THE INSTALLED APP'S ENTRY. The customer app's manifest opens at /order, so that
+   path carries data-entry="app": the server renders the overlay there (it cannot
+   know the display mode) and this hides it everywhere except inside the installed
+   app. A browser tab on /order sees nothing — no flash, no hydration mismatch —
+   and the component, finding it display:none, plays nothing. */
+.intro[data-entry="app"] { display: none; }
+@media (display-mode: standalone) {
+  .intro[data-entry="app"] { display: block; }
+}
+
+.intro[data-armed] { animation: none; }
+/* Order matters: these two come after [data-armed] and win on source order. */
+.intro[data-out]  { animation: intro-out var(--intro-exit) var(--ease) var(--intro-exit-delay) both; }
+.intro[data-skip] { animation: intro-out var(--intro-skip) ease-out both; }
+/* Once the dissolve is far enough along to see through, stop catching taps. */
+.intro[data-pass] { pointer-events: none; }
+
+@keyframes intro-failsafe { to { visibility: hidden; } }
+@keyframes intro-out      { to { opacity: 0; visibility: hidden; } }
+
+/* The viewport has a scrollbar on desktop and the overlay can't cover it. While
+   the show runs the page doesn't scroll anyway (a scroll IS a skip), so the
+   component parks it; the stable gutter keeps the page from shifting by a
+   scrollbar's width when it is parked and again when it is released. */
+html.intro-lock { overflow: hidden; scrollbar-gutter: stable; }
+
+/* ---- the stage: everything that leaves together ---- */
+.intro-stage { position: absolute; inset: 0; transform-origin: 50% var(--coin-y); }
+.intro[data-out]  .intro-stage { animation: intro-stage-out var(--intro-stage-exit) var(--ease) both; }
+.intro[data-skip] .intro-stage { animation: intro-stage-out var(--intro-skip) ease-out both; }
+@keyframes intro-stage-out { to { opacity: 0; transform: translateY(-14px) scale(1.045); } }
+
+/* ---- the halo: the lamp's warm light on the room ----
+   A dimmer rising, not a neon striking: ONE monotonic ease from a pilot light to
+   full, no reversals. (Ayeka's halo flickers on; a coffee cart's lamp warms.) */
+.intro-halo {
+  position: absolute;
+  left: calc(50% - var(--coin) * 1.5);
+  top: calc(var(--coin-y) - var(--coin) * 1.5);
+  width: calc(var(--coin) * 3); height: calc(var(--coin) * 3);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 158, 84, 0.34), rgba(255, 122, 69, 0.12) 52%, transparent 100%);
+  opacity: 0.12;                       /* standby: a pilot light, not yet on */
+  pointer-events: none;
+}
+.intro[data-lit] .intro-halo { animation: intro-halo-on var(--intro-lit) cubic-bezier(0.3, 0, 0.2, 1) both; }
+@keyframes intro-halo-on { from { opacity: 0.12; } to { opacity: 0.95; } }
+
+/* ---- the coin: Sarcafe's cream badge (the same disc LogoMark draws) ---- */
+.intro-coin {
+  position: absolute;
+  left: calc(50% - var(--coin) / 2);
+  top: calc(var(--coin-y) - var(--coin) / 2);
+  width: var(--coin); height: var(--coin);
+}
+.intro-badge {
+  position: absolute; inset: 0; border-radius: 50%; overflow: hidden;
+  background: #fdf6ec;
+  /* Standby: a lamp that is off — dim, so the first frame is already "this is
+     Sarcafe" and the moment it lights is a gesture, not an arrival. */
+  opacity: 0.3;
+  filter: brightness(0.6) saturate(0.85) drop-shadow(0 0 0 rgba(255, 150, 80, 0));
+}
+.intro-badge img { position: absolute; inset: 3%; width: 94%; height: 94%; object-fit: contain; display: block; }
+.intro[data-lit] .intro-badge { animation: intro-badge-on var(--intro-lit) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes intro-badge-on {
+  0%   { opacity: 0.3; transform: scale(0.955); filter: brightness(0.6) saturate(0.85) drop-shadow(0 0 0 rgba(255, 150, 80, 0)); }
+  100% { opacity: 1;   transform: none;         filter: brightness(1)   saturate(1)    drop-shadow(0 0 24px rgba(255, 150, 80, 0.45)); }
+}
+
+/* Light moving across the glaze. On a CREAM disc a pale band would be invisible,
+   so the sheen is amber: candlelight sliding over a cup, not a glint on chrome.
+   Always physically left→right — light does not mirror with the language. */
+.intro-glint { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.intro-glint::before {
+  content: ''; position: absolute; top: -12%; bottom: -12%; left: 0; width: 38%;
+  background: linear-gradient(100deg, rgba(255, 150, 70, 0) 0%, rgba(255, 150, 70, 0.42) 50%, rgba(255, 150, 70, 0) 100%);
+  transform: translateX(-130%) skewX(-18deg);
+  opacity: 0;
+}
+.intro[data-lit] .intro-glint::before { animation: intro-glint var(--intro-glint) cubic-bezier(0.45, 0, 0.2, 1) var(--intro-glint-at) both; }
+@keyframes intro-glint {
+  0%   { opacity: 0; transform: translateX(-130%) skewX(-18deg); }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(340%) skewX(-18deg); }
+}
+
+/* ============================================================
+   THE WELCOME — a device's first visit. The two things only this version has
+   (rendered only when data-variant="first", so a repeat visitor never sees an
+   unlit string flash during standby):
+   • the cart's STRING LIGHTS — a wire of ten bulbs that catch one after another,
+     the way they do in the illustration the portal sits on;
+   • STEAM — three wisps rising from behind the badge.
+   Both finish before the exit starts (the harness holds them to it).
+   ============================================================ */
+.intro-lights {
+  position: absolute; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 6px);
+  height: min(15vh, 132px);
+  pointer-events: none;
+  opacity: 0;
+}
+@supports (height: 1dvh) {
+  .intro-lights { height: min(15dvh, 132px); }
+}
+.intro[data-lit] .intro-lights { animation: intro-fade-in var(--intro-lights) ease-out var(--intro-lights-at) both; }
+.intro-wire { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.intro-wire path { fill: none; stroke: rgba(253, 246, 236, 0.2); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+
+/* Each bulb is an anchor on the wire: a stem, a glass, and a soft glow. Placed
+   with left/top; only the glass colour and the glow animate. */
+.intro-bulb { position: absolute; left: calc(var(--x) * 100%); top: calc(var(--y) * 100%); width: 0; height: 0; }
+.intro-bulb::before {
+  content: ''; position: absolute; left: -0.5px; top: 0;
+  width: 1px; height: calc(var(--bulb-size) * 0.7);
+  background: rgba(253, 246, 236, 0.2);
+}
+.intro-bulb::after {
+  content: ''; position: absolute;
+  left: calc(var(--bulb-size) / -2); top: calc(var(--bulb-size) * 0.6);
+  width: var(--bulb-size); height: calc(var(--bulb-size) * 1.25);
+  border-radius: 50% 50% 50% 50% / 38% 38% 62% 62%;
+  background-color: #5c4434;
+}
+.intro-bulb b {
+  position: absolute;
+  left: calc(var(--bulb-size) * -3.5); top: calc(var(--bulb-size) * -1.5);
+  width: calc(var(--bulb-size) * 7); height: calc(var(--bulb-size) * 7);
+  border-radius: 50%; opacity: 0;
+  background: radial-gradient(closest-side, rgba(255, 196, 118, 0.5), rgba(255, 160, 80, 0.16) 55%, transparent 100%);
+}
+.intro[data-lit] .intro-bulb::after { animation: intro-bulb-glass var(--intro-bulb) ease-out var(--at) both; }
+.intro[data-lit] .intro-bulb b      { animation: intro-bulb-glow var(--intro-bulb) ease-out var(--at) both; }
+@keyframes intro-bulb-glass {
+  from { background-color: #5c4434; box-shadow: 0 0 0 0 rgba(255, 196, 118, 0); }
+  to   { background-color: #ffdca6; box-shadow: 0 0 calc(var(--bulb-size) * 0.9) calc(var(--bulb-size) * 0.12) rgba(255, 196, 118, 0.85); }
+}
+@keyframes intro-bulb-glow { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+.intro-steam {
+  position: absolute;
+  left: calc(50% - var(--coin) / 2);
+  top: calc(var(--coin-y) - var(--coin) / 2 - var(--coin) * 0.62);
+  width: var(--coin); height: calc(var(--coin) * 0.7);
+  pointer-events: none;
+}
+.intro-wisp {
+  position: absolute; bottom: 0;
+  left: calc(50% + var(--x) * var(--coin) - var(--coin) * 0.09);
+  width: calc(var(--coin) * 0.18); height: calc(var(--coin) * var(--h));
+  overflow: visible; opacity: 0; transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 22%, transparent 100%);
+          mask-image: linear-gradient(to top, #000 0%, #000 22%, transparent 100%);
+  filter: blur(0.7px);
+}
+.intro-wisp path { fill: none; stroke: rgba(253, 246, 236, 0.66); stroke-width: 3.4px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.intro[data-lit] .intro-wisp { animation: intro-wisp calc(var(--intro-steam) * var(--v)) ease-in-out var(--at) both; }
+@keyframes intro-wisp {
+  0%   { opacity: 0; transform: translateY(16%) scaleY(0.72) translateX(0); }
+  28%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-16%) scaleY(1.04) translateX(3%); }
+}
+/* A landscape phone has no room above the badge for steam. */
+@media (max-height: 520px) {
+  .intro-steam { display: none; }
+}
+
+/* ---- the words ---- */
+.intro-copy {
+  position: absolute;
+  left: calc(50% - var(--copy-w) / 2);
+  width: var(--copy-w);
+  top: calc(var(--coin-y) + var(--coin) / 2 + clamp(16px, 3.2vh, 28px));
+  padding: 0 8px;
+  text-align: center;
+}
+@supports (height: 1dvh) {
+  .intro-copy { top: calc(var(--coin-y) + var(--coin) / 2 + clamp(16px, 3.2dvh, 28px)); }
+}
+
+.intro-rule {
+  display: block; width: 46px; height: 2px; margin: 0 auto 14px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-soft), transparent);
+  box-shadow: 0 0 12px rgba(255, 150, 80, 0.55);
+  transform: scaleX(0); opacity: 0;
+}
+.intro[data-lit] .intro-rule { animation: intro-rule var(--intro-rule) var(--ease) var(--intro-rule-at) both; }
+@keyframes intro-rule { to { transform: scaleX(1); opacity: 1; } }
+
+.intro-line { margin: 0; text-wrap: balance; }
+.intro-l1 {
+  font-weight: 800; line-height: 1.22; color: var(--text);
+  font-size: clamp(1.05rem, min(6.2vw, 5.2vh), 2.15rem);
+  text-shadow: 0 0 28px rgba(255, 150, 80, 0.22);
+}
+.intro-l2 {
+  margin-top: 12px; font-weight: 400; line-height: 1.5; color: var(--text-dim);
+  font-size: clamp(0.85rem, min(3.9vw, 3.6vh), 1.2rem);
+}
+@supports (height: 1dvh) {
+  .intro-l1 { font-size: clamp(1.05rem, min(6.2vw, 5.2dvh), 2.15rem); }
+  .intro-l2 { font-size: clamp(0.85rem, min(3.9vw, 3.6dvh), 1.2rem); }
+}
+/* A real monitor. The phone sizes above top out at a 224px badge and a 34px
+   headline, which on a 1440-wide screen reads as timid, mostly empty dark.
+   Gated on BOTH dimensions so a short landscape phone never lands here. */
+@media (min-width: 1024px) and (min-height: 640px) {
+  .intro { --coin: min(26vw, 40vh, 300px); --copy-w: min(90vw, 760px); }
+  .intro-l1 { font-size: clamp(2rem, 3.1vw, 2.9rem); }
+  .intro-l2 { font-size: clamp(1.1rem, 1.55vw, 1.45rem); }
+  .intro-hint { font-size: 0.85rem; }
+}
+
+/* Arabic is cursive: any letter-spacing breaks the joins. */
+.intro-copy[lang="ar"] .intro-line { letter-spacing: 0; }
+
+.intro-w { display: inline-block; opacity: 0; }
+.intro[data-lit] .intro-l1 .intro-w {
+  animation: intro-word var(--intro-w1) var(--ease) both;
+  animation-delay: calc(var(--intro-l1-at) + var(--i) * var(--intro-l1-step));
+}
+.intro[data-lit] .intro-l2 .intro-w {
+  animation: intro-word var(--intro-w2) var(--ease) both;
+  animation-delay: calc(var(--intro-l2-at) + var(--i) * var(--intro-l2-step));
+}
+@keyframes intro-word {
+  from { opacity: 0; transform: translateY(0.5em); filter: blur(7px); }
+  to   { opacity: 1; transform: none;              filter: none; }
+}
+/* The one word that carries the headline: amber lamp-light, softer than a neon. */
+.intro-w.hl {
+  color: var(--neon-soft);
+  text-shadow: 0 0 22px rgba(255, 122, 69, 0.55), 0 0 4px rgba(255, 171, 122, 0.6);
+}
+
+.intro-hint {
+  position: absolute; left: 0; right: 0; margin: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
+  text-align: center; font-size: 0.78rem; letter-spacing: 0.03em;
+  color: var(--text-faint); opacity: 0;
+}
+.intro-hint[lang="ar"] { letter-spacing: 0; }
+.intro[data-lit] .intro-hint { animation: intro-hint var(--intro-hint) ease var(--intro-hint-at) both; }
+@keyframes intro-hint { to { opacity: 0.85; } }
+@keyframes intro-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ============================================================
+   Reduced motion — SUBSTITUTE, don't remove (BLUEPRINT §4.13). The intro is the
+   brand's first word and a message, not decoration, so it still plays — as
+   fades. No scale, blur, travel, glint, steam or ignition sequence, and the
+   words arrive a line at a time instead of one by one. The string lights simply
+   fade up already lit.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .intro-glint, .intro-steam { display: none; }
+
+  .intro[data-lit] .intro-badge { animation-name: intro-badge-calm; }
+  @keyframes intro-badge-calm {
+    from { opacity: 0.3; filter: brightness(0.6) saturate(0.85) drop-shadow(0 0 0 rgba(255, 150, 80, 0)); }
+    to   { opacity: 1;   filter: brightness(1)   saturate(1)    drop-shadow(0 0 24px rgba(255, 150, 80, 0.45)); }
+  }
+  .intro[data-lit] .intro-halo { animation-timing-function: ease-out; }
+
+  .intro[data-lit] .intro-rule { animation-name: intro-fade-in; transform: none; }
+  .intro[data-lit] .intro-l1 .intro-w { animation-name: intro-fade-in; animation-delay: var(--intro-l1-at); }
+  .intro[data-lit] .intro-l2 .intro-w { animation-name: intro-fade-in; animation-delay: var(--intro-l2-at); }
+
+  .intro[data-lit] .intro-bulb::after {
+    animation: none; background-color: #ffdca6;
+    box-shadow: 0 0 calc(var(--bulb-size) * 0.9) calc(var(--bulb-size) * 0.12) rgba(255, 196, 118, 0.85);
+  }
+  .intro[data-lit] .intro-bulb b { animation: none; opacity: 1; }
+
+  .intro[data-out]  .intro-stage,
+  .intro[data-skip] .intro-stage { animation-name: intro-stage-calm; }
+  @keyframes intro-stage-calm { to { opacity: 0; } }
+}
+
+/* The accessibility widget's "pause animations": the visitor has asked for the
+   site not to move. The component also skips the show on seeing this class; the
+   rule is the belt to that brace, for the frames before it has looked. */
+html.a11y-motion-off .intro { display: none !important; }
+
+@media print { .intro { display: none !important; } }

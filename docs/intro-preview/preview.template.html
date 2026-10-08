@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Sarcafe intro · design preview</title>
+<!--
+  SARCAFE INTRO — DESIGN PREVIEW (not part of the app; nothing here ships).
+
+  Source template. `node docs/intro-preview/build.mjs` inlines the logo and the
+  two backdrop images and writes sarcafe-intro-preview.html next to it.
+
+  Two layers live in this file:
+    1. The review shell (this page's own <style>/<script>): the controls, the
+       device frame, the read-out. Throwaway.
+    2. The frame template (<template id="frame-tpl">): a mock of the Sarcafe
+       portal with the intro on top. Everything between the PORT markers is
+       written to be moved into the app verbatim when the implementation is
+       unblocked (see docs/SARCAFE_INTRO.md, "Port plan"):
+         PORT config  -> src/lib/intro/config.ts
+         PORT copy    -> src/lib/intro/copy.ts
+         PORT css     -> src/components/intro/intro.css
+         PORT runtime -> src/components/intro/Intro.tsx
+-->
+<style>
+/* ===== the review shell (preview only) ===== */
+:root{--ink:#0d0907;--panel:#1a110d;--line:rgba(253,246,236,.12);--text:#fdf6ec;--dim:#b9ada0;--accent:#ff7a45;--accent-soft:#ffab7a;--sage:#93a36f}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ink);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.title{display:flex;flex-direction:column;line-height:1.15;margin-inline-end:auto}
+.title b{font-size:15px;letter-spacing:.01em}
+.title span{font-size:11.5px;color:var(--dim)}
+.group{display:flex;align-items:center;gap:6px}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:#120b08}
+.seg button{appearance:none;border:0;background:transparent;color:var(--dim);font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer;min-height:32px}
+.seg button[aria-checked="true"]{background:var(--accent);color:#1a0f09;font-weight:700}
+.seg button:focus-visible,.replay:focus-visible{outline:2px solid var(--accent-soft);outline-offset:2px}
+.replay{appearance:none;border:1px solid var(--accent);background:transparent;color:var(--accent-soft);font:inherit;font-weight:700;padding:7px 16px;border-radius:999px;cursor:pointer;min-height:36px}
+.replay:hover{background:rgba(255,122,69,.14)}
+.stage{flex:1;min-height:0;display:grid;place-items:center;padding:16px;position:relative}
+.device{position:relative;background:#000;border-radius:44px;padding:10px;box-shadow:0 0 0 2px #2b211c,0 30px 90px rgba(0,0,0,.65)}
+.device[data-d="desktop"]{border-radius:14px;padding:0}
+.device[data-d="landscape"]{border-radius:40px}
+.device[data-d="fill"]{border-radius:0;padding:0;box-shadow:none}
+.screen{position:relative;overflow:hidden;border-radius:34px;background:#150f0c}
+.device[data-d="desktop"] .screen{border-radius:14px}
+.device[data-d="fill"] .screen{border-radius:0}
+.screen iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:#150f0c}
+.readout{padding:10px 16px 14px;background:var(--panel);border-top:1px solid var(--line);color:var(--dim);font-size:12.5px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.readout b{color:var(--text)}
+.ok{color:var(--sage)}.bad{color:#ff6b6b}
+/* On a phone the read-out wraps to several lines; reserve them up front so the
+   frame is never sized against a one-line footer and then overlapped by it. */
+@media (max-width:640px){.bar{gap:8px 12px;padding:10px 12px}.lbl{display:none}.title span{display:none}.seg button{padding:6px 10px;font-size:12.5px}.stage{padding:0}.readout{font-size:11.5px;padding:8px 12px 12px;min-height:82px;align-content:flex-start}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="title"><b>sārcāfe · intro</b><span>Design preview. Not in the app yet.</span></div>
+  <div class="group"><span class="lbl">Version</span><div class="seg" id="g-variant" role="radiogroup" aria-label="Version"></div></div>
+  <div class="group"><span class="lbl">Language</span><div class="seg" id="g-lang" role="radiogroup" aria-label="Language"></div></div>
+  <div class="group"><span class="lbl">Copy</span><div class="seg" id="g-copy" role="radiogroup" aria-label="Copy option"></div></div>
+  <div class="group"><span class="lbl">Device</span><div class="seg" id="g-device" role="radiogroup" aria-label="Device"></div></div>
+  <div class="group"><span class="lbl">Motion</span><div class="seg" id="g-motion" role="radiogroup" aria-label="Motion preference"></div></div>
+  <button class="replay" id="replay" type="button" title="Replay (R)">▶ Replay</button>
+</header>
+
+<main class="stage" id="stage">
+  <div class="device" id="device" data-d="phone">
+    <div class="screen" id="screen"><iframe id="frame" title="Sarcafe intro preview"></iframe></div>
+  </div>
+</main>
+
+<footer class="readout" id="readout" aria-live="polite">Loading…</footer>
+
+<!-- =====================================================================
+     THE FRAME: a mock of the portal (the page the intro lifts off of) with
+     the intro on top. Loaded into the iframe via srcdoc, rebuilt on every
+     change of control.
+     ===================================================================== -->
+<template id="frame-tpl">
+<style>
+/* ----- tokens + base: a subset of src/app/globals.css, same values ----- */
+:root{
+  --bg:#150f0c;--bg-elev:#221712;--bg-elev-2:#2e1f18;
+  --neon:#ff7a45;--neon-soft:#ffab7a;--sage:#93a36f;
+  --text:#fdf6ec;--text-dim:#b9ada0;--text-faint:#9c9086;
+  --line:rgba(253,246,236,.08);--line-strong:rgba(253,246,236,.14);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Rubik',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;-webkit-font-smoothing:antialiased}
+body{font-variant-numeric:tabular-nums}
+
+/* ----- the mock portal behind the intro (mirrors src/app/page.tsx's hero) ----- */
+#main{min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 24px);text-align:center;position:relative;outline:none}
+.hero{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 44px)}
+.panel{width:100%;max-width:360px}
+.logo-badge{width:92px;height:92px;border-radius:50%;background:#fdf6ec;display:grid;place-items:center;box-shadow:0 10px 24px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.04)}
+.logo-badge img{width:86px;height:86px;object-fit:contain;display:block}
+.eyebrow{margin:0;color:var(--neon-soft);font-size:.8rem;font-weight:700}
+h1{margin:4px 0 6px;font-size:1.8rem;font-weight:800}
+.sub{margin:0 0 20px;color:var(--text-dim);font-size:.9rem}
+.branches{display:flex;flex-direction:column;gap:10px}
+.branch{min-height:64px;width:100%;border-radius:15px;border:1px solid var(--line);background:var(--bg-elev);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 16px;font:inherit;cursor:pointer}
+.branch b{font-weight:700;font-size:1.05rem}
+.branch small{color:var(--text-faint);font-size:.72rem}
+@keyframes rise-in{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.rise{animation:rise-in .55s var(--ease) backwards}
+.portal-hero-mark{animation:rise-in .6s var(--ease) .1s backwards;background:none;border:0;padding:0}
+@media (prefers-reduced-motion: reduce){.rise,.portal-hero-mark{animation:none}}
+
+/* ===== >>> PORT css -> src/components/intro/intro.css ===================== */
+/* The intro: a dark screen, the badge lighting up like a café lamp, two lines
+   arriving word by word, then the page. Same mechanics as Ayeka.Bar's intro
+   (BLUEPRINT §4.15); the look is Sarcafe's own — warm amber on espresso, with
+   the cart's string lights and steam in the welcome.
+
+   NO TIMING LIVES HERE. Every duration/delay is an --intro-* custom property
+   written onto .intro from config.ts (introCssVars()). The three per-element
+   values (--x/--y/--at, --h/--v) belong to their own elements.
+
+   Motion laws kept (BLUEPRINT §4.14): the overlay lives in the ROOT LAYOUT, not
+   under #a11y-scope or template.tsx (a); no backdrop-filter, ever (b); the
+   three state attributes are only ever ADDED (c); nothing positioned with
+   `transform` is also animated with it — the coin, halo, lights, steam and copy
+   are placed with left/top and their animated transforms live on children (d). */
+
+.intro{
+  --coin:min(54vw,34vh,224px);
+  --coin-y:38%;
+  --copy-w:min(92vw,560px);
+  /* Follows the SHORTER dimension as well as the width, so a landscape phone
+     (wide, short) does not get bulbs sized for a monitor. */
+  --bulb-size:clamp(6px,min(1.9vw,1.5vh),11px);
+  position:fixed;inset:0;
+  /* One notch UNDER the accessibility widget (a11y-widget: 2147483000). */
+  z-index:2147482000;
+  overflow:hidden;
+  color:var(--text);
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  /* Two light sources, as on Ayeka's — but warm amber top-right and a breath of
+     the logo's sage top-left, where Ayeka has coral and cyan. */
+  background:
+    radial-gradient(130% 100% at 50% 44%,transparent 50%,rgba(0,0,0,.5) 100%),
+    radial-gradient(70% 55% at 78% -8%,rgba(255,122,69,.11),transparent 60%),
+    radial-gradient(55% 45% at 12% -4%,rgba(147,163,111,.07),transparent 60%),
+    var(--bg);
+  /* The failsafe: if script never takes over, CSS removes the overlay itself.
+     The component disarms it (data-armed) the moment it mounts. */
+  animation:intro-failsafe 1ms linear var(--intro-failsafe) forwards;
+}
+@supports (height:1dvh){.intro{--coin:min(54vw,34dvh,224px);--bulb-size:clamp(6px,min(1.9vw,1.5dvh),11px)}}
+.intro[data-armed]{animation:none}
+/* Order matters: these two come after [data-armed] and win on source order. */
+.intro[data-out]{animation:intro-out var(--intro-exit) var(--ease) var(--intro-exit-delay) both}
+.intro[data-skip]{animation:intro-out var(--intro-skip) ease-out both}
+/* Once the dissolve is far enough along to see through, stop catching taps. */
+.intro[data-pass]{pointer-events:none}
+@keyframes intro-failsafe{to{visibility:hidden}}
+@keyframes intro-out{to{opacity:0;visibility:hidden}}
+html.intro-lock{overflow:hidden;scrollbar-gutter:stable}
+
+/* ---- the stage: everything that leaves together ---- */
+.intro-stage{position:absolute;inset:0;transform-origin:50% var(--coin-y)}
+.intro[data-out] .intro-stage{animation:intro-stage-out var(--intro-stage-exit) var(--ease) both}
+.intro[data-skip] .intro-stage{animation:intro-stage-out var(--intro-skip) ease-out both}
+@keyframes intro-stage-out{to{opacity:0;transform:translateY(-14px) scale(1.045)}}
+
+/* ---- the halo: the lamp's warm light on the room ----
+   A dimmer rising, not a neon striking: ONE monotonic ease from a pilot light to
+   full, no reversals. (Ayeka's halo flickers on; a coffee cart's lamp warms.) */
+.intro-halo{
+  position:absolute;
+  left:calc(50% - var(--coin) * 1.5);
+  top:calc(var(--coin-y) - var(--coin) * 1.5);
+  width:calc(var(--coin) * 3);height:calc(var(--coin) * 3);
+  border-radius:50%;
+  background:radial-gradient(closest-side,rgba(255,158,84,.34),rgba(255,122,69,.12) 52%,transparent 100%);
+  opacity:.12;
+  pointer-events:none;
+}
+.intro[data-lit] .intro-halo{animation:intro-halo-on var(--intro-lit) cubic-bezier(.3,0,.2,1) both}
+@keyframes intro-halo-on{from{opacity:.12}to{opacity:.95}}
+
+/* ---- the coin: Sarcafe's cream badge (the same disc LogoMark draws) ---- */
+.intro-coin{
+  position:absolute;
+  left:calc(50% - var(--coin) / 2);
+  top:calc(var(--coin-y) - var(--coin) / 2);
+  width:var(--coin);height:var(--coin);
+}
+.intro-badge{
+  position:absolute;inset:0;border-radius:50%;overflow:hidden;
+  background:#fdf6ec;
+  /* Standby: a lamp that is off — dim, so the first frame is already "this is
+     Sarcafe" and the moment it lights is a gesture, not an arrival. */
+  opacity:.3;
+  filter:brightness(.6) saturate(.85) drop-shadow(0 0 0 rgba(255,150,80,0));
+}
+.intro-badge img{position:absolute;inset:3%;width:94%;height:94%;object-fit:contain;display:block}
+.intro[data-lit] .intro-badge{animation:intro-badge-on var(--intro-lit) cubic-bezier(.2,.8,.2,1) both}
+@keyframes intro-badge-on{
+  0%{opacity:.3;transform:scale(.955);filter:brightness(.6) saturate(.85) drop-shadow(0 0 0 rgba(255,150,80,0))}
+  100%{opacity:1;transform:none;filter:brightness(1) saturate(1) drop-shadow(0 0 24px rgba(255,150,80,.45))}
+}
+
+/* Light moving across the glaze. On a CREAM disc a pale band would be
+   invisible, so the sheen is amber — candlelight sliding over a cup, not a
+   glint on chrome. Always physically left→right: light does not mirror. */
+.intro-glint{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.intro-glint::before{
+  content:'';position:absolute;top:-12%;bottom:-12%;left:0;width:38%;
+  background:linear-gradient(100deg,rgba(255,150,70,0) 0%,rgba(255,150,70,.42) 50%,rgba(255,150,70,0) 100%);
+  transform:translateX(-130%) skewX(-18deg);opacity:0;
+}
+.intro[data-lit] .intro-glint::before{animation:intro-glint var(--intro-glint) cubic-bezier(.45,0,.2,1) var(--intro-glint-at) both}
+@keyframes intro-glint{
+  0%{opacity:0;transform:translateX(-130%) skewX(-18deg)}
+  15%{opacity:1}85%{opacity:1}
+  100%{opacity:0;transform:translateX(340%) skewX(-18deg)}
+}
+
+/* ============================================================
+   THE WELCOME — a device's first visit. The two things only this version has
+   (rendered only when data-variant="first", so a repeat visitor never sees an
+   unlit string flash in standby):
+   • the cart's STRING LIGHTS — a wire of ten bulbs that catch one after another,
+     the way they do in the illustration the portal sits on;
+   • STEAM — three wisps rising from behind the badge.
+   Both finish before the exit starts (the harness holds them to it).
+   ============================================================ */
+.intro-lights{
+  position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 6px);
+  height:min(15vh,132px);pointer-events:none;opacity:0;
+}
+@supports (height:1dvh){.intro-lights{height:min(15dvh,132px)}}
+.intro[data-lit] .intro-lights{animation:intro-fade-in var(--intro-lights) ease-out var(--intro-lights-at) both}
+.intro-wire{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.intro-wire path{fill:none;stroke:rgba(253,246,236,.2);stroke-width:1.2;vector-effect:non-scaling-stroke}
+/* Each bulb is an anchor on the wire: a stem, a glass, and a soft glow. Placed
+   with left/top; only the glass colour and the glow animate. */
+.intro-bulb{position:absolute;left:calc(var(--x) * 100%);top:calc(var(--y) * 100%);width:0;height:0}
+.intro-bulb::before{content:'';position:absolute;left:-.5px;top:0;width:1px;height:calc(var(--bulb-size) * .7);background:rgba(253,246,236,.2)}
+.intro-bulb::after{
+  content:'';position:absolute;
+  left:calc(var(--bulb-size) / -2);top:calc(var(--bulb-size) * .6);
+  width:var(--bulb-size);height:calc(var(--bulb-size) * 1.25);
+  border-radius:50% 50% 50% 50% / 38% 38% 62% 62%;
+  background-color:#5c4434;
+}
+.intro-bulb b{
+  position:absolute;
+  left:calc(var(--bulb-size) * -3.5);top:calc(var(--bulb-size) * -1.5);
+  width:calc(var(--bulb-size) * 7);height:calc(var(--bulb-size) * 7);
+  border-radius:50%;opacity:0;
+  background:radial-gradient(closest-side,rgba(255,196,118,.5),rgba(255,160,80,.16) 55%,transparent 100%);
+}
+.intro[data-lit] .intro-bulb::after{animation:intro-bulb-glass var(--intro-bulb) ease-out var(--at) both}
+.intro[data-lit] .intro-bulb b{animation:intro-bulb-glow var(--intro-bulb) ease-out var(--at) both}
+@keyframes intro-bulb-glass{
+  from{background-color:#5c4434;box-shadow:0 0 0 0 rgba(255,196,118,0)}
+  to{background-color:#ffdca6;box-shadow:0 0 calc(var(--bulb-size) * .9) calc(var(--bulb-size) * .12) rgba(255,196,118,.85)}
+}
+@keyframes intro-bulb-glow{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+
+.intro-steam{
+  position:absolute;
+  left:calc(50% - var(--coin) / 2);
+  top:calc(var(--coin-y) - var(--coin) / 2 - var(--coin) * .62);
+  width:var(--coin);height:calc(var(--coin) * .7);
+  pointer-events:none;
+}
+.intro-wisp{
+  position:absolute;bottom:0;
+  left:calc(50% + var(--x) * var(--coin) - var(--coin) * .09);
+  width:calc(var(--coin) * .18);height:calc(var(--coin) * var(--h));
+  overflow:visible;opacity:0;transform-origin:50% 100%;
+  -webkit-mask-image:linear-gradient(to top,#000 0%,#000 22%,transparent 100%);
+          mask-image:linear-gradient(to top,#000 0%,#000 22%,transparent 100%);
+  filter:blur(.7px);
+}
+.intro-wisp path{fill:none;stroke:rgba(253,246,236,.66);stroke-width:3.4px;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.intro[data-lit] .intro-wisp{animation:intro-wisp calc(var(--intro-steam) * var(--v)) ease-in-out var(--at) both}
+@keyframes intro-wisp{
+  0%{opacity:0;transform:translateY(16%) scaleY(.72) translateX(0)}
+  28%{opacity:.9}
+  100%{opacity:0;transform:translateY(-16%) scaleY(1.04) translateX(3%)}
+}
+/* A landscape phone has no room above the badge for steam. */
+@media (max-height:520px){.intro-steam{display:none}}
+
+/* ---- the words ---- */
+.intro-copy{
+  position:absolute;
+  left:calc(50% - var(--copy-w) / 2);width:var(--copy-w);
+  top:calc(var(--coin-y) + var(--coin) / 2 + clamp(16px,3.2vh,28px));
+  padding:0 8px;text-align:center;
+}
+@supports (height:1dvh){.intro-copy{top:calc(var(--coin-y) + var(--coin) / 2 + clamp(16px,3.2dvh,28px))}}
+.intro-rule{
+  display:block;width:46px;height:2px;margin:0 auto 14px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--neon-soft),transparent);
+  box-shadow:0 0 12px rgba(255,150,80,.55);
+  transform:scaleX(0);opacity:0;
+}
+.intro[data-lit] .intro-rule{animation:intro-rule var(--intro-rule) var(--ease) var(--intro-rule-at) both}
+@keyframes intro-rule{to{transform:scaleX(1);opacity:1}}
+.intro-line{margin:0;text-wrap:balance}
+.intro-l1{font-weight:800;line-height:1.22;color:var(--text);font-size:clamp(1.05rem,min(6.2vw,5.2vh),2.15rem);text-shadow:0 0 28px rgba(255,150,80,.22)}
+.intro-l2{margin-top:12px;font-weight:400;line-height:1.5;color:var(--text-dim);font-size:clamp(.85rem,min(3.9vw,3.6vh),1.2rem)}
+@supports (height:1dvh){
+  .intro-l1{font-size:clamp(1.05rem,min(6.2vw,5.2dvh),2.15rem)}
+  .intro-l2{font-size:clamp(.85rem,min(3.9vw,3.6dvh),1.2rem)}
+}
+/* A real monitor. Gated on BOTH dimensions so a short landscape phone never
+   lands here. */
+@media (min-width:1024px) and (min-height:640px){
+  .intro{--coin:min(26vw,40vh,300px);--copy-w:min(90vw,760px)}
+  .intro-l1{font-size:clamp(2rem,3.1vw,2.9rem)}
+  .intro-l2{font-size:clamp(1.1rem,1.55vw,1.45rem)}
+  .intro-hint{font-size:.85rem}
+}
+/* Arabic is cursive: any letter-spacing breaks the joins. */
+.intro-copy[lang="ar"] .intro-line{letter-spacing:0}
+.intro-w{display:inline-block;opacity:0}
+.intro[data-lit] .intro-l1 .intro-w{animation:intro-word var(--intro-w1) var(--ease) both;animation-delay:calc(var(--intro-l1-at) + var(--i) * var(--intro-l1-step))}
+.intro[data-lit] .intro-l2 .intro-w{animation:intro-word var(--intro-w2) var(--ease) both;animation-delay:calc(var(--intro-l2-at) + var(--i) * var(--intro-l2-step))}
+@keyframes intro-word{from{opacity:0;transform:translateY(.5em);filter:blur(7px)}to{opacity:1;transform:none;filter:none}}
+/* The one word that carries the headline: amber lamp-light, softer than a neon. */
+.intro-w.hl{color:var(--neon-soft);text-shadow:0 0 22px rgba(255,122,69,.55),0 0 4px rgba(255,171,122,.6)}
+.intro-hint{position:absolute;left:0;right:0;margin:0;bottom:calc(env(safe-area-inset-bottom) + 20px);text-align:center;font-size:.78rem;letter-spacing:.03em;color:var(--text-faint);opacity:0}
+.intro-hint[lang="ar"]{letter-spacing:0}
+.intro[data-lit] .intro-hint{animation:intro-hint var(--intro-hint) ease var(--intro-hint-at) both}
+@keyframes intro-hint{to{opacity:.85}}
+@keyframes intro-fade-in{from{opacity:0}to{opacity:1}}
+
+/* ============================================================
+   Reduced motion — SUBSTITUTE, don't remove (BLUEPRINT §4.13). Still plays, as
+   fades: no scale, blur, travel, glint, steam or ignition sequence, and the
+   words arrive a line at a time. The string lights simply fade up already lit.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce){
+  .intro-glint,.intro-steam{display:none}
+  .intro[data-lit] .intro-badge{animation-name:intro-badge-calm}
+  @keyframes intro-badge-calm{
+    from{opacity:.3;filter:brightness(.6) saturate(.85) drop-shadow(0 0 0 rgba(255,150,80,0))}
+    to{opacity:1;filter:brightness(1) saturate(1) drop-shadow(0 0 24px rgba(255,150,80,.45))}
+  }
+  .intro[data-lit] .intro-halo{animation-timing-function:ease-out}
+  .intro[data-lit] .intro-rule{animation-name:intro-fade-in;transform:none}
+  .intro[data-lit] .intro-l1 .intro-w{animation-name:intro-fade-in;animation-delay:var(--intro-l1-at)}
+  .intro[data-lit] .intro-l2 .intro-w{animation-name:intro-fade-in;animation-delay:var(--intro-l2-at)}
+  .intro[data-lit] .intro-bulb::after{animation:none;background-color:#ffdca6;box-shadow:0 0 calc(var(--bulb-size) * .9) calc(var(--bulb-size) * .12) rgba(255,196,118,.85)}
+  .intro[data-lit] .intro-bulb b{animation:none;opacity:1}
+  .intro[data-out] .intro-stage,.intro[data-skip] .intro-stage{animation-name:intro-stage-calm}
+  @keyframes intro-stage-calm{to{opacity:0}}
+}
+/* The accessibility widget's "pause animations": the visitor asked for the site
+   not to move. The component also skips the show on seeing this class. */
+html.a11y-motion-off .intro{display:none!important}
+@media print{.intro{display:none!important}}
+/* ===== <<< PORT css ====================================================== */
+</style>
+
+<!-- The page the intro lifts off of: Sarcafe's portal hero, same structure. -->
+<div class="public-backdrop">
+  <main id="main" tabindex="-1">
+    <section class="hero">
+      <button type="button" class="portal-hero-mark" aria-label="Sarcafe"><span class="logo-badge"><img src="__LOGO_SRC__" alt="" width="86" height="86"></span></button>
+      <section class="panel">
+        <div class="rise" style="animation-delay:80ms">
+          <p class="eyebrow" data-t="eyebrow"></p>
+          <h1 data-t="welcome"></h1>
+          <p class="sub" data-t="choose"></p>
+        </div>
+        <div class="branches">
+          <button type="button" class="branch rise" style="animation-delay:160ms"><b data-t="b1"></b><small data-t="open"></small></button>
+          <button type="button" class="branch rise" style="animation-delay:230ms"><b data-t="b2"></b><small data-t="open"></small></button>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<!-- The STANDBY frame — exactly what the server renders: a dark screen and a dim
+     badge, static, no animation. Everything else is added by the runtime. -->
+<div class="intro" id="intro" aria-hidden="true">
+  <div class="intro-stage">
+    <div class="intro-halo"></div>
+    <div class="intro-coin">
+      <div class="intro-badge">
+        <img src="__LOGO_SRC__" alt="" width="224" height="224" draggable="false">
+        <span class="intro-glint"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict'
+var CFG = window.__INTRO_CFG__ || {}
+
+/* ===== >>> PORT config -> src/lib/intro/config.ts (pure, no DOM) ========== */
+
+// Where it plays: the portal home only. NOT /menu/* (a table's QR code or NFC
+// chip lands there and wants the menu now), NOT /order (a customer tracking an
+// order), and NOT any staff/owner area (refreshed dozens of times a shift).
+var INTRO_PATHS = ['/']
+
+// The longest the whole show may take, from lit to gone. The harness holds every
+// language and copy option to it.
+var INTRO_BUDGET_MS = { repeat: 3000, first: 5500 }
+
+// SHORT version — every load after the first. About three seconds. These
+// numbers are Ayeka's approved ones and are to be PINNED by the harness once the
+// owner signs off, so a later tweak to the welcome can never lengthen the one
+// people see every day.
+var REPEAT = {
+  litMs: 900,
+  rule: { atMs: 200, ms: 460 },
+  glint: { atMs: 420, ms: 950 },
+  line1: { atMs: 150, stepMs: 55, wordMs: 560 },
+  line2: { atMs: 640, stepMs: 32, wordMs: 520 },
+  hint: { atMs: 1100, ms: 600 },
+  holdMs: 650,
+  exit: { delayMs: 100, ms: 560, stageMs: 520, passAtMs: 280 },
+  lights: { atMs: 0, ms: 0 }, bulbMs: 0, steamMs: 0   // welcome only
+}
+// WELCOME — about five seconds, once per device. The same two lines given room,
+// plus the two things only this version has: the string lights and the steam.
+var FIRST = {
+  litMs: 1500,
+  rule: { atMs: 900, ms: 600 },
+  glint: { atMs: 700, ms: 1300 },
+  line1: { atMs: 1000, stepMs: 95, wordMs: 760 },
+  line2: { atMs: 2000, stepMs: 52, wordMs: 660 },
+  hint: { atMs: 1500, ms: 700 },
+  holdMs: 1200,
+  exit: { delayMs: 120, ms: 700, stageMs: 640, passAtMs: 340 },
+  lights: { atMs: 100, ms: 450 },   // the wire and the unlit bulbs fade in
+  bulbMs: 650,                      // one bulb warming up
+  steamMs: 2200                     // one wisp's rise (scaled per wisp by its --v)
+}
+var INTRO_TIMINGS = { first: FIRST, repeat: REPEAT }
+var INTRO_SKIP_MS = 260
+var INTRO_SETTLE = { quietMs: 90, maxMs: 450 }
+var INTRO_FAILSAFE_MS = 4000
+
+// The string lights: two swags meeting at the centre top (the way the lights in
+// the illustration converge on the cart's sign), five bulbs each. y is a
+// fraction of the lights box; bulbs hang from the wire. They catch in a
+// scattered order, not a sweep: bulbs, not a progress bar.
+var LIGHTS = { y0: 0.08, sag: 0.6, perSwag: 5, from: 300, step: 120, rank: [6, 2, 8, 0, 5, 9, 3, 7, 1, 4] }
+var INTRO_BULBS = (function () {
+  var out = []
+  for (var s = 0; s < 2; s++) for (var k = 1; k <= LIGHTS.perSwag; k++) {
+    var u = k / (LIGHTS.perSwag + 1), i = s * LIGHTS.perSwag + (k - 1)
+    out.push({ x: (s + u) / 2, y: LIGHTS.y0 + LIGHTS.sag * 4 * u * (1 - u), atMs: LIGHTS.from + LIGHTS.rank[i] * LIGHTS.step })
+  }
+  return out
+})()
+// The wire is the same parabola the bulbs sit on, as two quadratic Béziers.
+var INTRO_WIRE_D = (function () {
+  var y0 = LIGHTS.y0 * 100, yc = (LIGHTS.y0 + 2 * LIGHTS.sag) * 100
+  return 'M0 ' + y0 + ' Q25 ' + yc + ' 50 ' + y0 + ' Q75 ' + yc + ' 100 ' + y0
+})()
+// Steam: x in coin-lengths from the badge's centre, h its height in coin-lengths,
+// v a per-wisp speed so they never move in unison.
+var INTRO_WISPS = [
+  { x: -0.17, h: 0.50, atMs: 350,  v: 1.00, d: 'M20 120 C 6 104, 34 90, 20 70 S 6 30, 20 0' },
+  { x:  0.02, h: 0.62, atMs: 750,  v: 1.10, d: 'M20 120 C 34 102, 8 86, 21 64 S 33 26, 20 0' },
+  { x:  0.18, h: 0.46, atMs: 1150, v: 0.95, d: 'M20 120 C 8 106, 30 92, 22 72 S 8 34, 20 0' }
+]
+// The portal's own entrance finished long ago, under the overlay. As the overlay
+// lifts, play it again on what is on screen. Sarcafe names those elements by
+// class (.rise, .portal-hero-mark) where Ayeka's are matched by inline style.
+var INTRO_REPLAY = { selector: '#main .rise, #main .portal-hero-mark', atMs: 140, stepMs: 70, durationMs: 560, risepx: 16 }
+
+function pickVariant(i) {
+  if (i.forced === 'first' || i.forced === 'repeat') return { variant: i.forced, preview: true }
+  if (!i.canRemember || i.seen) return { variant: 'repeat', preview: false }
+  return { variant: 'first', preview: false }
+}
+function planTimeline(words1, words2, variant) {
+  var t = INTRO_TIMINGS[variant || 'repeat']
+  var end = function (line, n) { return line.atMs + Math.max(0, n - 1) * line.stepMs + line.wordMs }
+  var textEndMs = Math.max(end(t.line1, words1), end(t.line2, words2))
+  var exitAtMs = textEndMs + t.holdMs
+  return { textEndMs: textEndMs, exitAtMs: exitAtMs, doneAtMs: exitAtMs + t.exit.delayMs + t.exit.ms + 40 }
+}
+// The last moment any bulb or wisp is still moving (welcome only), for the
+// harness to hold against the exit.
+function extrasEndMs(variant) {
+  if (variant !== 'first') return 0
+  var t = INTRO_TIMINGS.first
+  var bulbs = INTRO_BULBS.reduce(function (m, b) { return Math.max(m, b.atMs + t.bulbMs) }, 0)
+  var steam = INTRO_WISPS.reduce(function (m, w) { return Math.max(m, w.atMs + Math.round(t.steamMs * w.v)) }, 0)
+  return Math.max(bulbs, steam)
+}
+function introCssVars(variant) {
+  var t = INTRO_TIMINGS[variant || 'repeat'], ms = function (n) { return n + 'ms' }
+  return {
+    '--intro-lit': ms(t.litMs),
+    '--intro-lights-at': ms(t.lights.atMs), '--intro-lights': ms(t.lights.ms),
+    '--intro-bulb': ms(t.bulbMs), '--intro-steam': ms(t.steamMs),
+    '--intro-rule-at': ms(t.rule.atMs), '--intro-rule': ms(t.rule.ms),
+    '--intro-glint-at': ms(t.glint.atMs), '--intro-glint': ms(t.glint.ms),
+    '--intro-l1-at': ms(t.line1.atMs), '--intro-l1-step': ms(t.line1.stepMs), '--intro-w1': ms(t.line1.wordMs),
+    '--intro-l2-at': ms(t.line2.atMs), '--intro-l2-step': ms(t.line2.stepMs), '--intro-w2': ms(t.line2.wordMs),
+    '--intro-hint-at': ms(t.hint.atMs), '--intro-hint': ms(t.hint.ms),
+    '--intro-exit-delay': ms(t.exit.delayMs), '--intro-exit': ms(t.exit.ms), '--intro-stage-exit': ms(t.exit.stageMs),
+    '--intro-skip': ms(INTRO_SKIP_MS), '--intro-failsafe': ms(INTRO_FAILSAFE_MS)
+  }
+}
+/* ===== <<< PORT config ==================================================== */
+
+/* ===== >>> PORT copy -> src/lib/intro/copy.ts ============================== */
+// `*word*` marks the one word of the headline that glows amber; splitLine()
+// strips the markers. HEBREW HERE IS A PROPOSAL, not the owner's words: on
+// Ayeka the owner wrote the Hebrew and the harness pins it verbatim. Once the
+// owner picks and edits one of these, that wording is what gets pinned. English
+// and Arabic are my translations: worth a read by a native speaker.
+//
+// A ties to the tagline on the logo ("What everyone wants") and keeps Ayeka's
+// shape: a question, then an invitation.  B is shorter and warmer.  C is quieter.
+var INTRO_COPY_OPTIONS = {
+  A: {
+    he: { line1: 'מוכנים לקפה ש*כולם* רוצים?', line2: 'בואו לשתות משהו טוב, לנשנש ולהישאר עוד קצת.', skip: 'הקישו כדי לדלג' },
+    en: { line1: 'Ready for the coffee *everyone* wants?', line2: 'Come for a good drink and a bite, and stay a while.', skip: 'Tap to skip' },
+    ar: { line1: 'جاهزون للقهوة التي يريدها *الجميع*؟', line2: 'تعالوا لتشربوا شيئاً لذيذاً، وتتناولوا لقمة، وتبقوا قليلاً.', skip: 'انقر للتخطي' }
+  },
+  B: {
+    he: { line1: '*הקפה* שלכם כבר מחכה.', line2: 'בואו, נכין לכם משהו טוב.', skip: 'הקישו כדי לדלג' },
+    en: { line1: 'Your *coffee* is already waiting.', line2: "Come on over, we'll make you something good.", skip: 'Tap to skip' },
+    ar: { line1: '*قهوتكم* بانتظاركم.', line2: 'تعالوا، سنحضّر لكم شيئاً لذيذاً.', skip: 'انقر للتخطي' }
+  },
+  C: {
+    he: { line1: 'זמן ל*הפסקה*?', line2: 'קפה טוב, אנשים טובים, ובלי למהר.', skip: 'הקישו כדי לדלג' },
+    en: { line1: 'Time for a *break*?', line2: 'Good coffee, good people, no rush.', skip: 'Tap to skip' },
+    ar: { line1: 'حان وقت *الاستراحة*؟', line2: 'قهوة طيبة، ناس طيبون، وبلا استعجال.', skip: 'انقر للتخطي' }
+  }
+}
+function splitLine(line) {
+  return line.split(/\s+/).filter(function (w) { return w.length > 0 })
+    .map(function (w) { return { text: w.replace(/\*/g, ''), hl: w.indexOf('*') !== -1 } })
+    .filter(function (w) { return w.text.length > 0 })
+}
+/* ===== <<< PORT copy ====================================================== */
+
+/* ===== >>> PORT runtime -> src/components/intro/Intro.tsx =================== */
+// In the app this is a React component with the same stages; here it is the
+// same logic imperatively. Standby is what the server renders; LIT is the show
+// (every delay counts from it); OUT/SKIP is leaving. Attributes are only ever
+// ADDED (BLUEPRINT §4.14c). The marker, the settle, the failsafe, the skip
+// rules and the ghost-click guard are Ayeka's, unchanged.
+var SVG_NS = 'http://www.w3.org/2000/svg'
+var EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
+var IGNORED_KEYS = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock', 'ContextMenu', 'Dead', 'Unidentified', '']
+var html = document.documentElement
+var root = document.getElementById('intro')
+var stage = root.querySelector('.intro-stage')
+var coinEl = root.querySelector('.intro-coin')
+var timers = []
+var leaving = null
+var timing = INTRO_TIMINGS.repeat
+var stopSettle = function () {}
+var finished = false
+
+function later(fn, ms) { timers.push(window.setTimeout(fn, ms)) }
+function el(tag, cls, attrs, ns) {
+  var e = ns ? document.createElementNS(ns, tag) : document.createElement(tag)
+  if (cls) e.setAttribute('class', cls)
+  for (var k in (attrs || {})) e.setAttribute(k, attrs[k])
+  return e
+}
+function applyVars(variant) {
+  var v = introCssVars(variant)
+  root.style.cssText = Object.keys(v).map(function (k) { return k + ':' + v[k] }).join(';')
+}
+function buildWords(line) {
+  var frag = document.createDocumentFragment(), words = splitLine(line)
+  words.forEach(function (w, i) {
+    var s = el('span', w.hl ? 'intro-w hl' : 'intro-w')
+    s.style.setProperty('--i', i); s.textContent = w.text
+    frag.appendChild(s)
+    if (i < words.length - 1) frag.appendChild(document.createTextNode(' '))
+  })
+  return frag
+}
+function buildLights() {
+  var wrap = el('div', 'intro-lights')
+  var svg = el('svg', 'intro-wire', { viewBox: '0 0 100 100', preserveAspectRatio: 'none' }, SVG_NS)
+  svg.appendChild(el('path', null, { d: INTRO_WIRE_D }, SVG_NS))
+  wrap.appendChild(svg)
+  INTRO_BULBS.forEach(function (b) {
+    var i = el('i', 'intro-bulb')
+    i.style.cssText = '--x:' + b.x + ';--y:' + b.y + ';--at:' + b.atMs + 'ms'
+    i.appendChild(el('b'))
+    wrap.appendChild(i)
+  })
+  return wrap
+}
+function buildSteam() {
+  var wrap = el('div', 'intro-steam')
+  INTRO_WISPS.forEach(function (w) {
+    var s = el('svg', 'intro-wisp', { viewBox: '0 0 40 120', preserveAspectRatio: 'none' }, SVG_NS)
+    s.style.cssText = '--x:' + w.x + ';--h:' + w.h + ';--at:' + w.atMs + 'ms;--v:' + w.v
+    s.appendChild(el('path', null, { d: w.d }, SVG_NS))
+    wrap.appendChild(s)
+  })
+  return wrap
+}
+function buildCopy(c, lang) {
+  var dir = lang === 'en' ? 'ltr' : 'rtl'
+  var copy = el('div', 'intro-copy', { lang: lang, dir: dir })
+  copy.appendChild(el('span', 'intro-rule'))
+  var p1 = el('p', 'intro-line intro-l1'); p1.appendChild(buildWords(c.line1))
+  var p2 = el('p', 'intro-line intro-l2'); p2.appendChild(buildWords(c.line2))
+  copy.appendChild(p1); copy.appendChild(p2)
+  var hint = el('p', 'intro-hint', { lang: lang, dir: dir }); hint.textContent = c.skip
+  return [copy, hint]
+}
+function finish() {
+  if (finished) return
+  finished = true
+  stopSettle()
+  timers.forEach(function (t) { window.clearTimeout(t) })
+  window.removeEventListener('keydown', onKey)
+  window.removeEventListener('wheel', skip)
+  html.classList.remove('intro-lock')
+  if (root.parentNode) root.parentNode.removeChild(root)
+  post('done')
+}
+function leave(how) {
+  if (leaving) return
+  leaving = how
+  stopSettle()
+  root.setAttribute(how === 'out' ? 'data-out' : 'data-skip', '')
+  if (how === 'out') {
+    replayPage()
+    later(function () { root.setAttribute('data-pass', '') }, timing.exit.passAtMs)
+    later(finish, timing.exit.delayMs + timing.exit.ms + 40)
+  } else {
+    later(finish, INTRO_SKIP_MS + 40)
+  }
+}
+function skip() { leave('skip') }
+function onKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey || IGNORED_KEYS.indexOf(e.key) !== -1) return
+  skip()
+}
+// Calls cb once <html lang> and <html class> have stopped changing for quietMs
+// (or after maxMs regardless): the language switcher and the accessibility
+// widget each write one of them from their own post-hydration effect.
+function whenSettled(quietMs, maxMs, cb) {
+  var quiet = 0, cap = 0, done = false
+  var stop = function () { done = true; window.clearTimeout(quiet); window.clearTimeout(cap); observer.disconnect() }
+  var fire = function () { if (done) return; stop(); cb() }
+  var observer = new MutationObserver(function () { window.clearTimeout(quiet); quiet = window.setTimeout(fire, quietMs) })
+  observer.observe(html, { attributes: true, attributeFilter: ['lang', 'class'] })
+  quiet = window.setTimeout(fire, quietMs)
+  cap = window.setTimeout(fire, maxMs)
+  return stop
+}
+function replayPage() {
+  if (CFG.motion === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  var viewport = window.innerHeight, n = 0
+  Array.prototype.forEach.call(document.querySelectorAll(INTRO_REPLAY.selector), function (e) {
+    if (typeof e.animate !== 'function') return
+    var r = e.getBoundingClientRect()
+    if (r.bottom <= 0 || r.top >= viewport) return
+    e.animate(
+      [{ opacity: 0, transform: 'translateY(' + INTRO_REPLAY.risepx + 'px)' }, { opacity: 1, transform: 'none' }],
+      { duration: INTRO_REPLAY.durationMs, delay: INTRO_REPLAY.atMs + n * INTRO_REPLAY.stepMs, easing: EASE, fill: 'backwards' }
+    )
+    n++
+  })
+}
+function post(type, extra) {
+  try { parent.postMessage(Object.assign({ source: 'sarcafe-intro', runId: CFG.runId, type: type }, extra || {}), '*') } catch (e) {}
+}
+
+// Decorative text on the page beneath (the mock portal). Not part of the intro.
+var PAGE_T = {
+  he: { eyebrow: 'פורטל קפה', welcome: 'ברוכים הבאים ל־Sarcafe', choose: 'בחרו סניף כדי להמשיך.', b1: 'גבעת חביבה', b2: 'מאור', open: 'פתוח עכשיו' },
+  en: { eyebrow: 'Coffee truck portal', welcome: 'Welcome to Sarcafe', choose: 'Choose your branch to continue.', b1: 'Givat Haviva', b2: 'Maor', open: 'Open now' },
+  ar: { eyebrow: 'بوابة عربة القهوة', welcome: 'أهلاً بكم في Sarcafe', choose: 'اختاروا الفرع للمتابعة.', b1: 'גבעת חביבה', b2: 'מאור', open: 'مفتوح الآن' }
+}
+Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (n) { n.textContent = (PAGE_T[CFG.lang] || PAGE_T.he)[n.getAttribute('data-t')] })
+
+// ---- start ----
+applyVars('repeat')   // the server renders the short one's variables
+var shown = getComputedStyle(root)
+if (shown.visibility === 'hidden' || shown.display === 'none' || (!CFG.ignoreHidden && document.visibilityState === 'hidden')) {
+  finish()
+} else {
+  root.setAttribute('data-armed', '')
+  html.classList.add('intro-lock')
+  root.addEventListener('pointerdown', skip)
+  window.addEventListener('keydown', onKey)
+  window.addEventListener('wheel', skip, { passive: true })
+  stopSettle = whenSettled(INTRO_SETTLE.quietMs, INTRO_SETTLE.maxMs, function () {
+    if (leaving) return
+    if (html.classList.contains('a11y-motion-off')) { finish(); return }
+    var raw = html.lang, lang = raw === 'en' || raw === 'ar' ? raw : 'he'
+    // Preview: the version is always forced (?intro=first|repeat on the real site).
+    var v = pickVariant({ forced: CFG.variant, seen: false, canRemember: false }).variant
+    timing = INTRO_TIMINGS[v]
+    var c = INTRO_COPY_OPTIONS[CFG.copy || 'A'][lang]
+    var plan = planTimeline(splitLine(c.line1).length, splitLine(c.line2).length, v)
+    // One commit: the version's variables, its extras, the words, and the
+    // attribute that starts every animation.
+    applyVars(v)
+    root.setAttribute('data-variant', v)
+    if (v === 'first') { stage.insertBefore(buildLights(), coinEl); stage.insertBefore(buildSteam(), coinEl) }
+    buildCopy(c, lang).forEach(function (n) { stage.appendChild(n) })
+    root.setAttribute('data-lit', '')
+    later(function () { leave('out') }, plan.exitAtMs)
+    post('plan', { variant: v, lang: lang, plan: plan, budget: INTRO_BUDGET_MS[v], extrasEnd: extrasEndMs(v) })
+  })
+}
+/* ===== <<< PORT runtime =================================================== */
+
+// ---- QA hooks (preview only): deterministic frames and the budget table ----
+window.__introQA = {
+  freeze: function (ms) {
+    timers.forEach(function (t) { window.clearTimeout(t) }); stopSettle()
+    document.getAnimations().forEach(function (a) { try { a.pause(); a.currentTime = ms } catch (e) {} })
+  },
+  budgetTable: function () {
+    var rows = []
+    Object.keys(INTRO_COPY_OPTIONS).forEach(function (o) {
+      ['he', 'en', 'ar'].forEach(function (l) {
+        ['first', 'repeat'].forEach(function (v) {
+          var c = INTRO_COPY_OPTIONS[o][l], p = planTimeline(splitLine(c.line1).length, splitLine(c.line2).length, v)
+          rows.push({ copy: o, lang: l, variant: v, w1: splitLine(c.line1).length, w2: splitLine(c.line2).length, textEnd: p.textEndMs, exitAt: p.exitAtMs, done: p.doneAtMs, budget: INTRO_BUDGET_MS[v], inBudget: p.doneAtMs <= INTRO_BUDGET_MS[v], extrasEnd: extrasEndMs(v), extrasBeforeExit: extrasEndMs(v) <= p.exitAtMs })
+        })
+      })
+    })
+    return rows
+  },
+  geometry: function () { return { bulbs: INTRO_BULBS, wisps: INTRO_WISPS, wire: INTRO_WIRE_D } },
+  // The variables a server render writes into the standby markup (the preview
+  // sets them from script instead), so the pure-CSS failsafe can be tested alone.
+  cssVars: function (v) { return introCssVars(v) }
+}
+})()
+</script>
+</template>
+
+<script>
+/* ===== the review shell's script (preview only) ===== */
+var ASSETS = { logo: '__LOGO__', bg: '__BG__', bgWide: '__BGWIDE__' }
+var SIZES = { phone: [390, 844], landscape: [844, 390], desktop: [1440, 900] }
+var GROUPS = [
+  { key: 'variant', opts: [['first', 'Welcome', 'First visit on a device, about 5 s'], ['repeat', 'Short', 'Every load after that, about 3 s']] },
+  { key: 'lang', opts: [['he', 'עברית', ''], ['en', 'English', ''], ['ar', 'العربية', '']] },
+  { key: 'copy', opts: [['A', 'A', 'What everyone wants'], ['B', 'B', 'Your coffee is waiting'], ['C', 'C', 'Time for a break']] },
+  { key: 'device', opts: [['phone', 'Phone', ''], ['landscape', 'Landscape', ''], ['desktop', 'Desktop', '']] },
+  { key: 'motion', opts: [['normal', 'Normal', ''], ['reduced', 'Reduced', 'Emulates prefers-reduced-motion: the intro still plays, as fades']] }
+]
+var narrow = window.innerWidth <= 640
+var state = { variant: 'first', lang: 'he', copy: 'A', device: narrow ? 'fill' : 'phone', motion: 'normal' }
+// A state can be linked to: ?variant=first|repeat&lang=he|en|ar&copy=A|B|C&device=phone|landscape|desktop&motion=normal|reduced
+// ?freeze=1900 additionally stops every animation at that millisecond of the show (for stills).
+;(function () {
+  var q = new URLSearchParams(location.search)
+  GROUPS.forEach(function (g) {
+    var v = q.get(g.key)
+    if (v && g.opts.some(function (o) { return o[0] === v }) && !(g.key === 'device' && narrow)) state[g.key] = v
+  })
+  if (q.get('device') === 'fill') state.device = 'fill'   // unlisted: the frame takes the whole stage (a real-size look at any window)
+})()
+var freezeMs = Number(new URLSearchParams(location.search).get('freeze')) || 0
+var runId = 0
+var els = { frame: document.getElementById('frame'), device: document.getElementById('device'), screen: document.getElementById('screen'), stage: document.getElementById('stage'), readout: document.getElementById('readout'), tpl: document.getElementById('frame-tpl') }
+var lastPlan = null
+
+function buildGroups() {
+  GROUPS.forEach(function (g) {
+    if (g.key === 'device' && narrow) { document.getElementById('g-device').parentNode.style.display = 'none'; return }
+    var host = document.getElementById('g-' + g.key)
+    host.innerHTML = ''
+    g.opts.forEach(function (o) {
+      var b = document.createElement('button')
+      b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.k = g.key; b.dataset.v = o[0]; b.textContent = o[1]
+      if (o[2]) b.title = o[2]
+      if (g.key === 'lang') b.lang = o[0]
+      b.setAttribute('aria-checked', String(state[g.key] === o[0]))
+      b.addEventListener('click', function () {
+        state[g.key] = o[0]
+        Array.prototype.forEach.call(host.children, function (c) { c.setAttribute('aria-checked', String(c.dataset.v === o[0])) })
+        if (g.key === 'device') layout()
+        play()
+      })
+      host.appendChild(b)
+    })
+  })
+}
+
+function srcdoc(cfg) {
+  var dir = cfg.lang === 'en' ? 'ltr' : 'rtl'
+  var body = els.tpl.innerHTML.split('__LOGO_SRC__').join(ASSETS.logo)
+  // Emulate prefers-reduced-motion inside the frame: the real rules are written
+  // as @media (prefers-reduced-motion: reduce), so the emulation just makes that
+  // query unconditional.
+  if (cfg.motion === 'reduced') body = body.split('@media (prefers-reduced-motion: reduce)').join('@media all')
+  var grad = 'linear-gradient(180deg,rgba(21,15,12,.55) 0%,rgba(21,15,12,.72) 45%,#150f0c 92%),radial-gradient(circle at 50% 0%,rgba(21,15,12,.2),transparent 55%)'
+  var backdrop = '<style>.public-backdrop{background-image:' + grad + ',url("' + ASSETS.bg + '");background-position:0 0,0 0,center 25%;background-size:auto,auto,cover;background-repeat:no-repeat;background-attachment:fixed,fixed,fixed;background-color:#150f0c}' +
+    '@media (min-width:900px){.public-backdrop{background-image:' + grad + ',url("' + ASSETS.bgWide + '");background-position:0 0,0 0,center 40%}}</style>'
+  var fonts = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap">'
+  return '<!doctype html><html lang="' + cfg.lang + '" dir="' + dir + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark"><title>Sarcafe</title>' + fonts + backdrop + '</head><body><script>window.__INTRO_CFG__=' + JSON.stringify(cfg) + '<\/script>' + body + '</body></html>'
+}
+
+function layout() {
+  var d = state.device
+  var box = els.stage.getBoundingClientRect()
+  var pad = d === 'fill' ? 0 : (d === 'desktop' ? 0 : 10)
+  var availW = box.width - (d === 'fill' ? 0 : 32), availH = box.height - (d === 'fill' ? 0 : 32)
+  var W, H, s
+  if (d === 'fill') { W = Math.floor(availW); H = Math.floor(availH); s = 1 }
+  else { W = SIZES[d][0]; H = SIZES[d][1]; s = Math.min(1, (availW - pad * 2) / W, (availH - pad * 2) / H) }
+  els.device.dataset.d = d
+  els.screen.style.width = Math.round(W * s) + 'px'
+  els.screen.style.height = Math.round(H * s) + 'px'
+  els.frame.style.width = W + 'px'
+  els.frame.style.height = H + 'px'
+  els.frame.style.transform = 'scale(' + s + ')'
+}
+
+function play() {
+  runId++
+  lastPlan = null
+  els.readout.textContent = 'Playing…'
+  var cfg = { runId: runId, variant: state.variant, lang: state.lang, copy: state.copy, motion: state.motion, ignoreHidden: true }
+  els.frame.srcdoc = srcdoc(cfg)
+}
+
+function fmt(ms) { return (ms / 1000).toFixed(1) + ' s' }
+window.addEventListener('message', function (e) {
+  var m = e.data
+  if (!m || m.source !== 'sarcafe-intro' || m.runId !== runId) return
+  if (m.type === 'plan') {
+    lastPlan = m
+    if (freezeMs) window.setTimeout(function () { try { els.frame.contentWindow.__introQA.freeze(freezeMs) } catch (err) {} }, 30)
+    var ok = m.plan.doneAtMs <= m.budget
+    els.readout.innerHTML = '<b>' + (m.variant === 'first' ? 'Welcome' : 'Short') + '</b>' +
+      '<span>plays about <b>' + fmt(m.plan.doneAtMs) + '</b> from the moment the lamp lights</span>' +
+      '<span class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓ within' : '✗ over') + ' its ' + fmt(m.budget) + ' budget</span>' +
+      (m.variant === 'first' ? '<span class="' + (m.extrasEnd <= m.plan.exitAtMs ? 'ok' : 'bad') + '">' + (m.extrasEnd <= m.plan.exitAtMs ? '✓ lights and steam finish before the exit' : '✗ extras run into the exit') + '</span>' : '') +
+      '<span>tap, any key or scroll skips it</span>'
+  } else if (m.type === 'done') {
+    var base = els.readout.innerHTML
+    if (lastPlan && base.indexOf('finished') === -1) els.readout.innerHTML = base + '<span>· finished. Press Replay or R to watch again</span>'
+  }
+})
+
+document.getElementById('replay').addEventListener('click', play)
+window.addEventListener('keydown', function (e) { if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) play() })
+var rz = 0
+window.addEventListener('resize', function () { window.clearTimeout(rz); rz = window.setTimeout(layout, 60) })
+
+buildGroups()
+layout()
+play()
+</script>
+</body>
+</html>

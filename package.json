@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check:schedule": "node scripts/check-schedule.mjs",
+    "check:intro": "node scripts/check-intro.mjs",
     "verify:schedule-sql": "node scripts/verify-schedule-sql.mjs",
     "verify:checklist-sql": "node scripts/verify-checklist-sql.mjs",
     "verify:onboarding-sql": "node scripts/verify-onboarding-sql.mjs",

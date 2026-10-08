@@ -3,7 +3,10 @@ import {
   CUSTOMER_FEEDBACK_ENABLED_KEY,
   DEFAULT_CUSTOMER_FEEDBACK_ENABLED,
   DEFAULT_MENU_CART_ENABLED,
+  INTRO_ENABLED_KEY,
+  DEFAULT_INTRO_ENABLED,
 } from '@/lib/settings/keys'
+import { normalizeIntroEnabled } from '@/lib/intro/config'
 
 /**
  * Reads one app_settings row via the Supabase REST endpoint directly
@@ -50,4 +53,12 @@ export async function getCustomerFeedbackEnabled(): Promise<boolean> {
  *  as a stub for exactly this feature — nothing read it until now. */
 export async function getMenuCartEnabled(): Promise<boolean> {
   return readSetting('menu_cart_enabled', DEFAULT_MENU_CART_ENABLED)
+}
+
+/** Does the portal play its intro? Read by the root layout on EVERY page render
+ *  (through components/intro/IntroGate, which also time-boxes it), so it must
+ *  stay cheap: it is the same tagged, cached fetch as every other switch here.
+ *  See INTRO_ENABLED_KEY for why it defaults to ON and fails open. */
+export async function getIntroEnabled(): Promise<boolean> {
+  return normalizeIntroEnabled(await readSetting<unknown>(INTRO_ENABLED_KEY, DEFAULT_INTRO_ENABLED))
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import PageTransitions from '@/components/PageTransitions'
+import IntroGate from '@/components/intro/IntroGate'
 import { A11yWidget } from 'a11y-widget'
 import './globals.css'
 
@@ -57,6 +58,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             preferences. See github.com/unixecho/a11y-widget's README
             ("Integration contract"). */}
         <div id="a11y-scope">{children}</div>
+        {/* The portal's opening screen (docs/SARCAFE_INTRO.md). A sibling of
+            #a11y-scope and never inside it: the widget's contrast/grayscale
+            `filter` there would become the containing block for the overlay's
+            `position: fixed` and size it to the page instead of the screen.
+            <IntroGate> is the owner's on/off (/owner/intro) and decides on the
+            server whether the overlay exists at all, so there is no dark flash
+            for an owner who turned it off. It sits one notch under the a11y
+            widget below (z-index), so it can never hide the way into it. */}
+        <IntroGate />
         {/* The shared accessibility widget (github.com/unixecho/a11y-widget)
             — extracted 2026-09-24 from this file's own former in-house build
             (src/components/a11y, src/lib/a11y) once this copy had already

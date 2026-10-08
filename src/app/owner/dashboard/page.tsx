@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { Beaker, ClipboardCheck, ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt, ShoppingBag, ShieldCheck } from 'lucide-react'
+import { Beaker, ClipboardCheck, ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt, ShoppingBag, ShieldCheck, Sparkles } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardLive from '@/components/DashboardLive'
@@ -74,6 +74,7 @@ export default async function OwnerDashboardPage() {
       { href: '/owner/feedback', icon: MessageCircle, label: 'משוב מלקוחות', description: 'הודעות והצעות לשיפור' },
       { href: '/owner/links', icon: Link2, label: 'קישורים ושיתוף', description: 'הפורטל, תפריטים וקודי QR' },
       { href: '/owner/audit', icon: History, label: 'יומן פעילות', description: 'שינויים שבוצעו במערכת' },
+      { href: '/owner/intro', icon: Sparkles, label: 'מסך פתיחה', description: 'הדלקה וכיבוי, והשורות שמופיעות' },
       { href: '/owner/accessibility', icon: Accessibility, label: 'נגישות', description: 'הצהרת הנגישות של העסק' },
     ] },
   ]
