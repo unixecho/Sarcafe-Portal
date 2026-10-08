@@ -24,6 +24,7 @@ import { flushSync } from 'react-dom'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { runLocalTransition } from '@/lib/nav/viewTransition'
 import { createClient } from '@/lib/supabase/client'
+import { readPos } from '@/lib/pos/read-client'
 import { EVENT_COLUMNS, ITEM_COLUMNS, ORDER_EMBED } from '@/lib/pos/columns'
 import { describeEvent } from '@/lib/pos/events'
 import { lineSummary, ticketLabel, timeLabel } from '@/lib/pos/format'
@@ -61,7 +62,7 @@ function group(rows: Row[]): Group[] {
 export default function TimelineView({ pointId, onBack }: { pointId: string; onBack: () => void }) {
   const t = useT()
   const [lang] = usePosLang()
-  const { me, session, pointsById } = usePos()
+  const { me, branchId, session, pointsById } = usePos()
   const key = useRefreshKey()
   const sessionId = session?.id ?? null
   const point = pointsById.get(pointId)
@@ -78,7 +79,7 @@ export default function TimelineView({ pointId, onBack }: { pointId: string; onB
     if (!sessionId) return
     let cancelled = false
     void (async () => {
-      const { data, error } = await createClient()
+      const { data, error } = me.codeOnly ? await readPos<Row[]>({ kind: 'point_history', branch: branchId, session: sessionId, point: pointId, limit: wanted }) : await createClient()
         .from('pos_order_items')
         .select(`${ITEM_COLUMNS}, ${ORDER_EMBED}`)
         .eq('point_id', pointId)
@@ -99,7 +100,7 @@ export default function TimelineView({ pointId, onBack }: { pointId: string; onB
     return () => {
       cancelled = true
     }
-  }, [pointId, sessionId, wanted, key])
+  }, [pointId, sessionId, wanted, key, me.codeOnly, branchId])
 
   // The audit trail of the one expanded order (who marked it ready, and everything else that happened).
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function TimelineView({ pointId, onBack }: { pointId: string; onB
     }
     let cancelled = false
     void (async () => {
-      const { data, error } = await createClient()
+      const { data, error } = me.codeOnly ? await readPos<PosEvent[]>({ kind: 'order_events', branch: branchId, order: openId, direction: 'asc' }) : await createClient()
         .from('pos_events')
         .select(EVENT_COLUMNS)
         .eq('order_id', openId)
@@ -121,7 +122,7 @@ export default function TimelineView({ pointId, onBack }: { pointId: string; onB
     return () => {
       cancelled = true
     }
-  }, [openId, key])
+  }, [openId, key, me.codeOnly, branchId])
 
   const groups = useMemo(() => (rows ? group(rows) : null), [rows])
 

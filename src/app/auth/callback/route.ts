@@ -1,20 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
-import { isOp, hasAnyMenuEditAccess, isStaff } from '@/lib/staff/access'
-import { staffLandingPath } from '@/lib/pos/server/landing'
-
-// Mirrors AyekaBar's auth/callback/route.ts. One important difference:
-// Sarcafe's Google login is STAFF-ONLY. Unlike AyekaBar (where customers
-// also sign in with Google for a loyalty club), Sarcafe's customer flow is
-// intentionally account-less — a temporary order session + six-digit
-// recovery code (Phase 2/3), never Google OAuth. So a Google-authenticated
-// user with no `staff` row has no legitimate destination here at all.
+import { isOp, isStaff } from '@/lib/staff/access'
+import { revokeEmployeeSession } from '@/lib/staff/session'
+import { clearLinkCookie, GOOGLE_LINK_COOKIE, ONBOARDING_HEADERS, tokenHash } from '@/lib/staff/invitations'
+import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
 
 function safeNext(raw: string | null): string | null {
-  if (!raw) return null
-  if (!raw.startsWith('/')) return null
-  if (raw.startsWith('//')) return null
-  if (raw.includes('://')) return null
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('://') || raw.includes('\\') || /[\x00-\x1f]/.test(raw)) return null
   return raw
 }
 
@@ -22,80 +15,58 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = safeNext(searchParams.get('next'))
-
-  if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=auth`)
-  }
-
+  const linking = searchParams.has('link')
+  const redirect = (path: string) => NextResponse.redirect(`${origin}${path}`, { headers: ONBOARDING_HEADERS })
   const supabase = await createServerSupabaseClient()
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
+  const completedRedirect = async (path: string) => {
+    const response = redirect(path)
+    response.cookies.set(POS_RETURN_COOKIE, '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0 })
+    await revokeEmployeeSession(response)
+    return response
+  }
+  const failLink = async (reason = 'link_failed') => {
+    await supabase.auth.signOut({ scope: 'local' })
+    const response = redirect(`/staff/onboarding?error=${reason}`)
+    clearLinkCookie(response)
+    return response
+  }
+  if (!code) return linking ? failLink() : redirect('/login?error=auth')
+  const { data: exchanged, error } = await supabase.auth.exchangeCodeForSession(code)
+  if (error) return linking ? failLink() : redirect('/login?error=auth')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || !exchanged.session) return linking ? failLink() : redirect('/login?error=auth')
 
-  if (error) {
-    return NextResponse.redirect(`${origin}/login?error=auth`)
+  if (linking) {
+    const proof = (await cookies()).get(GOOGLE_LINK_COOKIE)?.value
+    // The URL contains only a hash. The bearer proof stays in an HttpOnly cookie;
+    // Supabase's PKCE verifier separately binds the OAuth response to this browser.
+    if (!proof || searchParams.get('link') !== tokenHash(proof) || !user.identities?.some((identity) => identity.provider === 'google')) return failLink()
+    const { data, error: linkError } = await createServiceRoleClient().rpc('staff_finish_google_link', { p_token_hash: tokenHash(proof), p_auth_user: user.id })
+    const result = data as { ok?: boolean; reason?: string } | null
+    if (linkError || !result?.ok) return failLink(result?.reason === 'account_conflict' || result?.reason === 'already_linked' ? 'account_conflict' : 'link_failed')
+    const response = await completedRedirect('/staff/onboarding?linked=1')
+    clearLinkCookie(response)
+    return response
   }
 
-  // Idempotent — links a pre-created staff invite (keyed by email) to this
-  // Google account on first sign-in. No-op if already linked or if no
-  // matching invite exists. It runs BEFORE the ?next redirect on purpose: a
-  // brand-new employee who signs in on the way to /pos would otherwise be sent
-  // there unclaimed and land on /no-access.
+  // Legacy owner-entered email invitations remain compatible. Explicit link
+  // intents above never fall back to claiming a different employee by email.
   await supabase.rpc('claim_staff_invite')
-
-  if (next) {
-    return NextResponse.redirect(`${origin}${next}`)
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    // Fails loudly and visibly (in the redirect URL, since we may not have
-    // access to Vercel's function logs) rather than silently landing on
-    // /no-access with no way to tell a missing env var from a real denial.
-    console.error('auth/callback: SUPABASE_SERVICE_ROLE_KEY is not set')
-    return NextResponse.redirect(`${origin}/no-access?reason=server_misconfigured`)
+    console.error('auth/callback: service role is not configured')
+    return redirect('/no-access?reason=server_misconfigured')
   }
-
-  // `staff` has zero SELECT policies for `authenticated` on purpose — the
-  // session-scoped `supabase` client above (subject to RLS) would always
-  // see zero rows here, which is exactly the "no staff row -> /no-access"
-  // bug this service-role read fixes.
-  const { data: staffRow, error: staffError } = user
-    ? await createServiceRoleClient()
-        .from('staff')
-        .select('role, badge, branch_id')
-        .eq('auth_user_id', user.id)
-        .eq('active', true)
-        .maybeSingle()
-    : { data: null, error: null }
-
+  const { data: staffRow, error: staffError } = await createServiceRoleClient().from('staff')
+    .select('role, badge, branch_id').eq('auth_user_id', user.id).eq('active', true).maybeSingle()
   if (staffError) {
-    console.error('auth/callback: staff lookup failed:', staffError.message)
-    // Including the actual message here (not just a generic code) since we
-    // don't have Vercel log access from this session — a Postgrest/GoTrue
-    // error message ("Invalid API key", "JWT expired", etc.) isn't
-    // sensitive, and seeing it directly beats another round trip through
-    // logs we can't reach.
-    return NextResponse.redirect(
-      `${origin}/no-access?reason=lookup_failed&detail=${encodeURIComponent(staffError.message)}`
-    )
+    console.error('auth/callback: staff lookup failed:', staffError.code)
+    return redirect('/no-access?reason=lookup_failed')
   }
-
-  if (isOp(staffRow)) {
-    return NextResponse.redirect(`${origin}/owner/dashboard`)
+  if (!isStaff(staffRow)) return completedRedirect('/no-access?reason=no_staff_row')
+  if (next) {
+    const station = next === '/pos' ? safePosReturn((await cookies()).get(POS_RETURN_COOKIE)?.value) : null
+    return completedRedirect(station ?? next)
   }
-  if (hasAnyMenuEditAccess(staffRow)) {
-    return NextResponse.redirect(`${origin}/owner/editor`)
-  }
-  if (isStaff(staffRow)) {
-    // A legitimate staff account without owner/menu-editor rights — their
-    // own shift schedule (and, if a branch delegated them as a schedule
-    // manager, /owner/schedule resolves that on its own) is a real
-    // destination now, not a placeholder. When an event they may work is live
-    // right now the POS is where they are headed instead.
-    return NextResponse.redirect(`${origin}${await staffLandingPath(staffRow)}`)
-  }
-
-  return NextResponse.redirect(`${origin}/no-access?reason=no_staff_row`)
+  if (isOp(staffRow)) return completedRedirect('/owner/dashboard')
+  return completedRedirect('/staff')
 }

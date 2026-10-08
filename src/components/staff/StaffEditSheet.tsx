@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { ChevronDown, KeyRound, Mail, Phone, Trash2, UserCheck, UserX, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import SelectSheet from '@/components/SelectSheet'
@@ -12,6 +13,7 @@ import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
 import { formatPhone } from '@/lib/pos/validate'
 import { useT } from '@/lib/pos/useT'
 import { messageOf, reasonOf, type BranchOption, type ScheduleMemberRow, type StaffDetail, type StaffRow } from '@/components/staff/types'
+import StaffInvitation from '@/components/staff/StaffInvitation'
 
 // One person, everything about them, in ONE place — with the three different
 // kinds of change kept visibly apart so nobody mixes them up:
@@ -38,6 +40,7 @@ export default function StaffEditSheet({
   onEditHandle,
   onEditEmpNo,
   onGenerateCode,
+  onSetCode,
   onClearCode,
 }: {
   row: StaffRow | null
@@ -53,6 +56,7 @@ export default function StaffEditSheet({
   onEditHandle: (row: StaffRow) => void
   onEditEmpNo: (row: StaffRow) => void
   onGenerateCode: (row: StaffRow) => void
+  onSetCode: (row: StaffRow) => void
   onClearCode: (row: StaffRow) => void
 }) {
   const t = useT()
@@ -187,7 +191,7 @@ export default function StaffEditSheet({
     onChanged(
       r.email
         ? `${name} הופעל/ה מחדש ✓ כדי להתחבר שוב — צריך להיכנס פעם אחת עם Google.`
-        : `${name} הופעל/ה מחדש ✓ (אין אימייל, ולכן אי אפשר להתחבר — אפשר להוסיף אימייל למעלה.)`
+        : `${name} הופעל/ה מחדש ✓ אפשר להיכנס עם מספר העובד והקוד האישי, ולקשר Google דרך הזמנה חדשה.`
     )
   }
 
@@ -231,7 +235,7 @@ export default function StaffEditSheet({
   }
 
   const noLogin = !r.has_google
-  const emailNote = locked ? 'מחובר/ת עם חשבון Google — אי אפשר לשנות את האימייל.' : r.email ? 'עוד לא התחבר/ה. אחרי שייכנסו עם החשבון הזה, הם יראו את הלוח שלהם.' : 'בלי אימייל אפשר לשבץ אותו/ה בלוח, אבל הם לא יוכלו להתחבר ולראות אותו.'
+  const emailNote = locked ? 'מחובר/ת עם חשבון Google — אי אפשר לשנות את האימייל.' : 'קוד אישי מאפשר כניסה לצ׳קליסטים ולאירועים. העובד/ת יכול/ה לקשר חשבון Google דרך קישור אישי.'
 
   return (
     <>
@@ -373,7 +377,7 @@ export default function StaffEditSheet({
           {r.active && (
             <section className="sch-card" aria-labelledby={`${ids}-pos`}>
               <h3 id={`${ids}-pos`} className="sch-h">
-                כניסה לקופה
+                חשבון וכניסה
               </h3>
               <div className="sch-wrapflex" style={{ alignItems: 'center' }}>
                 {r.handle != null && (
@@ -393,8 +397,11 @@ export default function StaffEditSheet({
               </div>
               <div className="sch-wrapflex" style={{ alignItems: 'center' }}>
                 <span className="sch-sub">{r.has_passcode === true ? t('owner.menu.staff.quickHas') : r.has_passcode === false ? t('owner.menu.staff.quickNone') : t('owner.menu.staff.quick')}</span>
-                <button type="button" className="sch-btn sch-btn--sm press" disabled={!r.claimed_at || quickBusy} onClick={() => onGenerateCode(r)}>
+                <button type="button" className="sch-btn sch-btn--sm press" disabled={quickBusy} onClick={() => onGenerateCode(r)}>
                   <KeyRound size={15} aria-hidden="true" /> {r.has_passcode ? t('owner.menu.staff.quickRegenerate') : t('owner.menu.staff.quickGenerate')}
+                </button>
+                <button type="button" className="sch-btn sch-btn--sm press" disabled={quickBusy} onClick={() => onSetCode(r)}>
+                  בחירת קוד ידנית
                 </button>
                 {r.has_passcode === true && (
                   <button type="button" className="sch-btn sch-btn--sm sch-btn--danger press" disabled={quickBusy} onClick={() => onClearCode(r)}>
@@ -402,9 +409,13 @@ export default function StaffEditSheet({
                   </button>
                 )}
               </div>
-              {!r.claimed_at && <p className="sch-sub">{t('owner.menu.staff.quickNeedsGoogle')}</p>}
+              {!r.claimed_at && <p className="sch-sub">אפשר להתחבר עכשיו עם מספר העובד והקוד. אימייל Google אפשר להוסיף מאוחר יותר.</p>}
+              <hr style={{ border: 0, borderTop: '1px solid var(--line)', width: '100%' }} />
+              <StaffInvitation staffId={r.id} completeProfile={!!r.first_name?.trim() && !!r.last_name?.trim() && !!r.employee_no} />
             </section>
           )}
+
+          <Link href={`/owner/staff/${r.id}`} className="sch-btn press" onClick={onClose}>תיק עובד/ת · משמרות, פעילות ותלושי שכר</Link>
 
           {/* ============================================================ history */}
           <section className="sch-wrap">

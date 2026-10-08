@@ -1,8 +1,7 @@
-// Quick login (employee number + 6-digit passcode) — the server half. Blueprint §1a.5,
-// migration 022.
+// Provenance checks for historical PIN JWTs (migration 022).
 //
-// A quick login yields a REAL Supabase session as the person, so every action,
-// every RLS policy and the realtime channel see the actual employee. Because six
+// New PIN logins use opaque staff cookies. Historical sessions still need their
+// permanent marker checked by every full-login guard. Because six
 // digits are a much weaker secret than a Google account, the session is recorded in
 // pos_quick_sessions (keyed by the JWT's own session_id) and treated as SECOND-CLASS
 // by the guards: floor work only. The client cannot lift that — the id comes from the
@@ -67,7 +66,7 @@ export async function mintQuickSession(staff: { id: string; email: string }): Pr
 
 /** Is this session id one a passcode minted? A failed read THROWS: callers fail closed. */
 export async function isQuickSessionId(sessionId: string | null): Promise<boolean> {
-  if (!sessionId) return false
+  if (!sessionId) return true
   const service = createServiceRoleClient()
   const { data, error } = await service.from('pos_quick_sessions').select('session_id').eq('session_id', sessionId).maybeSingle()
   if (error) throw new Error('quick session lookup failed')

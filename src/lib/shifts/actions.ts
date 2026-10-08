@@ -38,6 +38,8 @@ export type ScheduleAction =
   | { type: 'deleteShift'; shiftId: string }
   | { type: 'moveAssignment'; assignmentId: string; toShiftId: string }
   | { type: 'publishWeek'; weekId: string }
+  | { type: 'fillWeek'; weekId: string }
+  | { type: 'prepareWeek'; weekId: string }
   | { type: 'unpublishWeek'; weekId: string }
   | { type: 'clearWeek'; weekId: string }
   | { type: 'copyWeek'; branchId: string; fromWeekStart: ISODate; toWeekStart: ISODate }

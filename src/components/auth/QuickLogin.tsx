@@ -164,7 +164,7 @@ export function PasscodeEntry({ value, onChange, onComplete, disabled, invalid, 
   )
 }
 
-export default function QuickLogin() {
+export default function QuickLogin({ next = '/staff' }: { next?: '/pos' | '/staff' | '/staff/checklists' | '/staff/schedule' }) {
   const t = useT()
   const router = useRouter()
   const numberId = useId()
@@ -200,10 +200,11 @@ export default function QuickLogin() {
         const res = await fetch('/api/auth/quick-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeNo: no, passcode: finalCode }),
+          body: JSON.stringify({ employeeNo: no, passcode: finalCode, next }),
         })
         if (res.ok) {
-          router.replace('/pos')
+          const payload = (await res.json().catch(() => null)) as { next?: string } | null
+          router.replace(payload?.next || next)
           router.refresh()
           return
         }
@@ -218,7 +219,7 @@ export default function QuickLogin() {
       setShake((n) => n + 1)
       setBusy(false)
     },
-    [employeeNo, router, t]
+    [employeeNo, next, router, t]
   )
 
   return (

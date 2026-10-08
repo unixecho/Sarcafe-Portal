@@ -1,0 +1,21 @@
+# Employee records and private documents
+
+Implemented and migrated to production on 2026-10-08. The application bundle is awaiting its production deployment.
+
+The owner opens an employee's record from `/owner/staff`. `/owner/staff/[id]` includes published shift assignments, up to 100 recent checklist records with defect reasons, up to 100 event orders created by that employee, and uploaded payslips. `/staff/profile` shows the same employee's own history, Google linking and PIN change. Published schedule snapshots supply shift history; current drafts do not change it. The shift list is bounded to 150 assignments from the latest 104 published branch weeks. These are scheduled opportunities, not attendance or actual HYP cashier statistics. No HYP integration or wage calculation is implemented.
+
+Payslips accept PDF, PNG and JPEG up to 4 MB. The owner supplies the pay month; the server detects the format from file bytes, replaces the supplied filename, writes to private Storage, and records employee ownership. Failed metadata insertion triggers uploaded-object cleanup. There is no public document URL. Metadata grants are revoked for browser roles, and a restrictive Storage policy prevents an unrelated broad policy from exposing this bucket. A full Google session may obtain a 60-second signed download for its own employee record; a full owner may obtain one for an employee. Opaque PIN sessions and historical PIN JWTs cannot list or download payslips. Staff record, notification and document API responses—including errors—use private no-store headers.
+
+`/api/staff/notifications` provides the current employee's latest 40 updates and exact unread count. Acknowledgement is constrained by both notification IDs and the server-resolved employee UUID. Dashboard notifications refresh every 30 seconds while visible and on return to the app. Existing schedule publication, request decisions and the peer-acceptance/manager-approval swap chain create these updates atomically. No message, email, SMS or WhatsApp is sent.
+
+All new PIN logins use hashed opaque employee cookies, including employees already linked to Google. Switching employee logs out the previous browser Auth session locally and revokes the old opaque cookie. Historical floor JWTs keep their permanent provenance markers and are restricted at both application guards and browser database policies. A missing session ID fails closed for full-access classification.
+
+## Verification
+
+- `npm run check:staff-access`: 50 isolated route checks, including own versus peer documents, PIN denial, cross-origin denial, no-store errors, orphan cleanup, published history mapping and login identity switching.
+- `npm run verify:onboarding-sql`: 45 real local Postgres checks, including invitation consumption/linking, historical PIN database restrictions, private bucket settings and restrictive Storage policy behavior despite a broad permissive policy.
+- `npm run check:app-layout`: 141 synthetic-data browser checks at 320, 390, 768 and 1760 pixels; real components and compiled project CSS, Home navigation, touch targets, bounded overflow and the seven-day manager board. Requires Playwright plus a local test browser; set `PLAYWRIGHT_MODULE` and `TEST_BROWSER` if they are not available on the default paths. These checks do not substitute for authenticated production or real iOS testing.
+
+## Release and pilot
+
+The four production migrations are applied. Deploy the verified application bundle, then test one owner-created employee end to end: create/share invitation manually, employee chooses PIN, link verified Google to the same UUID, submit next-week requests before Tuesday ends in Jerusalem, owner grants choices and fills remaining places, publish, employee proposes swap, peer accepts, manager approves, and both see dashboard updates. Upload a fixture payslip, verify employee-only download and PIN denial, then delete the pilot fixture through an authorized maintenance process. Confirm Safari Add to Home Screen, standalone launch, safe-area spacing, keyboard dismissal, Back/Home and session switching on a real iPhone. Do not run an unreviewed blanket database push: the historical checklist migration's production timestamp differs from its local filename.

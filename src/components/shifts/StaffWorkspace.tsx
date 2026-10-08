@@ -19,8 +19,8 @@ type Tab = 'schedule' | 'mine' | 'availability'
 //   הלוח        my shifts (and, on "כולם", everyone's — where I can ask to join)
 //   הבקשות שלי  what colleagues asked me, what I asked, and how it turned out
 //   זמינות      the days I cannot work next week
-// Reads ONLY the published schedule (never a draft week — enforced by the server,
-// which sends nothing else), and every action explains itself before it is taken.
+// The schedule reads published snapshots; a separate minimal planning menu
+// offers shift choices before publication without draft assignments or notes.
 export default function StaffWorkspace() {
   const { db, loading, error, weekStart, setWeekStart, goToToday, refresh } = useShifts()
   const [tab, setTab] = useState<Tab>('schedule')
@@ -93,7 +93,7 @@ export default function StaffWorkspace() {
           </button>
           {db.settings.features.availability && (
             <button type="button" role="tab" aria-selected={tab === 'availability'} className="sch-tab press" onClick={() => setTab('availability')}>
-              זמינות
+              בקשות לשבוע
             </button>
           )}
         </div>

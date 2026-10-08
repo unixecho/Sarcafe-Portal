@@ -29,7 +29,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { canEditMenu, isOp, type AccessRow } from '@/lib/staff/access'
 import type { BranchLite } from '@/lib/pos/api'
 import type { PosErrorCode } from '@/lib/pos/types'
-import { isQuickSessionId, validatedSessionId } from './quick-login'
+import { resolveStaffIdentity } from '@/lib/staff/session'
 
 // ======================================================================================
 // Errors in plain language
@@ -135,7 +135,7 @@ const MAX_BODY_BYTES = 131_072 // 60 lines x 24 modifiers is a few KB; this is a
 /** A state-changing request must come from this app's own pages. SameSite=Lax
  *  cookies already stop a cross-site POST carrying the session; this is the second
  *  lock, the same one the public feedback route uses. */
-function assertSameOrigin(request: Request) {
+export function assertSameOrigin(request: Request) {
   const origin = request.headers.get('origin')
   if (!origin) return
   let originHost: string | null = null
@@ -268,7 +268,7 @@ export function rpcFailure(reason: unknown, details?: Record<string, unknown>): 
 
 export type PosStaffRow = AccessRow & {
   id: string
-  auth_user_id: string
+  auth_user_id: string | null
   email: string | null
   display_name: string | null
   handle: string
@@ -277,6 +277,10 @@ export type PosStaffRow = AccessRow & {
   colour: string | null
   /** This session was opened with employee number + passcode (migration 022): floor work only. Set by resolvePosIdentity. */
   quick?: boolean
+  /** Opaque employee session: reads use the guarded API, without a Supabase browser JWT. */
+  codeOnly?: boolean
+  /** Explicit owner-assigned stations permit floor work at these event branches. */
+  eventBranchIds?: string[]
 }
 
 const STAFF_COLUMNS = 'id, auth_user_id, role, badge, branch_id, active, email, display_name, handle, handle_set_at, colour'
@@ -289,33 +293,31 @@ const STAFF_COLUMNS = 'id, auth_user_id, role, badge, branch_id, active, email, 
  * still points at it) but resolves to nobody, exactly as in lib/staff/guard.ts.
  */
 export async function resolvePosIdentity(): Promise<{ signedIn: boolean; staff: PosStaffRow | null }> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { signedIn: false, staff: null }
-
+  const identity = await resolveStaffIdentity()
+  if (!identity) {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    return { signedIn: !!user, staff: null }
+  }
   const service = createServiceRoleClient()
-  // The quick-session lookup rides along with the staff read: one extra round trip in
-  // parallel, not in series, on the hot path of every write.
-  const [{ data, error }, quick] = await Promise.all([
-    service.from('staff').select(STAFF_COLUMNS).eq('auth_user_id', user.id).eq('active', true).maybeSingle(),
-    // A failed lookup throws -> 500. Never guess "full" when we could not tell.
-    validatedSessionId(supabase).then(isQuickSessionId).catch(() => {
-      console.error('quick session lookup failed')
-      throw posError('internal_error')
-    }),
-  ])
-  // A failed read is an outage, not "this person is nobody": answering 403 (or sending a
-  // real staff member to /no-access) over a database blip would be a confident wrong answer.
+  const { data, error } = await service.from('staff').select(STAFF_COLUMNS).eq('id', identity.id).eq('active', true).maybeSingle()
   if (error) {
     console.error('staff identity read failed:', error.code)
     throw posError('internal_error')
   }
   const row = (data as unknown as PosStaffRow | null) ?? null
-  return { signedIn: true, staff: row ? { ...row, quick } : null }
+  if (!row) return { signedIn: true, staff: null }
+  const { data: memberships, error: membershipError } = await service.from('pos_point_staff')
+    .select('pos_points!inner(branch_id, active, branches!inner(kind, active))')
+    .eq('staff_id', row.id).eq('pos_points.active', true)
+    .eq('pos_points.branches.kind', 'event').eq('pos_points.branches.active', true)
+  if (membershipError) throw posError('internal_error')
+  const eventBranchIds = [...new Set((memberships ?? []).map((membership) => {
+    const point = membership.pos_points as unknown as { branch_id: string }
+    return point.branch_id
+  }))]
+  return { signedIn: true, staff: { ...row, quick: identity.quick, codeOnly: identity.via === 'employee_code', eventBranchIds } }
 }
-
 /** Active staff, nothing more. (The nickname route and the bootstrap start here.) */
 export async function requirePosIdentity(): Promise<PosStaffRow> {
   const { signedIn, staff } = await resolvePosIdentity()
@@ -373,10 +375,10 @@ export function canManagePos(row: AccessRow | null | undefined, branchId: string
  *  branch-scoped (lib/staff/access.ts: "a true owner has full access to every
  *  branch by definition"), so an owner row that happens to carry a branch_id is not
  *  locked out of an event. */
-export function canAccessBranch(row: AccessRow | null | undefined, branchId: string): boolean {
+export function canAccessBranch(row: (AccessRow & { eventBranchIds?: string[] }) | null | undefined, branchId: string): boolean {
   if (!row) return false
   if (isOp(row)) return true
-  return row.branch_id === null || row.branch_id === undefined || row.branch_id === branchId
+  return row.branch_id === null || row.branch_id === undefined || row.branch_id === branchId || row.eventBranchIds?.includes(branchId) === true
 }
 
 /** An active branch, by slug or uuid. null when it does not exist (or is switched off). */

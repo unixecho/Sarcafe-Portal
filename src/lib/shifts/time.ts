@@ -75,6 +75,15 @@ export function weekDates(weekStart: ISODate): ISODate[] {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 }
 
+/** Upcoming Sunday's requests close after the preceding Tuesday (Jerusalem wall clock). */
+export function requestDeadline(weekStart: ISODate): ISODate {
+  return addDays(weekStartOf(weekStart), -5)
+}
+
+export function requestsOpen(weekStart: ISODate, now: WallClock): boolean {
+  return now.date <= requestDeadline(weekStart)
+}
+
 const WEEKDAY_LABELS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
 
 export function weekdayLabel(dayOfWeek: number): string {

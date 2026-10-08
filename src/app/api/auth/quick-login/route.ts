@@ -1,31 +1,31 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { apiRoute, ApiError } from '@/lib/http/errors'
-import { checkRateLimit, clientIp } from '@/lib/rate-limit'
-import { createServiceRoleClient } from '@/lib/supabase/server'
+import { checkCredentialRateLimit, clientIp, credentialFingerprint } from '@/lib/rate-limit'
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { parseBody, safeLogMessage } from '@/lib/pos/server/guard'
-import { mintQuickSession } from '@/lib/pos/server/quick-login'
+import { issueEmployeeSession, revokeEmployeeSession } from '@/lib/staff/session'
+import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
 
-// POST /api/auth/quick-login — employee number + 6-digit passcode -> a real session as
-// that person (blueprint §1a.5, migration 022). The OPTION for a shared station tablet;
-// the default way in is still the person's own Google account.
+// Employee number + six-digit PIN opens an opaque, floor-only staff session.
+// Google is optional for onboarding and required for scheduling and quick orders.
 //
 // Trust model. There is no session yet — the caller is a stranger who may be guessing —
 // so this route is built to be useless to a guesser:
 //   * same-origin JSON only, strict body (parseBody);
 //   * rate limits BEFORE any verification, per employee number AND per IP;
 //   * ONE answer, identical in status and body, for every reason a login can fail
-//     (wrong code, no such number, inactive, never signed in with Google, no code set);
+//     (wrong code, no such number, inactive, no code set);
 //     pos_verify_pin burns comparable bcrypt time on every path, so the timing says
 //     nothing either;
 //   * the passcode and the request body are never logged or echoed;
-//   * a failed mint leaves no cookie behind (mintQuickSession).
-// The session it opens is second-class — see lib/pos/server/quick-login.ts.
+//   * the browser receives no Supabase Auth JWT from PIN login.
 
 const body = z
   .object({
     employeeNo: z.number().int().min(1).max(99999),
     passcode: z.string().regex(/^\d{6}$/),
+    next: z.enum(['/pos', '/staff', '/staff/checklists', '/staff/schedule']).optional(),
   })
   .strict()
 
@@ -34,13 +34,17 @@ const GENERIC = 'מספר עובד או קוד שגויים'
 const fail = () => new ApiError(401, 'unauthorized', GENERIC)
 
 export const POST = apiRoute(async (request: NextRequest) => {
-  const { employeeNo, passcode } = await parseBody(request, body)
+  const { employeeNo, passcode, next = '/staff' } = await parseBody(request, body)
+  const ipKey = credentialFingerprint(clientIp(request))
+  const employeeKey = credentialFingerprint(String(employeeNo))
 
-  const [perPerson, perIp] = await Promise.all([
-    checkRateLimit(`quick:emp:${employeeNo}`, 10, 900),
-    checkRateLimit(`quick:ip:${clientIp(request)}`, 30, 900),
+  const [perEmployeeWindow, perEmployeeDay, perIp, perPair] = await Promise.all([
+    checkCredentialRateLimit(`quick:emp15:${employeeKey}`, 8, 900),
+    checkCredentialRateLimit(`quick:emp24:${employeeKey}`, 40, 86_400),
+    checkCredentialRateLimit(`quick:ip15:${ipKey}`, 20, 900),
+    checkCredentialRateLimit(`quick:pair15:${ipKey}:${employeeKey}`, 5, 900),
   ])
-  if (!perPerson || !perIp) {
+  if (!perEmployeeWindow || !perEmployeeDay || !perIp || !perPair) {
     throw new ApiError(429, 'rate_limited', 'יותר מדי ניסיונות. חכו כמה דקות ונסו שוב.')
   }
 
@@ -51,17 +55,34 @@ export const POST = apiRoute(async (request: NextRequest) => {
     console.error('pos_verify_pin failed:', error.code, safeLogMessage(error.message))
     throw new ApiError(500, 'internal_error', 'משהו השתבש אצלנו, נסו שוב')
   }
-  const verified = data as { ok?: boolean; staff_id?: string; email?: string } | null
-  if (!verified || verified.ok !== true || !verified.staff_id || !verified.email) throw fail()
-
-  try {
-    await mintQuickSession({ id: verified.staff_id, email: verified.email })
-  } catch {
-    // The code was right but the session could not be opened. Not "wrong code" — the
-    // person should know to use Google instead — and no cookie was left behind.
-    console.error('quick login: session could not be opened')
-    throw new ApiError(500, 'internal_error', 'לא הצלחנו לפתוח את הכניסה. נסו שוב או היכנסו עם Google.')
+  const verified = data as { ok?: boolean; staff_id?: string; email?: string | null; auth_user_id?: string | null } | null
+  if (!verified || verified.ok !== true || !verified.staff_id) {
+    await new Promise((resolve) => setTimeout(resolve, 180 + Math.floor(Math.random() * 220)))
+    throw fail()
   }
 
-  return NextResponse.json({ ok: true, next: '/pos' }, { headers: { 'Cache-Control': 'no-store' } })
+  const { data: access, error: accessError } = await service
+    .from('staff')
+    .select('role, badge')
+    .eq('id', verified.staff_id)
+    .eq('active', true)
+    .maybeSingle()
+  if (accessError || !access) throw fail()
+  const destination = next === '/pos' ? safePosReturn(request.cookies.get(POS_RETURN_COOKIE)?.value) || '/pos' : next === '/staff/schedule' ? '/staff' : next
+
+  const response = NextResponse.json({ ok: true, next: destination }, { headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' } })
+  response.cookies.set(POS_RETURN_COOKIE, '', { path: '/', maxAge: 0 })
+  try {
+    // A PIN never creates an Auth JWT, even for a Google-linked employee. Clear
+    // the previous tablet user's browser session before switching identities.
+    const supabase = await createServerSupabaseClient()
+    const { error: signoutError } = await supabase.auth.signOut({ scope: 'local' })
+    if (signoutError && signoutError.name !== 'AuthSessionMissingError') throw signoutError
+    await revokeEmployeeSession(response)
+    await issueEmployeeSession(response, verified.staff_id)
+  } catch {
+    console.error('quick login: employee session could not be opened')
+    throw new ApiError(500, 'internal_error', 'לא הצלחנו לפתוח את הכניסה. נסו שוב.')
+  }
+  return response
 })

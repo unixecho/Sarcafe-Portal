@@ -410,17 +410,18 @@ export type StaffPerson = {
   email: string | null
 }
 
-/** Active staff who can actually work THIS branch's POS: a linked Google account or a
- *  pending invite with an email. A name-only roster row (the scheduler's) can never sign
- *  in, so it can never confirm a nickname — counting it would keep the row amber forever. */
+/** Event setup may explicitly assign any active employee to a station. Permanent
+ *  branch setup keeps the existing branch scope. Google/email is optional. */
 export async function readPeople(service: Service, branchId: string): Promise<StaffPerson[]> {
+  const { data: branch, error: branchError } = await service.from('branches').select('kind').eq('id', branchId).maybeSingle()
+  if (branchError) throw new Error(`read failed (${branchError.code ?? 'unknown'})`)
   const res = await service
     .from('staff')
     .select('id, handle, handle_set_at, colour, badge, branch_id, auth_user_id, email')
     .eq('active', true)
     .order('id', { ascending: true })
   const rows = unwrap<StaffPerson[] | null>(res) ?? []
-  return rows.filter((p) => (p.branch_id === null || p.branch_id === branchId) && (p.auth_user_id !== null || p.email !== null))
+  return rows.filter((p) => branch?.kind === 'event' || p.branch_id === null || p.branch_id === branchId)
 }
 
 // ======================================================================================

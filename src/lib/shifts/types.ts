@@ -212,6 +212,10 @@ export type Warning = {
  *  already started?" is decided by, on the server and (from this) the client. */
 export type WallClock = { date: ISODate; time: HM }
 
+/** Shift choices offered before publishing, deliberately without names, notes or assignments. */
+export type PlanningShift = Pick<Shift, 'id' | 'weekId' | 'date' | 'startTime' | 'endTime' | 'presetId'>
+export type SaturdayBalance = { staffId: string; minutes: number; shifts: number }
+
 /** The full window the provider holds: the requested week, ± 1 — enough
  *  for cross-week rest/consecutive-day checks at the boundary. Manager
  *  view reads shifts/assignments live; staff view is built from each
@@ -226,6 +230,9 @@ export type ShiftsDB = {
   availability: AvailabilitySubmission[]
   swaps: SwapRequest[]
   requests: ShiftRequest[]
+  planningShifts: PlanningShift[]
+  /** Manager-only count of scheduled Saturday opportunities in the preceding 12 weeks. */
+  saturdayBalance: SaturdayBalance[]
   notifications: ScheduleNotification[]
   unreadCount: number
   audit: ShiftAuditEntry[]

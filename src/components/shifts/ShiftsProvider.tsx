@@ -1,13 +1,13 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { todayISO, weekStartOf } from '@/lib/shifts/time'
+import { wallClockNow, weekStartOf } from '@/lib/shifts/time'
 import type { DispatchResult, ScheduleAction } from '@/lib/shifts/actions'
 import type { ShiftsDB } from '@/lib/shifts/types'
 import ScheduleToast, { type ToastState } from '@/components/shifts/ScheduleToast'
 import '@/components/shifts/schedule.css'
 
-const POLL_MS = 45_000
+const POLL_MS = 15_000
 const GENERIC_ERROR = 'משהו השתבש. בדקו את החיבור לרשת ונסו שוב.'
 
 type DispatchOptions = {
@@ -49,7 +49,7 @@ export default function ShiftsProvider({
   initialWeekStart?: string
   children: ReactNode
 }) {
-  const [weekStart, setWeekStartState] = useState(() => (initialWeekStart ? weekStartOf(initialWeekStart) : weekStartOf(todayISO())))
+  const [weekStart, setWeekStartState] = useState(() => (initialWeekStart ? weekStartOf(initialWeekStart) : weekStartOf(wallClockNow('Asia/Jerusalem').date)))
   const [db, setDb] = useState<ShiftsDB | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -139,7 +139,7 @@ export default function ShiftsProvider({
   )
 
   const setWeekStart = useCallback((iso: string) => setWeekStartState(weekStartOf(iso)), [])
-  const goToToday = useCallback(() => setWeekStartState(weekStartOf(todayISO())), [])
+  const goToToday = useCallback(() => setWeekStartState(weekStartOf(wallClockNow('Asia/Jerusalem').date)), [])
 
   const value = useMemo<ShiftsContextValue>(
     () => ({ branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, refresh: () => load(true), toast }),

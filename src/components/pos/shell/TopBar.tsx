@@ -8,7 +8,7 @@
 // The middle cluster holds the warnings (connection, unsent orders). It renders
 // nothing when all is well, and CSS hides the empty cluster so no gap is left.
 
-import { LayoutGrid, Languages, Settings, Volume2, VolumeX } from 'lucide-react'
+import { Home, LayoutGrid, Languages, Settings, Volume2, VolumeX } from 'lucide-react'
 import { haptic } from '@/lib/haptics'
 import { setSoundEnabled, unlockAudio, useSoundEnabled } from '@/lib/pos/alerts'
 import { usePosLang, useT } from '@/lib/pos/useT'
@@ -35,6 +35,9 @@ export function TopBar({ onOpenMe }: { onOpenMe: () => void }) {
   return (
     <header className="pos-topbar" dir="ltr">
       <div className="pos-tb-left">
+        <a className="pos-iconbtn press" href="/staff" aria-label={lang === 'en' ? 'App home' : 'מסך הבית'}>
+          <Home size={20} aria-hidden="true" />
+        </a>
         <button
           type="button"
           className="pos-iconbtn press"

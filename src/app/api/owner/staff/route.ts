@@ -8,6 +8,7 @@ import { callPosRpc } from '@/lib/pos/server/guard'
 import { handleProblem, normalizePhone } from '@/lib/pos/validate'
 import { refusal } from '@/lib/shifts/dispatch-write'
 import { staffDisplayName } from '@/lib/shifts/names'
+import { createStaffInvitation, credentialRoute, ONBOARDING_HEADERS } from '@/lib/staff/invitations'
 
 // Owner-only throughout — staff management is exactly the kind of
 // privileged action that must never be reachable by a general_manager's
@@ -123,19 +124,23 @@ const inviteSchema = z.object({
   handle: z.string().optional(),
   // The same name already belongs to an active colleague: ask once, then allow.
   allowDuplicateName: z.boolean().optional(),
+  employeeNo: z.number().int().min(1).max(99999).optional(),
+  generateInvite: z.boolean().default(false),
+}).superRefine((body, ctx) => {
+  if (!body.generateInvite) return
+  for (const field of ['firstName', 'lastName'] as const) {
+    if (!body[field]?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Required for invitation' })
+  }
+  if (!body.employeeNo) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['employeeNo'], message: 'Required for invitation' })
 })
 
-export const POST = apiRoute(async (request: NextRequest) => {
+export const POST = credentialRoute(async (request: NextRequest) => {
   const owner = await requireOwner()
   const body = inviteSchema.parse(await request.json())
-  if (!body.email && !body.firstName) throw BadRequest('Provide a name or an email.')
-  if (!body.handle || body.handle.trim() === '') {
-    throw new ApiError(400, 'bad_request', words(OWNER_MESSAGES.handle_required), { reason: 'handle_required' })
-  }
-  const handle = checkHandleFormat(body.handle)
+  const handle = body.handle?.trim() ? checkHandleFormat(body.handle) : null
 
   const service = createServiceRoleClient()
-  await assertHandleFree(service, handle, null)
+  if (handle) await assertHandleFree(service, handle, null)
   if (body.email) {
     const { data: existing } = await service.from('staff').select('id').ilike('email', likeEscape(body.email)).maybeSingle()
     if (existing) throw new ApiError(409, 'conflict', 'כבר קיים/ת איש/אשת צוות עם האימייל הזה.', { reason: 'email_taken' })
@@ -164,19 +169,23 @@ export const POST = apiRoute(async (request: NextRequest) => {
       role: body.role,
       badge: body.badge,
       branch_id: body.branchId,
+      ...(body.employeeNo ? { employee_no: body.employeeNo } : {}),
     })
     .select()
     .single()
 
+  if (error?.code === '23505' && body.employeeNo) throw new ApiError(409, 'conflict', 'מספר העובד הזה כבר נמצא בשימוש. בדקו את מספר HYP.', { reason: 'employee_no_taken' })
   if (error || !staff) throw new ApiError(400, 'bad_request', 'לא הצלחנו להוסיף את איש/אשת הצוות. בדקו את הפרטים ונסו שוב.')
 
   // The insert trigger gave the row a placeholder nickname; this sets the real one
   // (and the audit event) through the same function a person's own rename uses.
-  const set = await callPosRpc<{ ok: boolean; reason?: string; handle?: string }>('pos_set_handle', {
-    p_actor: owner.id,
-    p_target: staff.id,
-    p_handle: handle,
-  })
+  const set: { ok: boolean; reason?: string; handle?: string | null } = handle
+    ? await callPosRpc<{ ok: boolean; reason?: string; handle?: string }>('pos_set_handle', {
+        p_actor: owner.id,
+        p_target: staff.id,
+        p_handle: handle,
+      })
+    : { ok: true, handle: (staff as { handle?: string | null }).handle ?? null }
   if (!set.ok) {
     // A brand-new row has no history, so removing it is safe, and it leaves nobody
     // half-created behind a nickname that was refused.
@@ -187,10 +196,17 @@ export const POST = apiRoute(async (request: NextRequest) => {
     p_actor: owner.id,
     p_target: staff.id,
     p_action: 'staff.create',
-    p_summary: `הוסיף/ה את ${fullName || handle} לצוות`,
+    p_summary: `הוסיף/ה את ${fullName || handle || `עובד/ת ${staff.employee_no ?? ''}`}`.trim() + ' לצוות',
     p_detail: { email: body.email, branchId: body.branchId, badge: body.badge },
   })
-  return NextResponse.json({ staff: { ...staff, label: fullName || handle, handle: set.handle ?? handle, handle_set_at: new Date().toISOString() } })
+  const label = fullName || handle || `עובד/ת ${staff.employee_no ?? ''}`.trim()
+  let invitation: { url: string; expiresAt: string } | null = null
+  if (body.generateInvite) {
+    try { invitation = await createStaffInvitation(owner.id, staff.id, new URL(request.url).origin) }
+    catch { console.error('staff create: invitation creation failed; owner may retry for existing record') }
+  }
+  // Do not serialize the database row: credential hashes and Auth identifiers are server-only.
+  return NextResponse.json({ staff: { id: staff.id, label, employee_no: staff.employee_no }, invitation }, { status: 201, headers: ONBOARDING_HEADERS })
 })
 
 const patchSchema = z.object({

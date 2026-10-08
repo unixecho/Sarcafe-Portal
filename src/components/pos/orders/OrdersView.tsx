@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw, Search, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { readPos } from '@/lib/pos/read-client'
 import { ITEM_COLUMNS, ORDER_COLUMNS } from '@/lib/pos/columns'
 import { useT } from '@/lib/pos/useT'
 import { normalizePhone } from '@/lib/pos/validate'
@@ -84,7 +85,7 @@ function matches(order: PosOrder, query: string): boolean {
 
 export default function OrdersView() {
   const t = useT()
-  const { pointsById, session } = usePos()
+  const { me, branchId, pointsById, session } = usePos()
   const { orders, loaded, failed, advance, refreshNow } = useLive()
   const { openOrder } = usePosNav()
   const now = useNow()
@@ -123,14 +124,15 @@ export default function OrdersView() {
       const known = new Set<string>(liveIdsRef.current)
       let gathered: PosOrderWithItems[] = []
       for (let i = 0; i < MAX_PAGES_PER_TAP; i++) {
-        let q = sb
-          .from('pos_orders')
-          .select(`${ORDER_COLUMNS}, pos_order_items(${ITEM_COLUMNS})`)
-          .eq('session_id', sessionId)
-          .order('ticket_no', { ascending: false })
-          .limit(PAGE)
-        if (cursor.current !== null) q = q.lt('ticket_no', cursor.current)
-        const { data, error } = await q
+        let result: { data: unknown; error: unknown }
+        if (me.codeOnly) {
+          result = await readPos<RawOrder[]>({ kind: 'orders', branch: branchId, session: sessionId, before: cursor.current ?? undefined })
+        } else {
+          let q = sb.from('pos_orders').select(`${ORDER_COLUMNS}, pos_order_items(${ITEM_COLUMNS})`).eq('session_id', sessionId).order('ticket_no', { ascending: false }).limit(PAGE)
+          if (cursor.current !== null) q = q.lt('ticket_no', cursor.current)
+          result = await q
+        }
+        const { data, error } = result
         if (sessionRef.current !== sessionId) return
         if (error) throw error
         const rows = (data as unknown as RawOrder[] | null) ?? []
@@ -152,7 +154,7 @@ export default function OrdersView() {
     } finally {
       setOlderBusy(false)
     }
-  }, [sessionId, olderBusy, olderDone])
+  }, [sessionId, olderBusy, olderDone, me.codeOnly, branchId])
 
   // ---- the list ----------------------------------------------------------------------------
   const merged = useMemo(() => {

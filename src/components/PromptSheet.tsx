@@ -11,6 +11,10 @@ export type PromptRequest = {
   submitLabel: string
   cancelLabel?: string
   allowEmpty?: boolean
+  inputMode?: 'text' | 'numeric' | 'decimal' | 'email' | 'tel' | 'url'
+  digitsOnly?: boolean
+  exactLength?: number
+  validationMessage?: string
 }
 
 type PromptSheetProps = {
@@ -58,7 +62,8 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
 
   if (!rendered || !shown) return null
 
-  const canSubmit = !!request && (request.allowEmpty || value.trim().length > 0)
+  const exactLengthOk = !shown.exactLength || value.trim().length === shown.exactLength
+  const canSubmit = !!request && (request.allowEmpty || value.trim().length > 0) && exactLengthOk
 
   function submit() {
     if (!canSubmit) return
@@ -97,8 +102,12 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
               ref={inputRef}
               id={inputId}
               type="text"
+              inputMode={shown.inputMode}
+              pattern={shown.digitsOnly ? '[0-9]*' : undefined}
+              maxLength={shown.exactLength}
+              autoComplete="off"
               value={value}
-              onChange={(event) => setValue(event.target.value)}
+              onChange={(event) => setValue(shown.digitsOnly ? event.target.value.replace(/\D/g, '').slice(0, shown.exactLength) : event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') submit()
               }}
@@ -113,6 +122,7 @@ export default function PromptSheet({ request, onSubmit, onCancel }: PromptSheet
                 fontSize: '0.95rem',
               }}
             />
+            {shown.validationMessage && value.length > 0 && !exactLengthOk && <p role="status" style={{ margin: '8px 2px 0', color: 'var(--warn)', fontSize: '.82rem' }}>{shown.validationMessage}</p>}
             <button
               type="button"
               className="press"

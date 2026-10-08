@@ -49,6 +49,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { readPos } from '@/lib/pos/read-client'
 import { posApi, type ApiResult } from '@/lib/pos/client'
 import { ITEM_COLUMNS, ORDER_COLUMNS } from '@/lib/pos/columns'
 import { deriveOrderStatus, orderTotalAgorot } from '@/lib/pos/lifecycle'
@@ -377,7 +378,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       const since = new Date(Date.now() - RECENT_MS).toISOString()
       let result: { data: unknown; error: unknown }
       try {
-        result = await createClient()
+        result = me.codeOnly ? await readPos<RawOrder[]>({ kind: 'live', branch: branchRef.current, session: forSession }, ctrl.signal) : await createClient()
           .from('pos_orders')
           .select(SELECT)
           .eq('session_id', forSession)
@@ -412,7 +413,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         void load()
       }
     }
-  }, [collect, commitServer])
+  }, [collect, commitServer, me.codeOnly])
 
   // A different event (or the first one): start from a clean slate.
   useEffect(() => {

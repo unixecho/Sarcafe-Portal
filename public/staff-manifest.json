@@ -1,0 +1,17 @@
+{
+  "id": "/staff-app",
+  "name": "Sarcafe צוות",
+  "short_name": "Sarcafe",
+  "description": "משמרות, צ׳קליסטים וקופת אירועים לצוות Sarcafe",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/staff",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "background_color": "#150f0c",
+  "theme_color": "#150f0c",
+  "icons": [
+    { "src": "/sarcafe-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

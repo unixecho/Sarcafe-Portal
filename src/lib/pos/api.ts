@@ -135,6 +135,8 @@ export type PosMe = {
   hasPasscode?: boolean
   /** This session was opened with employee number + passcode, not Google. */
   quickSession?: boolean
+  /** Opaque code session, with no authenticated Supabase browser client. */
+  codeOnly?: boolean
 }
 
 /** Everything the staff app needs for first paint. Also server-rendered into /pos's props. */
@@ -186,3 +188,17 @@ export type BoardResponse = {
 }
 
 export type { ItemStatus }
+
+// Read selectors are a closed vocabulary. Table names, columns, actor IDs and SQL filters never come from a browser.
+const readScope = { branch: uuid }
+const readSession = { ...readScope, session: uuid }
+const eventOrder = z.enum(['asc', 'desc']).optional()
+export const posReadQuery = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('live'), ...readSession }).strict(),
+  z.object({ kind: z.literal('orders'), ...readSession, before: z.coerce.number().int().min(1).optional() }).strict(),
+  z.object({ kind: z.literal('order'), ...readScope, order: uuid }).strict(),
+  z.object({ kind: z.literal('order_events'), ...readScope, order: uuid, direction: eventOrder }).strict(),
+  z.object({ kind: z.literal('point_history'), ...readSession, point: uuid, limit: z.coerce.number().int().min(1).max(600).default(60) }).strict(),
+  z.object({ kind: z.literal('checkin'), ...readScope, point: uuid, session: uuid.optional() }).strict(),
+])
+export type PosReadQuery = z.infer<typeof posReadQuery>

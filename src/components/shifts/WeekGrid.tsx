@@ -62,7 +62,7 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
   for (const list of shiftsByDate.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime))
 
   return (
-    <div className="sch-week">
+    <div className={mode === 'manager' ? 'sch-week sch-week--manager' : 'sch-week'}>
       {dates.map((date, dow) => {
         const all = shiftsByDate.get(date) ?? []
         const dayShifts = onlyMine ? all.filter((s) => (byShift.get(s.id) ?? []).some((a) => a.staffId === viewer)) : all
@@ -83,6 +83,7 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
               </h3>
               {relative && <Pill tone="mine">{relative}</Pill>}
               {!isWorkingDay && <Pill tone="neutral">יום סגור</Pill>}
+              {dow === 6 && isWorkingDay && <Pill tone="info">שבת · 150%</Pill>}
               {mode === 'manager' && onAdd && (
                 <button type="button" className="sch-add press" onClick={() => onAdd(date)} aria-label={`הוספת משמרת ל${weekdayLongLabel(dow)} ${formatDateLabel(date)}`}>
                   <Plus size={16} aria-hidden="true" /> משמרת

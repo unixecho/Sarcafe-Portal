@@ -3,6 +3,7 @@ import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 import { jwtSessionId } from '@/lib/pos/quick-jwt'
+import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
 
 // Mirrors AyekaBar's src/middleware.ts, minus the loyalty-club gate and the
 // floor/shift-scheduling prefixes — Sarcafe has none of those systems.
@@ -33,7 +34,7 @@ const MENU_EDITOR_PREFIXES = [
 // /owner/feedback is owner-only, not menu-edit-scoped — unsolicited public
 // correspondence, sometimes with a contact address attached, and being
 // trusted with the menu has never implied being handed that.
-const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibility', '/owner/feedback']
+const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/accessibility', '/owner/feedback']
 // /owner/schedule and /staff/* are gated by isStaff() only — a delegated
 // schedule manager can be any active staff member (badge might just be
 // "barista"), so neither the editor nor the op-only check applies here.
@@ -49,11 +50,38 @@ const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/accessibil
 // board, whose credential is its link) and /api/* (every route guards itself — the
 // matcher below lets /api through and the PROTECTED_ROUTES check never matches it).
 const STAFF_ONLY_PREFIXES = ['/owner/schedule', '/staff', '/pos']
+const EMPLOYEE_SESSION_COOKIE = 'sarcafe_staff_session'
 
 const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES, ...STAFF_ONLY_PREFIXES]
 
 function matchesAny(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+async function hasValidEmployeeSession(request: NextRequest): Promise<boolean> {
+  const token = request.cookies.get(EMPLOYEE_SESSION_COOKIE)?.value
+  if (!token) return false
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+    const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+    const service = createSupabaseJsClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+    const { data: session, error } = await service
+      .from('staff_employee_sessions')
+      .select('staff_id')
+      .eq('token_hash', hash)
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle()
+    if (error || !session) return false
+    const { data: staff } = await service.from('staff').select('id').eq('id', session.staff_id).eq('active', true).maybeSingle()
+    return staff !== null
+  } catch {
+    return false
+  }
 }
 
 export async function middleware(request: NextRequest) {
@@ -100,23 +128,35 @@ export async function middleware(request: NextRequest) {
 
   const editorProtected = matchesAny(pathname, MENU_EDITOR_PREFIXES)
   const opProtected = matchesAny(pathname, OP_ONLY_PREFIXES)
-  const staffProtected = matchesAny(pathname, STAFF_ONLY_PREFIXES)
+  const onboarding = pathname === '/staff/onboarding'
+  const staffProtected = !onboarding && matchesAny(pathname, STAFF_ONLY_PREFIXES)
 
-  if (matchesAny(pathname, PROTECTED_ROUTES) && !user) {
+  const employeeSession = !user && (pathname.startsWith('/staff') || pathname === '/pos') ? await hasValidEmployeeSession(request) : false
+
+  if (!onboarding && matchesAny(pathname, PROTECTED_ROUTES) && !user && !employeeSession) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
     // Carry the destination through the door for the POS only (a phone opening /pos
     // should come back to /pos after Google). Owner paths keep the bare /login. The
     // value is a constant, never request data, so it cannot be an open redirect.
-    if (matchesAny(pathname, ['/pos'])) url.searchParams.set('next', '/pos')
-    return NextResponse.redirect(url)
+    if (matchesAny(pathname, ['/pos'])) {
+      url.searchParams.set('next', '/pos')
+      url.searchParams.set('quick', '1')
+    }
+    if (pathname.startsWith('/staff')) url.searchParams.set('next', pathname)
+    if (pathname.startsWith('/staff/checklists')) {
+      url.searchParams.set('next', '/staff/checklists')
+      url.searchParams.set('quick', '1')
+    }
+    const redirected = NextResponse.redirect(url)
+    if (pathname === '/pos') redirected.cookies.set(POS_RETURN_COOKIE, safePosReturn(`${pathname}${request.nextUrl.search}`) || '/pos', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 600 })
+    return redirected
   }
 
-  // A quick-login session (employee number + passcode, migration 022) is floor work
-  // only — never an /owner page, whatever the person's role. Looked up only for owner
-  // paths so every floor request stays as cheap as it was. Fails CLOSED: a lookup
-  // error sends the visitor to /pos rather than letting a possibly-weak session in.
+  // A quick-login owner may land on the dashboard, but nowhere else under /owner.
+  // The dashboard itself renders a restricted launch screen for this session class;
+  // privileged owner APIs and pages continue to require Google authentication.
   if (user && (pathname === '/owner' || pathname.startsWith('/owner/'))) {
     const {
       data: { session },
@@ -137,9 +177,9 @@ export async function middleware(request: NextRequest) {
     }
     if (quick) {
       const url = request.nextUrl.clone()
-      url.pathname = '/pos'
+      url.pathname = pathname === '/owner/dashboard' ? pathname : '/owner/dashboard'
       url.search = ''
-      return NextResponse.redirect(url)
+      if (url.pathname !== pathname) return NextResponse.redirect(url)
     }
   }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CalendarPlus, Copy, Eraser, Inbox, MoreHorizontal, Printer, Send, Undo2, X, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Copy, Eraser, Inbox, MoreHorizontal, Printer, Send, Undo2, X, CheckCircle2, WandSparkles } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
@@ -10,6 +10,7 @@ import WeekGrid from '@/components/shifts/WeekGrid'
 import ShiftSheet from '@/components/shifts/ShiftSheet'
 import WarningsPanel from '@/components/shifts/WarningsPanel'
 import RequestsPanel from '@/components/shifts/RequestsPanel'
+import PlanningPanel from '@/components/shifts/PlanningPanel'
 import ManagerPanel from '@/components/shifts/ManagerPanel'
 import ShiftsAuditTrail from '@/components/shifts/ShiftsAuditTrail'
 import NotificationsSheet, { NotificationsButton } from '@/components/shifts/NotificationsSheet'
@@ -18,7 +19,7 @@ import { evaluate } from '@/lib/shifts/rules'
 import { coverageOf } from '@/lib/shifts/coverage'
 import { unpublishedChanges } from '@/lib/shifts/snapshot-diff'
 import { indexByShift, managerInbox } from '@/lib/shifts/view'
-import { addDays, formatDateLabel, weekDates } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, requestsOpen, weekDates } from '@/lib/shifts/time'
 import type { NotificationLink } from '@/lib/shifts/types'
 
 type Tab = 'week' | 'requests' | 'problems' | 'settings' | 'log'
@@ -76,6 +77,8 @@ export default function ScheduleWorkspace() {
   const isCurrentWeek = weekDates(weekStart).includes(db.now.date)
   const prevWeekShifts = db.weeks.find((w) => w.weekStart === addDays(weekStart, -7))
   const prevHasShifts = !!prevWeekShifts && db.shifts.some((s) => s.weekId === prevWeekShifts.id)
+  const pendingForWeek = db.requests.filter((r) => r.status === 'pending' && !!r.terms.date && r.terms.date >= weekStart && r.terms.date <= addDays(weekStart, 6)).length
+  const planningOpen = requestsOpen(weekStart, db.now)
 
   let unassigned = 0
   let short = 0
@@ -130,6 +133,23 @@ export default function ScheduleWorkspace() {
       return
     }
     await go()
+  }
+
+  async function fillRemaining() {
+    if (!currentWeek) return
+    setBusy(true)
+    await dispatch({ type: 'fillWeek', weekId: currentWeek.id }, { success: (d) => {
+      const left = Array.isArray(d.remaining) ? d.remaining.length : 0
+      return `נוספו ${d.added ?? 0} שיבוצים. כל הבחירות הידניות נשמרו.${left ? ` נותרו ${left} חוסרים ללא עובד/ת מתאים/ה — אפשר לשבץ ידנית.` : ' בדקו את הלוח ופרסמו לצוות.'}`
+    } })
+    setBusy(false)
+  }
+
+  async function prepareWeek() {
+    if (!currentWeek) return
+    setBusy(true)
+    await dispatch({ type: 'prepareWeek', weekId: currentWeek.id }, { success: (d) => `נוספו ${d.added ?? 0} משמרות ללא שיבוץ. ${planningOpen ? 'העובדים יכולים לבחור בקשות עד יום שלישי.' : 'אפשר להמשיך לשיבוץ ידני ולהשלמת החוסרים.'}` })
+    setBusy(false)
   }
 
   function unpublish() {
@@ -256,6 +276,9 @@ export default function ScheduleWorkspace() {
               </div>
             </div>
             <div className="sch-row" style={{ flexWrap: 'wrap' }}>
+              <button type="button" className="sch-btn press" disabled={busy || weekShifts.length === 0 || planningOpen || pendingForWeek > 0} onClick={fillRemaining} title={planningOpen ? 'זמין לאחר סגירת ההגשה ביום שלישי' : pendingForWeek ? 'טפלו קודם בבקשות לשבוע הזה' : 'שומר את הבחירות הידניות ומשלים חוסרים'}>
+                <WandSparkles size={18} aria-hidden="true" /> {busy ? 'מעדכן…' : 'השלמת חוסרים הוגנת'}
+              </button>
               {(!published || changes.total > 0) && (
                 <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: '1 1 200px' }} disabled={busy || weekShifts.length === 0} onClick={publish}>
                   <Send size={18} aria-hidden="true" /> {published ? 'פרסום העדכון לעובדים' : 'פרסום לעובדים'}
@@ -266,6 +289,8 @@ export default function ScheduleWorkspace() {
               </button>
             </div>
           </div>
+
+          <p className="sch-sub">{planningOpen ? 'בקשות העובדים פתוחות עד יום שלישי בחצות. אפשר להתחיל לשבץ ידנית.' : pendingForWeek > 0 ? `${pendingForWeek} בקשות ממתינות לשבוע הזה. טפלו בהן לפני ההשלמה האוטומטית.` : 'השלמה אוטומטית מאזנת שעות ושבתות, מכבדת זמינות ושומרת כל שיבוץ שכבר בחרתם.'}</p>
 
           {inbox.count > 0 && (
             <button type="button" className="sch-card sch-card--attention press" style={{ flexDirection: 'row', alignItems: 'center', font: 'inherit', color: 'inherit', textAlign: 'start', cursor: 'pointer' }} onClick={() => setTab('requests')}>
@@ -295,6 +320,10 @@ export default function ScheduleWorkspace() {
               title="עוד אין משמרות בשבוע הזה"
               hint="לחצו על ״משמרת״ בכל יום כדי להוסיף. השעות יתמלאו לבד לפי התבניות שהגדרתם בהגדרות."
             >
+              <button type="button" className="sch-btn sch-btn--primary press" disabled={busy} onClick={prepareWeek}>
+                <CalendarPlus size={18} aria-hidden="true" /> הכנת שבוע מהתבניות
+              </button>
+              <p className="sch-sub">יוצר משמרות פנויות בימי הפעילות. בדקו את השעות והצרכים לפני השיבוץ.</p>
               {prevHasShifts && (
                 <button type="button" className="sch-btn press" onClick={copyFromPreviousWeek}>
                   <Copy size={18} aria-hidden="true" /> העתקה מהשבוע הקודם
@@ -303,6 +332,8 @@ export default function ScheduleWorkspace() {
             </EmptyState>
           )}
 
+          <div className="sch-planning-layout">
+          <div className="sch-board-scroll" tabIndex={0} role="region" aria-label="לוח שבועי מלא; גללו בין הימים">
           <WeekGrid
             weekStart={weekStart}
             db={db}
@@ -317,6 +348,9 @@ export default function ScheduleWorkspace() {
               setPrompt({ date, title: `הערה ל${formatDateLabel(date)}`, label: 'הערה ליום (תוצג לעובדים)', initialValue: currentWeek?.dayNotes[date] ?? '', submitLabel: 'שמירה', allowEmpty: true })
             }
           />
+          </div>
+          <PlanningPanel />
+          </div>
         </>
       )}
 

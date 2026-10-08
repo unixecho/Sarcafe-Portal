@@ -21,6 +21,7 @@ import { requireStaff } from '@/lib/staff/guard'
 import { addDays, weekStartOf } from './time'
 import type { ScheduleAction } from './actions'
 import type { SettingsPatch } from './schema'
+import { DEFAULT_PRESETS } from './config'
 
 type Service = ReturnType<typeof createServiceRoleClient>
 type Row = Record<string, unknown>
@@ -160,6 +161,20 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       return callSched(service, 'sched_publish_week', { p_actor: actor.id, p_week_id: action.weekId })
     }
 
+    case 'fillWeek': {
+      const branchId = await branchOfWeek(service, action.weekId)
+      const actor = await requireScheduleManager(branchId)
+      return callSched(service, 'sched_fill_week', { p_actor: actor.id, p_week: action.weekId })
+    }
+
+    case 'prepareWeek': {
+      const branchId = await branchOfWeek(service, action.weekId)
+      const actor = await requireScheduleManager(branchId)
+      const { data: settings } = await service.from('shift_settings').select('presets').eq('branch_id', branchId).maybeSingle()
+      const presets = Array.isArray(settings?.presets) && settings.presets.length ? settings.presets : DEFAULT_PRESETS
+      return callSched(service, 'sched_prepare_week', { p_actor: actor.id, p_week: action.weekId, p_presets: presets })
+    }
+
     case 'unpublishWeek': {
       const branchId = await branchOfWeek(service, action.weekId)
       const actor = await requireScheduleManager(branchId)
@@ -255,40 +270,14 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       const staff = await requireScheduleViewer(action.branchId)
       const start = weekStartOf(action.weekStart)
       if (start !== action.weekStart) throw refusal('bad_date')
-      // Only this week or later: nobody can change the availability of a week that is over.
-      const thisWeek = weekStartOf(new Date().toISOString().slice(0, 10))
-      if (start < addDays(thisWeek, -7)) throw refusal('past')
       const end = addDays(start, 6)
       for (const e of action.entries as { date: string }[]) {
         if (e.date < start || e.date > end) throw refusal('bad_date')
       }
-      const { error } = await service.from('shift_availability').upsert(
-        {
-          branch_id: action.branchId,
-          staff_id: staff.id,
-          week_start: start,
-          entries: action.entries,
-          note: action.note ?? null,
-          status: action.status,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'branch_id,staff_id,week_start' }
-      )
-      if (error) throw new ApiError(500, 'internal_error', INTERNAL)
-      if (action.status === 'submitted') {
-        // Managers learn a submission arrived without having to go looking for it.
-        const { data: ids } = await service.rpc('sched_manager_ids', { p_branch: action.branchId })
-        const { data: me } = await service.rpc('sched_name', { p_staff: staff.id })
-        await service.rpc('sched_notify', {
-          p_branch: action.branchId,
-          p_staff: ((ids as string[] | null) ?? []).filter((id) => id !== staff.id),
-          p_kind: 'availability.submitted',
-          p_title: `${(me as string) || 'עובד/ת'} הגיש/ה זמינות`,
-          p_body: `לשבוע שמתחיל ב-${start}`,
-          p_link: { tab: 'requests', weekStart: start },
-        })
-      }
-      return {}
+      return callSched(service, 'sched_submit_availability', {
+        p_actor: staff.id, p_branch: action.branchId, p_week_start: start,
+        p_entries: action.entries, p_note: action.note ?? null, p_status: action.status,
+      })
     }
 
     case 'requestShift': {

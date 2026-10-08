@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LogIn, UserCheck } from 'lucide-react'
 import { haptic } from '@/lib/haptics'
 import { createClient } from '@/lib/supabase/client'
+import { readPos } from '@/lib/pos/read-client'
 import { posApi } from '@/lib/pos/client'
 import { CHECKIN_COLUMNS } from '@/lib/pos/columns'
 import { useT } from '@/lib/pos/useT'
@@ -25,7 +26,7 @@ import { usePosToast } from '../shell/Toast'
 
 export default function CheckinPill({ pointId }: { pointId: string }) {
   const t = useT()
-  const { me, session } = usePos()
+  const { me, branchId, session } = usePos()
   const key = useRefreshKey()
   const { toast } = usePosToast()
   const [state, setState] = useState<boolean | null>(null)
@@ -35,15 +36,15 @@ export default function CheckinPill({ pointId }: { pointId: string }) {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      let q = createClient()
-        .from('pos_point_checkins')
-        .select(CHECKIN_COLUMNS)
-        .eq('point_id', pointId)
-        .eq('staff_id', me.id)
-        .order('at', { ascending: false })
-        .limit(1)
-      if (sessionId) q = q.eq('session_id', sessionId)
-      const { data, error } = await q
+      let result: { data: unknown; error: unknown }
+      if (me.codeOnly) {
+        result = await readPos<PosCheckin[]>({ kind: 'checkin', branch: branchId, point: pointId, session: sessionId ?? undefined })
+      } else {
+        let q = createClient().from('pos_point_checkins').select(CHECKIN_COLUMNS).eq('point_id', pointId).eq('staff_id', me.id).order('at', { ascending: false }).limit(1)
+        if (sessionId) q = q.eq('session_id', sessionId)
+        result = await q
+      }
+      const { data, error } = result
       if (cancelled || pending.current) return
       if (error) {
         setState((prev) => (prev === null ? false : prev))
@@ -55,7 +56,7 @@ export default function CheckinPill({ pointId }: { pointId: string }) {
     return () => {
       cancelled = true
     }
-  }, [pointId, me.id, sessionId, key])
+  }, [pointId, me.id, sessionId, key, me.codeOnly, branchId])
 
   const toggle = useCallback(async () => {
     if (state === null || pending.current) return

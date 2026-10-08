@@ -100,6 +100,7 @@ export const coreStrings = {
 
   // ---- home: where do you work today ------------------------------------------------------------
   'core.home.title': { he: 'איפה עובדים היום?', en: 'Where are you working today?' },
+  'core.top.appHome': { he: 'מסך הבית', en: 'App home' },
   'core.home.sub': {
     he: 'בחרו מקום והמכשיר יזכור. תמיד אפשר להחליף מהסרגל העליון.',
     en: 'Pick a place and this device will remember it. You can always change it from the top bar.',

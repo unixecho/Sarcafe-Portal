@@ -1243,3 +1243,15 @@ src/components/owner/pos/                   Hub, Wizard, Readiness, History, Sta
 src/app/api/pos/…  src/app/api/owner/pos/…  src/app/api/board/[token]/route.ts
 src/app/api/cron/cleanup-pos/route.ts
 ```
+
+## 2026-10-08 — employee-code event access (local)
+
+Number/code event access now resolves the same active `staff.id` through `resolveStaffIdentity`. Opaque employee sessions never require a fabricated Auth user/email and remain floor-only (`quick=true`, `codeOnly=true`); owner/manager operations still require a full Google session. Existing branch authorization is preserved: a branch-scoped employee is not automatically authorized for a separate event branch merely because they know its link.
+
+`/api/pos/read` accepts a closed set of validated resource selectors (`live`, `orders`, `order`, `order_events`, `point_history`, `checkin`). The route authorizes the branch from the current actor; service reads validate session/point membership, bind audit rows to an authorized order, and restrict presence to the actor. No arbitrary table, column, SQL predicate, staff identity or database privilege comes from the browser. Responses are `no-store`; browser grants/RLS are unchanged.
+
+Opaque sessions use this API for live/older orders, details, audit history, station history and presence, and refresh all configuration slices via bootstrap on the existing eight-second fallback. They do not open Realtime. Google and linked quick JWT sessions keep their existing authenticated browser reads/socket. The connection pill reports the fallback state honestly. Cached configuration restoration now requires the same staff identity and transport mode so a shared device cannot restore a different employee's last screen.
+
+The owner may now explicitly assign any active employee to an event station. Active station membership permits floor access to that event without changing the employee's permanent branch; it never grants event management or access to an unrelated permanent branch. Removing/deactivating the station removes this access on the next resolved request. A station/timeline link without `branch` resolves its authorized event from its point ID. New PIN logins always use opaque cookies, including Google-linked employees. Google login without a specific destination opens the categorized `/staff` home; a full owner resolves to `/owner/dashboard`.
+
+Verification: `node scripts/check-pos-access.mjs` exercises the real TypeScript guard/schema/read code with local query fixtures (37 assertions): no-Google identity, legacy/full session classification, floor manager denial, inactive/non-staff denial, branch/session/point/order isolation, self-only checkins, selector injection rejection, server paging bounds and explicit event membership/revocation. This does not replace an authenticated event device pilot. Deployment/migration state is recorded in `handoff.md`.

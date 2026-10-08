@@ -117,13 +117,17 @@ export async function loadBootstrap(input: BootstrapInput): Promise<BootstrapRes
     employeeNo: facts?.employee_no ?? null,
     hasPasscode: facts?.pin_hash != null,
     quickSession: quick,
+    codeOnly: staff.codeOnly === true,
   }
 
   // `staff` is read directly (id, handle, colour only — exactly what the
   // pos_staff_directory view exposes). The view itself is gated by auth.uid() through
   // is_staff_client(), and under the service role auth.uid() is null: it would
   // return zero rows here.
-  const directoryRes = await service.from('staff').select(DIRECTORY_COLUMNS).order('handle', { ascending: true })
+  let directoryQuery = service.from('staff').select(DIRECTORY_COLUMNS).eq('active', true).order('handle', { ascending: true })
+  if (chosen) directoryQuery = directoryQuery.or(`branch_id.is.null,branch_id.eq.${chosen.id}`)
+  else directoryQuery = directoryQuery.eq('id', staff.id)
+  const directoryRes = await directoryQuery
   const directory = ok<StaffDirEntry[]>('staff directory', directoryRes as unknown as Res, [])
 
   const base: BootstrapResponse = {

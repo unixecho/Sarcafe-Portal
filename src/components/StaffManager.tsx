@@ -55,7 +55,7 @@ export default function StaffManager({
   const flash = (kind: ToastState['kind'], text: string) => setToast({ id: Date.now() + Math.random(), kind, text })
 
   // ---- POS access (nickname / employee number / quick code) — unchanged behaviour ----
-  const [prompt, setPrompt] = useState<(PromptRequest & { staffId: string; kind: 'handle' | 'empNo' }) | null>(null)
+  const [prompt, setPrompt] = useState<(PromptRequest & { staffId: string; kind: 'handle' | 'empNo' | 'passcode' }) | null>(null)
   const [confirmClear, setConfirmClear] = useState<(ConfirmRequest & { staffId: string }) | null>(null)
   const [quickBusy, setQuickBusy] = useState<string | null>(null)
   // The passcode exists in this state ONLY while its sheet is on screen (see closeCode).
@@ -160,6 +160,26 @@ export default function StaffManager({
       void load()
     } catch {
       flash('error', t('owner.menu.staff.failed'))
+    } finally {
+      setQuickBusy(null)
+    }
+  }
+
+  async function setManualCode(staffId: string, value: string) {
+    if (!/^\d{6}$/.test(value.trim())) return flash('error', 'הקוד חייב להכיל בדיוק 6 ספרות.')
+    setQuickBusy(staffId)
+    try {
+      const res = await fetch('/api/owner/staff/passcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, action: 'set', passcode: value.trim() }),
+      })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) return flash('error', messageOf(payload, 'לא הצלחנו לשמור את הקוד.'))
+      flash('ok', 'קוד הכניסה נשמר ✓')
+      void load()
+    } catch {
+      flash('error', 'בעיית חיבור. בדקו את הרשת ונסו שוב.')
     } finally {
       setQuickBusy(null)
     }
@@ -344,6 +364,7 @@ export default function StaffManager({
           setPrompt({ staffId: row.id, kind: 'empNo', title: t('owner.menu.staff.empNoTitle'), label: t('owner.menu.staff.empNoLabel'), initialValue: String(row.employee_no ?? ''), submitLabel: t('owner.menu.staff.save') })
         }
         onGenerateCode={generateCode}
+        onSetCode={(row) => setPrompt({ staffId: row.id, kind: 'passcode', title: 'בחירת קוד כניסה', label: 'קוד בן 6 ספרות', initialValue: '', submitLabel: 'שמירת הקוד', inputMode: 'numeric', digitsOnly: true, exactLength: 6, validationMessage: 'הקוד חייב להכיל בדיוק 6 ספרות.' })}
         onClearCode={(row) =>
           setConfirmClear({ staffId: row.id, title: t('owner.menu.staff.clearTitle'), body: t('owner.menu.staff.clearBody', { name: row.handle || row.label }), confirmLabel: t('owner.menu.staff.clearConfirm'), danger: true })
         }
@@ -357,7 +378,8 @@ export default function StaffManager({
           setPrompt(null)
           if (!current) return
           if (current.kind === 'handle') void saveHandle(current.staffId, value)
-          else void saveEmployeeNo(current.staffId, value)
+          else if (current.kind === 'empNo') void saveEmployeeNo(current.staffId, value)
+          else void setManualCode(current.staffId, value)
         }}
       />
 

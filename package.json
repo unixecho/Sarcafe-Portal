@@ -9,12 +9,20 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check:schedule": "node scripts/check-schedule.mjs",
-    "verify:schedule-sql": "node scripts/verify-schedule-sql.mjs"
+    "verify:schedule-sql": "node scripts/verify-schedule-sql.mjs",
+    "verify:checklist-sql": "node scripts/verify-checklist-sql.mjs",
+    "verify:onboarding-sql": "node scripts/verify-onboarding-sql.mjs",
+    "check:staff-access": "node scripts/check-staff-access.mjs",
+    "check:pos-access": "node scripts/check-pos-access.mjs",
+    "check:app-layout": "node scripts/check-app-layout.mjs"
   },
   "dependencies": {
+    "@gsap/react": "2.1.2",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.1",
     "a11y-widget": "https://github.com/unixecho/a11y-widget/archive/refs/tags/v1.1.0.tar.gz",
+    "geist": "1.7.2",
+    "gsap": "3.15.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.45.0",
     "next": "^15.1.0",

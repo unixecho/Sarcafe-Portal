@@ -9,7 +9,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import type { StaffRow } from '@/lib/owner/guard'
 import { isOp } from '@/lib/staff/access'
-import { addDays, wallClockNow, weekStartOf } from './time'
+import { addDays, durationMinutes, wallClockNow, weekStartOf } from './time'
 import {
   serializeAssignment,
   serializeAuditEntry,
@@ -23,7 +23,7 @@ import {
   serializeWeek,
 } from './serialize'
 import { DEFAULT_PRESETS, DEFAULT_ROLES, DEFAULT_SAFETY, DEFAULT_STATIONS } from './config'
-import type { Assignment, Shift, ShiftsDB } from './types'
+import type { Assignment, PlanningShift, SaturdayBalance, Shift, ShiftsDB } from './types'
 
 const AUDIT_LIMIT = 60
 const HISTORY_LIMIT = 150
@@ -61,12 +61,14 @@ export async function loadShiftsState(
     ? await loadLive(service, branchId, windowStarts)
     : await loadPublishedOnly(service, branchId, windowStarts)
 
-  const [availability, swaps, requests, notifications, audit] = await Promise.all([
+  const [availability, swaps, requests, notifications, audit, planningShifts, saturdayBalance] = await Promise.all([
     settings.features.availability ? loadAvailability(service, branchId, windowStarts, viewer, isManager) : Promise.resolve([]),
     settings.features.swaps ? loadSwaps(service, branchId, viewer, isManager) : Promise.resolve([]),
     loadRequests(service, branchId, viewer, isManager),
     loadNotifications(service, branchId, viewer),
     isManager ? loadAudit(service, branchId) : Promise.resolve([]),
+    loadPlanningShifts(service, branchId, centerWeek),
+    isManager ? loadSaturdayBalance(service, branchId, centerWeek) : Promise.resolve([]),
   ])
 
   return {
@@ -79,6 +81,8 @@ export async function loadShiftsState(
     availability,
     swaps,
     requests,
+    planningShifts,
+    saturdayBalance,
     notifications: notifications.items,
     unreadCount: notifications.unread,
     audit,
@@ -87,6 +91,36 @@ export async function loadShiftsState(
     viewerCanManage: isManager,
     viewerCanDelegate: canDelegate,
   }
+}
+
+/** Only the shift menu is public to staff before publishing. Assignees and private notes stay private. */
+async function loadPlanningShifts(service: Service, branchId: string, centerWeek: string): Promise<PlanningShift[]> {
+  const { data } = await service.from('shifts')
+    .select('id, week_id, shift_date, start_time, end_time, preset_id')
+    .eq('branch_id', branchId).gte('shift_date', centerWeek).lte('shift_date', addDays(centerWeek, 13))
+    .order('shift_date').order('start_time')
+  return (data ?? []).map((s) => ({ id: s.id, weekId: s.week_id, date: s.shift_date, startTime: s.start_time, endTime: s.end_time, presetId: s.preset_id }))
+}
+
+async function loadSaturdayBalance(service: Service, branchId: string, centerWeek: string): Promise<SaturdayBalance[]> {
+  const { data: weeks } = await service.from('schedule_weeks').select('id')
+    .eq('branch_id', branchId).eq('status', 'published').gte('week_start', addDays(centerWeek, -84)).lt('week_start', centerWeek)
+  if (!weeks?.length) return []
+  const { data: shifts } = await service.from('shifts').select('id, shift_date, start_time, end_time').in('week_id', weeks.map((w) => w.id))
+  const saturdays = (shifts ?? []).filter((s) => new Date(`${s.shift_date}T00:00:00Z`).getUTCDay() === 6)
+  if (!saturdays.length) return []
+  const byShift = new Map(saturdays.map((s) => [s.id, s]))
+  const { data: assignments } = await service.from('shift_assignments').select('shift_id, staff_id').in('shift_id', saturdays.map((s) => s.id))
+  const balance = new Map<string, SaturdayBalance>()
+  for (const a of assignments ?? []) {
+    const shift = byShift.get(a.shift_id)
+    if (!shift || !a.staff_id) continue
+    const item = balance.get(a.staff_id) ?? { staffId: a.staff_id, minutes: 0, shifts: 0 }
+    item.minutes += durationMinutes({ startTime: shift.start_time, endTime: shift.end_time })
+    item.shifts++
+    balance.set(a.staff_id, item)
+  }
+  return [...balance.values()]
 }
 
 async function ensureSettingsRow(service: Service, branchId: string): Promise<Record<string, unknown>> {

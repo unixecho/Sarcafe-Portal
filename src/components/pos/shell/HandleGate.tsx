@@ -17,6 +17,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import SheetShell from '@/components/SheetShell'
 import { posApi } from '@/lib/pos/client'
+import Link from 'next/link'
 import { handleProblem } from '@/lib/pos/validate'
 import { LIMITS } from '@/lib/pos/vocab'
 import { useT } from '@/lib/pos/useT'
@@ -101,6 +102,7 @@ export function HandleGate() {
           {t('core.handle.title')}
         </h2>
         <p className="pos-sheet-sub">{t('core.handle.sub')}</p>
+        <Link href="/staff" className="pos-btn pos-btn--ghost press" style={{ minHeight: 44, marginBlockStart: 8 }}>{t('core.top.appHome')}</Link>
 
         <label htmlFor={`${titleId}-input`} className="sr-only">
           {t('core.handle.label')}

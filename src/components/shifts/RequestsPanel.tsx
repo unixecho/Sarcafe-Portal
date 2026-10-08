@@ -9,7 +9,7 @@ import { Avatar, EmptyState, Notice, Person, Pill, RequestStatusPill, SwapStatus
 import { issuesOf } from '@/lib/shifts/messages'
 import { requestImpact, swapImpact } from '@/lib/shifts/rules'
 import { coverageOf } from '@/lib/shifts/coverage'
-import { formatDateLabel, formatShiftLabel, timeAgoHe, weekdayLabel, parseISODate } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, formatShiftLabel, timeAgoHe, weekdayLabel, parseISODate } from '@/lib/shifts/time'
 import { indexByShift, nameOf, requestLabel, sideLabel } from '@/lib/shifts/view'
 import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
 
@@ -20,7 +20,7 @@ import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
 //     until the manager approves it here),
 // then, for information, swaps still waiting on an employee, the availability the
 // team submitted, and a short history of what was decided.
-export default function RequestsPanel() {
+export default function RequestsPanel({ planning = false }: { planning?: boolean }) {
   const { db, dispatch, weekStart } = useShifts()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
@@ -29,9 +29,9 @@ export default function RequestsPanel() {
 
   const model = useMemo(() => {
     if (!db) return null
-    const pendingRequests = db.requests.filter((r) => r.status === 'pending').sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    const awaitingMe = db.swaps.filter((s) => s.status === 'peer_accepted').sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    const awaitingPeer = db.swaps.filter((s) => s.status === 'open')
+    const pendingRequests = db.requests.filter((r) => r.status === 'pending' && (!planning || (!!r.terms.date && r.terms.date >= weekStart && r.terms.date <= addDays(weekStart, 6)))).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const awaitingMe = planning ? [] : db.swaps.filter((s) => s.status === 'peer_accepted').sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const awaitingPeer = planning ? [] : db.swaps.filter((s) => s.status === 'open')
     const history = [
       ...db.requests.filter((r) => r.status !== 'pending').map((r) => ({ kind: 'request' as const, at: r.decidedAt ?? r.createdAt, r })),
       ...db.swaps.filter((s) => s.status !== 'open' && s.status !== 'peer_accepted').map((s) => ({ kind: 'swap' as const, at: s.decidedAt ?? s.createdAt, s })),
@@ -39,7 +39,7 @@ export default function RequestsPanel() {
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, 25)
     return { pendingRequests, awaitingMe, awaitingPeer, history }
-  }, [db])
+  }, [db, planning, weekStart])
 
   if (!db || !model) return null
   const evalInput = { weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability }
@@ -91,8 +91,8 @@ export default function RequestsPanel() {
   }
 
   return (
-    <div className="sch-wrap" style={{ gap: 22 }}>
-      {nothing && <EmptyState icon={<Inbox size={30} aria-hidden="true" />} title="אין כרגע בקשות שמחכות לך" hint="כשעובד/ת יבקשו להצטרף למשמרת או יסכימו להחלפה, זה יופיע כאן וגם בעדכונים (הפעמון)." />}
+    <div className={`sch-wrap${planning ? ' sch-planning-requests' : ''}`} style={{ gap: planning ? 14 : 22 }}>
+      {nothing && <EmptyState icon={<Inbox size={26} aria-hidden="true" />} title={planning ? 'כל הבקשות לשבוע הזה טופלו' : 'אין כרגע בקשות שמחכות לך'} hint={planning ? 'אפשר לשבץ ידנית ולהשלים את המקומות החסרים אחרי סגירת ההגשה.' : 'בקשות חדשות והחלפות שהעובדים הסכימו עליהן יופיעו כאן ובמרכז העדכונים.'} />}
 
       {/* ---------------------------------------------------------------- waiting on the manager */}
       {(model.pendingRequests.length > 0 || model.awaitingMe.length > 0) && (
@@ -238,7 +238,7 @@ export default function RequestsPanel() {
       )}
 
       {/* ---------------------------------------------------------------- availability */}
-      <section className="sch-wrap" aria-label="זמינות שהוגשה">
+      {!planning && <section className="sch-wrap" aria-label="זמינות שהוגשה">
         <h3 className="sch-h">זמינות שהוגשה לשבוע {formatDateLabel(weekStart)}</h3>
         {!db.settings.features.availability ? (
           <p className="sch-sub">הגשת זמינות כבויה בהגדרות.</p>
@@ -261,10 +261,10 @@ export default function RequestsPanel() {
             </div>
           ))
         )}
-      </section>
+      </section>}
 
       {/* ---------------------------------------------------------------- history */}
-      {model.history.length > 0 && (
+      {!planning && model.history.length > 0 && (
         <section className="sch-wrap" aria-label="היסטוריה">
           <button type="button" className="sch-btn sch-btn--ghost sch-btn--sm press" aria-expanded={historyOpen} onClick={() => setHistoryOpen((o) => !o)} style={{ justifyContent: 'space-between' }}>
             <span>מה כבר טופל ({model.history.length})</span>

@@ -139,7 +139,7 @@ export default function LoginPage() {
             </button>
             {quickOpen && (
               <div id="quick-login-panel">
-                <QuickLogin />
+                <QuickLogin next={next === '/pos' ? '/pos' : next === '/staff/checklists' ? '/staff/checklists' : '/staff'} />
               </div>
             )}
           </div>

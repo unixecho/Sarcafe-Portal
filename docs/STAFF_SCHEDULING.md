@@ -1,4 +1,74 @@
-# Staff & Scheduling — what was wrong, what it is now
+# Staff & Scheduling
+
+## Weekly planning update — 2026-10-08
+
+Implemented and migrated to production; deployment status is recorded in root `handoff.md`.
+Migration: `20261008134738_schedule_planning_fair_fill.sql`. Existing migration
+024 remains historical; the successor changes the request rules deliberately.
+
+The owner flow is now **prepare an empty week → collect requests through Tuesday →
+approve requests and assign manually → complete remaining places fairly → publish**.
+The staff scheduler uses a full Google session. Number/code sessions serve the
+checklists and event POS; staff first activate via their owner-generated invitation
+and can then link Google to the same employee record.
+
+- **Prepare the week.** An empty board has “הכנת שבוע מהתבניות”. A guarded,
+  atomic RPC builds empty shifts from the branch's templates and working days.
+  Existing shifts/assignments survive and repeat preparation adds nothing twice.
+  With no saved templates, the server uses the same app defaults as the editor.
+  Review hours and role/headcount requirements before collecting requests.
+- **Tuesday cutoff.** For a Sunday-starting week, requests and availability close
+  after the preceding Tuesday, at midnight in `Asia/Jerusalem`, including DST.
+  Draft-week requests and availability are enforced by SQL, beyond disabled UI
+  buttons. A published schedule still permits the existing last-minute join and
+  swap workflows. An employee can cancel their own pending request after cutoff.
+- **Pre-publication choices.** `/staff/schedule` → “בקשות לשבוע” offers the upcoming
+  week's shift dates/times/templates, alongside day preferences, unavailability,
+  and partial hours. Each shift request is sent explicitly and immediately.
+  Availability has draft/submit actions. The separate `planningShifts` response
+  contains only `id`, `weekId`, `date`, `startTime`, `endTime`, `presetId` — never
+  draft assignees, manager notes, role demands, or unpublished snapshots.
+- **Live week board.** Seven equal day columns on wide screens, a contained swipe
+  board on phones, and the current week's approval pane beside the board on large
+  desktops. The pane includes submitted availability, who has not submitted, and
+  each eligible employee's Saturday hours over the previous 12 published weeks.
+  Visible, idle pages refresh every 15 seconds and immediately on focus/mutation.
+- **Owner decisions.** Approve/reject directly while watching the board. Approval
+  uses the existing locked, conflict-checked request RPC. Manual assignment also
+  answers a matching pending request. Nothing automatically grants a preference.
+- **Fair completion.** “השלמת חוסרים הוגנת” is available after Tuesday and only
+  after all requests for that week have a decision. The server fills role minima
+  (or one person when a shift has no declared requirement), never removes or
+  changes an existing assignment, and retains the draft until deliberate publish.
+  Saturday is allocated first; fewer Saturday hours in the preceding 12 published
+  weeks plus current week's assignments rank first, then lower weekly hours,
+  then submitted day preference. Deterministic, week-dependent ties rotate among
+  otherwise equal candidates. The “150%” label is the user's scheduling incentive
+  rule, not an attendance, payroll calculation, or HYP wage integration.
+- **Eligibility for automatic completion.** Active, branch-authorized, schedulable
+  employees; matching default role or no specified default role; no existing
+  assignment to that shift; no overlap in any branch; submitted unavailability
+  and partial hours honored; weekly/person and daily caps, rest (including half
+  hours and midnight crossings), and consecutive-day limits honored. No submitted
+  availability means available; drafts do not influence completion. Manual edits
+  retain the existing manager authority and warnings. Unfillable role/shift places
+  return explicit results and stay visible on the board.
+- **Swaps and notifications.** The verified existing workflow remains
+  `open → peer_accepted → approved`. Peer acceptance never changes assignments;
+  manager approval atomically updates assignments and published snapshots and
+  notifies both employees. Invalidated proposals cancel with preserved history.
+  Availability submission and manager notification now share one transaction.
+  All updates stay in-app; no email/SMS/WhatsApp dependency.
+
+Verification: `check:schedule` includes Jerusalem summer/winter cutoff parity;
+`verify:schedule-sql` applies all successor migrations and covers preparation,
+deadline enforcement, request-first completion, preserving manual choices,
+Saturday fairness/distribution, partial availability, hour/rest limits,
+cross-branch conflicts, repeated completion, explicit unfilled places and
+service-only function grants. PGlite is a single connection: actual parallel
+connection races still require a real Postgres integration environment.
+
+## Previous overhaul findings and implementation
 
 One cohesive experience for **people → shifts → requests → swaps → approvals**, built on the existing
 architecture (Next.js routes → one guarded dispatch → Postgres functions). Hebrew-only, like every other
@@ -125,7 +195,7 @@ Re-runnable. Checked against live data first (read-only): PostgreSQL 17.6, no ma
 
 | Suite | Result |
 |---|---|
-| `node scripts/verify-schedule-sql.mjs` — real Postgres (PGlite): whole workflow incl. legacy-data migration, idempotency, name-only staff, templates, conflicts (same branch **and** across branches, past-midnight), requests, hand-over + exchange swaps, approvals, changes-while-pending, publish + notifications, copy/clear, staff lifecycle, privilege model, app↔DB function names | **233 passed** |
+| `node scripts/verify-schedule-sql.mjs` — real Postgres (PGlite): whole workflow incl. legacy-data migration, idempotency, name-only staff, templates, conflicts (same branch **and** across branches, past-midnight), requests, hand-over + exchange swaps, approvals, changes-while-pending, publish + notifications, fair filling, copy/clear, staff lifecycle, privilege model, app↔DB function names | **277 passed** |
 | `node scripts/check-schedule.mjs` — real TS sources: names, privacy, labels/clock, default times, coverage, messages, strict schema, rules engine, view helpers, purity — **plus TS == SQL** for labels, overlap (250 random pairs), headcount, names and the full role × branch × delegation access matrix | **150 passed** |
 | Existing suites (regression): `verify-pos-sql` / `check-pos` / `check-a11y` | 263 / 1894 / 76 passed |
 | `tsc --noEmit` (and `--noUnusedLocals --noUnusedParameters` on the touched files) · `next build` (isolated copy) | clean |
@@ -137,10 +207,10 @@ Not run: a real parallel-connection concurrency test (PGlite is single-connectio
 
 ## 7. Limitations & decisions you may want to revisit
 
-1. **Employees without an email cannot sign in**, so they can't see their schedule, request, or answer a swap themselves (login is Google-only; quick-login also needs a linked account). Managers schedule them normally and can print the week. The UI flags this ("ללא כניסה לאפליקציה") and refuses to send a swap to someone who couldn't answer it. Giving them a way in (e.g. a PIN-only account) is a separate decision.
+1. **Scheduling requires verified Google login.** Employees can first activate and use checklists/event POS with their HYP employee number and PIN, then link Google to the same record. Managers can schedule employees before linking; swaps require the selected employee to have a Google login so they can answer.
 2. **Staff management stays owner-only** (existing rule). A general manager can run the schedule and approve requests but can't edit people.
 3. **"Full" definition.** A shift is full only if it declares a need (per-role minimums) and has reached it. Most shifts declare none, so anyone may ask to join, and the manager is shown who is already on it and must confirm. Say if you'd rather always require a headcount.
 4. **Time/date change cancels pending swaps; it does not cancel pending requests** (the manager sees "the shift changed since the request" and must confirm).
 5. **Overlapping shifts are never allowed** for one person, in any branch (a person can't be in two places). Softer rules (rest, weekly/daily hours, consecutive days, unavailable day) warn and show their effect before approval, but never block.
 6. **Email can't be edited once someone has signed in** (their account is the identity); edit before first login.
-7. Deactivating unlinks the person's login (existing behaviour, now atomic). To let them in again: reactivate, then have them sign in with Google once.
+7. Deactivating unlinks the person's login and invalidates active employee sessions/setup proofs. Reactivate and generate a new invitation for that same staff record; the employee sets a PIN and links Google again. History stays on the original UUID.

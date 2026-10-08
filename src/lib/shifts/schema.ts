@@ -93,6 +93,8 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('deleteShift'), shiftId: uuid }).strict(),
   z.object({ type: z.literal('moveAssignment'), assignmentId: uuid, toShiftId: uuid }).strict(),
   z.object({ type: z.literal('publishWeek'), weekId: uuid }).strict(),
+  z.object({ type: z.literal('fillWeek'), weekId: uuid }).strict(),
+  z.object({ type: z.literal('prepareWeek'), weekId: uuid }).strict(),
   z.object({ type: z.literal('unpublishWeek'), weekId: uuid }).strict(),
   z.object({ type: z.literal('clearWeek'), weekId: uuid }).strict(),
   z.object({ type: z.literal('copyWeek'), branchId: uuid, fromWeekStart: isoDate, toWeekStart: isoDate }).strict(),

@@ -18,7 +18,8 @@ import { callPosRpc, parseBody, posJson, rpcFailure } from '@/lib/pos/server/gua
 const body = z
   .object({
     staffId: z.string().uuid(),
-    action: z.enum(['generate', 'clear']).optional(),
+    action: z.enum(['generate', 'set', 'clear']).optional(),
+    passcode: z.string().regex(/^\d{6}$/).optional(),
     employeeNo: z.number().int().min(1).max(99999).optional(),
   })
   .strict()
@@ -29,7 +30,7 @@ const draw = () => String(randomInt(0, 1_000_000)).padStart(6, '0')
 
 export const POST = apiRoute(async (request: NextRequest) => {
   const owner = await requireOwner()
-  const { staffId, action, employeeNo } = await parseBody(request, body)
+  const { staffId, action, employeeNo, passcode: requestedPasscode } = await parseBody(request, body)
   if (!action && employeeNo === undefined) throw BadRequest('חסר מה לעשות / Nothing to do.')
 
   let employeeNoSet: number | undefined
@@ -63,11 +64,21 @@ export const POST = apiRoute(async (request: NextRequest) => {
     }
     if (passcode === null) throw new ApiError(500, 'internal_error', 'לא הצלחנו להפיק קוד, נסו שוב / Could not issue a code, try again')
 
-    // Quick login only works once the person has signed in with Google (there must be an
-    // account to open a session for) — tell the owner so the UI can say it.
-    const { data } = await createServiceRoleClient().from('staff').select('auth_user_id').eq('id', staffId).maybeSingle()
-    const needsGoogleSignIn = !(data as { auth_user_id: string | null } | null)?.auth_user_id
-    return posJson({ ok: true, passcode, needsGoogleSignIn, ...(employeeNoSet !== undefined ? { employeeNo: employeeNoSet } : {}) })
+    return posJson({ ok: true, passcode, ...(employeeNoSet !== undefined ? { employeeNo: employeeNoSet } : {}) })
+  }
+
+  if (action === 'set') {
+    if (!requestedPasscode) throw BadRequest('הזינו קוד בן 6 ספרות.')
+    const res = await callPosRpc<{ ok: boolean; reason?: string }>('pos_set_pin', {
+      p_actor: owner.id,
+      p_target: staffId,
+      p_pin: requestedPasscode,
+    })
+    if (!res.ok) {
+      if (res.reason === 'weak') throw new ApiError(400, 'bad_request', 'הקוד קל מדי לניחוש. בחרו 6 ספרות אחרות.', { reason: 'weak' })
+      throw rpcFailure(res.reason)
+    }
+    return posJson({ ok: true, ...(employeeNoSet !== undefined ? { employeeNo: employeeNoSet } : {}) })
   }
 
   return posJson({ ok: true, employeeNo: employeeNoSet })

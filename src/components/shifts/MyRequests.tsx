@@ -180,7 +180,7 @@ export default function MyRequests() {
 function RequestRow({ r, busy, onCancel }: { r: ShiftRequest; busy?: boolean; onCancel?: () => void }) {
   const text: Record<ShiftRequest['status'], string> = {
     pending: 'מחכה לאישור המנהל/ת. תקבלו הודעה כשיענו.',
-    approved: 'אושרה ✓ אתם במשמרת הזו עכשיו.',
+    approved: 'אושרה. נוספתם לשיבוץ; הלוח הסופי יוצג לאחר פרסום המנהל/ת.',
     rejected: 'לא אושרה.',
     cancelled: 'בוטלה.',
   }

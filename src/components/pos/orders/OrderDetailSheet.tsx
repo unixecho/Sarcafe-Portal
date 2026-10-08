@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import { createClient } from '@/lib/supabase/client'
+import { readPos } from '@/lib/pos/read-client'
 import { haptic } from '@/lib/haptics'
 import { EVENT_COLUMNS, ITEM_COLUMNS, ORDER_COLUMNS } from '@/lib/pos/columns'
 import { describeEvent, groupFeed } from '@/lib/pos/events'
@@ -72,6 +73,7 @@ function useNowEvery(ms: number): number {
 /** The order, from the live store when it is there, else one direct read. */
 function useOrder(orderId: string): { order: PosOrderWithItems | null; state: 'loading' | 'ready' | 'missing' } {
   const { byId } = useLive()
+  const { me, branchId } = usePos()
   const key = useRefreshKey()
   const live = byId.get(orderId) ?? null
   const [fetched, setFetched] = useState<PosOrderWithItems | null>(null)
@@ -83,7 +85,7 @@ function useOrder(orderId: string): { order: PosOrderWithItems | null; state: 'l
     let cancelled = false
     void (async () => {
       try {
-        const { data, error } = await createClient()
+        const { data, error } = me.codeOnly ? await readPos<RawOrder>({ kind: 'order', branch: branchId, order: orderId }) : await createClient()
           .from('pos_orders')
           .select(`${ORDER_COLUMNS}, pos_order_items(${ITEM_COLUMNS})`)
           .eq('id', orderId)
@@ -104,7 +106,7 @@ function useOrder(orderId: string): { order: PosOrderWithItems | null; state: 'l
     return () => {
       cancelled = true
     }
-  }, [orderId, live, key])
+  }, [orderId, live, key, me.codeOnly, branchId])
 
   if (live) return { order: live, state: 'ready' }
   if (fetched && fetched.id === orderId) return { order: fetched, state: 'ready' }
@@ -114,6 +116,7 @@ function useOrder(orderId: string): { order: PosOrderWithItems | null; state: 'l
 type EventRow = Pick<PosEvent, 'id' | 'event' | 'order_id' | 'actor_id' | 'actor_handle' | 'at' | 'payload'>
 
 function useTimeline(orderId: string): { events: EventRow[] | null; failed: boolean } {
+  const { me, branchId } = usePos()
   const key = useRefreshKey()
   const [events, setEvents] = useState<EventRow[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -121,7 +124,7 @@ function useTimeline(orderId: string): { events: EventRow[] | null; failed: bool
     let cancelled = false
     void (async () => {
       try {
-        const { data, error } = await createClient()
+        const { data, error } = me.codeOnly ? await readPos<EventRow[]>({ kind: 'order_events', branch: branchId, order: orderId }) : await createClient()
           .from('pos_events')
           .select(EVENT_COLUMNS)
           .eq('order_id', orderId)
@@ -141,7 +144,7 @@ function useTimeline(orderId: string): { events: EventRow[] | null; failed: bool
     return () => {
       cancelled = true
     }
-  }, [orderId, key])
+  }, [orderId, key, me.codeOnly, branchId])
   return { events, failed }
 }
 

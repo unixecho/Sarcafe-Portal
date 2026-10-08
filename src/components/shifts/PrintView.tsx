@@ -3,6 +3,7 @@
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { formatDateLabel, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import { indexByShift, nameOf } from '@/lib/shifts/view'
+import Link from 'next/link'
 
 // Standalone content for /owner/schedule/print — relies on the browser's own
 // print-to-PDF, no PDF library. Explicit black-on-white (the app's dark theme
@@ -11,7 +12,8 @@ import { indexByShift, nameOf } from '@/lib/shifts/view'
 // mistaken for the live schedule.
 export default function PrintView() {
   const { db, loading, weekStart } = useShifts()
-  if (loading || !db) return <p style={{ padding: 20 }}>טוען…</p>
+  const navigation = <nav className="no-print" aria-label="ניווט" style={{ display: 'flex', gap: 16, paddingBlock: 12 }}><Link href="/owner/schedule" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center' }}>חזרה ללוח</Link><Link href="/staff" style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center' }}>בית</Link></nav>
+  if (loading || !db) return <div style={{ padding: 20 }}>{navigation}<p>טוען…</p></div>
 
   const currentWeek = db.weeks.find((w) => w.weekStart === weekStart)
   const weekShifts = currentWeek ? db.shifts.filter((s) => s.weekId === currentWeek.id) : []
@@ -22,6 +24,7 @@ export default function PrintView() {
 
   return (
     <div style={{ padding: 20, background: '#fff', color: '#111', minHeight: '100vh', colorScheme: 'light' }}>
+      {navigation}
       <style>{`
         @media print { .no-print { display: none !important } @page { size: A4 landscape; margin: 12mm } }
         .pv-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }

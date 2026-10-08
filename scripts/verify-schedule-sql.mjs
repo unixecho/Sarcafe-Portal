@@ -75,8 +75,13 @@ async function throws(sql, params, re) {
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin;
   create schema auth;
+  create schema storage;
+  create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+  create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text);
+  alter table storage.objects enable row level security;
   create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb default '{}'::jsonb);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+  create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{"session_id":"10000000-0000-4000-8000-000000000001"}'::jsonb) $$;
   create publication supabase_realtime;
   grant usage on schema public to anon, authenticated, service_role;
   grant usage on schema auth to anon, authenticated, service_role;
@@ -630,6 +635,104 @@ check('marking read affects only your own', await (async () => {
 check('mark-read of someone else\'s id changes nothing', (await one(`select public.sched_mark_read($1, $2) n`, [yossi.id, [(await notesFor(dana))[0].id]])).n === 0)
 
 // ============================================================================
+section('successor migrations — Tuesday planning and fair remaining-slot fill')
+for (const f of files.filter((x) => x > NEW_MIG)) {
+  try { await db.exec(readFileSync(MIG + f, 'utf8')); check(`apply ${f}`, true) }
+  catch (e) { console.error(e); check(`apply ${f}`, false, String(e.message)); process.exit(1) }
+}
+const planningMigration = files.find((f) => f.endsWith('_schedule_planning_fair_fill.sql'))
+await db.exec(readFileSync(MIG + planningMigration, 'utf8'))
+check('planning migration may be run again', true)
+check('deadline is preceding Tuesday even for a non-Sunday input', (await one(`select public.sched_request_deadline('2026-10-12')::text d`)).d === '2026-10-06')
+check('summer Jerusalem: Tuesday 23:59 stays open; Wednesday 00:00 closes', (await one(`select public.sched_requests_open('2026-10-11','2026-10-06 20:59:59+00') a, public.sched_requests_open('2026-10-11','2026-10-06 21:00:00+00') b`)).a === true && (await one(`select public.sched_requests_open('2026-10-11','2026-10-06 21:00:00+00') b`)).b === false)
+check('winter Jerusalem follows local midnight after DST', (await one(`select public.sched_requests_open('2026-11-01','2026-10-27 21:59:59+00') a, public.sched_requests_open('2026-11-01','2026-10-27 22:00:00+00') b`)).a === true && (await one(`select public.sched_requests_open('2026-11-01','2026-10-27 22:00:00+00') b`)).b === false)
+
+// Fixture-only wall clock override. Production always uses the actual Jerusalem clock.
+await db.exec(`create or replace function public.sched_requests_open(p_week date, p_at timestamptz default now())
+  returns boolean language sql stable set search_path = public as $$
+    select (coalesce(nullif(current_setting('test.scheduler_clock', true), '')::timestamptz, p_at) at time zone 'Asia/Jerusalem')::date <= public.sched_request_deadline(p_week);
+  $$;`)
+const planBranch = (await one(`insert into public.branches (slug, name) values ('planning-fixture', '{"he":"בדיקת שיבוץ"}') returning id`)).id
+await db.query(`insert into public.shift_settings (branch_id, roles, safety) values ($1, '[{"id":"barista","name":"צוות","color":"#ffffff"}]', '{"maxWeeklyHours":42,"minRestHours":10,"maxDailyHours":10,"maxConsecutiveDays":6}')`, [planBranch])
+const heavy = await addStaff({ first: 'Heavy Saturdays', branch: planBranch })
+const light = await addStaff({ first: 'Light Saturdays', branch: planBranch })
+const unavailable = await addStaff({ first: 'Unavailable', branch: planBranch })
+await db.query(`insert into public.schedule_members (branch_id, staff_id, schedulable)
+  select $1, s.id, s.id = any($2::uuid[]) from public.staff s`, [planBranch, [heavy.id, light.id, unavailable.id]])
+const pw = '2031-01-05'
+const planWeek = await weekOf(planBranch, pw)
+await db.exec(`select set_config('test.scheduler_clock', '2030-12-29T10:00:00Z', false)`)
+const prepStart = day(14, pw)
+const prepWeek = await weekOf(planBranch, prepStart)
+await db.query(`update public.shift_settings set working_days='{0,2,6}' where branch_id=$1`, [planBranch])
+const prepManual = await save(owner, prepWeek, { p_date: prepStart, p_assignees: JSON.stringify([asg(heavy.id)]) })
+const prepTemplates = JSON.stringify([{ id: 'am', startTime: '07:00', endTime: '13:00' }, { id: 'pm', startTime: '14:00', endTime: '18:00', roleId: 'barista' }])
+const prepared = await rpc('sched_prepare_week', { p_actor: owner.id, p_week: prepWeek, p_presets: prepTemplates })
+check('prepare week follows configured days and creates only missing empty templates', prepared.ok === true && prepared.added === 5 && (await one(`select count(*)::int n from public.shifts where week_id=$1`, [prepWeek])).n === 6)
+check('prepare week preserves every manual shift and assignment', (await assignmentsOf(prepManual.shiftId))[0].staff_id === heavy.id && (await one(`select count(*)::int n from public.shift_assignments a join public.shifts s on s.id=a.shift_id where s.week_id=$1`, [prepWeek])).n === 1)
+check('prepare week is idempotent and manager-only', (await rpc('sched_prepare_week', { p_actor: owner.id, p_week: prepWeek, p_presets: prepTemplates })).added === 0 && (await rpc('sched_prepare_week', { p_actor: light.id, p_week: prepWeek, p_presets: prepTemplates })).reason === 'forbidden')
+check('prepare week refuses malformed template times before any insert', (await rpc('sched_prepare_week', { p_actor: owner.id, p_week: prepWeek, p_presets: JSON.stringify([{ startTime: '07:00', endTime: '99:00' }]) })).reason === 'bad_time')
+await db.query(`update public.shift_settings set working_days='{0,1,2,3,4,5,6}' where branch_id=$1`, [planBranch])
+const planSunday = await save(owner, planWeek, { p_date: day(0, pw), p_assignees: JSON.stringify([asg(heavy.id)]) })
+const planMonday = await save(owner, planWeek, { p_date: day(1, pw), p_requirements: JSON.stringify([{ roleId: 'barista', min: 1 }]) })
+const planSaturday = await save(owner, planWeek, { p_date: day(6, pw), p_requirements: JSON.stringify([{ roleId: 'barista', min: 1 }]) })
+const manualId = (await assignmentsOf(planSunday.shiftId))[0].id
+const draftReq = await rpc('sched_request_shift', { p_actor: light.id, p_shift: planMonday.shiftId, p_note: 'Preferred' })
+check('employee can request an offered shift before publication', draftReq.ok === true && (await assignmentsOf(planMonday.shiftId)).length === 0)
+check('the owner is notified of a draft-week request', (await notesFor(owner)).some((n) => n.kind === 'request.new' && n.link.weekStart === pw))
+const avail = (actor, entries = [], status = 'submitted') => rpc('sched_submit_availability', { p_actor: actor.id, p_branch: planBranch, p_week_start: pw, p_entries: JSON.stringify(entries), p_note: null, p_status: status })
+check('availability submission succeeds before Tuesday close', (await avail(unavailable, Array.from({ length: 7 }, (_, i) => ({ date: day(i, pw), kind: 'unavailable' })))).ok === true)
+check('availability rejects duplicate dates and incomplete partial hours', (await avail(light, [{ date: pw, kind: 'prefer' }, { date: pw, kind: 'unavailable' }])).reason === 'bad_request' && (await avail(light, [{ date: pw, kind: 'partial', from: '08:00' }])).reason === 'bad_time')
+check('automatic completion waits for Tuesday to finish', (await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })).reason === 'planning_open')
+check('employee cannot trigger manager completion', (await rpc('sched_fill_week', { p_actor: light.id, p_week: planWeek })).reason === 'forbidden')
+await db.exec(`select set_config('test.scheduler_clock', '2031-01-01T10:00:00Z', false)`)
+check('availability rejects late submissions without modifying the old row', (await avail(unavailable, [])).reason === 'requests_closed' && (await one(`select jsonb_array_length(entries) n from public.shift_availability where staff_id=$1 and branch_id=$2`, [unavailable.id, planBranch])).n === 7)
+check('draft shift requests reject late changes', (await rpc('sched_request_shift', { p_actor: unavailable.id, p_shift: planSaturday.shiftId, p_note: null })).reason === 'requests_closed')
+check('completion waits until manager answers all weekly requests', (await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })).reason === 'requests_pending')
+await rpc('sched_decide_request', { p_actor: owner.id, p_request: draftReq.requestId, p_approve: false, p_note: null, p_force: false })
+for (let n = 1; n <= 3; n++) {
+  const ws = day(-n * 7, pw)
+  const hw = await weekOf(planBranch, ws)
+  await save(owner, hw, { p_date: day(6, ws), p_assignees: JSON.stringify([asg(heavy.id)]) })
+  await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: hw })
+}
+const filled = await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })
+check('fair fill adds remaining shifts only', filled.ok === true && filled.added === 2 && filled.remaining.length === 0, JSON.stringify(filled))
+check('existing manual assignment keeps its id and owner choice', (await assignmentsOf(planSunday.shiftId))[0].id === manualId && (await assignmentsOf(planSunday.shiftId))[0].staff_id === heavy.id)
+check('Saturday opportunity goes to the colleague with fewer historical Saturday hours', (await assignmentsOf(planSaturday.shiftId))[0].staff_id === light.id)
+check('no submitted availability means available; unavailable employee is not chosen', (await one(`select count(*)::int n from public.shift_assignments a join public.shifts s on s.id=a.shift_id where s.week_id=$1 and a.staff_id=$2`, [planWeek, unavailable.id])).n === 0 && (await assignmentsOf(planSaturday.shiftId))[0].staff_id === light.id)
+check('repeat completion is idempotent', (await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })).added === 0)
+const saturdaySecond = await save(owner, planWeek, { p_date: day(6, pw), p_start: '14:00', p_end: '18:00' })
+const spread = await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })
+check('multiple Saturday slots spread across eligible staff while preserving rest', spread.added === 1 && (await assignmentsOf(saturdaySecond.shiftId))[0].staff_id === heavy.id)
+check('completion remains draft until deliberate publication', (await one(`select status, published_snapshot from public.schedule_weeks where id=$1`, [planWeek])).status === 'draft' && (await one(`select published_snapshot from public.schedule_weeks where id=$1`, [planWeek])).published_snapshot === null)
+check('completion is audited with fairness horizon', (await one(`select detail from public.shift_audit where branch_id=$1 and action='schedule.fill' order by id desc limit 1`, [planBranch])).detail.saturdayHistoryWeeks === 12)
+
+// Eligibility independently exercises every hard restriction the automatic
+// allocator promises. Manager overrides remain in the existing shift editor.
+const safe = JSON.stringify({ maxWeeklyHours: 42, minRestHours: 10, maxDailyHours: 10, maxConsecutiveDays: 6 })
+const elig = (staff, shift, safety = safe, cap = null) => one(`select public.sched_fill_eligible($1,$2,$3,$4,$5) yes`, [staff.id, shift, pw, safety, cap]).then((r) => r.yes)
+const partialShift = await save(owner, planWeek, { p_date: day(3, pw), p_start: '07:00', p_end: '13:00' })
+await db.query(`insert into public.shift_availability (branch_id,staff_id,week_start,entries,status) values ($1,$2,$3,$4,'submitted')`, [planBranch, light.id, pw, JSON.stringify([{ date: day(3, pw), kind: 'partial', from: '09:00', to: '14:00' }])])
+check('partial availability cannot cover a shift starting outside its hours', await elig(light, partialShift.shiftId) === false)
+await db.query(`update public.shift_availability set entries=$1 where staff_id=$2 and branch_id=$3`, [JSON.stringify([{ date: day(3, pw), kind: 'partial', from: '06:00', to: '14:00' }]), light.id, planBranch])
+check('partial availability covering all shift hours is eligible', await elig(light, partialShift.shiftId) === true)
+check('employee weekly cap stops completion', await elig(light, partialShift.shiftId, safe, 6) === false)
+check('daily cap stops a long shift', await elig(light, partialShift.shiftId, JSON.stringify({ maxWeeklyHours: 42, minRestHours: 10, maxDailyHours: 5, maxConsecutiveDays: 6 })) === false)
+const restShift = await save(owner, planWeek, { p_date: day(5, pw), p_start: '22:00', p_end: '02:00' })
+check('cross-midnight rest is protected against Saturday assignment', await elig(light, restShift.shiftId) === false)
+const otherWeek = await weekOf(ghav, pw)
+await save(owner, otherWeek, { p_date: day(3, pw), p_start: '08:00', p_end: '14:00', p_assignees: JSON.stringify([asg(light.id)]) })
+// Branch assignment cannot be created for a branch-bound employee; use an
+// existing floater to verify the across-branch conflict invariant instead.
+const floaterConflict = await save(owner, otherWeek, { p_date: day(3, pw), p_start: '08:00', p_end: '14:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+check('automatic eligibility rejects any-branch overlapping assignments', floaterConflict.ok === true && await elig(yossi, partialShift.shiftId) === false)
+
+await db.query(`update public.schedule_members set schedulable=false where branch_id=$1`, [planBranch])
+const impossible = await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })
+check('unfillable places are returned explicitly and no existing assignment moves', impossible.ok === true && impossible.remaining.length >= 1 && (await assignmentsOf(planSunday.shiftId))[0].id === manualId)
+await db.exec(`select set_config('test.scheduler_clock', '', false)`)
+
 section('privileges — as the roles a browser would be')
 for (const t of ['shifts', 'shift_assignments', 'schedule_weeks', 'shift_settings', 'schedule_members', 'shift_availability']) {
   check(`a signed-in employee cannot WRITE ${t} directly`, await asRole('authenticated', dana.authId, () => refused(`insert into public.${t} default values`)) === true)

@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { isStaff } from '@/lib/staff/access'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
+import { resolveStaffIdentity } from '@/lib/staff/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,8 @@ export const dynamic = 'force-dynamic'
 // /staff/schedule: a branch-scoped staff row sees only their branch, an
 // all-branch row sees every branch.
 export default async function StaffPosPage() {
+  const identity = await resolveStaffIdentity()
+  if (!identity || identity.quick || identity.via !== 'google') redirect('/login?next=/staff/pos')
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },

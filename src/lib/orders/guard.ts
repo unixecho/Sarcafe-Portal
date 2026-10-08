@@ -8,6 +8,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { Unauthorized, Forbidden } from '@/lib/http/errors'
 import type { StaffRow } from '@/lib/owner/guard'
 import { canWorkOrders, canCancelOrder } from './access'
+import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 
 async function resolveStaff(): Promise<StaffRow | null> {
   const supabase = await createServerSupabaseClient()
@@ -15,6 +16,7 @@ async function resolveStaff(): Promise<StaffRow | null> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+  if (await validatedSessionId(supabase).then(isQuickSessionId)) throw Forbidden('כדי להשתמש בקופה צריך להתחבר עם Google')
 
   const service = createServiceRoleClient()
   const { data: row } = await service

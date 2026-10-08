@@ -4,13 +4,16 @@ import PosApp from '@/components/pos/PosApp'
 import { ApiError } from '@/lib/http/errors'
 import type { BootstrapResponse } from '@/lib/pos/api'
 import { loadBootstrap } from '@/lib/pos/server/bootstrap'
-import { resolvePosIdentity } from '@/lib/pos/server/guard'
+import { canAccessBranch, isUuid, resolvePosIdentity } from '@/lib/pos/server/guard'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Sarcafe — קופה',
   description: 'Sarcafe — קופה ועמדות הכנה.',
+  manifest: '/staff-manifest.json',
+  appleWebApp: { capable: true, title: 'Sarcafe צוות', statusBarStyle: 'black-translucent' },
 }
 
 // A till on a tablet: zoom stays ENABLED (accessibility — a person who needs to
@@ -21,6 +24,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#150f0c',
+  viewportFit: 'cover',
 }
 
 // The staff app's server entry. Middleware has already sent strangers to /login and
@@ -34,13 +38,20 @@ export const viewport: Viewport = {
 // `?branch=<slug|uuid>` is only a first-paint hint for a person who may work several
 // branches; a stale or foreign value falls back to the default rather than breaking
 // the app.
-export default async function PosPage({ searchParams }: { searchParams: Promise<{ branch?: string | string[] }> }) {
+export default async function PosPage({ searchParams }: { searchParams: Promise<{ branch?: string | string[]; v?: string; p?: string }> }) {
   const { signedIn, staff } = await resolvePosIdentity()
   if (!signedIn) redirect('/login')
   if (!staff) redirect('/no-access')
 
   const params = await searchParams
-  const ref = typeof params.branch === 'string' && params.branch.trim() !== '' ? params.branch.trim().slice(0, 80) : undefined
+  let ref = typeof params.branch === 'string' && params.branch.trim() !== '' ? params.branch.trim().slice(0, 80) : undefined
+  // A shared station link identifies its event even when it has no branch query.
+  // Resolve on the server and retain the independently authorized branch scope.
+  if (!ref && (params.v === 'station' || params.v === 'timeline') && isUuid(params.p)) {
+    const { data: point, error } = await createServiceRoleClient().from('pos_points').select('branch_id').eq('id', params.p).eq('active', true).maybeSingle()
+    if (error) throw new ApiError(503, 'unavailable', 'לא הצלחנו לפתוח את העמדה. נסו שוב.')
+    if (point && canAccessBranch(staff, point.branch_id)) ref = point.branch_id
+  }
 
   let initial: BootstrapResponse
   try {

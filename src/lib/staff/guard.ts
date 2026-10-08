@@ -1,6 +1,7 @@
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { Unauthorized, Forbidden } from '@/lib/http/errors'
 import { isStaff, type AccessRow } from '@/lib/staff/access'
+import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 
 // Being signed in with Google is NOT being staff — anyone with a Google
 // account can authenticate against this project (see /login and
@@ -13,6 +14,7 @@ export async function requireStaff(): Promise<AccessRow & { id: string; auth_use
   } = await supabase.auth.getUser()
 
   if (!user) throw Unauthorized()
+  if (await validatedSessionId(supabase).then(isQuickSessionId)) throw Forbidden('כדי להשתמש בקופה צריך להתחבר עם Google')
 
   // Service role: RLS on `staff` intentionally does not grant a row read
   // to the row's own owner (staff shouldn't be able to read their own

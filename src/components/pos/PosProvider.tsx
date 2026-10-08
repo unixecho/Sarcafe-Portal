@@ -262,7 +262,7 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
   const [menu, setMenu] = useState<PosMenu | null>(() => validMenu(initial.menu))
   const [refreshKey, setRefreshKey] = useState(0)
   const [configKey, setConfigKey] = useState(0)
-  const [connection, setConnection] = useState<RealtimeStatus>('connecting')
+  const [connection, setConnection] = useState<RealtimeStatus>(initial.me.codeOnly ? 'off' : 'connecting')
   const [online, setOnline] = useState(true)
   const [menuStale, setMenuStale] = useState(false)
   const [signedOut, setSignedOut] = useState(false)
@@ -316,6 +316,20 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
     }
     configBusy.current = true
     try {
+      if (cfgRef.current.me.codeOnly) {
+        const response = await posApi.bootstrap(branchId)
+        if (!response.ok) {
+          if (response.status === 401 || response.code === 'unauthorized') setSignedOut(true)
+          return
+        }
+        setSignedOut(false)
+        patchConfig(configFrom(response.data))
+        if (response.data.menu && response.data.menu.stamp !== menuRef.current?.stamp) {
+          const nextMenu = validMenu(response.data.menu)
+          if (nextMenu) { menuRef.current = nextMenu; setMenu(nextMenu) }
+        }
+        return
+      }
       const sb = createClient()
       const [sess, pts, rts, ps, dir] = await Promise.all([
         sb.from('pos_sessions').select(SESSION_COLUMNS).eq('branch_id', branchId).eq('status', 'active').maybeSingle(),
@@ -376,7 +390,7 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
         }
         setSignedOut(false)
         const d = r.data
-        patchConfig({ me: d.me, enabled: d.enabled, unsold: d.unsold ?? [], branches: d.branches })
+        patchConfig(d.me.codeOnly ? configFrom(d) : { me: d.me, enabled: d.enabled, unsold: d.unsold ?? [], branches: d.branches })
         if (d.menu && d.menu.stamp !== menuRef.current?.stamp) {
           const m = validMenu(d.menu)
           if (m) commitMenu(m)
@@ -417,14 +431,14 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
   // ---- the three sources of "something changed" — all bump the SAME counter ---------------------------------
 
   useEffect(() => {
-    const unsubscribe = subscribeRealtime((dirty) => {
+    const unsubscribe = cfg.me.codeOnly ? () => undefined : subscribeRealtime((dirty) => {
       bump()
       // Only these two change what refreshConfig reads and are in the publication;
       // an order change must not trigger five configuration reads per device.
       if (dirty.has('pos_points') || dirty.has('pos_sessions')) bumpConfig()
     })
-    const unsubscribeStatus = subscribeRealtimeStatus(setConnection)
-    setConnection(getRealtimeStatus())
+    const unsubscribeStatus = cfg.me.codeOnly ? () => undefined : subscribeRealtimeStatus(setConnection)
+    setConnection(cfg.me.codeOnly ? 'off' : getRealtimeStatus())
     setOnline(typeof navigator === 'undefined' ? true : navigator.onLine !== false)
 
     const poll = window.setInterval(() => {
@@ -472,7 +486,7 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
-  }, [bump, bumpConfig, refreshBootstrap, refreshMenu])
+  }, [bump, bumpConfig, refreshBootstrap, refreshMenu, cfg.me.codeOnly])
 
   // ---- after hydration: caches (kept out of initial state so server and client markup match) ----------------------
 
@@ -489,7 +503,7 @@ export function PosProvider({ initial, children }: { initial: BootstrapResponse;
       // The server could not resolve an event for us. If this tab remembers one, paint
       // that so the cashier is not stranded on a blank; the next read corrects it.
       const snap = readJson<{ cfg?: PosConfig }>('session', BOOT_KEY)
-      if (snap?.cfg?.branch) {
+      if (snap?.cfg?.branch && snap.cfg.me.id === initial.me.id && snap.cfg.me.codeOnly === initial.me.codeOnly) {
         cfgRef.current = snap.cfg
         setCfg(snap.cfg)
         const cached = validMenu(readJson('local', MENU_KEY + snap.cfg.branch.id))

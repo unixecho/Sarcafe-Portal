@@ -58,7 +58,7 @@ export default async function OwnerSchedulePage() {
   const backHref = isOp(me) ? '/owner/dashboard' : '/staff/schedule'
 
   return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 1040, margin: '0 auto', padding: '0 16px 32px' }}>
+    <main id="main" tabIndex={-1} style={{ maxWidth: 1760, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" backHref={backHref} />
       <ScheduleWorkspaceShell branches={manageableBranches} initialBranch={initialBranch} />
     </main>

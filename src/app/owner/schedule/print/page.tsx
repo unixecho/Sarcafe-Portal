@@ -6,6 +6,7 @@ import { isStaff } from '@/lib/staff/access'
 import { canViewSchedule } from '@/lib/shifts/access'
 import { getBranchBySlug } from '@/lib/branches/server'
 import { todayISO, weekStartOf } from '@/lib/shifts/time'
+import { sessionIsQuick } from '@/lib/pos/server/quick-login'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +28,7 @@ export default async function SchedulePrintPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+  if (await sessionIsQuick()) redirect('/login?next=/staff/schedule')
 
   const service = createServiceRoleClient()
   const { data: me } = await service
