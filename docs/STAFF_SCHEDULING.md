@@ -2,7 +2,7 @@
 
 ## Weekly planning update — 2026-10-08
 
-Implemented and migrated to production; deployment status is recorded in root `handoff.md`.
+Implemented, migrated and deployed to production; the authenticated pilot status is recorded in root `handoff.md`.
 Migration: `20261008134738_schedule_planning_fair_fill.sql`. Existing migration
 024 remains historical; the successor changes the request rules deliberately.
 

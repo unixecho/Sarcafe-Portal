@@ -1,6 +1,6 @@
 # Employee records and private documents
 
-Implemented and migrated to production on 2026-10-08. The application bundle is awaiting its production deployment.
+Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.
 
 The owner opens an employee's record from `/owner/staff`. `/owner/staff/[id]` includes published shift assignments, up to 100 recent checklist records with defect reasons, up to 100 event orders created by that employee, and uploaded payslips. `/staff/profile` shows the same employee's own history, Google linking and PIN change. Published schedule snapshots supply shift history; current drafts do not change it. The shift list is bounded to 150 assignments from the latest 104 published branch weeks. These are scheduled opportunities, not attendance or actual HYP cashier statistics. No HYP integration or wage calculation is implemented.
 

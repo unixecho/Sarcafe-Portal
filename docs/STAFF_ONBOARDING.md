@@ -1,6 +1,6 @@
 # Employee setup and Google linking
 
-Implemented and migrated to production on 2026-10-08. The application bundle is awaiting its production deployment.
+Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.
 
 The owner opens `/owner/staff`, enters first name, last name and the employee's HYP number (1–99999), and chooses their branch/role. The number is manually matched to HYP; no cashier integration is present. Creating the employee preserves one stable staff UUID and shows a copyable personal setup link. The app does not send messages. Contact details are optional. Existing owner-created drafts and manual/random PIN administration remain supported.
 
