@@ -68,7 +68,13 @@ export const POST = apiRoute(async (request: NextRequest) => {
     .eq('active', true)
     .maybeSingle()
   if (accessError || !access) throw fail()
-  const destination = next === '/pos' ? safePosReturn(request.cookies.get(POS_RETURN_COOKIE)?.value) || '/pos' : next === '/staff/schedule' ? '/staff' : next
+  const destination = !verified.auth_user_id
+    ? '/staff/profile?setup=google'
+    : next === '/pos'
+      ? safePosReturn(request.cookies.get(POS_RETURN_COOKIE)?.value) || '/pos'
+      : next === '/staff/schedule'
+        ? '/staff'
+        : next
 
   const response = NextResponse.json({ ok: true, next: destination }, { headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' } })
   response.cookies.set(POS_RETURN_COOKIE, '', { path: '/', maxAge: 0 })

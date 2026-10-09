@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import WeekGrid from '@/components/shifts/WeekGrid'
 import AvailabilityPortal from '@/components/shifts/AvailabilityPortal'
@@ -127,9 +127,7 @@ export default function StaffWorkspace() {
 
           <div className="sch-weeknav">
             <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="השבוע הקודם">
-              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-                ‹
-              </span>
+              <ChevronRight size={20} aria-hidden="true" />
             </button>
             <div className="sch-weeknav__label">
               <strong className="ltr-isolate">
@@ -143,9 +141,7 @@ export default function StaffWorkspace() {
               </button>
             )}
             <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="השבוע הבא">
-              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-                ›
-              </span>
+              <ChevronLeft size={20} aria-hidden="true" />
             </button>
           </div>
 

@@ -77,7 +77,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
       }
     })
     .filter((row): row is ChecklistAssignment => row !== null)
-    .sort((a, b) => a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime) || a.kind.localeCompare(b.kind))
+    .sort((a, b) => a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime) || ({ opening: 0, handover: 1, closing: 2 }[a.kind] - { opening: 0, handover: 1, closing: 2 }[b.kind]))
 }
 
 export function flattenDefinition(definition: ChecklistDefinition) {

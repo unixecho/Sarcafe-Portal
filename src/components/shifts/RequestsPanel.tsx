@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowLeftRight, Check, ChevronDown, Inbox, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, CalendarDays, Check, ChevronDown, Inbox, UserPlus, X } from 'lucide-react'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
@@ -9,7 +9,7 @@ import { Avatar, EmptyState, Notice, Person, Pill, RequestStatusPill, SwapStatus
 import { issuesOf } from '@/lib/shifts/messages'
 import { requestImpact, swapImpact } from '@/lib/shifts/rules'
 import { coverageOf } from '@/lib/shifts/coverage'
-import { addDays, formatDateLabel, formatShiftLabel, timeAgoHe, weekdayLabel, parseISODate } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, formatShiftLabel, parseISODate, timeAgoHe, weekdayLabel, weekStartOf } from '@/lib/shifts/time'
 import { indexByShift, nameOf, requestLabel, sideLabel } from '@/lib/shifts/view'
 import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
 
@@ -21,7 +21,7 @@ import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
 // then, for information, swaps still waiting on an employee, the availability the
 // team submitted, and a short history of what was decided.
 export default function RequestsPanel({ planning = false }: { planning?: boolean }) {
-  const { db, dispatch, weekStart } = useShifts()
+  const { db, dispatch, weekStart, setWeekStart } = useShifts()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
   const [prompt, setPrompt] = useState<(PromptRequest & { kind: 'request' | 'swap'; id: string }) | null>(null)
@@ -38,7 +38,20 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
     ]
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, 25)
-    return { pendingRequests, awaitingMe, awaitingPeer, history }
+    const activity = new Map<string, { requests: number; availability: number }>()
+    for (const request of db.requests.filter((candidate) => candidate.status === 'pending' && candidate.terms.date)) {
+      const key = weekStartOf(request.terms.date!)
+      const value = activity.get(key) ?? { requests: 0, availability: 0 }
+      value.requests += 1
+      activity.set(key, value)
+    }
+    for (const submission of db.availability.filter((candidate) => candidate.status === 'submitted')) {
+      const value = activity.get(submission.weekStart) ?? { requests: 0, availability: 0 }
+      value.availability += 1
+      activity.set(submission.weekStart, value)
+    }
+    const activityWeeks = [...activity].map(([start, counts]) => ({ start, ...counts })).sort((a, b) => a.start.localeCompare(b.start))
+    return { pendingRequests, awaitingMe, awaitingPeer, history, activityWeeks }
   }, [db, planning, weekStart])
 
   if (!db || !model) return null
@@ -92,6 +105,15 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
 
   return (
     <div className={`sch-wrap${planning ? ' sch-planning-requests' : ''}`} style={{ gap: planning ? 14 : 22 }}>
+      {!planning && model.activityWeeks.length > 0 && <section className="sch-request-weeks" aria-label="שבועות עם מידע מעובדים">
+        <div className="sch-row"><CalendarDays size={18} aria-hidden="true" /><div style={{ flex: 1 }}><h3 className="sch-h">שבועות עם מידע מעובדים</h3><p className="sch-sub">אין צורך לחפש: שבוע עם בקשה או זמינות נשאר מסומן כאן.</p></div></div>
+        <div className="sch-request-weeks__list">
+          {model.activityWeeks.map((item) => <button key={item.start} type="button" className="sch-request-week press" aria-pressed={item.start === weekStart} onClick={() => setWeekStart(item.start)}>
+            <strong>שבוע {formatDateLabel(item.start)}</strong>
+            <span>{item.requests ? `${item.requests} בקשות` : 'אין בקשות'} · {item.availability} הגשות זמינות</span>
+          </button>)}
+        </div>
+      </section>}
       {nothing && <EmptyState icon={<Inbox size={26} aria-hidden="true" />} title={planning ? 'כל הבקשות לשבוע הזה טופלו' : 'אין כרגע בקשות שמחכות לך'} hint={planning ? 'אפשר לשבץ ידנית ולהשלים את המקומות החסרים אחרי סגירת ההגשה.' : 'בקשות חדשות והחלפות שהעובדים הסכימו עליהן יופיעו כאן ובמרכז העדכונים.'} />}
 
       {/* ---------------------------------------------------------------- waiting on the manager */}
@@ -108,7 +130,9 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
             const fromName = nameOf(db, s.fromStaffId, s.fromStaffName)
             const toName = nameOf(db, s.toStaffId, s.toStaffName)
             return (
-              <article key={s.id} className="sch-card sch-card--attention" aria-label={`בקשת החלפה בין ${fromName} ל${toName}`}>
+              <details key={s.id} className="sch-card sch-card--attention sch-request-disclosure" aria-label={`בקשת החלפה בין ${fromName} ל${toName}`}>
+                <summary className="sch-request-summary"><span className="sch-request-summary__people"><Avatar name={fromName} /><ArrowLeftRight size={15} aria-hidden="true" /><Avatar name={toName} /></span><span><strong>{fromName} ↔ {toName}</strong><small>החלפה שמחכה להחלטה</small></span><ChevronDown size={18} className="sch-disclosure-chevron" aria-hidden="true" /></summary>
+                <div className="sch-request-body">
                 <div className="sch-row" style={{ flexWrap: 'wrap' }}>
                   <Pill tone="swap" icon={<ArrowLeftRight size={13} aria-hidden="true" />}>
                     בקשת החלפה
@@ -149,7 +173,8 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
                     <X size={18} aria-hidden="true" /> דחייה
                   </button>
                 </div>
-              </article>
+                </div>
+              </details>
             )
           })}
 
@@ -162,7 +187,9 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
             const label = shift ? formatShiftLabel(shift.date, shift.startTime, shift.endTime) : requestLabel(r.terms)
             const changed = !!shift && (r.terms.start !== shift.startTime || r.terms.end !== shift.endTime || r.terms.date !== shift.date)
             return (
-              <article key={r.id} className="sch-card sch-card--attention" aria-label={`בקשה של ${name} להצטרף למשמרת`}>
+              <details key={r.id} className="sch-card sch-card--attention sch-request-disclosure" aria-label={`בקשה של ${name} להצטרף למשמרת`}>
+                <summary className="sch-request-summary"><Avatar name={name} /><span><strong>{name}</strong><small>{label}</small></span><RequestStatusPill status="pending" /><ChevronDown size={18} className="sch-disclosure-chevron" aria-hidden="true" /></summary>
+                <div className="sch-request-body">
                 <div className="sch-row" style={{ flexWrap: 'wrap' }}>
                   <Pill tone="info" icon={<UserPlus size={13} aria-hidden="true" />}>
                     בקשה להצטרף למשמרת
@@ -209,7 +236,8 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
                     <X size={18} aria-hidden="true" /> דחייה
                   </button>
                 </div>
-              </article>
+                </div>
+              </details>
             )
           })}
         </section>
@@ -225,7 +253,7 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
               <div className="sch-row" style={{ flexWrap: 'wrap' }}>
                 <SwapStatusPill status="open" />
                 <strong style={{ flex: 1, minWidth: 0 }}>
-                  {nameOf(db, s.fromStaffId, s.fromStaffName)} {s.toStaffId ? `← ${nameOf(db, s.toStaffId, s.toStaffName)}` : '← פתוח לכולם'}
+                  {nameOf(db, s.fromStaffId, s.fromStaffName)} {s.toStaffId ? `מבקש/ת להעביר ל${nameOf(db, s.toStaffId, s.toStaffName)}` : '· פתוח לכולם'}
                 </strong>
               </div>
               <p className="sch-sub">{sideLabel(s.terms.from)}</p>
@@ -336,7 +364,7 @@ function SwapTerms({ fromName, toName, from, to }: { fromName: string; toName: s
           {fromName} עובד/ת עכשיו ב:
         </div>
         <div style={{ fontWeight: 800 }}>{label(from)}</div>
-        <div className="sch-sub">← {toName} יעבוד/תעבוד בה במקומו/ה</div>
+        <div className="sch-sub">{toName} יעבוד/תעבוד במשמרת הזו במקום {fromName}</div>
       </div>
       {to ? (
         <div>
@@ -344,7 +372,7 @@ function SwapTerms({ fromName, toName, from, to }: { fromName: string; toName: s
             {toName} עובד/ת עכשיו ב:
           </div>
           <div style={{ fontWeight: 800 }}>{label(to)}</div>
-          <div className="sch-sub">← {fromName} יעבוד/תעבוד בה במקומו/ה</div>
+          <div className="sch-sub">{fromName} יעבוד/תעבוד במשמרת הזו במקום {toName}</div>
         </div>
       ) : (
         <div className="sch-sub">{toName} לוקח/ת את המשמרת, ו{fromName} לא מקבל/ת משמרת בתמורה.</div>

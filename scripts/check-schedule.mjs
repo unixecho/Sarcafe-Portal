@@ -130,6 +130,8 @@ check('a manager sees the bookkeeping', asManager.note === member.note && asMana
 check('an employee sees a name and nothing private', asEmployee.displayName === 'דנה' && asEmployee.note === null && asEmployee.maxWeeklyHours === null && asEmployee.defaultRoleId === null && asEmployee.employmentType === null)
 check('…and whether the person can answer a swap (hasLogin) is shared', asEmployee.hasLogin === false && Z.serializeRosterRow({ ...staffRow, auth_user_id: 'x' }, undefined, false).hasLogin === true)
 check('no member row = schedulable (the default everywhere)', Z.serializeRosterRow(staffRow, undefined, false).schedulable === true)
+check('owner without an explicit member row is not schedulable', Z.serializeRosterRow({ ...staffRow, role: 'owner', badge: 'owner' }, undefined, true).schedulable === false)
+check('developer display role keeps owner powers out of scheduling by default', Z.serializeRosterRow({ ...staffRow, role: 'owner', badge: 'developer' }, undefined, true).schedulable === false)
 check('an explicit "off" is respected', Z.serializeRosterRow(staffRow, { ...member, schedulable: false }, true).schedulable === false)
 
 // ============================================================================================================

@@ -42,6 +42,15 @@ check('all migrations apply in order', true)
 const branch = (await one(`select id from public.branches where slug = 'givat-haviva'`)).id
 const owner = (await one(`insert into public.staff (first_name, role, badge, branch_id) values ('Owner', 'owner', 'owner', $1) returning id`, [branch])).id
 const worker = await one(`insert into public.staff (first_name, badge, branch_id) values ('Dana', 'barista', $1) returning id, employee_no`, [branch])
+const ownerMember = await one(`select count(*)::int n, bool_and(not schedulable) disabled from public.schedule_members where staff_id=$1`, [owner])
+check('new owner is excluded from scheduling until explicitly enabled', ownerMember.n > 0 && ownerMember.disabled === true)
+await db.query(`update public.schedule_members set schedulable=true where branch_id=$1 and staff_id=$2`, [branch, owner])
+await db.query(`update public.staff set badge='developer' where id=$1`, [owner])
+check('an explicit operator scheduling opt-in survives owner-to-developer display change', (await one(`select schedulable from public.schedule_members where branch_id=$1 and staff_id=$2`, [branch, owner])).schedulable === true)
+const promoted = (await one(`insert into public.staff (first_name, role, badge, branch_id) values ('Promoted', 'staff', 'barista', $1) returning id`, [branch])).id
+await db.query(`insert into public.schedule_members (branch_id, staff_id, schedulable) values ($1,$2,true)`, [branch, promoted])
+await db.query(`update public.staff set role='owner', badge='developer' where id=$1`, [promoted])
+check('promotion to developer resets scheduling off until explicitly enabled', (await one(`select schedulable from public.schedule_members where branch_id=$1 and staff_id=$2`, [branch, promoted])).schedulable === false)
 const definition = JSON.stringify({ categories: [{ id: 'main', title: 'בדיקות', items: [{ id: 'x', label: 'בדיקה', kind: 'status', issueType: 'other', required: true }] }] })
 for (const kind of ['opening', 'handover', 'closing']) {
   await db.query(`insert into public.checklist_templates (branch_id, kind, name, definition, created_by) values ($1,$2,$3,$4::jsonb,$5)`, [branch, kind, kind, definition, owner])
@@ -57,7 +66,8 @@ const secondShift = (await one(`insert into public.shifts (branch_id, week_id, s
 await db.query(`insert into public.shift_assignments (branch_id, shift_id, staff_id, staff_name) values ($1,$2,$3,'Dana')`, [branch, secondShift, worker.id])
 await db.query(`update public.schedule_weeks set version=version+1 where id=$1`, [week])
 const kinds = (await db.query(`select checklist_kind, shift_id from public.checklist_assignments order by shift_id, checklist_kind`)).rows
-check('republish removes stale pending requirements and maps the handover', kinds.length === 3 && kinds.some((row) => row.checklist_kind === 'handover'))
+const handovers = kinds.filter((row) => row.checklist_kind === 'handover')
+check('republish maps handover to both the outgoing and incoming shifts', kinds.length === 4 && handovers.length === 2 && new Set(handovers.map((row) => row.shift_id)).size === 2)
 
 const newTemplate = (await one(`select public.publish_checklist_template($1,$2,'opening','פתיחה חדשה',$3::jsonb) id`, [owner, branch, definition])).id
 check('owner publishes an immutable new template version', !!newTemplate && Number((await one(`select max(version) v from public.checklist_templates where branch_id=$1 and kind='opening'`, [branch])).v) === 2)

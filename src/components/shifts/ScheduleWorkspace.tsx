@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CalendarPlus, Copy, Eraser, Inbox, MoreHorizontal, Printer, Send, Undo2, X, CheckCircle2, WandSparkles } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Copy, Eraser, Inbox, MoreHorizontal, Printer, Send, Undo2, WandSparkles, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
@@ -234,9 +234,7 @@ export default function ScheduleWorkspace() {
         <>
           <div className="sch-weeknav">
             <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="השבוע הקודם">
-              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-                ‹
-              </span>
+              <ChevronRight size={20} aria-hidden="true" />
             </button>
             <div className="sch-weeknav__label">
               <strong className="ltr-isolate">
@@ -250,9 +248,7 @@ export default function ScheduleWorkspace() {
               </button>
             )}
             <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="השבוע הבא">
-              <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-                ›
-              </span>
+              <ChevronLeft size={20} aria-hidden="true" />
             </button>
           </div>
 

@@ -40,12 +40,15 @@ export function serializeSettings(row: Record<string, unknown>): ShiftSettings {
  * private note can never reach a colleague.
  */
 export function serializeRosterRow(staff: Record<string, unknown>, member: Record<string, unknown> | undefined, manager: boolean): ScheduleStaffRow {
+  const operator = staff.role === 'owner' || staff.badge === 'owner' || staff.badge === 'developer'
   return {
     staffId: staff.id as string,
     displayName: staffDisplayName(staff),
     badge: (staff.badge as string | null) ?? null,
     active: staff.active !== false,
-    schedulable: member ? member.schedulable !== false : true,
+    // Operators can opt into shifts, but never appear as available merely because
+    // an owner has not configured their branch-specific scheduling row yet.
+    schedulable: member ? member.schedulable !== false : !operator,
     defaultRoleId: manager ? ((member?.default_role_id as string | null) ?? null) : null,
     maxWeeklyHours: manager ? ((member?.max_weekly_hours as number | null) ?? null) : null,
     employmentType: manager ? ((member?.employment_type as string | null) ?? null) : null,

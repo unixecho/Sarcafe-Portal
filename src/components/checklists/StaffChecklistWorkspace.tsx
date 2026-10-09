@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Beaker, CheckCircle2, ChevronLeft, ClipboardCheck, Mail, Save, X } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, Beaker, CheckCircle2, ChevronLeft, ClipboardCheck, ShieldCheck, Save, X } from 'lucide-react'
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import { flattenChecklistDefinition, type ChecklistAnswer, type ChecklistAssignment, type ChecklistItem, type ChecklistPreviewTemplate } from '@/lib/checklists/types'
@@ -9,7 +10,7 @@ import { messageOf } from '@/components/staff/types'
 import './checklists.css'
 
 type Payload = {
-  profile: { id: string; label: string; email: string | null; employeeNo: string | null; via: 'google' | 'employee_code' }
+  profile: { id: string; label: string; email: string | null; employeeNo: string | null; via: 'google' | 'employee_code'; hasGoogle: boolean }
   assignments: ChecklistAssignment[]
   developerMode: boolean
   previews: ChecklistPreviewTemplate[]
@@ -36,8 +37,6 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [attested, setAttested] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailSaved, setEmailSaved] = useState(false)
   const [codeOpen, setCodeOpen] = useState(false)
   const [currentCode, setCurrentCode] = useState('')
   const [newCode, setNewCode] = useState('')
@@ -188,18 +187,6 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
     }
     setActiveId(null)
     await load()
-  }
-
-  async function saveEmail() {
-    try {
-      const res = await fetch('/api/checklists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'profile_email', email }) })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(messageOf(payload, 'לא הצלחנו לשמור את האימייל.'))
-      setEmailSaved(true)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'לא הצלחנו לשמור את האימייל.')
-    }
   }
 
   async function changeCode() {
@@ -370,12 +357,11 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
           </div>
         </section>
       )}
-      {data?.profile.via === 'employee_code' && !data.profile.email && (
+      {data?.profile.via === 'employee_code' && !data.profile.hasGoogle && (
         <section className="ck-card">
-          <div className="sch-row"><Mail size={20} aria-hidden="true" /><strong>רוצים גם כניסה מהירה עם Google?</strong></div>
-          <p className="sch-sub">אפשר להוסיף אימייל עכשיו. מספר העובד והקוד ימשיכו לעבוד.</p>
-          <input className="sch-input" type="email" dir="ltr" placeholder="name@gmail.com" value={email} onChange={(event) => setEmail(event.target.value)} />
-          <button className="sch-btn press" disabled={!email.includes('@') || emailSaved} onClick={() => void saveEmail()}>{emailSaved ? 'נשמר ✓' : 'שמירת אימייל'}</button>
+          <div className="sch-row"><ShieldCheck size={20} aria-hidden="true" /><strong>קישור Google נדרש לגישה מלאה</strong></div>
+          <p className="sch-sub">כתובת האימייל מתקבלת ישירות מ-Google. אי אפשר להקליד כתובת ידנית ולהשתמש בה כהרשאת כניסה.</p>
+          <Link className="sch-btn press" href="/staff/profile?setup=google">קישור חשבון Google מאובטח</Link>
         </section>
       )}
       {data?.profile.via === 'employee_code' && (

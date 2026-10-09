@@ -1,5 +1,44 @@
 # Sarcafe — cross-agent handoff
 
+## Codex addendum, 2026-10-09: onboarding, checklists, requests, RTL, staff roles and branch hub implemented locally
+
+This is the newest release candidate on branch `integrate/pos-and-scheduling`. Migration `supabase/migrations/20261009134321_onboarding_handover_owner_defaults.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded as version `20261009134321`. A seven-signal production query confirmed the ledger row, function, both triggers, browser-role denials, and complete owner/developer scheduling defaults. Git/Vercel release status is recorded below once deployment completes.
+
+### Confirmed decisions and implemented behavior
+
+- Removed the employee-side `profile_email` write completely. An unlinked number/PIN login now always returns `/staff/profile?setup=google`, regardless of its requested destination. The profile asks for the current six-digit PIN and starts the existing server-proof + PKCE Google OAuth flow. Only the verified Google callback writes the email and `auth_user_id`; owner-entered email is labeled contact-only. OAuth success/failure returns to the profile with visible feedback.
+- Checklist synchronization now gives `handover` to both staffed shifts on a multi-shift day. Ordered employee display is `opening → handover → closing`, so the morning shift runs opening then handover and the afternoon shift runs handover then closing. Single-shift days remain opening + closing. Only pending assignments are remapped; in-progress/submitted evidence remains immutable.
+- The owner checklist builder now supports form names, blank starts, restore-to-published, local draft persistence, add/reorder/duplicate/delete categories and checks, required/optional checks, number targets/units and server-side minimum-content validation. Publishing remains immutable and pending-only.
+- The owner request experience is collapsed by default. Availability is separated into per-employee disclosures with a seven-day green/red/amber/neutral grid and a distinct notes callout. Pending join/swap decisions open in-place with approve/reject actions. A week-activity rail exposes every loaded week with pending requests or submitted availability so off-screen weeks are discoverable.
+- Replaced mirrored schedule text glyphs with physical RTL week chevrons in manager, employee and availability views; removed directional text arrows from request prose and isolated partial-hour text.
+- Staff now renders in visually separate management/operator and employee groups. Added `developer` / `מפתח/ת` as a display badge; server writes the established `owner` authorization role underneath, so it retains operator powers without displaying Owner. Selecting a non-owner badge removes that role through the same owner-only staff route.
+- Owners/developers are unschedulable by default in TypeScript and in per-branch database rows. The migration backfills missing defaults and adds staff/branch triggers; explicit later toggles are preserved. A promotion into owner/developer resets scheduling off until explicitly enabled.
+- Branch chip strips were replaced by a compact branch-context picker. The dashboard now has a dedicated branch-management hub with clear active-branch cards and links to schedule, employees and checklists. The once-per-login branch confirmation sheet remains.
+
+### Main files changed
+
+- Auth/onboarding: `src/app/api/auth/quick-login/route.ts`, `src/app/api/checklists/route.ts`, `src/app/auth/callback/route.ts`, `src/app/staff/profile/page.tsx`, `src/components/staff/StaffAccountActions.tsx`, `src/components/checklists/StaffChecklistWorkspace.tsx`.
+- Checklists/migration: `src/lib/checklists/server.ts`, `src/components/checklists/OwnerChecklistWorkspace.tsx`, `src/app/api/owner/checklists/route.ts`, checklist CSS, `supabase/migrations/20261009134321_onboarding_handover_owner_defaults.sql`.
+- Scheduling/requests/RTL: `PlanningPanel.tsx`, `RequestsPanel.tsx`, all three week navigators, `serialize.ts`, scheduling CSS and schedule/checklist verification scripts.
+- Staff/branch UI: `StaffManager.tsx`, `StaffEditSheet.tsx`, `AddStaffSheet.tsx`, `badges.ts`, owner staff API, `BranchSwitcher.tsx`, `SelectSheet.tsx`, `DashboardLive.tsx`, global/records CSS.
+- Domain docs updated: `docs/STAFF_ONBOARDING.md`, `docs/STAFF_CHECKLISTS.md`, `docs/STAFF_SCHEDULING.md`, `docs/STAFF_RECORDS.md`.
+
+### Verification
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed after running outside the restricted filesystem sandbox so Next could create nested `.next` folders.
+- `npm run check:schedule` — 158 passed, 0 failed.
+- `npm run verify:schedule-sql` — 280 passed, 0 failed; all migrations apply in order including the new successor.
+- `npm run verify:checklist-sql` — 11 passed, 0 failed; includes two-sided handover, new-owner defaults, explicit opt-in preservation and developer-promotion reset assertions.
+- `npm run verify:onboarding-sql` — 46 passed, 0 failed.
+- `npm run check:staff-access` — 51 passed; includes unlinked redirect and linked station-return behavior.
+- `npm run check:pos-access` — 37 passed.
+- Playwright `1.64.0` and its Chromium runtime were installed. `npm run check:app-layout` — 161 passed after updating the synthetic navigation fixture. No authenticated iPhone walkthrough was performed.
+
+Graphify was run against `src` (the whole repository exceeded its 500-file threshold); its untracked `graphify-out/` report identified the cross-cutting auth/schedule/UI nodes used for this pass. Existing unrelated dirty/untracked files were preserved, including the pre-existing `.gitignore` change.
+
+**Exact next step:** deploy the reviewed application commit to `main`, confirm Vercel is Ready and scan production errors, then run an authenticated two-branch pilot: skip Google during onboarding and re-link from PIN login, verify morning/afternoon checklist order, confirm owner/dev scheduling defaults, inspect off-week request indicators and availability colors, and check dashboard branch switching plus mobile Hebrew RTL arrows.
+
 ## Codex addendum, 2026-10-09: native fixed dashboard shell and request controls implemented locally
 
 The requested `gpt-taste` dashboard refinement is live on production from commit

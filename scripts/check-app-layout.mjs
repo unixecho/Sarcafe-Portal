@@ -16,6 +16,7 @@ fs.mkdirSync(output, { recursive: true })
 const modules = new Map()
 const mocked = {
   'next/link': { default: ({ children, ...props }) => React.createElement('a', props, children) },
+  'next/navigation': { usePathname: () => '/owner/dashboard' },
   '@/components/SignOutButton': { default: ({ className }) => React.createElement('button', { className }, 'יציאה') },
 }
 const load = (file, extra = {}) => {

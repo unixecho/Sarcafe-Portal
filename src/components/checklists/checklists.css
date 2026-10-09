@@ -226,6 +226,11 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 .ck-builder-item select.sch-input option { background: var(--bg-elev); color: var(--text); }
 .ck-builder-item .sch-input:focus, .ck-builder-category .sch-input:focus { outline: 2px solid color-mix(in srgb, var(--neon) 72%, white); outline-offset: 2px; border-color: var(--neon); }
 .ck-builder-publish { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); }
+.ck-builder-toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.ck-builder-required { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; }
+.ck-builder-required input { inline-size: 19px; block-size: 19px; accent-color: var(--neon); }
+.ck-builder-required span { display: grid; gap: 2px; }
+.ck-builder-required small { color: var(--text-dim); }
 .ck-test-banner, .ck-notice { display: flex; align-items: flex-start; gap: 9px; border: 1px solid color-mix(in srgb, var(--neon) 42%, var(--line)); border-radius: 14px; padding: 11px 12px; background: color-mix(in srgb, var(--neon) 9%, var(--bg-elev)); color: var(--text); line-height: 1.5; }
 .ck-test-banner svg, .ck-notice svg { flex: none; margin-top: 2px; color: var(--neon); }
 .ck-developer-card { border-color: color-mix(in srgb, var(--neon) 42%, var(--line)); }
@@ -245,7 +250,8 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
   .ck-builder-category__head { grid-template-columns: 1fr; align-items: stretch; }
   .ck-builder-actions { justify-content: flex-end; }
   .ck-builder-fields { grid-template-columns: 1fr; }
-  .ck-builder-publish .sch-btn { inline-size: 100%; }
+  .ck-builder-toolbar { inline-size: 100%; }
+  .ck-builder-toolbar .sch-btn { inline-size: 100%; }
   .ck-preview-grid { grid-template-columns: 1fr; }
   .ck-entry-grid { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .ck-entry-grid > div { inline-size: 100%; }

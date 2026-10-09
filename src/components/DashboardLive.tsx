@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { FileEdit, Package, Bell, MessageCircle, ChevronDown } from 'lucide-react'
+import { Bell, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardCheck, FileEdit, MessageCircle, Package, UsersRound } from 'lucide-react'
 import StatStrip from '@/components/StatStrip'
-import BranchSwitcher from '@/components/BranchSwitcher'
 import SheetShell from '@/components/SheetShell'
-import { isDashboardBranchConfirmed, setDashboardBranchConfirmed } from '@/lib/branches/current'
+import { isDashboardBranchConfirmed, setCurrentBranchCookie, setDashboardBranchConfirmed } from '@/lib/branches/current'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
@@ -56,6 +55,11 @@ export default function DashboardLive({
     setBranchConfirmed(true)
   }
 
+  function selectBranch(slug: BranchSlug) {
+    setCurrentBranchCookie(slug)
+    setBranch(slug)
+  }
+
   const refresh = useCallback(async (forBranch: BranchSlug) => {
     setLoading(true)
     try {
@@ -94,7 +98,7 @@ export default function DashboardLive({
         <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>
           המספרים והתראות שלמטה יתייחסו לסניף שתבחרו. נשאל שוב רק בכניסה הבאה.
         </p>
-        <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
+        <BranchCards branches={branches} value={branch} onChange={selectBranch} disabled={loading} />
         <button
           type="button"
           className="press"
@@ -115,7 +119,18 @@ export default function DashboardLive({
         </button>
       </SheetShell>
 
-      <BranchSwitcher branches={branches} value={branch} onChange={setBranch} disabled={loading} />
+      <section className="dashboard-branch-hub" aria-labelledby="dashboard-branches-title">
+        <div className="dashboard-branch-hub__head">
+          <span className="dashboard-branch-hub__icon"><Building2 size={22} aria-hidden="true" /></span>
+          <div><p>מרכז שליטה</p><h2 id="dashboard-branches-title">ניהול סניפים</h2></div>
+        </div>
+        <BranchCards branches={branches} value={branch} onChange={selectBranch} disabled={loading} />
+        <nav className="dashboard-branch-actions" aria-label="פעולות בסניף הפעיל">
+          <Link className="press" href={`/owner/schedule?branch=${branch}`}><CalendarDays size={17} aria-hidden="true" />לוח משמרות</Link>
+          <Link className="press" href="/owner/staff"><UsersRound size={17} aria-hidden="true" />עובדים</Link>
+          <Link className="press" href={`/owner/checklists?branch=${branch}`}><ClipboardCheck size={17} aria-hidden="true" />צ׳קליסטים</Link>
+        </nav>
+      </section>
 
       {/* Dimmed + inert (not just visually opaque) while switching branches
           — a tap mid-fetch on a signal link or a stat's own affordance
@@ -134,6 +149,18 @@ export default function DashboardLive({
       </div>
     </div>
   )
+}
+
+function BranchCards({ branches, value, onChange, disabled = false }: { branches: Branch[]; value: BranchSlug; onChange: (slug: BranchSlug) => void; disabled?: boolean }) {
+  return <div className="dashboard-branch-grid" role="radiogroup" aria-label="בחירת סניף לניהול">
+    {branches.map((item) => {
+      const selected = item.slug === value
+      return <button key={item.slug} type="button" role="radio" aria-checked={selected} disabled={disabled} className="dashboard-branch-card press" onClick={() => onChange(item.slug)}>
+        <span><strong>{item.name.he}</strong><small>{selected ? 'הסניף הפעיל עכשיו' : 'מעבר לניהול הסניף'}</small></span>
+        {selected ? <CheckCircle2 size={20} aria-hidden="true" /> : <Building2 size={20} aria-hidden="true" />}
+      </button>
+    })}
+  </div>
 }
 
 function SignalRow({ signal }: { signal: Signal }) {

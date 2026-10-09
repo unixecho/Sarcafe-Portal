@@ -1,12 +1,12 @@
 'use client'
 
+import { Building2 } from 'lucide-react'
+import SelectSheet from '@/components/SelectSheet'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 import type { Branch, BranchSlug } from '@/lib/branches'
 
-// The one branch-chip row every /owner/* page renders identically — pulled
-// out of DashboardLive/EditorWorkspace, which each carried a byte-identical
-// copy with no shared memory between them (the actual bug report: picking a
-// branch on one page had no effect on the next). Selecting a chip here both
+// The one branch-context control every /owner/* page renders identically.
+// Selecting here both
 // updates the caller's own state (instant, no round trip) and persists the
 // choice via setCurrentBranchCookie() so the *next* page navigated to reads
 // the same branch server-side.
@@ -34,34 +34,19 @@ export default function BranchSwitcher({
   }
 
   return (
-    <div role="group" aria-label="בחירת סניף" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', opacity: disabled ? 0.6 : 1 }}>
-      {branches.map((b) => {
-        const selected = b.slug === value
-        return (
-          <button
-            key={b.slug}
-            type="button"
-            className="press"
-            aria-pressed={selected}
-            disabled={disabled}
-            onClick={() => select(b.slug)}
-            style={{
-              flex: '1 1 auto',
-              minHeight: 'var(--tap-min)',
-              padding: '0 14px',
-              borderRadius: 999,
-              border: `1px solid ${selected ? 'var(--neon)' : 'var(--line-strong)'}`,
-              background: selected ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-              color: selected ? 'var(--neon-soft)' : 'var(--text)',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              cursor: disabled ? 'default' : 'pointer',
-            }}
-          >
-            {b.name.he}
-          </button>
-        )
-      })}
+    <div className="branch-context-switcher" role="group" aria-label="הקשר הסניף הפעיל" style={{ opacity: disabled ? 0.6 : 1 }}>
+      <span className="branch-context-switcher__icon"><Building2 size={19} aria-hidden="true" /></span>
+      <span className="branch-context-switcher__copy"><small>הסניף הפעיל</small><strong>{branches.find((branch) => branch.slug === value)?.name.he ?? value}</strong></span>
+      <SelectSheet
+        label="בחירת סניף לניהול"
+        placeholder="בחירת סניף"
+        value={value}
+        options={branches.map((branch) => ({ value: branch.slug, label: branch.name.he }))}
+        onChange={(slug) => select(slug as BranchSlug)}
+        disabled={disabled}
+        allowEmpty={false}
+        style={{ minHeight: 42, borderRadius: 12, border: '1px solid var(--line-interactive)', background: 'var(--bg)', color: 'var(--text)', padding: '0 12px', minWidth: 150 }}
+      />
       {extra}
     </div>
   )

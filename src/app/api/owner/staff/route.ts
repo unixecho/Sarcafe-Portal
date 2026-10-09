@@ -18,7 +18,7 @@ import { createStaffInvitation, credentialRoute, ONBOARDING_HEADERS } from '@/li
 // WHAT A STAFF RECORD IS (the identity rules this route enforces):
 //   * a stable internal id (staff.id) — NOT the email. Email is optional: a person
 //     without one is a full employee who can be scheduled, edited and paid
-//     attention to; they just cannot sign in until an email is added;
+//     attention to; Google access is created only by the verified OAuth link flow;
 //   * a name the owner can see everywhere: display name, else first + last name,
 //     else the POS nickname (lib/shifts/names.ts — the same rule the scheduler uses);
 //   * contact details (phone, email), a job title (badge), an optional home branch,
@@ -167,7 +167,9 @@ export const POST = credentialRoute(async (request: NextRequest) => {
       // Always set, so every screen (and the audit log) shows the same real name.
       display_name: fullName || null,
       phone: cleanPhone(body.phone),
-      role: body.role,
+      // "developer" is a display title with owner/operator powers. Keeping the
+      // established role value avoids a second, divergent authorization system.
+      role: body.badge === 'developer' || body.badge === 'owner' ? 'owner' : body.role,
       badge: body.badge,
       branch_id: body.branchId,
       ...(body.employeeNo ? { employee_code: body.employeeNo, employee_no: Number(body.employeeNo) } : {}),
@@ -312,8 +314,9 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
     }
   }
 
-  if (body.role !== undefined && body.role !== before.role) {
-    updates.role = body.role
+  const requestedRole = body.role ?? (body.badge !== undefined ? (body.badge === 'developer' || body.badge === 'owner' ? 'owner' : 'staff') : undefined)
+  if (requestedRole !== undefined && requestedRole !== before.role) {
+    updates.role = requestedRole
     changed.push('הרשאה')
   }
   if (body.badge !== undefined && (body.badge || null) !== before.badge) {
@@ -326,15 +329,15 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   }
 
   // Taking away the last owner's ownership would lock everybody out of the owner screens.
-  const willBeOwner = (updates.role ?? before.role) === 'owner' || (updates.badge !== undefined ? updates.badge : before.badge) === 'owner'
-  const isOwnerNow = before.role === 'owner' || before.badge === 'owner'
+  const willBeOwner = (updates.role ?? before.role) === 'owner' || ['owner', 'developer'].includes(String((updates.badge !== undefined ? updates.badge : before.badge) ?? ''))
+  const isOwnerNow = before.role === 'owner' || ['owner', 'developer'].includes(before.badge ?? '')
   if (isOwnerNow && !willBeOwner) {
     const { data: others } = await service
       .from('staff')
       .select('id')
       .eq('active', true)
       .neq('id', body.id)
-      .or('role.eq.owner,badge.eq.owner')
+      .or('role.eq.owner,badge.eq.owner,badge.eq.developer')
       .limit(1)
     if (!others || others.length === 0) throw refusal('last_owner')
   }

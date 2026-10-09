@@ -24,6 +24,7 @@ import StaffInvitation from '@/components/staff/StaffInvitation'
 
 const BADGE_HELP: Record<string, string> = {
   owner: 'גישה מלאה לכל דבר — בכל הסניפים.',
+  developer: 'תצוגת מפתח/ת עם הרשאות מפעיל מלאות, בלי להופיע כבעלים.',
   general_manager: 'עורך/ת את התפריט, מנהל/ת את הקופה ואת לוח המשמרות של הסניף.',
 }
 
@@ -235,7 +236,7 @@ export default function StaffEditSheet({
   }
 
   const noLogin = !r.has_google
-  const emailNote = locked ? 'מחובר/ת עם חשבון Google — אי אפשר לשנות את האימייל.' : 'קוד אישי מאפשר כניסה לצ׳קליסטים ולאירועים. העובד/ת יכול/ה לקשר חשבון Google דרך קישור אישי.'
+  const emailNote = locked ? 'מחובר/ת עם חשבון Google — אי אפשר לשנות את האימייל.' : 'כתובת ליצירת קשר בלבד. הרשאות Google נוצרות רק כשהעובד/ת מקשר/ת את החשבון דרך OAuth.'
 
   return (
     <>
@@ -249,7 +250,7 @@ export default function StaffEditSheet({
             <div className="sch-wrapflex" style={{ marginTop: 4 }}>
               <Pill tone={r.active ? 'ok' : 'neutral'}>{r.active ? 'פעיל/ה' : 'לא פעיל/ה'}</Pill>
               {r.badge && <Pill tone="neutral">{badgeLabel(r.badge)}</Pill>}
-              {r.active && noLogin && <Pill tone="neutral">{r.email ? 'עוד לא התחבר/ה' : 'ללא אימייל'}</Pill>}
+              {r.active && noLogin && <Pill tone="warn">Google לא מקושר</Pill>}
             </div>
           </div>
           <button type="button" className="sch-iconbtn press" onClick={onClose} aria-label="סגירה">
@@ -294,7 +295,7 @@ export default function StaffEditSheet({
             </label>
             <label>
               <span className="sch-label" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <Mail size={14} aria-hidden="true" /> אימייל Google
+                <Mail size={14} aria-hidden="true" /> אימייל ליצירת קשר
               </span>
               <input
                 className="sch-input"
@@ -347,11 +348,11 @@ export default function StaffEditSheet({
               <h3 id={`${ids}-sched`} className="sch-h">
                 שיבוץ במשמרות
               </h3>
-              <p className="sch-sub">זה לא משנה את הפרטים של העובד/ת — רק אם אפשר לשבץ אותו/ה בלוח. נשמר מיד.</p>
+              <p className="sch-sub">זה לא משנה את הפרטים של העובד/ת — רק אם אפשר לשבץ אותו/ה בלוח. בעלי הרשאות מפעיל אינם ניתנים לשיבוץ כברירת מחדל; אפשר להפעיל זאת כאן במפורש.</p>
               {targetBranches.map((b) => {
                 const member = scheduleMembers.find((m) => m.branch_id === b.id && m.staff_id === r.id)
-                // No row = never configured = schedulable (the same default the scheduler itself uses).
-                const on = member ? member.schedulable : true
+                const operator = r.role === 'owner' || r.badge === 'owner' || r.badge === 'developer'
+                const on = member ? member.schedulable : !operator
                 return (
                   <div key={b.id} className="sch-row">
                     <span style={{ flex: 1, fontWeight: 600 }}>{targetBranches.length > 1 ? `${b.name.he ?? b.slug}: ` : ''}ניתן לשיבוץ במשמרות</span>
@@ -369,7 +370,7 @@ export default function StaffEditSheet({
                   </div>
                 )
               })}
-              <p className="sch-sub">תפקיד ברירת מחדל ומגבלת שעות שבועית — בלוח המשמרות › הגדרות.</p>
+              <p className="sch-sub">תפקיד ברירת מחדל ומגבלת שעות שבועית נמצאים באזור ההגדרות בלוח המשמרות.</p>
             </section>
           )}
 
@@ -409,7 +410,7 @@ export default function StaffEditSheet({
                   </button>
                 )}
               </div>
-              {!r.claimed_at && <p className="sch-sub">אפשר להתחבר עכשיו עם מספר העובד והקוד. אימייל Google אפשר להוסיף מאוחר יותר.</p>}
+              {!r.claimed_at && <p className="sch-sub">אפשר להתחבר עכשיו עם מספר העובד והקוד. חשבון Google אפשר לקשר ולאמת מאוחר יותר.</p>}
               <hr style={{ border: 0, borderTop: '1px solid var(--line)', width: '100%' }} />
               <StaffInvitation staffId={r.id} completeProfile={!!r.first_name?.trim() && !!r.last_name?.trim() && !!r.employee_no} />
             </section>

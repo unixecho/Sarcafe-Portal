@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
   const failLink = async (reason = 'link_failed') => {
     await supabase.auth.signOut({ scope: 'local' })
-    const response = redirect(`/staff/onboarding?error=${reason}`)
+    const response = redirect(`/staff/profile?setup=google&error=${reason}`)
     clearLinkCookie(response)
     return response
   }
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const { data, error: linkError } = await createServiceRoleClient().rpc('staff_finish_google_link', { p_token_hash: tokenHash(proof), p_auth_user: user.id })
     const result = data as { ok?: boolean; reason?: string } | null
     if (linkError || !result?.ok) return failLink(result?.reason === 'account_conflict' || result?.reason === 'already_linked' ? 'account_conflict' : 'link_failed')
-    const response = await completedRedirect('/staff/onboarding?linked=1')
+    const response = await completedRedirect('/staff/profile?linked=1')
     clearLinkCookie(response)
     return response
   }

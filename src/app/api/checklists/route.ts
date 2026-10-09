@@ -21,7 +21,6 @@ const answerSchema = z.record(
 const writeSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('save'), assignmentId: z.string().uuid(), answers: answerSchema }),
   z.object({ action: z.literal('submit'), assignmentId: z.string().uuid(), answers: answerSchema, attested: z.literal(true) }),
-  z.object({ action: z.literal('profile_email'), email: z.string().email().max(255) }),
   z.object({ action: z.literal('change_passcode'), currentPasscode: z.string().regex(/^\d{6}$/), newPasscode: z.string().regex(/^\d{6}$/) }),
 ])
 
@@ -43,7 +42,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   await ensureChecklistTemplates(service, branch, staff.id)
   await syncPublishedChecklists(service, branch.id)
   const assignments = await loadStaffChecklistAssignments(service, branch, staff.id)
-  const developerMode = isChecklistDeveloper(staff.email)
+  const developerMode = staff.badge === 'developer' || isChecklistDeveloper(staff.email)
   const { data: previewRows } = developerMode
     ? await service
         .from('checklist_templates')
@@ -62,7 +61,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   }))
   const label = staff.display_name || [staff.first_name, staff.last_name].filter(Boolean).join(' ') || `עובד/ת ${staff.employee_no ?? ''}`.trim()
   return NextResponse.json(
-    { profile: { id: staff.id, label, email: staff.email, employeeNo: staff.employee_no, via: staff.via }, assignments, developerMode, previews },
+    { profile: { id: staff.id, label, email: staff.email, employeeNo: staff.employee_no, via: staff.via, hasGoogle: Boolean(staff.auth_user_id) }, assignments, developerMode, previews },
     { headers: { 'Cache-Control': 'private, no-store' } }
   )
 })
@@ -90,14 +89,6 @@ export const POST = apiRoute(async (request: NextRequest) => {
       throw new ApiError(400, 'bad_request', 'לא הצלחנו לשנות את הקוד.')
     }
     return NextResponse.json({ ok: true, signInAgain: true }, { headers: { 'Cache-Control': 'private, no-store' } })
-  }
-
-  if (body.action === 'profile_email') {
-    const { data: duplicate } = await service.from('staff').select('id').ilike('email', body.email).neq('id', staff.id).maybeSingle()
-    if (duplicate) throw new ApiError(409, 'conflict', 'האימייל הזה כבר משויך לעובד/ת אחר/ת.')
-    const { error } = await service.from('staff').update({ email: body.email.trim().toLowerCase() }).eq('id', staff.id).is('auth_user_id', null)
-    if (error) throw new ApiError(400, 'bad_request', 'לא הצלחנו לשמור את האימייל.')
-    return NextResponse.json({ ok: true })
   }
 
   const { data: row } = await service

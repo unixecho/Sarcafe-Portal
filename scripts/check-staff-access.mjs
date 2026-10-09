@@ -165,13 +165,15 @@ const pinRequest = (next, cookie) => new NextRequest('http://localhost/api/auth/
 response = await quick.POST(pinRequest('/staff'))
 eq(response.status, 200, 'Linked employee PIN login succeeds')
 eq(sessionEvents, ['signout:local', 'revoke:old', `opaque:${STAFF}`], 'PIN replaces the previous identity with opaque floor session even when Google-linked')
+response = await quick.POST(pinRequest('/pos', `sarcafe_pos_return=/pos?v=station&p=${SLIP}`))
+eq((await response.json()).next, `/pos?v=station&p=${SLIP}`, 'Linked employee keeps an authorized station deep link')
 verifiedLogin = { ok: true, staff_id: STAFF }
 sessionEvents = []
 response = await quick.POST(pinRequest('/pos', `sarcafe_pos_return=/pos?v=station&p=${SLIP}`))
-eq((await response.json()).next, `/pos?v=station&p=${SLIP}`, 'Station deep link survives first PIN login without Google')
+eq((await response.json()).next, '/staff/profile?setup=google', 'Unlinked employee is sent to verified Google setup before other destinations')
 eq(response.headers.get('cache-control'), 'private, no-store', 'PIN login response cannot be cached')
 response = await quick.POST(pinRequest('/staff/schedule'))
-eq((await response.json()).next, '/staff', 'PIN cannot use a schedule return path to bypass Google')
+eq((await response.json()).next, '/staff/profile?setup=google', 'Schedule return path cannot bypass verified Google setup')
 eq(navigation.safePosReturn('https://foreign.example.test/pos'), null, 'External return destinations are refused')
 eq(navigation.safePosReturn(`/pos?v=station&p=${SLIP}&unknown=secret`), `/pos?v=station&p=${SLIP}`, 'Only whitelisted event navigation survives login')
 console.log(`Staff access checks: ${checks} passed`)

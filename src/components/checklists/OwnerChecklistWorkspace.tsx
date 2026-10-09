@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, Eye, Plus, QrCode, Send, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, Eye, FilePlus2, Plus, QrCode, RotateCcw, Send, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
@@ -39,6 +39,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
   const [error, setError] = useState<string | null>(null)
   const [kind, setKind] = useState<ChecklistKind>('opening')
   const [draft, setDraft] = useState<ChecklistDefinition | null>(null)
+  const [draftName, setDraftName] = useState('')
   const [publishing, setPublishing] = useState(false)
   const [entryUrl, setEntryUrl] = useState('')
   const [entryQr, setEntryQr] = useState('')
@@ -77,15 +78,24 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
   useEffect(() => {
     if (!selected || !branch) return setDraft(null)
     const saved = localStorage.getItem(`sarcafe:checklist-draft:${branch}:${selected.kind}:${selected.version}`)
-    try { setDraft(saved ? JSON.parse(saved) as ChecklistDefinition : structuredClone(selected.definition)) }
-    catch { setDraft(structuredClone(selected.definition)) }
+    try {
+      const parsed = saved ? JSON.parse(saved) as ChecklistDefinition | { name?: string; definition?: ChecklistDefinition } : null
+      if (parsed && 'definition' in parsed && parsed.definition) {
+        setDraft(parsed.definition)
+        setDraftName(parsed.name || selected.name)
+      } else {
+        setDraft(parsed && 'categories' in parsed ? parsed : structuredClone(selected.definition))
+        setDraftName(selected.name)
+      }
+    } catch { setDraft(structuredClone(selected.definition)); setDraftName(selected.name) }
   }, [selected?.id, branch])
   useEffect(() => {
     if (!draft || !selected || !branch) return
-    localStorage.setItem(`sarcafe:checklist-draft:${branch}:${selected.kind}:${selected.version}`, JSON.stringify(draft))
-  }, [draft, selected?.id, branch])
+    localStorage.setItem(`sarcafe:checklist-draft:${branch}:${selected.kind}:${selected.version}`, JSON.stringify({ name: draftName, definition: draft }))
+  }, [draft, draftName, selected?.id, branch])
   const inbox = useMemo(() => (data?.assignments ?? []).filter((row) => row.status === 'submitted' && row.issueCount > 0 && !row.resolvedAt), [data])
   const overdue = useMemo(() => (data?.assignments ?? []).filter((row) => row.status !== 'submitted' && row.shiftDate && new Date(`${row.shiftDate}T${row.endTime || '23:59'}:00`).getTime() < Date.now()), [data])
+  const builderDirty = Boolean(selected && draft && (draftName !== selected.name || JSON.stringify(draft) !== JSON.stringify(selected.definition)))
 
   async function act(action: 'seen' | 'resolve', assignmentId: string, note?: string) {
     try {
@@ -113,6 +123,15 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
       if (!current) return current
       const categories = structuredClone(current.categories)
       categories[categoryIndex]!.items.push({ id: `custom-${crypto.randomUUID()}`, label: 'בדיקה חדשה', kind: 'status', issueType: 'other', required: true })
+      return { categories }
+    })
+  }
+  function duplicateItem(categoryIndex: number, itemIndex: number) {
+    setDraft((current) => {
+      if (!current) return current
+      const categories = structuredClone(current.categories)
+      const copy = { ...categories[categoryIndex]!.items[itemIndex]!, id: `custom-${crypto.randomUUID()}` }
+      categories[categoryIndex]!.items.splice(itemIndex + 1, 0, copy)
       return { categories }
     })
   }
@@ -146,18 +165,39 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
     })
   }
   function addCategory() {
-    setDraft((current) => ({ categories: [...(current?.categories ?? []), { id: `category-${crypto.randomUUID()}`, title: 'קטגוריה חדשה', items: [] }] }))
+    setDraft((current) => ({ categories: [...(current?.categories ?? []), { id: `category-${crypto.randomUUID()}`, title: 'קטגוריה חדשה', items: [{ id: `custom-${crypto.randomUUID()}`, label: 'בדיקה חדשה', kind: 'status', issueType: 'other', required: true }] }] }))
+  }
+  function removeCategory(index: number) {
+    setDraft((current) => current ? { categories: current.categories.filter((_, categoryIndex) => categoryIndex !== index) } : current)
+  }
+  function duplicateCategory(index: number) {
+    setDraft((current) => {
+      if (!current) return current
+      const categories = structuredClone(current.categories)
+      const source = categories[index]!
+      categories.splice(index + 1, 0, { ...source, id: `category-${crypto.randomUUID()}`, title: `${source.title} — עותק`, items: source.items.map((item) => ({ ...item, id: `custom-${crypto.randomUUID()}` })) })
+      return { categories }
+    })
+  }
+  function startBlank() {
+    setDraft({ categories: [{ id: `category-${crypto.randomUUID()}`, title: 'קטגוריה חדשה', items: [{ id: `custom-${crypto.randomUUID()}`, label: 'בדיקה חדשה', kind: 'status', issueType: 'other', required: true }] }] })
+    setDraftName(`טופס ${KIND_LABELS[kind]}`)
+  }
+  function resetDraft() {
+    if (!selected) return
+    setDraft(structuredClone(selected.definition))
+    setDraftName(selected.name)
   }
 
   async function publish() {
     if (!data || !selected || !draft) return
-    if (draft.categories.some((category) => !category.title.trim() || category.items.some((item) => !item.label.trim()))) return setError('מלאו שם לכל קטגוריה ולכל בדיקה לפני הפרסום.')
+    if (!draftName.trim() || draft.categories.length === 0 || draft.categories.some((category) => !category.title.trim() || category.items.length === 0 || category.items.some((item) => !item.label.trim()))) return setError('צריך שם לטופס ולפחות קטגוריה אחת עם בדיקה אחת לפני הפרסום.')
     setPublishing(true)
     setError(null)
     try {
       const res = await fetch('/api/owner/checklists', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish', branchId: data.branch.id, kind, name: selected.name, definition: draft }),
+        body: JSON.stringify({ action: 'publish', branchId: data.branch.id, kind, name: draftName.trim(), definition: draft }),
       })
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(messageOf(payload, 'לא הצלחנו לפרסם.'))
@@ -225,23 +265,32 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
 
       {tab === 'builder' && data && <div className="ck-wrap">
         <div className="sch-segment" role="group" aria-label="סוג טופס">{(['opening', 'handover', 'closing'] as const).map((value) => <button key={value} className="press" aria-pressed={kind === value} onClick={() => setKind(value)}>{KIND_LABELS[value]}</button>)}</div>
-        <div className="ck-builder-publish"><div style={{ flex: 1, minWidth: 220 }}><strong>{selected?.name}</strong><div className="sch-sub">גרסה {selected?.version} · הגרסה החדשה תחליף רק טפסים שעדיין לא התחילו</div></div><button className="sch-btn sch-btn--primary press" disabled={!draft || publishing} onClick={() => void publish()}><Send size={17} /> {publishing ? 'מפרסם…' : 'פרסום לעובדים'}</button></div>
+        <div className="ck-builder-publish">
+          <label style={{ flex: 1, minWidth: 220 }}><span className="sch-label">שם הטופס</span><input className="sch-input" value={draftName} maxLength={200} onChange={(event) => setDraftName(event.target.value)} /></label>
+          <div className="ck-builder-toolbar">
+            <button type="button" className="sch-btn sch-btn--sm press" onClick={startBlank}><FilePlus2 size={16} /> התחלה מטופס ריק</button>
+            <button type="button" className="sch-btn sch-btn--sm press" disabled={!builderDirty} onClick={resetDraft}><RotateCcw size={16} /> שחזור הגרסה שפורסמה</button>
+            <button className="sch-btn sch-btn--primary press" disabled={!draft || publishing || !builderDirty} onClick={() => void publish()}><Send size={17} /> {publishing ? 'מפרסם…' : 'פרסום לעובדים'}</button>
+          </div>
+          <div className="sch-sub" style={{ width: '100%' }}>גרסה {selected?.version} · הטיוטה נשמרת אוטומטית בדפדפן · פרסום יוצר גרסה חדשה ומעדכן רק טפסים שעדיין לא התחילו</div>
+        </div>
         {draft?.categories.map((category, categoryIndex) => <section key={category.id} className="ck-builder-category">
-          <div className="ck-builder-category__head"><label><span className="sch-label">שם הקטגוריה</span><input className="sch-input" value={category.title} onChange={(event) => changeCategory(categoryIndex, { title: event.target.value })} /></label><div className="ck-builder-actions"><button className="sch-iconbtn press" disabled={categoryIndex === 0} onClick={() => moveCategory(categoryIndex, -1)} aria-label="העלאת הקטגוריה"><ArrowUp size={17} /></button><button className="sch-iconbtn press" disabled={categoryIndex === draft.categories.length - 1} onClick={() => moveCategory(categoryIndex, 1)} aria-label="הורדת הקטגוריה"><ArrowDown size={17} /></button></div></div>
+          <div className="ck-builder-category__head"><label><span className="sch-label">שם הקטגוריה</span><input className="sch-input" value={category.title} onChange={(event) => changeCategory(categoryIndex, { title: event.target.value })} /></label><div className="ck-builder-actions"><button className="sch-iconbtn press" disabled={categoryIndex === 0} onClick={() => moveCategory(categoryIndex, -1)} aria-label="העלאת הקטגוריה"><ArrowUp size={17} /></button><button className="sch-iconbtn press" disabled={categoryIndex === draft.categories.length - 1} onClick={() => moveCategory(categoryIndex, 1)} aria-label="הורדת הקטגוריה"><ArrowDown size={17} /></button><button className="sch-iconbtn press" onClick={() => duplicateCategory(categoryIndex)} aria-label="שכפול הקטגוריה"><Copy size={16} /></button><button className="sch-iconbtn press" onClick={() => removeCategory(categoryIndex)} aria-label="מחיקת הקטגוריה"><Trash2 size={17} /></button></div></div>
           {category.items.map((item, itemIndex) => <div className="ck-builder-item" key={item.id}>
-            <div className="ck-builder-item__head"><span className="ck-builder-item__number">{itemIndex + 1}</span><div className="ck-builder-actions"><button className="sch-iconbtn press" disabled={itemIndex === 0} aria-label="העלאת הבדיקה" onClick={() => moveItem(categoryIndex, itemIndex, -1)}><ArrowUp size={16} /></button><button className="sch-iconbtn press" disabled={itemIndex === category.items.length - 1} aria-label="הורדת הבדיקה" onClick={() => moveItem(categoryIndex, itemIndex, 1)}><ArrowDown size={16} /></button><button className="sch-iconbtn press" aria-label="מחיקת הבדיקה" onClick={() => removeItem(categoryIndex, itemIndex)}><Trash2 size={17} /></button></div></div>
+            <div className="ck-builder-item__head"><span className="ck-builder-item__number">{itemIndex + 1}</span><div className="ck-builder-actions"><button className="sch-iconbtn press" disabled={itemIndex === 0} aria-label="העלאת הבדיקה" onClick={() => moveItem(categoryIndex, itemIndex, -1)}><ArrowUp size={16} /></button><button className="sch-iconbtn press" disabled={itemIndex === category.items.length - 1} aria-label="הורדת הבדיקה" onClick={() => moveItem(categoryIndex, itemIndex, 1)}><ArrowDown size={16} /></button><button className="sch-iconbtn press" aria-label="שכפול הבדיקה" onClick={() => duplicateItem(categoryIndex, itemIndex)}><Copy size={16} /></button><button className="sch-iconbtn press" aria-label="מחיקת הבדיקה" onClick={() => removeItem(categoryIndex, itemIndex)}><Trash2 size={17} /></button></div></div>
             <label><span className="sch-label">מה העובד צריך לבדוק?</span><input className="sch-input" value={item.label} onChange={(event) => changeItem(categoryIndex, itemIndex, { label: event.target.value })} /></label>
             <label><span className="sch-label">הסבר קצר לעובד/ת (לא חובה)</span><input className="sch-input" value={item.help ?? ''} onChange={(event) => changeItem(categoryIndex, itemIndex, { help: event.target.value || undefined })} placeholder="לדוגמה: איפה נמצא המלאי החלופי" /></label>
             <div className="ck-builder-fields">
               <label><span className="sch-label">איך העובד עונה?</span><select className="sch-input" value={item.kind} onChange={(event) => changeItem(categoryIndex, itemIndex, { kind: event.target.value as typeof item.kind })}><option value="status">תקין / לא תקין</option><option value="action">בוצע / לא בוצע</option><option value="number">הזנת מספר</option></select></label>
               <label><span className="sch-label">לאן ליקוי משויך?</span><select className="sch-input" value={item.issueType} onChange={(event) => changeItem(categoryIndex, itemIndex, { issueType: event.target.value as typeof item.issueType })}><option value="inventory">מלאי</option><option value="cleanliness">ניקיון</option><option value="equipment">ציוד / מכונה</option><option value="cash">קופה</option><option value="other">אחר</option></select></label>
-              {item.kind === 'number' && <label><span className="sch-label">מה היעד התקין?</span><input className="sch-input" type="number" value={item.target ?? ''} onChange={(event) => changeItem(categoryIndex, itemIndex, { target: event.target.value === '' ? undefined : Number(event.target.value) })} /></label>}
+              {item.kind === 'number' && <><label><span className="sch-label">מה היעד התקין?</span><input className="sch-input" type="number" value={item.target ?? ''} onChange={(event) => changeItem(categoryIndex, itemIndex, { target: event.target.value === '' ? undefined : Number(event.target.value) })} /></label><label><span className="sch-label">יחידת מידה</span><input className="sch-input" maxLength={20} value={item.unit ?? ''} onChange={(event) => changeItem(categoryIndex, itemIndex, { unit: event.target.value || undefined })} placeholder="יח׳ / ₪ / מעלות" /></label></>}
             </div>
+            <label className="ck-builder-required"><input type="checkbox" checked={item.required !== false} onChange={(event) => changeItem(categoryIndex, itemIndex, { required: event.target.checked })} /><span><strong>בדיקה חובה</strong><small>כשכבוי, העובד/ת יכול/ה לדלג על הסעיף.</small></span></label>
           </div>)}
           <button className="sch-btn sch-btn--sm press" onClick={() => addItem(categoryIndex)}><Plus size={16} /> הוספת בדיקה לקטגוריה</button>
         </section>)}
         <button className="sch-btn press" onClick={addCategory}><Plus size={17} /> הוספת קטגוריה</button>
-        <div className="ck-card"><div className="sch-row"><ClipboardList size={20} /><strong>מה העובד יראה?</strong></div><span className="sch-sub">העובד מקבל בדיקה אחת בכל מסך, כפתורים גדולים של תקין/לא תקין, וחובת סיבה לכל ליקוי. כל תשובה נשמרת לפני המעבר.</span></div>
+        <div className="ck-card"><div className="sch-row"><ClipboardList size={20} /><strong>מה העובד יראה?</strong></div><span className="sch-sub">העובד מקבל קטגוריה אחת בכל מסך, כפתורים גדולים של תקין/לא תקין, וחובת סיבה לכל ליקוי. כל קטגוריה נשמרת לפני המעבר.</span></div>
       </div>}
     </div>
   )

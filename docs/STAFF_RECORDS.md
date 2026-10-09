@@ -1,5 +1,7 @@
 # Employee records and private documents
 
+Local 2026-10-09 follow-up: an unlinked employee's PIN login now lands on `/staff/profile?setup=google`; the profile asks for the current six-digit PIN and starts Google OAuth. The removed checklist-side email form can no longer write an arbitrary address that looks linked but has no Auth permissions. This application update is not deployed yet.
+
 Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.
 
 The owner opens an employee's record from `/owner/staff`. `/owner/staff/[id]` includes published shift assignments, up to 100 recent checklist records with defect reasons, up to 100 event orders created by that employee, and uploaded payslips. `/staff/profile` shows the same employee's own history, Google linking and PIN change. Published schedule snapshots supply shift history; current drafts do not change it. The shift list is bounded to 150 assignments from the latest 104 published branch weeks. These are scheduled opportunities, not attendance or actual HYP cashier statistics. No HYP integration or wage calculation is implemented.

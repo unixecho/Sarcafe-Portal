@@ -38,6 +38,8 @@ type Props = {
   onChange: (value: string) => void
   style?: React.CSSProperties
   disabled?: boolean
+  /** Hide the placeholder row when the field must always have a value. */
+  allowEmpty?: boolean
 }
 
 export default function SelectSheet({
@@ -48,6 +50,7 @@ export default function SelectSheet({
   onChange,
   style,
   disabled,
+  allowEmpty = true,
 }: Props) {
   const [open, setOpen] = useState(false)
   const titleId = useId()
@@ -55,7 +58,7 @@ export default function SelectSheet({
   const selected = options.find((o) => o.value === value)
   // '' is a real, selectable value here (it means "no filter" / "all
   // branches"), so it gets its own row rather than being an empty state.
-  const rows: SelectOption[] = [{ value: '', label: placeholder }, ...options]
+  const rows: SelectOption[] = allowEmpty ? [{ value: '', label: placeholder }, ...options] : options
 
   return (
     <>

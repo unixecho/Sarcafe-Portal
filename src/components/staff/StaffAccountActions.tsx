@@ -5,7 +5,7 @@ import { KeyRound, ShieldCheck, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import GoogleLinkButton from './GoogleLinkButton'
 
-export default function StaffAccountActions({ linked, quick }: { linked: boolean; quick: boolean }) {
+export default function StaffAccountActions({ linked, quick, focusGoogle = false, linkFailed = false, linkedNow = false }: { linked: boolean; quick: boolean; focusGoogle?: boolean; linkFailed?: boolean; linkedNow?: boolean }) {
   const id = useId()
   const [open, setOpen] = useState(false)
   const [currentCode, setCurrentCode] = useState('')
@@ -26,9 +26,12 @@ export default function StaffAccountActions({ linked, quick }: { linked: boolean
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'לא הצלחנו לשמור'); setBusy(false) }
   }
   return <>
-    <div className="sr-upload" style={{ marginBottom: 20 }}>
+    <div className={`sr-upload${focusGoogle && !linked ? ' sr-upload--required' : ''}`} style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}><ShieldCheck size={20} color="var(--neon-soft)"/><h2 style={{ margin: 0 }}>כניסה לחשבון</h2></div>
       <p className="sr-note">הקוד האישי מיועד לצ׳קליסטים ולעמדות אירועים. Google מאפשר גישה ללוח המשמרות, להזמנות מהירות ולתלושים.</p>
+      {linkedNow && <p role="status" className="sr-note" style={{ color: 'var(--ok)' }}>חשבון Google קושר ואומת בהצלחה.</p>}
+      {linkFailed && <p role="alert" className="sr-attention">הקישור לא הושלם. ודאו שבחרתם את חשבון Google האישי הנכון ונסו שוב.</p>}
+      {focusGoogle && !linked && <p role="status" className="sr-attention">כדי להשלים את פתיחת החשבון, הזינו את הקוד האישי בן 6 הספרות שבחרתם וקשרו את חשבון Google שלכם. כתובת האימייל תתקבל ותאומת ישירות מול Google.</p>}
       {!linked ? <GoogleLinkButton/> : <p className="sr-note">חשבון Google מקושר.{quick && <> <Link href="/login?next=/staff/profile" style={{ color: 'var(--neon-soft)' }}>כניסה עם Google</Link></>}</p>}
       <button type="button" className="sr-download press" style={{ background: 'none', border: 0, font: 'inherit', fontSize: '.85rem', marginTop: 14 }} onClick={() => { setError(''); setOpen(true) }}><KeyRound size={18}/>שינוי הקוד האישי</button>
     </div>

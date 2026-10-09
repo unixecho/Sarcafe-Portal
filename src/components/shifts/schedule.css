@@ -806,6 +806,31 @@ button.sch-shift {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 10px;
 }
+.sch-staff-sections {
+  display: grid;
+  gap: 18px;
+}
+.sch-staff-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg-elev) 76%, transparent);
+}
+.sch-staff-section--management {
+  border-color: color-mix(in srgb, var(--neon) 42%, var(--line));
+  background: color-mix(in srgb, var(--neon) 7%, var(--bg-elev));
+}
+.sch-staff-section__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+}
+.sch-staff-section__head svg { color: var(--neon-soft); }
+.sch-staff-section__head h2 { margin: 0; font-size: 1rem; }
+.sch-staff-section__head p { margin: 2px 0 0; color: var(--text-dim); font-size: .78rem; }
 .sch-staffrow {
   width: 100%;
   text-align: start;
@@ -826,6 +851,133 @@ button.sch-shift {
 }
 .sch-staffrow--off {
   opacity: 0.62;
+}
+.sch-staffrow--management {
+  border-color: color-mix(in srgb, var(--neon) 35%, var(--line-strong));
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--neon) 60%, transparent), inset 0 1px rgba(255,255,255,.035), 0 10px 24px rgba(0,0,0,.16);
+}
+
+/* ---- Availability: compact employee disclosures with an explicit day legend ---------------- */
+.sch-availability-board {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background: var(--bg-elev);
+}
+.sch-availability-board__head,
+.sch-availability-person > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sch-availability-board__head > :first-child { flex: 1; }
+.sch-availability-people { display: grid; gap: 8px; }
+.sch-availability-person {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-elev-2);
+  overflow: clip;
+}
+.sch-availability-person > summary {
+  min-height: 58px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.sch-availability-person > summary::-webkit-details-marker { display: none; }
+.sch-availability-person > summary > span:first-child { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.sch-availability-person > summary small { color: var(--text-dim); }
+.sch-disclosure-chevron { color: var(--text-dim); transition: transform .2s var(--ease); }
+details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
+.sch-availability-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(70px, 1fr));
+  gap: 6px;
+  padding: 0 12px 12px;
+  overflow-x: auto;
+}
+.sch-availability-day {
+  display: grid;
+  gap: 3px;
+  min-height: 66px;
+  align-content: center;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  text-align: center;
+  font-size: .76rem;
+}
+.sch-availability-day span { font-size: .7rem; }
+.sch-availability-day--available,
+.sch-availability-day--prefer { color: #9bf0bd; background: rgba(42, 165, 91, .13); border-color: rgba(80, 208, 129, .28); }
+.sch-availability-day--prefer { box-shadow: inset 0 -3px rgba(80, 208, 129, .45); }
+.sch-availability-day--unavailable { color: #ffaaa0; background: rgba(212, 70, 56, .14); border-color: rgba(242, 100, 86, .3); }
+.sch-availability-day--partial { color: #ffd08c; background: rgba(218, 142, 44, .14); border-color: rgba(235, 164, 72, .3); }
+.sch-availability-day--unset { color: var(--text-dim); background: color-mix(in srgb, var(--bg) 58%, transparent); border-color: var(--line); }
+.sch-availability-note {
+  display: flex;
+  gap: 8px;
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(111, 91, 190, .14);
+  border: 1px solid rgba(155, 133, 231, .28);
+  color: #d8ccff;
+  font-size: .82rem;
+}
+.sch-availability-person > .sch-sub { padding: 0 12px 12px; }
+
+/* ---- Request inbox: weeks stay discoverable; individual decisions stay collapsed ------------ */
+.sch-request-weeks {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--neon) 32%, var(--line));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--neon) 6%, var(--bg-elev));
+}
+.sch-request-weeks__list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.sch-request-week {
+  display: grid;
+  gap: 3px;
+  min-width: 170px;
+  min-height: 58px;
+  padding: 9px 12px;
+  text-align: start;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.sch-request-week span { color: var(--text-dim); font-size: .75rem; }
+.sch-request-week[aria-pressed='true'] { border-color: var(--neon); background: color-mix(in srgb, var(--neon) 12%, var(--bg-elev-2)); }
+.sch-request-disclosure { padding: 0; overflow: clip; }
+.sch-request-disclosure > summary { list-style: none; }
+.sch-request-disclosure > summary::-webkit-details-marker { display: none; }
+.sch-request-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding: 12px;
+  cursor: pointer;
+}
+.sch-request-summary > span:nth-child(2) { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.sch-request-summary small { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sch-request-summary__people { display: flex !important; align-items: center; gap: 4px !important; flex: none !important; }
+.sch-request-body { display: grid; gap: 12px; padding: 0 12px 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+@media (max-width: 720px) {
+  .sch-availability-days { grid-template-columns: repeat(7, 78px); }
 }
 .sch-segment {
   display: inline-flex;

@@ -16,7 +16,7 @@ const itemSchema = z.object({
   unit: z.string().max(20).optional(),
 })
 const definitionSchema = z.object({
-  categories: z.array(z.object({ id: z.string().min(1).max(100), title: z.string().min(1).max(200), items: z.array(itemSchema).max(200) })).max(50),
+  categories: z.array(z.object({ id: z.string().min(1).max(100), title: z.string().min(1).max(200), items: z.array(itemSchema).min(1).max(200) })).min(1).max(50),
 })
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('publish'), branchId: z.string().uuid(), kind: z.enum(['opening', 'handover', 'closing']), name: z.string().min(1).max(200), definition: definitionSchema }),

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle2, CalendarPlus, Clock3 } from 'lucide-react'
+import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { InlineError, Notice } from '@/components/shifts/ui'
 import { addDays, formatDateLabel, formatShiftRange, requestDeadline, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
@@ -78,9 +78,7 @@ export default function AvailabilityPortal() {
     <div className="sch-wrap">
       <div className="sch-weeknav">
         <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="שבוע קודם">
-          <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-            ‹
-          </span>
+          <ChevronRight size={20} aria-hidden="true" />
         </button>
         <div className="sch-weeknav__label">
           <strong className="ltr-isolate">
@@ -89,9 +87,7 @@ export default function AvailabilityPortal() {
           <span>הבקשות שלכם לשבוע הזה</span>
         </div>
         <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="שבוע הבא">
-          <span className="dir-flip" aria-hidden="true" style={{ fontSize: '1.3rem' }}>
-            ›
-          </span>
+          <ChevronLeft size={20} aria-hidden="true" />
         </button>
       </div>
 

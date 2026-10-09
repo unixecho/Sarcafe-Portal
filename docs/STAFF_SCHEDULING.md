@@ -1,5 +1,11 @@
 # Staff & Scheduling
 
+## Local UX and operator update — 2026-10-09
+
+The current workspace adds a Hebrew/RTL request-management pass. Employee availability is separated into collapsed person cards with a seven-day grid: explicit availability/preferences are green, unavailability red, partial hours amber, missing submissions neutral, and notes have their own purple callout. Pending join/swap decisions are collapsed by default but retain approve/reject actions when opened. A week-activity rail points owners directly to every loaded week containing pending requests or submitted availability, including weeks other than the one currently displayed. Physical RTL chevrons replace mirrored text glyphs in all schedule week navigators.
+
+The staff directory now separates `הנהלה ומפעילים` from `צוות עובדים`. The `developer` badge is a distinct display role backed by the existing owner authorization role, so it retains operator powers without rendering as Owner. Owners/developers are not schedulable by default; migration `20261009134321_onboarding_handover_owner_defaults.sql` creates guarded per-branch defaults and preserves later explicit toggles. The migration and UI changes are local and **not yet applied or deployed**.
+
 ## Weekly planning update — 2026-10-08
 
 The 2026-10-08 weekly-planning baseline was implemented, migrated and deployed to production. The per-shift request opt-in described below was applied to production on 2026-10-09 in `20261009120000_native_dashboard_shift_requests_employee_codes.sql`. The authenticated pilot status is recorded in root `handoff.md`.
@@ -101,10 +107,10 @@ Everything below was confirmed against the **live database**, not guessed from t
 ## 2. How it works now
 
 ### People
-- A staff member is identified by a **stable internal id**, never by email. Email is optional.
+- A staff member is identified by a **stable internal id**, never by email. A contact email is optional; Google permissions come only from the verified OAuth link.
 - One name rule everywhere (`lib/shifts/names.ts`, mirrored in SQL by `sched_name()`):
   display name → first + last name → POS nickname → email → "ללא שם".
-- A person with no email can be created, **scheduled, edited, deactivated** like anyone else. They just can't sign in (Google-only) until an email is added. The UI says so, in the places it matters.
+- A person with no email can be created, **scheduled, edited, deactivated** like anyone else. They can use employee number + PIN for floor tools, but Google-only features stay unavailable until they complete OAuth. Manually typing an address does not grant access.
 
 ### Shift times: templates vs. scheduled shifts
 - A **template** (Settings → "תבניות משמרת") is a suggestion. A **shift owns its own explicit start/end.**
@@ -146,6 +152,7 @@ A bell with an unread dot on both the manager's and the employee's screen. Writt
 
 ### Staff management (`/owner/staff`, owner-only as before)
 List (name, role · branch, phone/email, status pills) with search, active/inactive/all, branch filter. **Add** needs only a name (nickname pre-filled from it). One **edit sheet** per person with three visibly separate things: *who they are* (name, display name, phone, email, role, branch — one Save), *on the schedule?* (a switch per branch, applies at once), *works here at all?* (below).
+- Management/operators and regular employees render in separate visual groups. `developer` displays as `מפתח/ת` while the server stores the established owner authorization role. Owners and developers begin with scheduling disabled in each active branch and can be enabled explicitly in the same edit sheet.
 - **Deactivate** keeps all history; if the person still has future shifts it asks whether to **remove them from those** (recommended) or leave them (the board flags them). Open requests/swaps of someone who left are cancelled. It also unlinks their login (existing behaviour, now atomic). **Reactivate** any time.
 - **Delete** only appears — and only works — for a record with **no history at all** (derived from the foreign keys, so it stays correct as tables are added). Otherwise: deactivate.
 - Guards: you can't deactivate yourself; owners can't be deleted; the last owner can't lose ownership; email can't be changed once the person has signed in; duplicate email blocked (index) and duplicate **name** asks once.
@@ -220,5 +227,5 @@ Not run: a real parallel-connection concurrency test (PGlite is single-connectio
 3. **"Full" definition.** A shift is full only if it declares a need (per-role minimums) and has reached it. Most shifts declare none, so anyone may ask to join, and the manager is shown who is already on it and must confirm. Say if you'd rather always require a headcount.
 4. **Time/date change cancels pending swaps; it does not cancel pending requests** (the manager sees "the shift changed since the request" and must confirm).
 5. **Overlapping shifts are never allowed** for one person, in any branch (a person can't be in two places). Softer rules (rest, weekly/daily hours, consecutive days, unavailable day) warn and show their effect before approval, but never block.
-6. **Email can't be edited once someone has signed in** (their account is the identity); edit before first login.
+6. **Verified Google email can't be edited once someone has signed in** (their Auth identity is the authority). Before linking, any owner-entered email is contact data only and does not unlock Google permissions.
 7. Deactivating unlinks the person's login and invalidates active employee sessions/setup proofs. Reactivate and generate a new invitation for that same staff record; the employee sets a PIN and links Google again. History stays on the original UUID.

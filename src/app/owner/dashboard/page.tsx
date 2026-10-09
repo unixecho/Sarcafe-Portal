@@ -88,7 +88,7 @@ export default async function OwnerDashboardPage() {
       {checklistIssues === null && <p className="app-notifications__error" role="status">מצב הדיווחים אינו זמין כרגע. אפשר לפתוח את הצ׳קליסטים כדי לנסות שוב.</p>}
       <DashboardSections categories={categories} />
       <div className="app-group app-account"><InstallAppButton /></div>
-      {isChecklistDeveloper(me?.email) && <div className="app-group app-account"><Link href="/staff/checklists" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>תצוגת הצ׳קליסט לעובד</strong><small>בדיקת חוויית המשמרת</small></span></Link></div>}
+      {(me?.badge === 'developer' || isChecklistDeveloper(me?.email)) && <div className="app-group app-account"><Link href="/staff/checklists" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>תצוגת הצ׳קליסט לעובד</strong><small>בדיקת חוויית המשמרת</small></span></Link></div>}
     </main>
   )
 }

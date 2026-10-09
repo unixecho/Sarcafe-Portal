@@ -658,7 +658,8 @@ const heavy = await addStaff({ first: 'Heavy Saturdays', branch: planBranch })
 const light = await addStaff({ first: 'Light Saturdays', branch: planBranch })
 const unavailable = await addStaff({ first: 'Unavailable', branch: planBranch })
 await db.query(`insert into public.schedule_members (branch_id, staff_id, schedulable)
-  select $1, s.id, s.id = any($2::uuid[]) from public.staff s`, [planBranch, [heavy.id, light.id, unavailable.id]])
+  select $1, s.id, s.id = any($2::uuid[]) from public.staff s
+  on conflict (branch_id, staff_id) do update set schedulable = excluded.schedulable`, [planBranch, [heavy.id, light.id, unavailable.id]])
 const pw = '2031-01-05'
 const planWeek = await weekOf(planBranch, pw)
 await db.exec(`select set_config('test.scheduler_clock', '2030-12-29T10:00:00Z', false)`)

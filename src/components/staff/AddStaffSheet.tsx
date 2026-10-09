@@ -197,10 +197,10 @@ export default function AddStaffSheet({
           </label>
 
           <label>
-            <span className="sch-label">אימייל Google (לא חובה)</span>
+            <span className="sch-label">אימייל ליצירת קשר (לא חובה)</span>
             <input className="sch-input" type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@gmail.com" style={{ textAlign: 'start' }} />
             <span className="sch-sub" style={{ display: 'block', marginTop: 6 }}>
-              העובד/ת יקשר/תקשר את חשבון Google דרך קישור ההזמנה. הקוד האישי מאפשר כניסה לצ׳קליסטים ואירועים גם לפני הקישור.
+              הכתובת כאן היא ליצירת קשר בלבד. העובד/ת יקשר/תקשר ויאמת/תאמת את חשבון Google דרך קישור ההזמנה.
             </span>
           </label>
 
@@ -228,8 +228,8 @@ export default function AddStaffSheet({
               />
             </div>
           </div>
-          {(badge === 'owner' || badge === 'general_manager') && (
-            <Notice tone="warn">{badge === 'owner' ? 'בעלים: גישה מלאה לכל המערכת ולכל הסניפים.' : 'מנהל/ת כללי/ת: עורך/ת את התפריט, מנהל/ת את הקופה ואת לוח המשמרות של הסניף.'}</Notice>
+          {(badge === 'owner' || badge === 'developer' || badge === 'general_manager') && (
+            <Notice tone="warn">{badge === 'owner' ? 'בעלים: גישה מלאה לכל המערכת ולכל הסניפים.' : badge === 'developer' ? 'מפתח/ת: הרשאות מפעיל מלאות, בתווית נפרדת מבעלים.' : 'מנהל/ת כללי/ת: עורך/ת את התפריט, מנהל/ת את הקופה ואת לוח המשמרות של הסניף.'}</Notice>
           )}
 
           <div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { ChevronLeft, Plus, Search, ShieldCheck, UsersRound } from 'lucide-react'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import SheetShell from '@/components/SheetShell'
@@ -11,7 +11,7 @@ import AddStaffSheet from '@/components/staff/AddStaffSheet'
 import StaffEditSheet from '@/components/staff/StaffEditSheet'
 import { messageOf, reasonOf, type BranchOption, type ScheduleMemberRow, type StaffRow } from '@/components/staff/types'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
-import { badgeLabel } from '@/lib/staff/badges'
+import { badgeLabel, MANAGEMENT_BADGES, type Badge } from '@/lib/staff/badges'
 import { formatPhone, handleProblem } from '@/lib/pos/validate'
 import { staffColourMap } from '@/lib/pos/colour'
 import { useT } from '@/lib/pos/useT'
@@ -97,6 +97,29 @@ export default function StaffManager({
 
   const counts = useMemo(() => ({ active: (staff ?? []).filter((r) => r.active).length, inactive: (staff ?? []).filter((r) => !r.active).length }), [staff])
   const editing = staff?.find((r) => r.id === editingId) ?? null
+  const managementRows = visible?.filter((row) => row.role === 'owner' || MANAGEMENT_BADGES.includes(row.badge as Badge)) ?? []
+  const teamRows = visible?.filter((row) => !(row.role === 'owner' || MANAGEMENT_BADGES.includes(row.badge as Badge))) ?? []
+
+  function staffRow(row: StaffRow, management: boolean) {
+    const branch = row.branch_id ? (branches.find((b) => b.id === row.branch_id)?.name.he ?? '') : branches.length > 1 ? 'כל הסניפים' : ''
+    const title = badgeLabel(row.badge) || (row.role === 'owner' ? 'בעלים' : 'צוות')
+    return (
+      <button key={row.id} type="button" className={`sch-staffrow press${management ? ' sch-staffrow--management' : ''}${row.active ? '' : ' sch-staffrow--off'}`} onClick={() => setEditingId(row.id)} aria-label={`${row.label} — עריכה`}>
+        <Avatar name={row.label} color={colours.get(row.id)} large />
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontWeight: 800, fontSize: '1rem' }}>{row.label}</span>
+          <span className="sch-sub">{[title, branch].filter(Boolean).join(' · ')}</span>
+          {(row.phone || row.email) && <span className="sch-sub sch-faint" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{row.phone && <span dir="ltr">{formatPhone(row.phone)}</span>}{row.email && <span dir="ltr">{row.email}</span>}</span>}
+          <span className="sch-wrapflex">
+            {!row.active && <Pill tone="neutral">לא פעיל/ה</Pill>}
+            {row.active && !row.has_google && <Pill tone="warn">Google לא מקושר</Pill>}
+            {row.active && row.has_google && !row.handle_set_at && <Pill tone="neutral">כינוי לקופה עוד לא אושר</Pill>}
+          </span>
+        </span>
+        <ChevronLeft size={20} className="sch-faint" aria-hidden="true" />
+      </button>
+    )
+  }
 
   async function toggleSchedulable(row: StaffRow, targetBranchId: string, next: boolean) {
     try {
@@ -299,34 +322,15 @@ export default function StaffManager({
           hint={query ? 'נסו שם אחר, או סינון אחר.' : filter === 'active' ? 'לחצו על "הוספת איש/אשת צוות" כדי להתחיל.' : undefined}
         />
       ) : (
-        <div className="sch-staff">
-          {visible.map((row) => {
-            const branch = row.branch_id ? (branches.find((b) => b.id === row.branch_id)?.name.he ?? '') : branches.length > 1 ? 'כל הסניפים' : ''
-            return (
-              <button key={row.id} type="button" className={`sch-staffrow press${row.active ? '' : ' sch-staffrow--off'}`} onClick={() => setEditingId(row.id)} aria-label={`${row.label} — עריכה`}>
-                <Avatar name={row.label} color={colours.get(row.id)} large />
-                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontWeight: 800, fontSize: '1rem' }}>{row.label}</span>
-                  <span className="sch-sub">{[row.role === 'owner' ? 'בעלים' : badgeLabel(row.badge) || 'צוות', branch].filter(Boolean).join(' · ')}</span>
-                  {(row.phone || row.email) && (
-                    <span className="sch-sub sch-faint" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {row.phone && <span dir="ltr">{formatPhone(row.phone)}</span>}
-                      {row.email && <span dir="ltr">{row.email}</span>}
-                    </span>
-                  )}
-                  <span className="sch-wrapflex">
-                    {!row.active && <Pill tone="neutral">לא פעיל/ה</Pill>}
-                    {row.active && !row.email && <Pill tone="neutral">ללא אימייל</Pill>}
-                    {row.active && row.email && !row.has_google && <Pill tone="warn">עוד לא התחבר/ה</Pill>}
-                    {row.active && row.has_google && !row.handle_set_at && <Pill tone="neutral">כינוי לקופה עוד לא אושר</Pill>}
-                  </span>
-                </span>
-                <span aria-hidden="true" className="dir-flip sch-faint" style={{ fontSize: '1.3rem' }}>
-                  ›
-                </span>
-              </button>
-            )
-          })}
+        <div className="sch-staff-sections">
+          {managementRows.length > 0 && <section className="sch-staff-section sch-staff-section--management" aria-labelledby="management-heading">
+            <header className="sch-staff-section__head"><ShieldCheck size={20} aria-hidden="true" /><div><h2 id="management-heading">הנהלה ומפעילים</h2><p>{managementRows.length} בעלי הרשאות ניהול</p></div></header>
+            <div className="sch-staff">{managementRows.map((row) => staffRow(row, true))}</div>
+          </section>}
+          {teamRows.length > 0 && <section className="sch-staff-section" aria-labelledby="team-heading">
+            <header className="sch-staff-section__head"><UsersRound size={20} aria-hidden="true" /><div><h2 id="team-heading">צוות עובדים</h2><p>{teamRows.length} אנשי ונשות צוות</p></div></header>
+            <div className="sch-staff">{teamRows.map((row) => staffRow(row, false))}</div>
+          </section>}
         </div>
       )}
 

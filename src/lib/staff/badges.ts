@@ -5,6 +5,7 @@
 
 export type Badge =
   | 'owner'
+  | 'developer'
   | 'general_manager'
   | 'manager'
   | 'barista'
@@ -13,6 +14,7 @@ export type Badge =
 
 export const BADGES: Record<Badge, { he: string; en: string; ar: string }> = {
   owner: { he: 'בעלים', en: 'Owner', ar: 'مالك' },
+  developer: { he: 'מפתח/ת', en: 'Developer', ar: 'مطوّر/ة' },
   general_manager: { he: 'מנהל/ת כללי/ת', en: 'General Manager', ar: 'مدير عام' },
   manager: { he: 'מנהל/ת משמרת', en: 'Shift Manager', ar: 'مدير مناوبة' },
   barista: { he: 'בריסטה', en: 'Barista', ar: 'باريستا' },
@@ -22,7 +24,7 @@ export const BADGES: Record<Badge, { he: string; en: string; ar: string }> = {
 
 // Controls which half of the (future) public team page a person appears in.
 // NOT an authorization check — see access.ts for the real gate.
-export const MANAGEMENT_BADGES: Badge[] = ['owner', 'general_manager', 'manager']
+export const MANAGEMENT_BADGES: Badge[] = ['owner', 'developer', 'general_manager', 'manager']
 
 export function badgeLabel(badge: string | null | undefined, lang: 'he' | 'en' | 'ar' = 'he'): string {
   if (!badge) return ''
