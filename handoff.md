@@ -2,11 +2,11 @@
 
 ## Codex addendum, 2026-10-09: native fixed dashboard shell and request controls implemented locally
 
-The requested `gpt-taste` dashboard refinement is implemented locally on
-`integrate/pos-and-scheduling`; application deployment is pending the release
-commit. The production schema changes were applied through the authenticated
-Supabase SQL Editor on 2026-10-09 and migration version `20261009120000` was
-recorded with the user's explicit approval.
+The requested `gpt-taste` dashboard refinement is live on production from commit
+`9bbb40c` on `main`. Vercel deployment `dpl_J8dzDFb5yUm38Qqp1iyCXkcVeaNq` is
+Ready on `https://sarcafe-portal.vercel.app`. The production schema changes were
+applied through the authenticated Supabase SQL Editor on 2026-10-09 and migration
+version `20261009120000` was recorded with the user's explicit approval.
 
 - Owner and staff pages now share a fixed safe-area-aware iOS-style top bar with a
   role-aware menu that drops from the top. Route loading retains the same chrome
@@ -39,12 +39,16 @@ shift-save overload exist. The connector migration call expired and the CLI acco
 lacked project-link privileges, so the matching migration-history row was recorded
 manually after explicit user approval and then read back successfully.
 
-**Exact next step for this local slice:** commit and push the release to `main`, verify
-the production deployment, then pilot: login
+Live application verification: production deployment is Ready with no alias error;
+the authenticated `/owner/staff` page loaded the new fixed header and the owner menu
+exposed all expected management destinations. The post-deploy Vercel error-log scan
+returned no errors. Unrelated local files remain untouched and uncommitted.
+
+**Exact next step for this local slice:** the owner performs the live iPhone pilot: login
 with a leading-zero HYP code, open exactly one shift for requests, verify closed
 shifts reject requests, and verify hand-over/exchange still work.
 
-Last updated: 2026-10-08 (Asia/Jerusalem). Author: ChatGPT / Codex. A Claude addendum on the shipped Sarcafe intro and the store-readiness work follows "Current state".
+Last updated: 2026-10-09 (Asia/Jerusalem). Author: ChatGPT / Codex. A Claude addendum on the shipped Sarcafe intro and the store-readiness work follows "Current state".
 
 Interactive concept preview: `C:/Users/Johnathan/.codex/visualizations/2026/10/07/01a117c0-6236-7402-a111-af490b29f94e/sarcafe-checklist-preview.html`. The corresponding first production slice is now implemented locally in the Sarcafe app; the preview itself remains a standalone concept.
 
