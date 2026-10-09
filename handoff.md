@@ -2,7 +2,7 @@
 
 ## Codex addendum, 2026-10-09: onboarding, checklists, requests, RTL, staff roles and branch hub implemented locally
 
-This is the newest release candidate on branch `integrate/pos-and-scheduling`. Migration `supabase/migrations/20261009134321_onboarding_handover_owner_defaults.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded as version `20261009134321`. A seven-signal production query confirmed the ledger row, function, both triggers, browser-role denials, and complete owner/developer scheduling defaults. Git/Vercel release status is recorded below once deployment completes.
+This release is live from application commit `1bfab0e` on `main`. Vercel deployment `dpl_72VWgbRWXzrxsmc945QNuemF6yUo` reached Ready and serves the production aliases including `https://sarcafe-portal.vercel.app`; a live `/login` request returned HTTP 200 and the post-deploy error-log scan returned no errors. Migration `supabase/migrations/20261009134321_onboarding_handover_owner_defaults.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded as version `20261009134321`. A seven-signal production query confirmed the ledger row, function, both triggers, browser-role denials, and complete owner/developer scheduling defaults.
 
 ### Confirmed decisions and implemented behavior
 
@@ -37,7 +37,7 @@ This is the newest release candidate on branch `integrate/pos-and-scheduling`. M
 
 Graphify was run against `src` (the whole repository exceeded its 500-file threshold); its untracked `graphify-out/` report identified the cross-cutting auth/schedule/UI nodes used for this pass. Existing unrelated dirty/untracked files were preserved, including the pre-existing `.gitignore` change.
 
-**Exact next step:** deploy the reviewed application commit to `main`, confirm Vercel is Ready and scan production errors, then run an authenticated two-branch pilot: skip Google during onboarding and re-link from PIN login, verify morning/afternoon checklist order, confirm owner/dev scheduling defaults, inspect off-week request indicators and availability colors, and check dashboard branch switching plus mobile Hebrew RTL arrows.
+**Exact next step:** run an authenticated two-branch pilot on production: skip Google during onboarding and re-link from PIN login, verify morning/afternoon checklist order, confirm owner/dev scheduling defaults, inspect off-week request indicators and availability colors, and check dashboard branch switching plus mobile Hebrew RTL arrows.
 
 ## Codex addendum, 2026-10-09: native fixed dashboard shell and request controls implemented locally
 
