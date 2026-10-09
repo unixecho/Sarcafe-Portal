@@ -58,18 +58,18 @@ export function SwapStatusPill({ status }: { status: SwapStatus }) {
 }
 
 // ---- people --------------------------------------------------------------------------------
-export function Avatar({ name, color, large }: { name: string; color?: string; large?: boolean }) {
+export function Avatar({ name, color, emoji, large }: { name: string; color?: string; emoji?: string | null; large?: boolean }) {
   return (
     <span className={`sch-avatar${large ? ' sch-avatar--lg' : ''}`} style={color ? { background: color } : undefined} aria-hidden="true">
-      {initialsOf(name)}
+      {emoji || initialsOf(name)}
     </span>
   )
 }
 
-export function Person({ name, role, faded, note }: { name: string; role?: ShiftRole | null; faded?: boolean; note?: string }) {
+export function Person({ name, role, color, emoji, faded, note }: { name: string; role?: ShiftRole | null; color?: string; emoji?: string | null; faded?: boolean; note?: string }) {
   return (
     <span className={`sch-person${faded ? ' sch-person--faded' : ''}`} title={note}>
-      <Avatar name={name} color={role?.color} />
+      <Avatar name={name} color={color ?? role?.color} emoji={emoji} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
       {role && <span className="sch-faint" style={{ fontSize: '0.74rem', fontWeight: 600 }}>· {role.name}</span>}
     </span>

@@ -66,7 +66,7 @@ function emit(tsPath) {
 
 // Pure modules only. Server-only files (guard, state-query, dispatch-write) and
 // type-only files are deliberately NOT here — and the purity check below proves it.
-const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions']
+const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people']
 for (const n of PURE) emit(join(SHIFTS, `${n}.ts`))
 emit(join(SRC, 'lib', 'staff', 'access.ts'))
 
@@ -82,6 +82,7 @@ const V = await load('lib/shifts/view.mjs')
 const A = await load('lib/shifts/access.mjs')
 const S = await load('lib/shifts/schema.mjs')
 const Z = await load('lib/shifts/serialize.mjs')
+const People = await load('lib/shifts/people.mjs')
 
 // ---- Output ---------------------------------------------------------------------------------------------
 let pass = 0
@@ -272,8 +273,8 @@ const baseSettings = {
   safety: { maxWeeklyHours: 20, minRestHours: 10, maxDailyHours: 10, maxConsecutiveDays: 6 }, ruleSeverity: {},
   features: { availability: true, swaps: true }, scheduleManagers: [], onboardedAt: null,
 }
-const roster = ['dana', 'yossi'].map((id) => ({ staffId: id, displayName: id, badge: null, active: true, schedulable: true, defaultRoleId: null, maxWeeklyHours: null, employmentType: null, sortOrder: null, note: null, hasLogin: true }))
-const sh = (id, date, s, e, req = []) => ({ id, branchId: 'B1', weekId: 'W', date, startTime: s, endTime: e, presetId: null, stationId: null, requirements: req, note: null, updatedAt: null })
+const roster = ['dana', 'yossi'].map((id) => ({ staffId: id, displayName: id, avatarEmoji: null, badge: null, active: true, schedulable: true, defaultRoleId: null, maxWeeklyHours: null, employmentType: null, sortOrder: null, note: null, hasLogin: true }))
+const sh = (id, date, s, e, req = []) => ({ id, branchId: 'B1', weekId: 'W', date, startTime: s, endTime: e, presetId: null, stationId: null, requirements: req, requestsOpen: false, note: null, updatedAt: null })
 const as = (id, shiftId, staffId) => ({ id, shiftId, staffId, staffName: staffId, roleId: 'barista', status: 'assigned' })
 const shifts = [sh('s1', '2030-01-07', '07:00', '17:00'), sh('s2', '2030-01-08', '07:00', '17:00'), sh('s3', '2030-01-09', '07:00', '17:00')]
 const input = { weekStart: wk, settings: baseSettings, roster, shifts, assignments: [as('a1', 's1', 'dana'), as('a2', 's2', 'yossi'), as('a3', 's3', 'yossi')], availability: [] }
@@ -299,6 +300,15 @@ const week = (snap) => ({ id: 'W', branchId: 'B1', weekStart: wk, status: 'publi
 const live = { shifts, assignments: [as('a1', 's1', 'dana'), as('a2', 's2', 'yossi')] }
 const toSnapShift = (s) => s
 eq('identical → none', D.unpublishedChanges(week({ shifts: shifts.map(toSnapShift), assignments: live.assignments }), shifts, live.assignments).total, 0)
+const rawWeek = Z.serializeWeek({
+  id: 'W', branch_id: 'B1', week_start: wk, status: 'published', version: 1,
+  published_snapshot: {
+    shifts: shifts.map((shift) => ({ id: shift.id, branch_id: shift.branchId, week_id: shift.weekId, shift_date: shift.date, start_time: shift.startTime, end_time: shift.endTime, preset_id: null, station_id: null, requirements: shift.requirements, requests_open: false, note: null, updated_at: null })),
+    assignments: live.assignments.map((assignment) => ({ id: assignment.id, shift_id: assignment.shiftId, staff_id: assignment.staffId, staff_name: assignment.staffName, role_id: assignment.roleId, status: assignment.status })),
+  },
+})
+eq('raw PostgreSQL snapshot normalizes before comparison', D.unpublishedChanges(rawWeek, shifts, live.assignments).total, 0)
+check('opening employee requests after publish is a real shift change', D.unpublishedChanges(week({ shifts, assignments: live.assignments }), shifts.map((shift, index) => index === 0 ? { ...shift, requestsOpen: true } : shift), live.assignments).shifts === 1)
 check('a draft week has nothing to compare', D.unpublishedChanges({ ...week(null), status: 'draft' }, shifts, live.assignments).total === 0 && D.unpublishedChanges(undefined, shifts, []).total === 0)
 const added = D.unpublishedChanges(week({ shifts: shifts.slice(0, 2), assignments: live.assignments }), shifts, live.assignments)
 check('a new shift since publishing is counted', added.shifts === 1, show(added))
@@ -308,6 +318,13 @@ const people = D.unpublishedChanges(week({ shifts, assignments: [as('a1', 's1', 
 check('a person added since publishing is counted', people.people === 1, show(people))
 const swapped = D.unpublishedChanges(week({ shifts, assignments: [as('a1', 's1', 'dana'), as('a2', 's2', 'dana')] }), shifts, live.assignments)
 check('a person swapped for another counts as two changes (one out, one in)', swapped.people === 2, show(swapped))
+
+section('staff identity — default roles and colors')
+const roles = [{ id: 'barista', name: 'בריסטה', color: '#fff' }, { id: 'cashier', name: 'קופה', color: '#000' }]
+check('an explicit personal default role wins', People.suggestedRoleId({ ...roster[0], defaultRoleId: 'cashier' }, roles, undefined, [], []) === 'cashier')
+check('a legacy staff badge maps to the same role automatically', People.suggestedRoleId({ ...roster[0], badge: 'barista' }, roles, undefined, [], []) === 'barista')
+check('an unmet requirement is used before a generic fallback', People.suggestedRoleId(roster[0], roles, undefined, [{ roleId: 'cashier', min: 1 }], []) === 'cashier')
+check('staff colors are stable and distinct inside one roster', People.staffColor('dana', roster) === People.staffColor('dana', [...roster].reverse()) && People.staffColor('dana', roster) !== People.staffColor('yossi', roster))
 
 // ============================================================================================================
 section('view helpers — names, clashes, what is waiting on whom')

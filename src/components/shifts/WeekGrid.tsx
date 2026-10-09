@@ -5,6 +5,7 @@ import { Person, Pill } from '@/components/shifts/ui'
 import { hoursFor, matchPreset } from '@/lib/shifts/presets'
 import { nameOf, indexByShift, pendingRequestsByShift, swapPendingAssignmentIds, shiftFacts } from '@/lib/shifts/view'
 import { formatDateLabel, formatShiftLabel, hasStarted, relativeDayLabel, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
+import { staffColor } from '@/lib/shifts/people'
 import type { Assignment, Shift, ShiftsDB, Warning } from '@/lib/shifts/types'
 
 // ONE renderer for a week, used by the manager's board and the employee's
@@ -217,6 +218,8 @@ function ShiftCard({
                 key={a.id}
                 name={nameOf(db, a.staffId, a.staffName)}
                 role={a.roleId ? roleById.get(a.roleId) : null}
+                color={staffColor(a.staffId, db.roster)}
+                emoji={row?.avatarEmoji}
                 faded={swapIds.has(a.id) || (!!row && !row.active)}
                 note={row && !row.active ? 'לא פעיל/ה' : undefined}
               />

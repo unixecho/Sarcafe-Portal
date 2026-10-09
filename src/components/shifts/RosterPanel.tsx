@@ -1,8 +1,12 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Switch from '@/components/Switch'
 import SelectSheet from '@/components/SelectSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
+import type { ScheduleStaffRow } from '@/lib/shifts/types'
+
+const SAVE_PAUSE_MS = 550
 
 // "Who's on the schedule, who runs it" — the direct answer to "staff
 // window needs staff flags for scheduling": a per-person schedulable
@@ -10,22 +14,56 @@ import { useShifts } from '@/components/shifts/ShiftsProvider'
 // delegate-manager toggle. Ported from AyekaBar's RosterPanel.tsx.
 export default function RosterPanel() {
   const { db, dispatch } = useShifts()
+  const [rows, setRows] = useState<ScheduleStaffRow[]>(() => db?.roster ?? [])
+  const confirmed = useRef<ScheduleStaffRow[]>(db?.roster ?? [])
+  const dbRef = useRef(db)
+  dbRef.current = db
+  const pending = useRef(new Map<string, Record<string, unknown>>())
+  const timers = useRef(new Map<string, number>())
+
+  useEffect(() => {
+    confirmed.current = db?.roster ?? []
+    if (pending.current.size === 0) setRows(db?.roster ?? [])
+  }, [db?.roster])
+
+  async function flushMember(staffId: string, success: string) {
+    const patch = pending.current.get(staffId)
+    const currentDb = dbRef.current
+    if (!patch || !currentDb) return
+    pending.current.delete(staffId)
+    timers.current.delete(staffId)
+    const result = await dispatch({ type: 'setMember', branchId: currentDb.branchId, staffId, patch }, { success })
+    if (!result.ok) setRows(confirmed.current)
+  }
+
+  function patchMember(staffId: string, patch: Partial<ScheduleStaffRow>, success: string) {
+    setRows((current) => current.map((row) => (row.staffId === staffId ? { ...row, ...patch } : row)))
+    pending.current.set(staffId, { ...(pending.current.get(staffId) ?? {}), ...patch })
+    const activeTimer = timers.current.get(staffId)
+    if (activeTimer) window.clearTimeout(activeTimer)
+    timers.current.set(staffId, window.setTimeout(() => void flushMember(staffId, success), SAVE_PAUSE_MS))
+  }
+
+  useEffect(() => () => {
+    for (const timer of timers.current.values()) window.clearTimeout(timer)
+    for (const staffId of pending.current.keys()) void flushMember(staffId, 'שינויי העובד נשמרו ✓')
+  // dispatch is stable; flushMember deliberately reads the latest refs/dbRef.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch])
+
   if (!db) return null
 
-  async function toggleSchedulable(staffId: string, next: boolean, name: string) {
-    await dispatch(
-      { type: 'setMember', branchId: db!.branchId, staffId, patch: { schedulable: next } },
-      { success: next ? `${name} חזר/ה להיות זמין/ה לשיבוץ` : `${name} לא יופיע/תופיע יותר ברשימת השיבוץ` }
-    )
+  function toggleSchedulable(staffId: string, next: boolean, name: string) {
+    patchMember(staffId, { schedulable: next }, next ? `${name} חזר/ה להיות זמין/ה לשיבוץ` : `${name} לא יופיע/תופיע יותר ברשימת השיבוץ`)
   }
-  async function setDefaultRole(staffId: string, roleId: string) {
-    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { defaultRoleId: roleId || null } }, { success: 'תפקיד ברירת המחדל נשמר ✓' })
+  function setDefaultRole(staffId: string, roleId: string) {
+    patchMember(staffId, { defaultRoleId: roleId || null }, 'תפקיד ברירת המחדל נשמר ✓')
   }
   // The cap is typed, so it saves when the field is left, not on every keystroke.
-  async function setMaxHours(staffId: string, value: string) {
+  function setMaxHours(staffId: string, value: string) {
     const n = value.trim() === '' ? null : Number(value)
     if (n !== null && (!Number.isInteger(n) || n < 0 || n > 168)) return
-    await dispatch({ type: 'setMember', branchId: db!.branchId, staffId, patch: { maxWeeklyHours: n } }, { success: 'מגבלת השעות נשמרה ✓' })
+    patchMember(staffId, { maxWeeklyHours: n }, 'מגבלת השעות נשמרה ✓')
   }
   async function toggleDelegate(staffId: string, next: boolean, name: string) {
     if (!db) return
@@ -36,7 +74,7 @@ export default function RosterPanel() {
     )
   }
 
-  const active = db.roster.filter((r) => r.active)
+  const active = rows.filter((r) => r.active)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

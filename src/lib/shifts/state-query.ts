@@ -157,7 +157,7 @@ async function loadRoster(service: Service, branchId: string, isManager: boolean
   const [{ data: staffRows }, { data: memberRows }] = await Promise.all([
     service
       .from('staff')
-      .select('id, display_name, first_name, last_name, handle, email, badge, role, active, branch_id, auth_user_id'),
+      .select('id, display_name, first_name, last_name, handle, email, badge, role, active, branch_id, auth_user_id, avatar_emoji'),
     service.from('schedule_members').select('*').eq('branch_id', branchId),
   ])
   const members = new Map((memberRows ?? []).map((m) => [m.staff_id as string, m as Record<string, unknown>]))

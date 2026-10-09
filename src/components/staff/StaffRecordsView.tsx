@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { CalendarDays, ClipboardCheck, FileText, ShoppingBag, Upload, Download, LockKeyhole } from 'lucide-react'
 import type { StaffRecords } from '@/lib/staff/records-types'
+import EmojiAvatarPicker from '@/components/staff/EmojiAvatarPicker'
 import './records.css'
 
 const TABS = [
@@ -49,11 +50,12 @@ export default function StaffRecordsView({ initial, owner = false, children }: {
 
   return <div className="staff-records" dir="rtl">
     <section className="sr-profile rise">
-      <span className="sr-avatar" aria-hidden="true">{name.trim().slice(0, 1)}</span>
+      <span className="sr-avatar" aria-hidden="true">{me.avatar_emoji || name.trim().slice(0, 1)}</span>
       <div><p className="sr-caption">{owner ? 'תיק עובד' : 'החשבון שלי'}</p><h1>{name}</h1>
         <p>{me.employee_no ? <>מספר עובד HYP <bdi>{me.employee_no}</bdi></> : 'מספר עובד עדיין לא הוגדר'}{!me.active && ' · לא פעיל'}</p>
       </div>
     </section>
+    {!owner && <EmojiAvatarPicker value={me.avatar_emoji} onChange={(emoji) => setRecords((current) => ({ ...current, employee: { ...current.employee, avatar_emoji: emoji } }))} />}
     {children}
     <div className="sr-summary" aria-label="פעילות מתועדת">
       <div><strong>{records.shifts.length}</strong><span>שיבוצים שפורסמו</span></div>

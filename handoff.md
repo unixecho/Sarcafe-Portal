@@ -1,5 +1,39 @@
 # Sarcafe — cross-agent handoff
 
+## Codex addendum, 2026-10-10: schedule publication fix, responsive saves and employee identity prepared for production
+
+Current branch is `integrate/pos-and-scheduling` at `046f2ed` (`origin/main`). The application slice is present as uncommitted workspace changes and has not yet been pushed or deployed. Migration `20261009153126_staff_avatar_emoji.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded in `supabase_migrations.schema_migrations`; a production query confirmed both the column and constraint. The pre-existing `.gitignore` modification and unrelated untracked skill/Graphify/native-store files remain untouched.
+
+### Confirmed cause and implemented behavior
+
+- Fixed the false “changes waiting to be published” banner. PostgreSQL stores `published_snapshot` rows with snake-case column names; the live board compared them as camel-case domain objects, so every published shift/person appeared changed. `serializeWeek()` now normalizes frozen shifts and assignments before comparison, and `requestsOpen` is included in the shift signature.
+- Shift saves no longer wait for a second browser round trip. The guarded/atomic database write still runs first; its response now contains the authoritative changed shift and assignments, which the board paints immediately before a quiet full reconciliation. Settings/catalog edits retain debouncing, and roster permission/default-role/hour edits merge per employee during a 550 ms pause.
+- Adding a person to a shift now chooses their explicit scheduling default, then a matching staff badge, template role, unmet role requirement, or first configured role. It remains editable before save.
+- Every employee receives a stable branch-local schedule color. Optional self-selected emoji avatars appear on the profile and schedule. New private no-store route: `/api/staff/profile/avatar`; it resolves Google or number/PIN identity server-side and updates only that staff row. Migration `20261009153126_staff_avatar_emoji.sql` adds the nullable, constrained column and is applied remotely.
+- The public accessibility widget is dynamically loaded only on customer routes and is absent on `/login`, `/owner`, `/staff`, `/pos`, `/checklists`, and `/no-access` (including nested routes).
+- The proposed public portal visual polish was rejected and excluded from this release. Reviews retain the original unboxed flow, and branch pages retain the existing responsive illustrated backgrounds (`/background.jpg` and `/background-wide.jpg`).
+
+### Main files
+
+- Scheduling: `src/lib/shifts/{serialize,snapshot-diff,people,types}.ts`, `state-query.ts`, `src/components/shifts/{ShiftsProvider,ShiftSheet,RosterPanel,WeekGrid,StaffPickerSheet,ui}.tsx`, shift dispatch route and schedule tests.
+- Avatar/profile: `src/lib/staff/avatar.ts`, records types/loader, `EmojiAvatarPicker.tsx`, `StaffRecordsView.tsx`, private avatar API route, records CSS and migration `20261009153126_staff_avatar_emoji.sql`.
+- Public UI/accessibility: `PublicA11yWidget.tsx`, root layout and the updated intro/layout checks.
+- Documentation: `docs/STAFF_SCHEDULING.md`, `docs/STAFF_RECORDS.md`.
+
+### Verification
+
+- `npm run typecheck` — passed.
+- `npm run build` — passed; final production route manifest includes `/api/staff/profile/avatar`.
+- `npm run check:schedule` — 165 passed, including a raw PostgreSQL snapshot regression, request-open diff, role inference and stable colors.
+- `npm run verify:schedule-sql` — 281 passed; all migrations apply in order, including the new avatar migration.
+- `npm run verify:onboarding-sql` — 46 passed.
+- `npm run check:staff-access` — 51 passed.
+- `npm run check:intro` — 430 passed after the accessibility wrapper rename.
+- `npm run check:app-layout` — 161 passed in Playwright at 320/390/768/1760 px.
+- `git diff --check` — passed (line-ending warnings only).
+
+**Exact next step:** rerun the release checks after excluding the rejected public polish, commit only the intended functional files (exclude the pre-existing `.gitignore` and unrelated untracked files), push the release to `main`, then verify the production deployment, private-route widget absence and public branch imagery.
+
 ## Codex addendum, 2026-10-09: onboarding, checklists, requests, RTL, staff roles and branch hub implemented locally
 
 This release is live from application commit `1bfab0e` on `main`. Vercel deployment `dpl_72VWgbRWXzrxsmc945QNuemF6yUo` reached Ready and serves the production aliases including `https://sarcafe-portal.vercel.app`; a live `/login` request returned HTTP 200 and the post-deploy error-log scan returned no errors. Migration `supabase/migrations/20261009134321_onboarding_handover_owner_defaults.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded as version `20261009134321`. A seven-signal production query confirmed the ledger row, function, both triggers, browser-role denials, and complete owner/developer scheduling defaults.

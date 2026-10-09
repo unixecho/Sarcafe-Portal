@@ -18,7 +18,7 @@ export type UnpublishedChanges = {
 const key = (a: Pick<Assignment, 'shiftId' | 'staffId' | 'roleId'>) => `${a.shiftId}|${a.staffId ?? ''}|${a.roleId ?? ''}`
 
 function shiftSignature(s: Shift): string {
-  return [s.date, s.startTime, s.endTime, s.stationId ?? '', s.note ?? '', JSON.stringify(s.requirements ?? [])].join('|')
+  return [s.date, s.startTime, s.endTime, s.stationId ?? '', s.requestsOpen ? 'open' : 'closed', s.note ?? '', JSON.stringify(s.requirements ?? [])].join('|')
 }
 
 export function unpublishedChanges(week: ScheduleWeek | undefined, shifts: Shift[], assignments: Assignment[]): UnpublishedChanges {

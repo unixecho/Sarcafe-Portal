@@ -1,5 +1,15 @@
 # Staff & Scheduling
 
+## Local schedule responsiveness and identity update — 2026-10-09
+
+- Published snapshots are normalized from PostgreSQL snake-case fields before the manager compares them with the live draft. Republishing an unchanged week now returns to zero unpublished changes; opening/closing employee requests is deliberately counted as a real change.
+- A successful shift save returns the changed shift and assignments in the same response. The board applies that authoritative slice immediately and refreshes warnings/audit data in the background instead of blocking on a second full-state request.
+- Settings/catalog editors retain their existing 500 ms coalescing. Roster scheduling permissions, default roles and hour limits now update locally and merge per employee during a short editing pause.
+- Adding an employee selects a role in this order: explicit scheduling default, matching staff badge, shift-template role, unmet role requirement, then the first configured role. The owner can still change it before saving.
+- Schedule avatars use stable person-specific colors rather than role colors. A self-selected emoji, when present, is shown on top of that color.
+
+Application changes and migration `20261009153126_staff_avatar_emoji.sql` are verified locally but are **not applied or deployed** in this workspace state.
+
 ## Local UX and operator update — 2026-10-09
 
 The current workspace adds a Hebrew/RTL request-management pass. Employee availability is separated into collapsed person cards with a seven-day grid: explicit availability/preferences are green, unavailability red, partial hours amber, missing submissions neutral, and notes have their own purple callout. Pending join/swap decisions are collapsed by default but retain approve/reject actions when opened. A week-activity rail points owners directly to every loaded week containing pending requests or submitted availability, including weeks other than the one currently displayed. Physical RTL chevrons replace mirrored text glyphs in all schedule week navigators.
@@ -122,7 +132,7 @@ Everything below was confirmed against the **live database**, not guessed from t
 - Tabs: **לוח · בקשות · בעיות · הגדרות · היסטוריה**, with a count badge on what is waiting.
 - A card says whether the team can see this week: *not published* / *published* / *"יש N שינויים שעוד לא פורסמו"* (the manager is told the team is looking at an old version).
 - Day cards in a responsive grid (1 column phone → 4 desktop): every shift shows its time, template, people, and **status pills with words, an icon and a colour** — `ללא שיבוץ`, `חסר/ה …`, `מאוישת (2/2)`, `החלפה ממתינה`, `N בקשות להצטרף`, `שימו לב`.
-- **One shift sheet, one Save.** Day, hours (template chips or exact wheel), people (multi-select picker that already shows who is double-booked / unavailable / asked to join / has no login), roles, needs, note — applied **atomically**; closing with unsaved changes asks first; "העברה למשמרת אחרת" moves a person in one step; requests to join are approved/rejected **inside the sheet**.
+- **One shift sheet, one Save.** Day, hours (template chips or exact wheel), people (multi-select picker that already shows who is double-booked / unavailable / asked to join / has no login), roles, needs, note — applied **atomically**; the confirmed result is painted immediately while a full reconciliation runs in the background; closing with unsaved changes asks first; "העברה למשמרת אחרת" moves a person in one step; requests to join are approved/rejected **inside the sheet**.
 - Publish / copy / clear / revert-to-draft live behind clear buttons with confirmations that say what will happen to pending requests and swaps.
 
 ### Shift requests ("I would like to work this shift")

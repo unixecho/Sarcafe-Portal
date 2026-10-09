@@ -51,6 +51,8 @@ export type ShiftSettings = {
 export type ScheduleStaffRow = {
   staffId: string
   displayName: string
+  /** Self-selected lightweight avatar until profile photos are introduced. */
+  avatarEmoji: string | null
   badge: string | null
   active: boolean
   /** Absence of a schedule_members row means "never configured" = schedulable. */

@@ -1,6 +1,11 @@
 .staff-records { --sr-line:color-mix(in srgb,var(--line) 80%,transparent); padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
 .sr-profile { display:flex; align-items:center; gap:18px; padding:24px 4px; }
 .sr-avatar { display:grid; place-items:center; width:64px; height:64px; flex-shrink:0; border-radius:22px; background:color-mix(in srgb,var(--neon) 16%,var(--bg-elev)); color:var(--neon-soft); font-size:1.8rem; font-weight:700; border:1px solid var(--sr-line); }
+.sr-avatar-picker { margin: 0 0 20px; padding: 18px; border: 1px solid var(--sr-line); border-radius: 22px; background: color-mix(in srgb, var(--bg-elev) 92%, transparent); box-shadow: 0 16px 38px rgba(0,0,0,.18); }
+.sr-avatar-picker h2 { margin: 0 0 4px; font-size: 1rem; }
+.sr-emoji-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(46px, 1fr)); gap: 8px; margin-top: 14px; }
+.sr-emoji-grid button { min-width: 44px; min-height: 44px; border: 1px solid var(--sr-line); border-radius: 14px; background: var(--bg); color: var(--text); font-size: 1.35rem; cursor: pointer; transition: transform .18s var(--spring), border-color .18s var(--ease), background .18s var(--ease); }
+.sr-emoji-grid button[aria-checked='true'] { border-color: color-mix(in srgb, var(--neon) 70%, transparent); background: color-mix(in srgb, var(--neon) 16%, var(--bg)); transform: translateY(-2px) scale(1.04); box-shadow: 0 8px 20px rgba(255,122,69,.16); }
 .sr-profile h1 { margin:2px 0 6px; font-size:clamp(1.4rem,4vw,2rem); letter-spacing:-.04em; overflow-wrap:anywhere; }
 .sr-profile p { margin:0; color:var(--text-dim); font-size:.83rem; }.sr-profile .sr-caption { color:var(--neon-soft); font-size:.75rem; }
 .sr-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); background:var(--bg-elev); border:1px solid var(--sr-line); border-radius:22px; margin:0 0 22px; padding:18px 8px; }

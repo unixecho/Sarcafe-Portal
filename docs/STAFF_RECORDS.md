@@ -1,5 +1,7 @@
 # Employee records and private documents
 
+Local 2026-10-09 avatar follow-up: `/staff/profile` now offers a curated emoji picker for both Google and employee-number/PIN sessions. Migration `20261009153126_staff_avatar_emoji.sql` adds the optional, length-constrained `staff.avatar_emoji` field. The browser never writes the staff table directly: the private no-store profile route resolves the authenticated employee server-side and updates only that row. The schedule roster exposes the emoji but none of the existing private scheduling notes or limits. The migration is verified locally and **not yet applied or deployed**.
+
 Local 2026-10-09 follow-up: an unlinked employee's PIN login now lands on `/staff/profile?setup=google`; the profile asks for the current six-digit PIN and starts Google OAuth. The removed checklist-side email form can no longer write an arbitrary address that looks linked but has no Auth permissions. This application update is not deployed yet.
 
 Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.

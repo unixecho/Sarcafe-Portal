@@ -474,7 +474,7 @@ section('wiring: where it is mounted, and how it decides')
   const inScope = layout.slice(scopeStart, scopeEnd)
   check('layout imports and renders <IntroGate />', /import IntroGate from '@\/components\/intro\/IntroGate'/.test(layout) && /<IntroGate \/>/.test(layout))
   check('it is NOT inside #a11y-scope (a CSS filter there would become its containing block)', scopeStart !== -1 && inScope.indexOf('Intro') === -1)
-  check('it comes after #a11y-scope and before the accessibility widget', layout.indexOf('<IntroGate />') > scopeEnd && layout.indexOf('<IntroGate />') < layout.indexOf('<A11yWidget'))
+  check('it comes after #a11y-scope and before the public accessibility widget', layout.indexOf('<IntroGate />') > scopeEnd && layout.indexOf('<IntroGate />') < layout.indexOf('<PublicA11yWidget'))
   check('the layout itself stays a plain synchronous component: the read lives in the gate', !/export default async function RootLayout/.test(layout))
   check('it is not mounted in the page template either', read('src/app/template.tsx').indexOf('Intro') === -1)
 

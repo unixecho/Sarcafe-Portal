@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import PageTransitions from '@/components/PageTransitions'
 import IntroGate from '@/components/intro/IntroGate'
-import { A11yWidget } from 'a11y-widget'
+import PublicA11yWidget from '@/components/PublicA11yWidget'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -76,7 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             localStorage key, passed through deliberately so migrating onto
             the package did not reset visitors' already-saved preferences.
             Outside the scope on purpose — see the paragraph above. */}
-        <A11yWidget config={{ storageKey: 'sarcafe:a11y-prefs', statementHref: '/accessibility' }} />
+        <PublicA11yWidget />
       </body>
     </html>
   )

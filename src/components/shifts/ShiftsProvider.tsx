@@ -10,6 +10,43 @@ import '@/components/shifts/schedule.css'
 const POLL_MS = 15_000
 const GENERIC_ERROR = 'משהו השתבש. בדקו את החיבור לרשת ונסו שוב.'
 
+function applyLocalAction(current: ShiftsDB, action: ScheduleAction, data?: Record<string, unknown>): ShiftsDB {
+  if (action.type === 'setMember') {
+    return {
+      ...current,
+      roster: current.roster.map((row) => (row.staffId === action.staffId ? { ...row, ...action.patch } : row)),
+    }
+  }
+  if (action.type === 'updateSettings') {
+    return { ...current, settings: { ...current.settings, ...action.patch } }
+  }
+  if (action.type === 'setDayNote') {
+    return {
+      ...current,
+      weeks: current.weeks.map((week) => {
+        if (week.id !== action.weekId) return week
+        const dayNotes = { ...week.dayNotes }
+        if (action.note.trim()) dayNotes[action.date] = action.note.trim()
+        else delete dayNotes[action.date]
+        return { ...week, dayNotes }
+      }),
+    }
+  }
+  if (action.type === 'saveShift' && data?.shift && Array.isArray(data.assignments)) {
+    const shift = data.shift as ShiftsDB['shifts'][number]
+    const assignments = data.assignments as ShiftsDB['assignments']
+    return {
+      ...current,
+      shifts: [...current.shifts.filter((candidate) => candidate.id !== shift.id), shift],
+      assignments: [...current.assignments.filter((assignment) => assignment.shiftId !== shift.id), ...assignments],
+    }
+  }
+  return current
+}
+
+const instantAction = (action: ScheduleAction) =>
+  action.type === 'saveShift' || action.type === 'setMember' || action.type === 'updateSettings' || action.type === 'setDayNote'
+
 type DispatchOptions = {
   /** Words shown after the action succeeds (a plain sentence, or built from what the action returned). */
   success?: string | ((data: Record<string, unknown>) => string)
@@ -26,9 +63,10 @@ type ShiftsContextValue = {
   weekStart: string
   setWeekStart: (iso: string) => void
   goToToday: () => void
-  /** Sends an action, awaits the server's authoritative answer, then replaces state
-   *  with a fresh read. There is no local optimistic apply: the rules live in the
-   *  database (migration 024) and run once, there. EVERY outcome is visible — a
+  /** Sends an action and keeps the interface responsive while the database remains
+   *  authoritative. Safe settings/member edits are reflected immediately; a saved
+   *  shift is applied from the server's confirmed response, then a quiet full read
+   *  reconciles related warnings/audit data. EVERY outcome is visible — a
    *  success toast with the words passed in `success`, or the server's plain-Hebrew
    *  explanation of what went wrong and what to do (unless `quiet`). */
   dispatch: (action: ScheduleAction, options?: DispatchOptions) => Promise<DispatchResult>
@@ -107,6 +145,11 @@ export default function ShiftsProvider({
   const dispatch = useCallback(
     async (action: ScheduleAction, options: DispatchOptions = {}): Promise<DispatchResult> => {
       busy.current++
+      // These patches are reversible views of the exact validated action. The
+      // database still makes the decision; a refusal below reloads the truth.
+      if (action.type === 'setMember' || action.type === 'updateSettings' || action.type === 'setDayNote') {
+        setDb((current) => (current ? applyLocalAction(current, action) : current))
+      }
       try {
         const res = await fetch('/api/shifts/dispatch', {
           method: 'POST',
@@ -120,12 +163,18 @@ export default function ShiftsProvider({
           const reason = typeof details.reason === 'string' ? details.reason : null
           // A refusal that needs a decision from the person (confirm / re-load) is handled by the caller.
           if (!options.quiet) toast('error', message)
+          if (instantAction(action)) void load(true)
           // The schedule may have moved under us (someone else changed it): show the truth.
           if (reason === 'stale' || reason === 'not_found' || reason === 'not_pending' || reason === 'assignment_changed') void load(true)
           return { ok: false, message, reason, details }
         }
         const data = (payload?.data ?? {}) as Record<string, unknown>
-        await load(true)
+        if (instantAction(action)) {
+          setDb((current) => (current ? applyLocalAction(current, action, data) : current))
+          void load(true)
+        } else {
+          await load(true)
+        }
         if (options.success) toast('ok', typeof options.success === 'function' ? options.success(data) : options.success)
         return { ok: true, data }
       } catch {

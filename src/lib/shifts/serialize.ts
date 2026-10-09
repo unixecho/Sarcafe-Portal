@@ -44,6 +44,7 @@ export function serializeRosterRow(staff: Record<string, unknown>, member: Recor
   return {
     staffId: staff.id as string,
     displayName: staffDisplayName(staff),
+    avatarEmoji: (staff.avatar_emoji as string | null) ?? null,
     badge: (staff.badge as string | null) ?? null,
     active: staff.active !== false,
     // Operators can opt into shifts, but never appear as available merely because
@@ -61,6 +62,16 @@ export function serializeRosterRow(staff: Record<string, unknown>, member: Recor
 }
 
 export function serializeWeek(row: Record<string, unknown>): ScheduleWeek {
+  const rawSnapshot = row.published_snapshot as { shifts?: unknown[]; assignments?: unknown[] } | null | undefined
+  const publishedSnapshot = rawSnapshot
+    ? {
+        // PostgreSQL's to_jsonb() keeps snake_case column names. Normalize the
+        // frozen snapshot with the same serializers as the live rows before
+        // comparing it to the draft; otherwise every published row looks new.
+        shifts: (rawSnapshot.shifts ?? []).map((shift) => serializeShift(shift as Record<string, unknown>)),
+        assignments: (rawSnapshot.assignments ?? []).map((assignment) => serializeAssignment(assignment as Record<string, unknown>)),
+      }
+    : null
   return {
     id: row.id as string,
     branchId: row.branch_id as string,
@@ -70,34 +81,34 @@ export function serializeWeek(row: Record<string, unknown>): ScheduleWeek {
     publishedAt: (row.published_at as string | null) ?? null,
     dayNotes: (row.day_notes as Record<string, string>) ?? {},
     dismissedWarnings: (row.dismissed_warnings as string[]) ?? [],
-    publishedSnapshot: (row.published_snapshot as ScheduleWeek['publishedSnapshot']) ?? null,
+    publishedSnapshot,
   }
 }
 
 export function serializeShift(row: Record<string, unknown>): Shift {
   return {
     id: row.id as string,
-    branchId: row.branch_id as string,
-    weekId: row.week_id as string,
-    date: row.shift_date as string,
-    startTime: row.start_time as string,
-    endTime: row.end_time as string,
-    presetId: (row.preset_id as string | null) ?? null,
-    stationId: (row.station_id as string | null) ?? null,
+    branchId: (row.branch_id ?? row.branchId) as string,
+    weekId: (row.week_id ?? row.weekId) as string,
+    date: (row.shift_date ?? row.date) as string,
+    startTime: (row.start_time ?? row.startTime) as string,
+    endTime: (row.end_time ?? row.endTime) as string,
+    presetId: ((row.preset_id ?? row.presetId) as string | null) ?? null,
+    stationId: ((row.station_id ?? row.stationId) as string | null) ?? null,
     requirements: (row.requirements as Shift['requirements']) ?? [],
-    requestsOpen: row.requests_open === true,
+    requestsOpen: (row.requests_open ?? row.requestsOpen) === true,
     note: (row.note as string | null) ?? null,
-    updatedAt: (row.updated_at as string | null) ?? null,
+    updatedAt: ((row.updated_at ?? row.updatedAt) as string | null) ?? null,
   }
 }
 
 export function serializeAssignment(row: Record<string, unknown>): Assignment {
   return {
     id: row.id as string,
-    shiftId: row.shift_id as string,
-    staffId: (row.staff_id as string | null) ?? null,
-    staffName: (row.staff_name as string | null) ?? null,
-    roleId: (row.role_id as string | null) ?? null,
+    shiftId: (row.shift_id ?? row.shiftId) as string,
+    staffId: ((row.staff_id ?? row.staffId) as string | null) ?? null,
+    staffName: ((row.staff_name ?? row.staffName) as string | null) ?? null,
+    roleId: ((row.role_id ?? row.roleId) as string | null) ?? null,
     status: (row.status as Assignment['status']) ?? 'assigned',
   }
 }

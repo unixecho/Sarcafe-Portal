@@ -16,6 +16,7 @@ import { defaultTimesFor, hoursFor, matchPreset } from '@/lib/shifts/presets'
 import { clashesFor, nameOf, pendingRequestsByShift, swapPendingAssignmentIds } from '@/lib/shifts/view'
 import { issuesOf } from '@/lib/shifts/messages'
 import { coverageOf } from '@/lib/shifts/coverage'
+import { staffColor, suggestedRoleId } from '@/lib/shifts/people'
 import { durationMinutes, formatDayLabel, formatHours, formatShiftLabel, hasStarted, isValidShiftTimes, toMinutes, weekDates, weekdayLabel, weekStartOf } from '@/lib/shifts/time'
 import type { RoleRequirement, Shift, ShiftsDB } from '@/lib/shifts/types'
 
@@ -166,14 +167,15 @@ export default function ShiftSheet({
     setPickerOpen(false)
     setForm((f) => {
       if (!f) return f
-      const added: Person[] = staffIds
-        .filter((id) => !f.people.some((p) => p.staffId === id))
-        .map((id) => {
-          const row = db!.roster.find((r) => r.staffId === id)
-          // The person's usual role, else the first role this shift still needs.
-          const deficit = f.requirements.find((r) => f.people.filter((p) => p.roleId === r.roleId).length < r.min)?.roleId
-          return { key: `new:${id}`, staffId: id, roleId: row?.defaultRoleId ?? deficit ?? null }
-        })
+      const assignedRoleIds = f.people.map((person) => person.roleId)
+      const added: Person[] = []
+      for (const id of staffIds.filter((staffId) => !f.people.some((person) => person.staffId === staffId))) {
+        const row = db!.roster.find((candidate) => candidate.staffId === id)
+        const preset = settings.presets.find((candidate) => candidate.id === f.presetId)
+        const roleId = suggestedRoleId(row, settings.roles, preset, f.requirements, assignedRoleIds)
+        added.push({ key: `new:${id}`, staffId: id, roleId })
+        assignedRoleIds.push(roleId)
+      }
       return { ...f, people: [...f.people, ...added] }
     })
     setError(null)
@@ -400,7 +402,12 @@ export default function ShiftSheet({
               return (
                 <div key={p.key} className="sch-card" style={{ padding: 10, gap: 8, borderColor: clash ? 'var(--danger)' : undefined }}>
                   <div className="sch-row">
-                    <Avatar name={name} color={roleById.get(p.roleId ?? '')?.color} large />
+                    <Avatar
+                      name={name}
+                      color={staffColor(p.staffId, db.roster)}
+                      emoji={db.roster.find((row) => row.staffId === p.staffId)?.avatarEmoji}
+                      large
+                    />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700 }}>{name}</div>
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 3 }}>

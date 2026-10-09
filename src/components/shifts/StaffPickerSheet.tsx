@@ -8,6 +8,7 @@ import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { clashesFor, pendingRequestsByShift } from '@/lib/shifts/view'
 import { formatShiftLabel, weekStartOf } from '@/lib/shifts/time'
 import { badgeLabel } from '@/lib/staff/badges'
+import { staffColor } from '@/lib/shifts/people'
 
 type Target = { date: string; startTime: string; endTime: string; shiftId: string | null }
 
@@ -113,7 +114,7 @@ export default function StaffPickerSheet({
               className="sch-pick press"
               onClick={() => toggle(row.staffId)}
             >
-              <Avatar name={row.displayName} />
+              <Avatar name={row.displayName} color={staffColor(row.staffId, db.roster)} emoji={row.avatarEmoji} />
               <span className="sch-pick__main">
                 <span className="sch-pick__name">{row.displayName}</span>
                 <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
