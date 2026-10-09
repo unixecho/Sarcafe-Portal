@@ -1,8 +1,8 @@
 # Sarcafe — cross-agent handoff
 
-## Codex addendum, 2026-10-10: schedule publication fix, responsive saves and employee identity prepared for production
+## Codex addendum, 2026-10-10: schedule publication fix, responsive saves and employee identity live
 
-Current branch is `integrate/pos-and-scheduling` at `046f2ed` (`origin/main`). The application slice is present as uncommitted workspace changes and has not yet been pushed or deployed. Migration `20261009153126_staff_avatar_emoji.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded in `supabase_migrations.schema_migrations`; a production query confirmed both the column and constraint. The pre-existing `.gitignore` modification and unrelated untracked skill/Graphify/native-store files remain untouched.
+Application commit `fbeef6d` is on `main` and live through Vercel deployment `dpl_F5FymnhQ8nVQYKyxgE9HA4NJCBBR` at `https://sarcafe-portal.vercel.app`. Migration `20261009153126_staff_avatar_emoji.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded in `supabase_migrations.schema_migrations`; a production query confirmed both the column and constraint. The pre-existing `.gitignore` modification and unrelated untracked skill/Graphify/native-store files remain untouched.
 
 ### Confirmed cause and implemented behavior
 
@@ -31,8 +31,12 @@ Current branch is `integrate/pos-and-scheduling` at `046f2ed` (`origin/main`). T
 - `npm run check:intro` — 430 passed after the accessibility wrapper rename.
 - `npm run check:app-layout` — 161 passed in Playwright at 320/390/768/1760 px.
 - `git diff --check` — passed (line-ending warnings only).
+- Vercel build — Ready on Next.js 15.5.25; production alias attached.
+- Live owner schedule — loaded successfully; the accessibility launcher is absent after hydration.
+- Live Maor and Givat Haviva portals — both retain `background-wide.jpg`; review surfaces have no added background, border or radius.
+- Post-deploy logs — no runtime errors and no 5xx responses in the release window.
 
-**Exact next step:** rerun the release checks after excluding the rejected public polish, commit only the intended functional files (exclude the pre-existing `.gitignore` and unrelated untracked files), push the release to `main`, then verify the production deployment, private-route widget absence and public branch imagery.
+**Exact next step:** run the authenticated owner pilot: publish an unchanged week and confirm the unpublished-change count returns to zero; add several paper-schedule shifts quickly and confirm the board stays responsive; add an employee and confirm their default role/color; then choose an emoji from `/staff/profile` and confirm it appears on the schedule. If a critical regression appears, restore the previous Ready Vercel deployment; the nullable avatar column is backward-compatible and does not need an emergency rollback.
 
 ## Codex addendum, 2026-10-09: onboarding, checklists, requests, RTL, staff roles and branch hub implemented locally
 

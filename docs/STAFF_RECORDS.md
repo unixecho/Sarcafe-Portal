@@ -1,8 +1,8 @@
 # Employee records and private documents
 
-Local 2026-10-09 avatar follow-up: `/staff/profile` now offers a curated emoji picker for both Google and employee-number/PIN sessions. Migration `20261009153126_staff_avatar_emoji.sql` adds the optional, length-constrained `staff.avatar_emoji` field. The browser never writes the staff table directly: the private no-store profile route resolves the authenticated employee server-side and updates only that row. The schedule roster exposes the emoji but none of the existing private scheduling notes or limits. The migration is verified locally and **not yet applied or deployed**.
+Production 2026-10-10 avatar follow-up: `/staff/profile` offers a curated emoji picker for both Google and employee-number/PIN sessions. Migration `20261009153126_staff_avatar_emoji.sql` adds the optional, length-constrained `staff.avatar_emoji` field. The browser never writes the staff table directly: the private no-store profile route resolves the authenticated employee server-side and updates only that row. The schedule roster exposes the emoji but none of the existing private scheduling notes or limits. Application commit `fbeef6d` and the migration are live in production.
 
-Local 2026-10-09 follow-up: an unlinked employee's PIN login now lands on `/staff/profile?setup=google`; the profile asks for the current six-digit PIN and starts Google OAuth. The removed checklist-side email form can no longer write an arbitrary address that looks linked but has no Auth permissions. This application update is not deployed yet.
+Production 2026-10-09 follow-up: an unlinked employee's PIN login lands on `/staff/profile?setup=google`; the profile asks for the current six-digit PIN and starts Google OAuth. The removed checklist-side email form can no longer write an arbitrary address that looks linked but has no Auth permissions.
 
 Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.
 
@@ -16,9 +16,9 @@ All new PIN logins use hashed opaque employee cookies, including employees alrea
 
 ## Verification
 
-- `npm run check:staff-access`: 50 isolated route checks, including own versus peer documents, PIN denial, cross-origin denial, no-store errors, orphan cleanup, published history mapping and login identity switching.
-- `npm run verify:onboarding-sql`: 45 real local Postgres checks, including invitation consumption/linking, historical PIN database restrictions, private bucket settings and restrictive Storage policy behavior despite a broad permissive policy.
-- `npm run check:app-layout`: 141 synthetic-data browser checks at 320, 390, 768 and 1760 pixels; real components and compiled project CSS, Home navigation, touch targets, bounded overflow and the seven-day manager board. Requires Playwright plus a local test browser; set `PLAYWRIGHT_MODULE` and `TEST_BROWSER` if they are not available on the default paths. These checks do not substitute for authenticated production or real iOS testing.
+- `npm run check:staff-access`: 51 isolated route checks, including own versus peer documents, PIN denial, cross-origin denial, no-store errors, orphan cleanup, published history mapping and login identity switching.
+- `npm run verify:onboarding-sql`: 46 real local Postgres checks, including invitation consumption/linking, historical PIN database restrictions, private bucket settings and restrictive Storage policy behavior despite a broad permissive policy.
+- `npm run check:app-layout`: 161 synthetic-data browser checks at 320, 390, 768 and 1760 pixels; real components and compiled project CSS, Home navigation, touch targets, bounded overflow and the seven-day manager board. Requires Playwright plus a local test browser; set `PLAYWRIGHT_MODULE` and `TEST_BROWSER` if they are not available on the default paths. These checks do not substitute for authenticated production or real iOS testing.
 
 ## Release and pilot
 

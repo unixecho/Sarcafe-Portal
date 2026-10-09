@@ -1,6 +1,6 @@
 # Staff & Scheduling
 
-## Local schedule responsiveness and identity update — 2026-10-09
+## Production schedule responsiveness and identity update — 2026-10-10
 
 - Published snapshots are normalized from PostgreSQL snake-case fields before the manager compares them with the live draft. Republishing an unchanged week now returns to zero unpublished changes; opening/closing employee requests is deliberately counted as a real change.
 - A successful shift save returns the changed shift and assignments in the same response. The board applies that authoritative slice immediately and refreshes warnings/audit data in the background instead of blocking on a second full-state request.
@@ -8,13 +8,13 @@
 - Adding an employee selects a role in this order: explicit scheduling default, matching staff badge, shift-template role, unmet role requirement, then the first configured role. The owner can still change it before saving.
 - Schedule avatars use stable person-specific colors rather than role colors. A self-selected emoji, when present, is shown on top of that color.
 
-Application changes and migration `20261009153126_staff_avatar_emoji.sql` are verified locally but are **not applied or deployed** in this workspace state.
+Application commit `fbeef6d` is live in production. Migration `20261009153126_staff_avatar_emoji.sql` is applied and recorded in the production migration ledger.
 
-## Local UX and operator update — 2026-10-09
+## Production UX and operator update — 2026-10-09
 
-The current workspace adds a Hebrew/RTL request-management pass. Employee availability is separated into collapsed person cards with a seven-day grid: explicit availability/preferences are green, unavailability red, partial hours amber, missing submissions neutral, and notes have their own purple callout. Pending join/swap decisions are collapsed by default but retain approve/reject actions when opened. A week-activity rail points owners directly to every loaded week containing pending requests or submitted availability, including weeks other than the one currently displayed. Physical RTL chevrons replace mirrored text glyphs in all schedule week navigators.
+The production application includes a Hebrew/RTL request-management pass. Employee availability is separated into collapsed person cards with a seven-day grid: explicit availability/preferences are green, unavailability red, partial hours amber, missing submissions neutral, and notes have their own purple callout. Pending join/swap decisions are collapsed by default but retain approve/reject actions when opened. A week-activity rail points owners directly to every loaded week containing pending requests or submitted availability, including weeks other than the one currently displayed. Physical RTL chevrons replace mirrored text glyphs in all schedule week navigators.
 
-The staff directory now separates `הנהלה ומפעילים` from `צוות עובדים`. The `developer` badge is a distinct display role backed by the existing owner authorization role, so it retains operator powers without rendering as Owner. Owners/developers are not schedulable by default; migration `20261009134321_onboarding_handover_owner_defaults.sql` creates guarded per-branch defaults and preserves later explicit toggles. The migration and UI changes are local and **not yet applied or deployed**.
+The staff directory separates `הנהלה ומפעילים` from `צוות עובדים`. The `developer` badge is a distinct display role backed by the existing owner authorization role, so it retains operator powers without rendering as Owner. Owners/developers are not schedulable by default; migration `20261009134321_onboarding_handover_owner_defaults.sql` creates guarded per-branch defaults and preserves later explicit toggles. This migration and UI are live in production.
 
 ## Weekly planning update — 2026-10-08
 
