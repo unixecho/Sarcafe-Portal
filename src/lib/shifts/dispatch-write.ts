@@ -137,6 +137,7 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
         p_preset_id: action.presetId ?? null,
         p_station_id: action.stationId ?? null,
         p_requirements: action.requirements,
+        p_requests_open: action.requestsOpen,
         p_note: action.note ?? null,
         p_assignees: action.assignees.map((a) => ({ staffId: a.staffId, roleId: a.roleId ?? null, ...(a.assignmentId ? { assignmentId: a.assignmentId } : {}) })),
         p_expected_updated: action.expectedUpdatedAt ?? null,

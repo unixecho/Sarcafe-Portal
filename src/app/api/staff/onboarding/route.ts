@@ -29,7 +29,11 @@ export const POST = credentialRoute(async (request: NextRequest) => {
     if (error) throw new ApiError(503, 'unavailable', 'הגדרת החשבון אינה זמינה כרגע. נסו שוב בעוד רגע.')
     const result = data as { ok?: boolean; name?: string; employee_no?: number }
     if (!result?.ok) throw invalid()
-    return NextResponse.json({ staff: { name: result.name, employeeNo: result.employee_no } }, { headers: ONBOARDING_HEADERS })
+    const hash = tokenHash(body.token)
+    const { data: invitation } = await service.from('staff_invitations').select('staff_id').eq('token_hash', hash).maybeSingle()
+    const { data: person } = invitation ? await service.from('staff').select('employee_code, employee_no').eq('id', invitation.staff_id).maybeSingle() : { data: null }
+    const employeeNo = person?.employee_code ?? (person?.employee_no == null ? String(result.employee_no ?? '') : String(person.employee_no))
+    return NextResponse.json({ staff: { name: result.name, employeeNo } }, { headers: ONBOARDING_HEADERS })
   }
 
   const sessionToken = newToken()
@@ -46,7 +50,10 @@ export const POST = credentialRoute(async (request: NextRequest) => {
   }
   // Setup deliberately changes to this employee, even when a shared browser held Google cookies.
   await (await createServerSupabaseClient()).auth.signOut({ scope: 'local' })
-  const response = NextResponse.json({ staff: { name: result.name, employeeNo: result.employee_no, hasGoogle: result.has_google }, ok: true }, { headers: ONBOARDING_HEADERS })
+  const { data: createdSession } = await service.from('staff_employee_sessions').select('staff_id').eq('token_hash', tokenHash(sessionToken)).maybeSingle()
+  const { data: person } = createdSession ? await service.from('staff').select('employee_code, employee_no').eq('id', createdSession.staff_id).maybeSingle() : { data: null }
+  const employeeNo = person?.employee_code ?? (person?.employee_no == null ? String(result.employee_no ?? '') : String(person.employee_no))
+  const response = NextResponse.json({ staff: { name: result.name, employeeNo, hasGoogle: result.has_google }, ok: true }, { headers: ONBOARDING_HEADERS })
   response.cookies.set(EMPLOYEE_SESSION_COOKIE, sessionToken, {
     httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 30 * 24 * 60 * 60,
   })

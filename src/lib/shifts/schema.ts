@@ -85,6 +85,7 @@ export const actionSchema = z.discriminatedUnion('type', [
       presetId: slug.nullish(),
       stationId: slug.nullish(),
       requirements: z.array(requirement).max(30),
+      requestsOpen: z.boolean().default(false),
       note,
       assignees: z.array(assignee).max(60),
       expectedUpdatedAt: z.string().max(40).nullish(),

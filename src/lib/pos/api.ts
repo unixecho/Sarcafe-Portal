@@ -130,7 +130,7 @@ export type PosMe = {
    *  Always false for a QUICK-LOGIN session (blueprint §1a.5): floor work only. */
   isManager: boolean
   /** The short number typed at quick login (staff.employee_no). */
-  employeeNo?: number | null
+  employeeNo?: string | null
   /** Has a quick-login passcode been set (never the code itself). */
   hasPasscode?: boolean
   /** This session was opened with employee number + passcode, not Google. */

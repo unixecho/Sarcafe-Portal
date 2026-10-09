@@ -677,8 +677,10 @@ const planSunday = await save(owner, planWeek, { p_date: day(0, pw), p_assignees
 const planMonday = await save(owner, planWeek, { p_date: day(1, pw), p_requirements: JSON.stringify([{ roleId: 'barista', min: 1 }]) })
 const planSaturday = await save(owner, planWeek, { p_date: day(6, pw), p_requirements: JSON.stringify([{ roleId: 'barista', min: 1 }]) })
 const manualId = (await assignmentsOf(planSunday.shiftId))[0].id
+check('a shift is closed to employee requests by default', (await rpc('sched_request_shift', { p_actor: light.id, p_shift: planMonday.shiftId, p_note: null })).reason === 'requests_not_open')
+await db.query(`update public.shifts set requests_open=true where id in ($1,$2)`, [planMonday.shiftId, planSaturday.shiftId])
 const draftReq = await rpc('sched_request_shift', { p_actor: light.id, p_shift: planMonday.shiftId, p_note: 'Preferred' })
-check('employee can request an offered shift before publication', draftReq.ok === true && (await assignmentsOf(planMonday.shiftId)).length === 0)
+check('employee can request a shift only after the owner opens it', draftReq.ok === true && (await assignmentsOf(planMonday.shiftId)).length === 0)
 check('the owner is notified of a draft-week request', (await notesFor(owner)).some((n) => n.kind === 'request.new' && n.link.weekStart === pw))
 const avail = (actor, entries = [], status = 'submitted') => rpc('sched_submit_availability', { p_actor: actor.id, p_branch: planBranch, p_week_start: pw, p_entries: JSON.stringify(entries), p_note: null, p_status: status })
 check('availability submission succeeds before Tuesday close', (await avail(unavailable, Array.from({ length: 7 }, (_, i) => ({ date: day(i, pw), kind: 'unavailable' })))).ok === true)

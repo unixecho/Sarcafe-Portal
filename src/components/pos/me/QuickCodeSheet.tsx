@@ -24,7 +24,7 @@ type Step = 'idle' | 'first' | 'again'
 type Props = {
   open: boolean
   onClose: () => void
-  employeeNo: number | null
+  employeeNo: string | null
   hasPasscode: boolean
 }
 

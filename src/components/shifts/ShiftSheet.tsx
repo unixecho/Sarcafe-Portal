@@ -7,6 +7,7 @@ import SelectSheet from '@/components/SelectSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import { TimeWheel } from '@/components/WheelPicker'
+import Switch from '@/components/Switch'
 import { Avatar, InlineError, Notice, Pill } from '@/components/shifts/ui'
 import StaffPickerSheet from '@/components/shifts/StaffPickerSheet'
 import MoveShiftSheet from '@/components/shifts/MoveShiftSheet'
@@ -26,6 +27,7 @@ type Form = {
   presetId: string | null
   stationId: string
   requirements: RoleRequirement[]
+  requestsOpen: boolean
   note: string
   people: Person[]
 }
@@ -39,6 +41,7 @@ function buildForm(db: ShiftsDB, shift: Shift | null, date: string): Form {
       presetId: shift.presetId,
       stationId: shift.stationId ?? '',
       requirements: shift.requirements,
+      requestsOpen: shift.requestsOpen,
       note: shift.note ?? '',
       people: db.assignments
         .filter((a) => a.shiftId === shift.id)
@@ -49,7 +52,7 @@ function buildForm(db: ShiftsDB, shift: Shift | null, date: string): Form {
   // else the template list's first, else the day's opening hours) — never from a number
   // typed into the code.
   const d = defaultTimesFor(date, db.settings, db.shifts.filter((s) => s.date === date))
-  return { date, startTime: d.startTime, endTime: d.endTime, presetId: d.presetId, stationId: '', requirements: [], note: '', people: [] }
+  return { date, startTime: d.startTime, endTime: d.endTime, presetId: d.presetId, stationId: '', requirements: [], requestsOpen: false, note: '', people: [] }
 }
 
 // Create / edit ONE shift — the same sheet for both, and ONE Save: times, who
@@ -223,6 +226,7 @@ export default function ShiftSheet({
         presetId: form.presetId,
         stationId: form.stationId || null,
         requirements: form.requirements.filter((r) => r.min > 0),
+        requestsOpen: form.requestsOpen,
         note: form.note.trim() || null,
         assignees: form.people.filter((p) => p.staffId).map((p) => ({ staffId: p.staffId, roleId: p.roleId, ...(p.assignmentId ? { assignmentId: p.assignmentId } : {}) })),
         expectedUpdatedAt: shift?.updatedAt ?? null,
@@ -483,7 +487,7 @@ export default function ShiftSheet({
           {/* ---- the less common things ---- */}
           <div className="sch-block">
             <button type="button" className="sch-btn sch-btn--ghost sch-btn--sm press" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)} style={{ justifyContent: 'space-between' }}>
-              <span>עוד אפשרויות (עמדה, כמה אנשים דרושים, הערה)</span>
+              <span>עוד אפשרויות (עמדה, בקשות, צוות והערה)</span>
               <ChevronDown size={16} aria-hidden="true" style={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s var(--ease)' }} />
             </button>
             {moreOpen && (
@@ -501,10 +505,14 @@ export default function ShiftSheet({
                     />
                   </div>
                 )}
+                <button type="button" role="switch" aria-checked={form.requestsOpen} className="sch-switchrow press" onClick={() => patch({ requestsOpen: !form.requestsOpen })}>
+                  <span style={{ flex: 1, minWidth: 0 }}><strong>פתיחת המשמרת לבקשות</strong><small>{form.requestsOpen ? 'עובדים יראו שאפשר לבקש את המשמרת.' : 'רק החלפה או מסירת משמרת קיימת אפשריות.'}</small></span>
+                  <Switch on={form.requestsOpen} />
+                </button>
                 <div>
                   <span className="sch-label">כמה אנשים דרושים מכל תפקיד?</span>
                   <p className="sch-sub" style={{ marginBottom: 8 }}>
-                    אם תגדירו, הלוח יסמן &quot;חסר/ה&quot; כשאין מספיק אנשים, ועובדים יוכלו לבקש להצטרף רק למשמרות שעוד לא מלאות.
+                    אם תגדירו, הלוח יסמן &quot;חסר/ה&quot; כשאין מספיק אנשים. בקשות הצטרפות יופיעו רק אם פתחתם אותן במתג למעלה.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {settings.roles.map((role) => {

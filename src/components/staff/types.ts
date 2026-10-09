@@ -22,7 +22,7 @@ export type StaffRow = {
   handle_set_at?: string | null
   colour?: string | null
   /** Quick-login employee number, and whether a passcode exists -- never the passcode. */
-  employee_no?: number | null
+  employee_no?: string | null
   has_passcode?: boolean
   /** Has signed in with Google (their login is linked to this record). */
   has_google?: boolean

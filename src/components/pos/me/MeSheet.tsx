@@ -169,7 +169,7 @@ export default function MeSheet({ open, onClose }: { open: boolean; onClose: () 
         <header className="me-head">
           <div className="me-who">
             <HandleChip staffId={me.id} handle={me.handle} size="md" />
-            {typeof me.employeeNo === 'number' ? (
+            {typeof me.employeeNo === 'string' ? (
               <span className="me-no">{t('me.employeeNo', { n: me.employeeNo })}</span>
             ) : null}
           </div>

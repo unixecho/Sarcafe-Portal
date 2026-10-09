@@ -46,7 +46,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const staffIds = [...new Set((rows ?? []).map((row) => row.staff_id as string).filter(Boolean))]
   const shiftIds = [...new Set((rows ?? []).map((row) => row.shift_id as string))]
   const [{ data: staff }, { data: shifts }] = await Promise.all([
-    staffIds.length ? service.from('staff').select('id, display_name, first_name, last_name, handle, employee_no').in('id', staffIds) : Promise.resolve({ data: [] }),
+    staffIds.length ? service.from('staff').select('id, display_name, first_name, last_name, handle, employee_no, employee_code').in('id', staffIds) : Promise.resolve({ data: [] }),
     shiftIds.length ? service.from('shifts').select('id, shift_date, start_time, end_time').in('id', shiftIds) : Promise.resolve({ data: [] }),
   ])
   const staffMap = new Map((staff ?? []).map((row) => [row.id as string, row]))
@@ -57,8 +57,8 @@ export const GET = apiRoute(async (request: NextRequest) => {
     return {
       id: row.id,
       staffId: row.staff_id,
-      staffName: person?.display_name || [person?.first_name, person?.last_name].filter(Boolean).join(' ') || person?.handle || `עובד/ת ${person?.employee_no ?? ''}`.trim(),
-      employeeNo: person?.employee_no ?? null,
+      staffName: person?.display_name || [person?.first_name, person?.last_name].filter(Boolean).join(' ') || person?.handle || `עובד/ת ${person?.employee_code ?? person?.employee_no ?? ''}`.trim(),
+      employeeNo: person?.employee_code ?? (person?.employee_no == null ? null : String(person.employee_no)),
       shiftDate: shift?.shift_date ?? '',
       startTime: shift?.start_time ?? '',
       endTime: shift?.end_time ?? '',

@@ -1,6 +1,50 @@
 # Sarcafe — cross-agent handoff
 
-Last updated: 2026-10-08 (Asia/Jerusalem). Author: ChatGPT / Codex. A Claude addendum on the Sarcafe intro (design only, implementation pending) follows "Current state".
+## Codex addendum, 2026-10-09: native fixed dashboard shell and request controls implemented locally
+
+The requested `gpt-taste` dashboard refinement is implemented locally on
+`integrate/pos-and-scheduling`; application deployment is pending the release
+commit. The production schema changes were applied through the authenticated
+Supabase SQL Editor on 2026-10-09 and migration version `20261009120000` was
+recorded with the user's explicit approval.
+
+- Owner and staff pages now share a fixed safe-area-aware iOS-style top bar with a
+  role-aware menu that drops from the top. Route loading retains the same chrome
+  and shows a small progress hairline. The employee home leads with the next
+  published shift and its station/zone before notifications and secondary tools.
+- Schedule/staff/POS transient notices use one fixed top location with a rounded,
+  blurred iOS-style container, top-down entrance and timed fade. Person/name chips,
+  avatars and staff rows use more native grouped rounded-rectangle treatment.
+- Direct requests to join a shift are opt-in per shift and closed by default. The
+  owner controls this in the shift editor; employees see open/closed labels on both
+  published and planning schedules. SQL rejects a closed request even if the API is
+  called directly. Existing hand-over, give-up-with-no-return and exchange flows
+  remain available for an employee's own shift.
+- HYP employee identifiers now have a canonical text `employee_code`, preserving
+  leading zeroes such as `0849` through creation, invitations, records, checklists,
+  POS and quick login. The old integer column and numeric login payloads remain as
+  compatibility paths.
+- New production migration: `20261009120000_native_dashboard_shift_requests_employee_codes.sql`.
+  It adds `staff.employee_code`, `shifts.requests_open`, service-only text-code
+  login/update RPCs and an atomic shift-save overload/request guard.
+- Verification: typecheck passed; production build passed (required host filesystem
+  access for generated `.next` folders); schedule model 156/0; scheduling SQL 279/0;
+  onboarding/auth/storage SQL 46/0; checklist SQL 8/0; staff access 50; POS access 37.
+  `check:app-layout` remains blocked by the pre-existing missing `playwright` module.
+
+Live verification after the SQL Editor run: no missing employee codes or null
+request flags; browser roles cannot call text-code login; service role can call the
+guarded request function but not its internal helper; both new service RPCs and the
+shift-save overload exist. The connector migration call expired and the CLI account
+lacked project-link privileges, so the matching migration-history row was recorded
+manually after explicit user approval and then read back successfully.
+
+**Exact next step for this local slice:** commit and push the release to `main`, verify
+the production deployment, then pilot: login
+with a leading-zero HYP code, open exactly one shift for requests, verify closed
+shifts reject requests, and verify hand-over/exchange still work.
+
+Last updated: 2026-10-08 (Asia/Jerusalem). Author: ChatGPT / Codex. A Claude addendum on the shipped Sarcafe intro and the store-readiness work follows "Current state".
 
 Interactive concept preview: `C:/Users/Johnathan/.codex/visualizations/2026/10/07/01a117c0-6236-7402-a111-af490b29f94e/sarcafe-checklist-preview.html`. The corresponding first production slice is now implemented locally in the Sarcafe app; the preview itself remains a standalone concept.
 
@@ -13,7 +57,7 @@ Interactive concept preview: `C:/Users/Johnathan/.codex/visualizations/2026/10/0
 - Categorized owner/staff dashboards include scoped, polling in-app notifications. Owner employee records include published shift history, checklist reports/defects, event orders and private payslip upload. Regular cashier/attendance statistics await HYP; scheduled shifts are not attendance. See `docs/STAFF_RECORDS.md` for limits and permissions.
 - Scheduling closes planning submissions after the preceding Tuesday in Jerusalem. Owner can prepare shift choices from templates, approve requests, place staff on a seven-day board, fill missing positions while preserving manual assignments, and publish. Filling prioritizes Saturday fairness over a 12-week history and respects availability/rest/hours/conflicts. Existing peer-acceptance then manager-approval swap transaction is preserved and tested. See `docs/STAFF_SCHEDULING.md`.
 - Explicit owner assignment to an active event station permits a branch employee to work that event without changing their home branch or granting event management. Station links infer their authorized event and survive login. Opaque event reads use a bounded, guarded server API plus polling; browser grants are not widened. Back uses explicit parents; Home leads to `/staff`, which resolves a full owner to the owner dashboard. Print and nickname gates now provide exits.
-- Four migrations are live in production in this order: `20261008134712_employee_invites.sql`, `20261008134738_schedule_planning_fair_fill.sql`, `20261008134751_staff_records_payslips.sql`, `20261008134807_staff_auth_assurance.sql`. Verification confirmed all three required tables, all three release-critical functions, and the private payslip bucket. Vercel production deployment `dpl_7GDgXCLPSo459PMVwr4hVnaf44Qq` is Ready and promoted from release commit `f72babe`. Historical checklist migration remains live as `20261008050857_branch_checklists.sql`; do not replay it.
+- Four migrations are live in production in this order: `20261008134712_employee_invites.sql`, `20261008134738_schedule_planning_fair_fill.sql`, `20261008134751_staff_records_payslips.sql`, `20261008134807_staff_auth_assurance.sql`. Verification confirmed all three required tables, all three release-critical functions, and the private payslip bucket. Vercel application deployment `dpl_7GDgXCLPSo459PMVwr4hVnaf44Qq` is Ready and promoted from release commit `f72babe`; the follow-up documentation commit `48c54de` is also on `main` and its production deployment `dpl_7Q9HTcRu1ThHxQ9GB1Phwxeu1Nfk` is Ready. Historical checklist migration remains live as `20261008050857_branch_checklists.sql`; do not replay it.
 - Verified: typecheck; scheduling model 156/0; scheduling SQL 277/0; checklist SQL 8/0; onboarding/auth/storage SQL 45/0; POS access 37 checks; staff private routes/session switching 50 checks; real component/browser layout 141 checks. Final production build passed after event membership, mobile upload controls and role-aware Google landing refinements; diff hygiene passed. Layout previews use synthetic data in `.codex/verification/app-polish`; desktop Chrome in a fresh isolated context, not real iOS or production staff authentication. CUA helper remained unavailable; host shell and fresh headless Chrome worked.
 - Main additions: `src/components/app`, onboarding and records components/routes, private staff APIs, `src/lib/staff` identity/invitations/history/navigation, guarded POS read bridge, scheduling planning panel/action/RPC, and the four migrations. Shared `OwnerHeader`, middleware/login/callback, POS clients and owner/staff layouts also changed. Preserve all pre-existing checklist and other-session files.
 
@@ -23,23 +67,22 @@ Interactive concept preview: `C:/Users/Johnathan/.codex/visualizations/2026/10/0
 
 Repository: `C:/Users/Johnathan/Desktop/sarcafe`; local branch `integrate/pos-and-scheduling`; release commit `f72babe` is on `origin/main`. Preserve pre-existing untracked `.agents/`, `.claude/skills/`, `skills-lock.json`. Check current status before starting: another Claude session may have progressed since this handoff.
 
-## Claude addendum, 2026-10-08: Sarcafe intro (design only, implementation PENDING)
+## Claude addendum, 2026-10-09: Sarcafe intro SHIPPED to main; store readiness in progress
 
-**HOLD (user instruction, repeated 2026-10-08): the intro port does NOT start until BOTH (1) the owner has approved a copy option, and (2) ChatGPT has finished its polish and scheduling release and says so here: the four local migrations applied, the bundle deployed, the pilot done.** ChatGPT: when you reach (2), add the line `INTRO PORT MAY START` under this heading. Claude will not infer it from a quiet working tree.
+**The intro is live.** Commit `a061354` on `main` (fast-forward on top of `48c54de`), deployed by Vercel from main and checked on `https://sarcafe-portal.vercel.app`. The user lifted the earlier hold explicitly ("push the intro to main"), so the `INTRO PORT MAY START` marker is no longer needed. Read `docs/SARCAFE_INTRO.md`.
 
-**In progress (Claude, same day): the Apple App Store and Google Play readiness checklist** requested by the user. Research and a checklist document only (`docs/NATIVE_STORE_CHECKLIST.md` once written); no app code, no migration, no store account action. It builds on `chatGPT/MOBILE_APP_ROADMAP.md` items 3 to 6 and does not replace your Capacitor-versus-React-Native ADR; it feeds it.
+- **What it is.** The portal's opening screen: dark screen, the cream badge warming like a cafe lamp, two lines word by word, then the page. About 5 s on a device's first visit (string lights and steam), about 3 s after. Tap, key or scroll skips. Ten lines in he/en/ar; a device sees line one first, then a different line each visit. `src/lib/intro/`, `src/components/intro/`, `src/components/IntroCard.tsx`, `src/app/owner/intro/`, `src/app/api/owner/intro/`.
+- **Where it plays.** `/` always; `/order` only inside the installed customer app (`data-entry="app"`, hidden by CSS unless `display-mode: standalone`). Not the menu, order tracking, login, staff, owner or POS.
+- **Owner switch.** `/owner/intro` (tile on the owner dashboard): on/off, a preview of each version and of every line. The `intro_enabled` row is upserted public by the route, so there is **no migration**. Only an explicit `false` turns it off; the read is time-boxed to 1.5 s and fails open.
+- **Shared files I edited (small, for your next pull).** `src/app/layout.tsx` (one import and `<IntroGate />` after `#a11y-scope`, before the accessibility widget; keep it outside `#a11y-scope`), `src/middleware.ts` (`/owner/intro` added to the owner-only list), `src/app/owner/dashboard/page.tsx` (one tile and icon import), `src/lib/settings/keys.ts` and `server.ts` (the key and `getIntroEnabled()`), `package.json` (`check:intro`). Your checkout was fast-forwarded to `a061354`; your uncommitted `.gitignore` and `handoff.md` edits were left alone.
+- **Verified.** `npm run check:intro`: 430 passed. Typecheck and production build pass. The built app against a stand-in settings endpoint (never the real database) for on, off, missing row, `"false"`, `0`, a 500 and a hang: off removes it on `/` and `/order`; the junk and failure cases leave it on; a hanging read costs the page about 1.5 s. Live smoke test after deploy: overlay on `/` (`site`) and `/order` (`app`), none on `/menu/*` and `/login`, `/owner/intro` redirects signed out, `/api/owner/intro` returns 401, the logo is served optimized (8 KB). `npm run check:pos-access`-style checks I ran (`check-pos-access` 37, `check-staff-access` 50) still pass; `scripts/check-app-layout.mjs` fails with MODULE_NOT_FOUND on the shared checkout too (a module not installed here), unrelated to the intro.
+- **Not verified.** A real iPhone or Android phone; the installed-app entry on a really installed PWA (the CSS gate is tested, the install is not); a screen reader.
+- **Copy to confirm with the owner.** Line one is the owner's. Lines 2 to 10 were written by Claude in the same spirit; lines 5 and 6 name pastries, shakes and hot or cold coffee. English and Arabic are translations.
+- **For the native track (`chatGPT/MOBILE_APP_ROADMAP.md`).** The intro's standby frame is the contract for the iOS launch screen and the Android 12+ splash. A WebView shell is not `display-mode: standalone`, so the `/order` entry would not fire there: decide the shell's start URL. `public/sarcafe-logo.png` cannot be used for store icons (hard 1-bit alpha, checkerboard colours under the transparency, 847 KB; App Store icons must be opaque).
 
-**Confirmed user requirement.** Make an intro for Sarcafe like the one on Ayeka.Bar, themed for a coffee shop. The user reviews it before it is finalised. Putting it into the app is **pending** until ChatGPT has finished the schedule overhaul, the checklist work and the iOS-style polish. The user also plans iOS and Android apps (will buy Apple Developer and Google Play accounts) and wants everything the stores need prepared; the intro comes first.
+**Store readiness (Apple App Store and Google Play): researched, decisions file written.** Research and documents only; no app code, no migration, no store account action. `docs/NATIVE_STORE_DECISIONS.md` lists 13 decisions with recommendations and defaults, the inputs needed from the owner, and the questions for an accountant or lawyer. It builds on `chatGPT/MOBILE_APP_ROADMAP.md` items 3 to 6 and feeds your Capacitor-versus-React-Native decision rather than replacing it. Headline findings for you: an osek must enroll with Apple as an Individual (personal name public); an iPhone build needs a cloud macOS builder, not a Mac (Xcode Cloud cannot be the first route); Google OAuth is blocked in embedded web views and web push does not exist in WKWebView; Apple 4.8 makes Google login on iPhone require Sign in with Apple unless the iOS build is PIN-only (recommended first release); 4.2 is the main rejection risk, so staff/owner app first and the customer side stays a PWA. The detailed phase checklist will be built from the owner's answers. The research notes are in the Claude session record, not in the repo.
 
-**Done, with no app code touched.** A reviewable single-file preview and the spec. Read `docs/SARCAFE_INTRO.md`. Open `docs/intro-preview/sarcafe-intro-preview.html` (controls for version, language, copy A/B/C, device, motion). `docs/intro-preview/sarcafe-intro-filmstrip.jpg` holds stills for sessions without a browser. `preview.template.html` and `build.mjs` rebuild the preview; `node docs/intro-preview/check-preview.mjs` runs 142 invariant checks. Not touched: `src/`, `public/`, `supabase/`, `package.json`, deployments, commits. No `.ts` or `.tsx` was added anywhere on purpose: `tsconfig.json` includes `**/*.ts(x)`, so one stray file would land in your `npm run typecheck`.
-
-**Waiting on the owner.** Copy A, B or C and the Hebrew wording (my proposal, not the owner's words), the durations (Ayeka's 3 s and 5 s), whether to keep both string lights and steam, an owner on/off switch, and whether the installed customer app plays it.
-
-**For ChatGPT until the port.** Please do not create `src/lib/intro`, `src/components/intro` or an intro mount. Phase 1 of the port later touches `src/app/layout.tsx` (one import, plus `<IntroGate />` after `#a11y-scope`) and `package.json` (one script), both of which currently carry your uncommitted changes. Phase 2 (owner switch, a migration seeding `intro_enabled`) touches `src/app/owner/*` and `src/app/api/owner/*`. The doc's "Notes for the native Android and iOS track" adds three items for `chatGPT/MOBILE_APP_ROADMAP.md`: the intro's standby frame is the contract for the iOS launch screen and the Android 12+ splash; a WebView cold start replays the intro; and `public/sarcafe-logo.png` cannot be used for store icons (hard 1-bit alpha, checkerboard colours under the transparency, 847 KB, and App Store icons must be opaque).
-
-**Verified.** Preview frames in the in-app browser and in headless Edge at 2x on phone, landscape and desktop in he/en/ar. All 18 copy x language x version combinations are within budget (short 2.64 to 2.86 s of 3.0, welcome 4.93 to 5.29 s of 5.5). Tap-to-skip gave zero ghost clicks, the pure-CSS failsafe hid the overlay at 4 s, reduced motion substitutes fades, and each of 10 deliberate breakages of the checks was caught. Not verified: a real iOS or Android device, a Next build with the intro (none exists yet), a screen reader.
-
-**Exact next step.** The user opens the preview and answers the five questions at the end of `docs/SARCAFE_INTRO.md`. Then, and only once this handoff says ChatGPT's schedule, checklist and iOS work is finished, run Phase 1 of the port in a scratch copy of the repo.
+**Exact next step.** The owner reads `docs/NATIVE_STORE_DECISIONS.md` and answers it (D1, D3 and D5 unblock the most). Separately, the owner can open `/owner/intro` to read and preview the ten lines and strike or reword any (words live in `src/lib/intro/copy.ts`; the harness pins line one).
 
 ## Read next
 
@@ -107,7 +150,7 @@ Supabase migration, advisor review, Vercel production deployment and public-rout
 
 - Supabase `moiunkugxgsgbdokaxbr`, Sarcafe Portal, eu-central-1. Migration `branch_checklists` is applied as production version `20261008050857`. Verification confirmed all three tables, the schedule trigger, and denied `anon`/`authenticated` reads. Branch slugs `givat-haviva`, `maor`; code resolves generated IDs dynamically.
 - Supabase advisors ran after migration. The new checklist/session tables intentionally report RLS-with-no-policy because all browser grants are revoked and access is service-only. Advisors also report existing project-wide security/performance findings, including security-definer views/functions and unindexed foreign keys; none exposed the new checklist RPCs to browser roles.
-- Vercel project `sarcafe-portal`, id `prj_KnRE1xTqicjPpuJcRZD6AcE6gCDk`, scope `godunix` / `team_FAQr1BGFf7wK7JCIVr0n9sPl`. Release deployment `dpl_7GDgXCLPSo459PMVwr4hVnaf44Qq` from commit `f72babe` reached Ready and was promoted to production on 2026-10-08. Live staff checklist smoke test returned the expected unauthenticated 307 with its quick-login return path. Earlier manifest/login/owner-route/code-validation smoke checks remain valid.
+- Vercel project `sarcafe-portal`, id `prj_KnRE1xTqicjPpuJcRZD6AcE6gCDk`, scope `godunix` / `team_FAQr1BGFf7wK7JCIVr0n9sPl`. Application deployment `dpl_7GDgXCLPSo459PMVwr4hVnaf44Qq` from commit `f72babe` reached Ready and was promoted on 2026-10-08. Final main deployment `dpl_7Q9HTcRu1ThHxQ9GB1Phwxeu1Nfk` from documentation commit `48c54de` is Ready on the production alias. Live staff checklist smoke test returned the expected unauthenticated 307 with its quick-login return path. Earlier manifest/login/owner-route/code-validation smoke checks remain valid.
 - Sandbox shell and Node/browser helper failed startup. Host shell recovery succeeded after automatic review; browser runtime remained unavailable. No authenticated live staff-page walkthrough. Use supplied screenshot + inspected source for current UI evidence, then verify in browser when runtime available.
 - Requested skills/connectors used as applicable: Supabase/Vercel read-only, UI/UX targeted guidance. Static employee flow documented with Mermaid; no prototype/app implementation generated. No delegated agents.
 

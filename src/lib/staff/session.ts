@@ -17,14 +17,19 @@ export type StaffIdentity = AccessRow & {
   display_name: string | null
   first_name: string | null
   last_name: string | null
-  employee_no: number | null
+  employee_no: string | null
   via: 'google' | 'employee_code'
   quick: boolean
 }
 
 export const employeeSessionHash = (token: string) => createHash('sha256').update(token).digest('hex')
 
-const STAFF_COLUMNS = 'id, auth_user_id, role, badge, branch_id, active, email, display_name, first_name, last_name, employee_no'
+const STAFF_COLUMNS = 'id, auth_user_id, role, badge, branch_id, active, email, display_name, first_name, last_name, employee_no, employee_code'
+
+function identity(row: Record<string, unknown>, via: StaffIdentity['via'], quick: boolean): StaffIdentity {
+  const { employee_code, ...rest } = row
+  return { ...(rest as Omit<StaffIdentity, 'via' | 'quick'>), employee_no: employee_code == null ? (row.employee_no == null ? null : String(row.employee_no)) : String(employee_code), via, quick }
+}
 
 export async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
   const service = createServiceRoleClient()
@@ -37,7 +42,7 @@ export async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
     const { data } = await service.from('staff').select(STAFF_COLUMNS).eq('auth_user_id', user.id).eq('active', true).maybeSingle()
     if (isStaff(data)) {
       const quick = await validatedSessionId(supabase).then(isQuickSessionId).catch(() => true)
-      return { ...(data as Omit<StaffIdentity, 'via' | 'quick'>), via: 'google', quick }
+      return identity(data as Record<string, unknown>, 'google', quick)
     }
   }
 
@@ -56,7 +61,7 @@ export async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
   const { data } = await service.from('staff').select(STAFF_COLUMNS).eq('id', session.staff_id).eq('active', true).maybeSingle()
   if (!isStaff(data)) return null
   void service.from('staff_employee_sessions').update({ last_seen_at: new Date().toISOString() }).eq('token_hash', hash)
-  return { ...(data as Omit<StaffIdentity, 'via' | 'quick'>), via: 'employee_code', quick: true }
+  return identity(data as Record<string, unknown>, 'employee_code', true)
 }
 
 export async function issueEmployeeSession(response: NextResponse, staffId: string) {

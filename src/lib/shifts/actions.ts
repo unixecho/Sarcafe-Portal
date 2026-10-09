@@ -30,6 +30,7 @@ export type ScheduleAction =
       presetId?: string | null
       stationId?: string | null
       requirements: RoleRequirement[]
+      requestsOpen: boolean
       note?: string | null
       assignees: SaveShiftAssignee[]
       /** The shift's updatedAt as the sheet loaded it — a stale save is refused. */

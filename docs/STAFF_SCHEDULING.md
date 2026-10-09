@@ -2,7 +2,7 @@
 
 ## Weekly planning update — 2026-10-08
 
-Implemented, migrated and deployed to production; the authenticated pilot status is recorded in root `handoff.md`.
+The 2026-10-08 weekly-planning baseline was implemented, migrated and deployed to production. The per-shift request opt-in described below was applied to production on 2026-10-09 in `20261009120000_native_dashboard_shift_requests_employee_codes.sql`. The authenticated pilot status is recorded in root `handoff.md`.
 Migration: `20261008134738_schedule_planning_fair_fill.sql`. Existing migration
 024 remains historical; the successor changes the request rules deliberately.
 
@@ -20,13 +20,17 @@ and can then link Google to the same employee record.
 - **Tuesday cutoff.** For a Sunday-starting week, requests and availability close
   after the preceding Tuesday, at midnight in `Asia/Jerusalem`, including DST.
   Draft-week requests and availability are enforced by SQL, beyond disabled UI
-  buttons. A published schedule still permits the existing last-minute join and
-  swap workflows. An employee can cancel their own pending request after cutoff.
+  buttons. On a published schedule, direct join requests are available only when
+  the owner explicitly opens that shift; swap and give-up workflows remain.
+  An employee can cancel their own pending request after cutoff.
 - **Pre-publication choices.** `/staff/schedule` → “בקשות לשבוע” offers the upcoming
   week's shift dates/times/templates, alongside day preferences, unavailability,
-  and partial hours. Each shift request is sent explicitly and immediately.
+  and partial hours. A shift is closed to direct employee requests by default;
+  the owner explicitly opens individual shifts in the shift editor. Employees see
+  whether each shift is open or closed to requests. SQL enforces the same rule.
   Availability has draft/submit actions. The separate `planningShifts` response
-  contains only `id`, `weekId`, `date`, `startTime`, `endTime`, `presetId` — never
+  contains only `id`, `weekId`, `date`, `startTime`, `endTime`, `presetId`,
+  `requestsOpen` — never
   draft assignees, manager notes, role demands, or unpublished snapshots.
 - **Live week board.** Seven equal day columns on wide screens, a contained swipe
   board on phones, and the current week's approval pane beside the board on large
@@ -116,7 +120,11 @@ Everything below was confirmed against the **live database**, not guessed from t
 - Publish / copy / clear / revert-to-draft live behind clear buttons with confirmations that say what will happen to pending requests and swaps.
 
 ### Shift requests ("I would like to work this shift")
-Employee opens a shift (on **כולם**) → *בקשה להצטרף* → status **pending** → manager sees it → **approve / reject** → employee is told.
+Owner first marks that specific shift **open for requests**. Employee opens it
+(on **כולם**) → *בקשה להצטרף* → status **pending** → manager sees it →
+**approve / reject** → employee is told. A shift not explicitly opened cannot be
+requested. Employees may still offer one of their own shifts for hand-over or
+exchange; hand-over supports “nothing in return”.
 - **Never touches the schedule while pending.**
 - Refused up front (with a plain reason): week not published, shift already started, shift **full** (needs-headcount reached), person already on it / already working then / another pending request at that time, person marked **unavailable** that day, or switched off for scheduling.
 - Approval **re-checks everything against the schedule as it is now.** *Hard stops* (cannot be forced): shift gone/started, person inactive/already on it/**double-booked**. *Soft issues* require an explicit confirmation: shift already full / already has people / person marked unavailable / the shift's time changed since they asked.

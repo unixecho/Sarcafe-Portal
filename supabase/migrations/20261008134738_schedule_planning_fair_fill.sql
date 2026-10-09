@@ -267,6 +267,12 @@ begin
   if not public.sched_can_view(p_actor, v_shift.branch_id) then
     return public.sched_fail('forbidden');
   end if;
+  -- Newer installs add a per-shift opt-in. `to_jsonb` keeps this successor
+  -- migration re-runnable against older databases where the column is not yet
+  -- present, while enforcing the opt-in whenever it is present.
+  if to_jsonb(v_shift) ? 'requests_open' and not coalesce((to_jsonb(v_shift) ->> 'requests_open')::boolean, false) then
+    return public.sched_fail('requests_not_open');
+  end if;
   if p_note is not null and char_length(p_note) > 300 then
     return public.sched_fail('bad_request');
   end if;

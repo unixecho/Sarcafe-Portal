@@ -13,7 +13,7 @@ type TemplateRow = { id: string; kind: ChecklistKind; name: string; version: num
 type AssignmentRow = {
   id: string
   staffName: string
-  employeeNo: number | null
+  employeeNo: string | null
   shiftDate: string
   startTime: string
   endTime: string

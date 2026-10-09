@@ -23,7 +23,7 @@ import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
 
 const body = z
   .object({
-    employeeNo: z.number().int().min(1).max(99999),
+    employeeNo: z.union([z.string().regex(/^(?=.*[1-9])\d{1,5}$/), z.number().int().min(1).max(99999)]).transform(String),
     passcode: z.string().regex(/^\d{6}$/),
     next: z.enum(['/pos', '/staff', '/staff/checklists', '/staff/schedule']).optional(),
   })

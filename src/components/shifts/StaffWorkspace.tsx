@@ -169,8 +169,8 @@ export default function StaffWorkspace() {
 
           {currentWeek?.status === 'published' && (
             <>
-              {view === 'everyone' && <p className="sch-sub">לחצו על משמרת כדי לראות פרטים — ואם חסרים בה אנשים, אפשר לבקש להצטרף.</p>}
-              {view === 'mine' && weekAssignments.every((a) => a.staffId !== me) && <p className="sch-sub">אין לכם משמרות בשבוע הזה. כדי לראות משמרות של אחרים ולבקש להצטרף — עברו ל״כולם״.</p>}
+              {view === 'everyone' && <p className="sch-sub">לחצו על משמרת לפרטים. רק משמרות שסומנו ״פתוחה לבקשות״ מאפשרות בקשת הצטרפות.</p>}
+              {view === 'mine' && weekAssignments.every((a) => a.staffId !== me) && <p className="sch-sub">אין לכם משמרות בשבוע הזה. אפשר לעבור ל״כולם״ ולראות אילו משמרות נפתחו לבקשות.</p>}
               <WeekGrid
                 weekStart={weekStart}
                 db={db}

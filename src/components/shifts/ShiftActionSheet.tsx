@@ -172,6 +172,8 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
                     ביטול הבקשה
                   </button>
                 </div>
+              ) : !shift.requestsOpen ? (
+                <Notice tone="info">המנהל/ת לא פתחו את המשמרת הזו לבקשות. אפשר לפתוח משמרת שלכם ולבקש החלפה או למסור אותה בלי משמרת חוזרת.</Notice>
               ) : myRow && !myRow.schedulable ? (
                 <Notice tone="warn">אתם מוגדרים כלא זמינים לשיבוץ בסניף הזה, ולכן אי אפשר לבקש משמרת. לשינוי — פנו למנהל/ת.</Notice>
               ) : clash ? (

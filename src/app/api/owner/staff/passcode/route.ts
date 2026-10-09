@@ -20,7 +20,7 @@ const body = z
     staffId: z.string().uuid(),
     action: z.enum(['generate', 'set', 'clear']).optional(),
     passcode: z.string().regex(/^\d{6}$/).optional(),
-    employeeNo: z.number().int().min(1).max(99999).optional(),
+    employeeNo: z.string().regex(/^(?=.*[1-9])\d{1,5}$/).optional(),
   })
   .strict()
 
@@ -33,16 +33,16 @@ export const POST = apiRoute(async (request: NextRequest) => {
   const { staffId, action, employeeNo, passcode: requestedPasscode } = await parseBody(request, body)
   if (!action && employeeNo === undefined) throw BadRequest('חסר מה לעשות / Nothing to do.')
 
-  let employeeNoSet: number | undefined
+  let employeeNoSet: string | undefined
   if (employeeNo !== undefined) {
-    const res = await callPosRpc<{ ok: boolean; reason?: string; employee_no?: number }>('pos_set_employee_no', {
+    const res = await callPosRpc<{ ok: boolean; reason?: string; employee_no?: string }>('pos_set_employee_code', {
       p_actor: owner.id,
       p_target: staffId,
-      p_no: employeeNo,
+      p_code: employeeNo,
     })
     if (!res.ok) {
       if (res.reason === 'taken') throw new ApiError(409, 'conflict', 'מספר העובד הזה כבר תפוס / That number is taken', { reason: 'taken' })
-      if (res.reason === 'invalid') throw new ApiError(400, 'bad_request', 'מספר עובד חייב להיות בין 1 ל-99999 / Invalid number', { reason: 'invalid' })
+      if (res.reason === 'invalid') throw new ApiError(400, 'bad_request', 'מספר עובד חייב להכיל 1–5 ספרות / Invalid number', { reason: 'invalid' })
       throw rpcFailure(res.reason)
     }
     employeeNoSet = res.employee_no ?? employeeNo

@@ -10,7 +10,7 @@ import { messageOf } from '@/components/staff/types'
 import '@/components/shifts/schedule.css'
 import '@/components/staff/onboarding.css'
 
-type Person = { name: string; employeeNo: number; hasGoogle?: boolean }
+type Person = { name: string; employeeNo: string; hasGoogle?: boolean }
 
 export default function StaffOnboarding() {
   const [person, setPerson] = useState<Person | null>(null)

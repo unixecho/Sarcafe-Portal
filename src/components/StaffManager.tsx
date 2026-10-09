@@ -131,8 +131,8 @@ export default function StaffManager({
   }
 
   async function saveEmployeeNo(staffId: string, value: string) {
-    const n = /^\d{1,5}$/.test(value.trim()) ? Number(value.trim()) : NaN
-    if (!Number.isInteger(n) || n < 1 || n > 99999) return flash('error', t('owner.menu.staff.empNoInvalid'))
+    const n = value.trim()
+    if (!/^\d{1,5}$/.test(n) || !/[1-9]/.test(n)) return flash('error', t('owner.menu.staff.empNoInvalid'))
     try {
       const res = await fetch('/api/owner/staff/passcode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ staffId, employeeNo: n }) })
       if (!res.ok) {

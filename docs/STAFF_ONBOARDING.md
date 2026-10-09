@@ -1,8 +1,8 @@
 # Employee setup and Google linking
 
-Implemented, migrated and deployed to production on 2026-10-08. Authenticated owner/employee and real iPhone pilots remain.
+The invitation and Google-linking baseline was implemented, migrated and deployed to production on 2026-10-08. The leading-zero HYP-code follow-up described below was applied to production on 2026-10-09 in `20261009120000_native_dashboard_shift_requests_employee_codes.sql`. Authenticated owner/employee and real iPhone pilots remain.
 
-The owner opens `/owner/staff`, enters first name, last name and the employee's HYP number (1–99999), and chooses their branch/role. The number is manually matched to HYP; no cashier integration is present. Creating the employee preserves one stable staff UUID and shows a copyable personal setup link. The app does not send messages. Contact details are optional. Existing owner-created drafts and manual/random PIN administration remain supported.
+The owner opens `/owner/staff`, enters first name, last name and the employee's HYP number (1–5 digits), and chooses their branch/role. The number is manually matched to HYP; no cashier integration is present. It is stored as a digit string, so a leading zero is significant and preserved end to end (`0849` stays `0849` in setup, display and login). Creating the employee preserves one stable staff UUID and shows a copyable personal setup link. The app does not send messages. Contact details are optional. Existing owner-created drafts and manual/random PIN administration remain supported.
 
 Links expire after seven days and can be used once. They put the random token in the URL fragment, so it is absent from HTTP request URLs and referrers. The owner sees the raw link only at creation, can regenerate it from the employee edit sheet, and can cancel an unused link. Regeneration immediately revokes the old link. If employee creation succeeds but link generation fails, the success screen retries link creation against the same employee rather than creating a duplicate.
 

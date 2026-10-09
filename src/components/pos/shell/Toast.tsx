@@ -160,7 +160,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: (id?: numb
   const t = useT()
   const Icon = ICONS[item.tone]
   return (
-    <div className={`pos-toast pos-toast--${item.tone}`}>
+    <div className={`pos-toast pos-toast--${item.tone}`} style={{ '--toast-duration': `${item.ms}ms` } as React.CSSProperties}>
       <Icon size={20} aria-hidden="true" className="pos-toast-icon" />
       <span className="pos-toast-text">{item.message}</span>
       {item.action && (

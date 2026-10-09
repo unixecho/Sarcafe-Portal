@@ -60,7 +60,7 @@ export default function AddStaffSheet({
   const effectiveHandle = handleTouched ? handle : suggestHandle(firstName)
   const hint = effectiveHandle.trim() ? handleProblem(effectiveHandle) : null
   const handleOk = !effectiveHandle.trim() || handleProblem(effectiveHandle) === null
-  const canSubmit = !!firstName.trim() && !!lastName.trim() && Number(employeeNo) >= 1 && Number(employeeNo) <= 99999 && handleOk && !busy
+  const canSubmit = !!firstName.trim() && !!lastName.trim() && /^\d{1,5}$/.test(employeeNo) && /[1-9]/.test(employeeNo) && handleOk && !busy
 
   function reset() {
     setFirstName('')
@@ -100,7 +100,7 @@ export default function AddStaffSheet({
           branchId: branchId || null,
           handle: effectiveHandle.trim() || undefined,
           allowDuplicateName,
-          employeeNo: Number(employeeNo),
+          employeeNo,
           generateInvite: true,
         }),
       })

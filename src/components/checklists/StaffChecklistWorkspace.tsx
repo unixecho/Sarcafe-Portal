@@ -9,7 +9,7 @@ import { messageOf } from '@/components/staff/types'
 import './checklists.css'
 
 type Payload = {
-  profile: { id: string; label: string; email: string | null; employeeNo: number | null; via: 'google' | 'employee_code' }
+  profile: { id: string; label: string; email: string | null; employeeNo: string | null; via: 'google' | 'employee_code' }
   assignments: ChecklistAssignment[]
   developerMode: boolean
   previews: ChecklistPreviewTemplate[]

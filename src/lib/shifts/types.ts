@@ -88,6 +88,8 @@ export type Shift = {
   presetId: string | null
   stationId: string | null
   requirements: RoleRequirement[]
+  /** The manager explicitly allows employees to ask for this shift. */
+  requestsOpen: boolean
   note: string | null
   /** Raw timestamp string, echoed back on save so a concurrent edit is detected. */
   updatedAt: string | null
@@ -213,7 +215,7 @@ export type Warning = {
 export type WallClock = { date: ISODate; time: HM }
 
 /** Shift choices offered before publishing, deliberately without names, notes or assignments. */
-export type PlanningShift = Pick<Shift, 'id' | 'weekId' | 'date' | 'startTime' | 'endTime' | 'presetId'>
+export type PlanningShift = Pick<Shift, 'id' | 'weekId' | 'date' | 'startTime' | 'endTime' | 'presetId' | 'requestsOpen'>
 export type SaturdayBalance = { staffId: string; minutes: number; shifts: number }
 
 /** The full window the provider holds: the requested week, ± 1 — enough

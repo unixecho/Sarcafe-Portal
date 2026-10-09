@@ -11,15 +11,15 @@ export type ToastState = { id: number; kind: 'ok' | 'error' | 'info'; text: stri
 // announced to screen readers: polite for a success, assertive for a failure.
 export default function ScheduleToast({ toast, onDismiss }: { toast: ToastState | null; onDismiss: () => void }) {
   useEffect(() => {
-    if (!toast || toast.kind === 'error') return
-    const t = window.setTimeout(onDismiss, 4200)
+    if (!toast) return
+    const t = window.setTimeout(onDismiss, toast.kind === 'error' ? 7000 : 4200)
     return () => window.clearTimeout(t)
   }, [toast, onDismiss])
 
   if (!toast) return null
   const isError = toast.kind === 'error'
   return (
-    <div className={`sch-toast sch-toast--${toast.kind}`} role={isError ? 'alert' : 'status'} aria-live={isError ? 'assertive' : 'polite'} key={toast.id}>
+    <div className={`sch-toast sch-toast--${toast.kind}`} style={{ '--notice-duration': isError ? '7s' : '4.2s' } as React.CSSProperties} role={isError ? 'alert' : 'status'} aria-live={isError ? 'assertive' : 'polite'} key={toast.id}>
       {isError ? <XCircle size={20} aria-hidden="true" /> : <CheckCircle2 size={20} aria-hidden="true" />}
       <span style={{ flex: 1, minWidth: 0 }}>{toast.text}</span>
       <button type="button" onClick={onDismiss} aria-label="סגירת ההודעה">

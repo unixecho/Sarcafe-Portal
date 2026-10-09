@@ -386,7 +386,7 @@ export default function SetupWorkspace({
 
       {notice && (
         <ModalPortal>
-          <div className="os-toast" data-tone={notice.tone} role={notice.tone === 'bad' ? 'alert' : 'status'} key={notice.id}>
+          <div className="os-toast" style={{ '--notice-duration': notice.tone === 'bad' ? '6s' : '3.2s' } as React.CSSProperties} data-tone={notice.tone} role={notice.tone === 'bad' ? 'alert' : 'status'} key={notice.id}>
             {notice.text}
           </div>
         </ModalPortal>

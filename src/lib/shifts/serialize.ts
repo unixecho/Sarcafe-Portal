@@ -82,6 +82,7 @@ export function serializeShift(row: Record<string, unknown>): Shift {
     presetId: (row.preset_id as string | null) ?? null,
     stationId: (row.station_id as string | null) ?? null,
     requirements: (row.requirements as Shift['requirements']) ?? [],
+    requestsOpen: row.requests_open === true,
     note: (row.note as string | null) ?? null,
     updatedAt: (row.updated_at as string | null) ?? null,
   }

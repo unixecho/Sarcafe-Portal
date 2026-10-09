@@ -1,5 +1,30 @@
 # Session log
 
+## 2026-10-09 — fixed native dashboard shell, opt-in shift requests and leading-zero HYP codes
+
+- Applied the requested `gpt-taste` direction to the operational app: a fixed,
+  safe-area-aware iOS-style header now opens a role-aware top navigation menu for
+  staff and owners; route loading keeps the same chrome and uses a slim progress
+  indicator. Employee home prioritizes the next published shift and its station.
+- Transient schedule, staff, POS and POS-setup notices now use one fixed top
+  location, rounded blurred iOS-style surfaces, top-down entrance and timed fade.
+  Name/person containers use refined rounded-rectangle avatars and grouped surfaces.
+- Added per-shift `requests_open`, off by default. Owners opt in from the shift
+  sheet; employee schedules label open/closed shifts; both the application and SQL
+  refuse direct join requests while closed. Swaps, open hand-over and exchange
+  remain available for an employee's own assigned shift.
+- Added canonical text `employee_code` alongside the compatibility integer column.
+  Owner creation/edit, onboarding, profile, checklist, POS and quick login preserve
+  leading zeroes. Legacy numeric quick-login request bodies remain accepted.
+- Production migration:
+  `20261009120000_native_dashboard_shift_requests_employee_codes.sql`. The schema
+  and migration-history version were applied on 2026-10-09; application deployment
+  is recorded in root `handoff.md`.
+- Verification passed: typecheck; production build; schedule model 156/0;
+  scheduling SQL 279/0; onboarding/auth/storage SQL 46/0; checklist SQL 8/0;
+  staff access 50; POS access 37. The browser layout harness remains unavailable
+  because the existing workspace does not include Playwright.
+
 ## 2026-10-08 — native-style staff workspace and employee lifecycle
 
 - Continued the user's `$gpt-taste` request on `integrate/pos-and-scheduling`, preserving the prior checklist work and separate Claude intro preview. Applied compact operational layouts, system/Geist typography, short reduced-motion-aware GSAP reveals, safe areas, categorized owner/staff/manager home screens and shared Home/Back navigation.

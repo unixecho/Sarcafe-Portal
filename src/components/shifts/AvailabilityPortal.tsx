@@ -151,14 +151,14 @@ export default function AvailabilityPortal() {
 
       <section className="sch-wrap" aria-label="בקשות למשמרות">
         <div className="sch-row"><CalendarPlus size={19} aria-hidden="true" /><h3 className="sch-h">משמרות שתרצו לעבוד בהן</h3></div>
-        <p className="sch-sub">בקשה נשלחת מיד למנהל/ת. זו העדפה, והשיבוץ הסופי יופיע בלוח שיפורסם.</p>
+        <p className="sch-sub">רק משמרות שהמנהל/ת פתחו לבקשות זמינות כאן. הבקשה נשלחת מיד, והשיבוץ הסופי מופיע אחרי אישור ופרסום.</p>
         {choices.length === 0 && <p className="sch-sub">עוד לא הוגדרו משמרות לשבוע הזה. אפשר להגיש זמינות בינתיים.</p>}
         {choices.map((s) => {
           const r = db.requests.find((r) => r.shiftId === s.id && r.staffId === db.viewerStaffId && (r.status === 'pending' || r.status === 'approved'))
           const preset = db.settings.presets.find((p) => p.id === s.presetId)
           return <div key={s.id} className="sch-card sch-choice-row">
             <div style={{ flex: 1 }}><strong>{weekdayLongLabel(new Date(`${s.date}T00:00:00Z`).getUTCDay())} {formatDateLabel(s.date)}</strong><p className="sch-sub"><span className="ltr-isolate">{formatShiftRange(s.startTime, s.endTime)}</span>{preset ? ` · ${preset.name}` : ''}</p></div>
-            {r ? <span className={`sch-pill sch-pill--${r.status === 'approved' ? 'ok' : 'info'}`}>{r.status === 'approved' ? 'אושרה' : 'הבקשה נשלחה'}</span> : <button type="button" className="sch-btn sch-btn--sm press" disabled={locked || !!requestBusy} onClick={() => request(s.id)}>{requestBusy === s.id ? 'שולח…' : 'לבקש משמרת'}</button>}
+            {r ? <span className={`sch-pill sch-pill--${r.status === 'approved' ? 'ok' : 'info'}`}>{r.status === 'approved' ? 'אושרה' : 'הבקשה נשלחה'}</span> : s.requestsOpen ? <button type="button" className="sch-btn sch-btn--sm press" disabled={locked || !!requestBusy} onClick={() => request(s.id)}>{requestBusy === s.id ? 'שולח…' : 'לבקש משמרת'}</button> : <span className="sch-pill sch-pill--neutral">לא פתוחה לבקשות</span>}
           </div>
         })}
       </section>

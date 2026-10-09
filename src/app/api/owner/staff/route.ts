@@ -68,7 +68,7 @@ async function assertHandleFree(service: ReturnType<typeof createServiceRoleClie
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 const COLUMNS =
-  'id, email, first_name, last_name, display_name, phone, role, badge, branch_id, active, invited_at, claimed_at, handle, handle_set_at, colour, employee_no, pin_hash, auth_user_id'
+  'id, email, first_name, last_name, display_name, phone, role, badge, branch_id, active, invited_at, claimed_at, handle, handle_set_at, colour, employee_no, employee_code, pin_hash, auth_user_id'
 
 export const GET = apiRoute(async () => {
   await requireOwner()
@@ -84,9 +84,10 @@ export const GET = apiRoute(async () => {
   // The passcode hash and the auth user id never leave the server: the UI only needs
   // "is a code set" and "has this person signed in with Google yet" (quick login needs both).
   const staff = (data ?? []).map((row) => {
-    const { pin_hash, auth_user_id, ...rest } = row as typeof row & { pin_hash: string | null; auth_user_id: string | null }
+    const { pin_hash, auth_user_id, employee_code, ...rest } = row as typeof row & { pin_hash: string | null; auth_user_id: string | null; employee_code: string | null }
     return {
       ...rest,
+      employee_no: employee_code ?? (rest.employee_no == null ? null : String(rest.employee_no)),
       label: staffDisplayName(rest),
       has_passcode: pin_hash != null,
       has_google: auth_user_id != null,
@@ -124,7 +125,7 @@ const inviteSchema = z.object({
   handle: z.string().optional(),
   // The same name already belongs to an active colleague: ask once, then allow.
   allowDuplicateName: z.boolean().optional(),
-  employeeNo: z.number().int().min(1).max(99999).optional(),
+  employeeNo: z.string().regex(/^(?=.*[1-9])\d{1,5}$/).optional(),
   generateInvite: z.boolean().default(false),
 }).superRefine((body, ctx) => {
   if (!body.generateInvite) return
@@ -169,7 +170,7 @@ export const POST = credentialRoute(async (request: NextRequest) => {
       role: body.role,
       badge: body.badge,
       branch_id: body.branchId,
-      ...(body.employeeNo ? { employee_no: body.employeeNo } : {}),
+      ...(body.employeeNo ? { employee_code: body.employeeNo, employee_no: Number(body.employeeNo) } : {}),
     })
     .select()
     .single()
@@ -206,7 +207,7 @@ export const POST = credentialRoute(async (request: NextRequest) => {
     catch { console.error('staff create: invitation creation failed; owner may retry for existing record') }
   }
   // Do not serialize the database row: credential hashes and Auth identifiers are server-only.
-  return NextResponse.json({ staff: { id: staff.id, label, employee_no: staff.employee_no }, invitation }, { status: 201, headers: ONBOARDING_HEADERS })
+  return NextResponse.json({ staff: { id: staff.id, label, employee_no: staff.employee_code ?? String(staff.employee_no) }, invitation }, { status: 201, headers: ONBOARDING_HEADERS })
 })
 
 const patchSchema = z.object({

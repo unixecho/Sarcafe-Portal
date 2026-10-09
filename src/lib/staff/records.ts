@@ -21,7 +21,7 @@ export function privateStaffRoute<Args extends unknown[]>(handler: (...args: Arg
 export async function loadStaffRecords(staffId: string, canReadPayslips: boolean): Promise<StaffRecords> {
   const service = createServiceRoleClient()
   const [person, weeks, checklists, orders, documents, branches] = await Promise.all([
-    service.from('staff').select('id, first_name, last_name, display_name, employee_no, email, active').eq('id', staffId).maybeSingle(),
+    service.from('staff').select('id, first_name, last_name, display_name, employee_no, employee_code, email, active').eq('id', staffId).maybeSingle(),
     service.from('schedule_weeks').select('id, branch_id, published_snapshot').not('published_snapshot', 'is', null).order('week_start', { ascending: false }).limit(104),
     service.from('checklist_assignments').select('id, checklist_kind, status, issue_count, submitted_at, created_at, issues').eq('staff_id', staffId).order('created_at', { ascending: false }).limit(100),
     service.from('pos_orders').select('id, ticket_no, total_agorot, status, created_at').eq('created_by', staffId).order('created_at', { ascending: false }).limit(100),
@@ -44,7 +44,7 @@ export async function loadStaffRecords(staffId: string, canReadPayslips: boolean
   }
   history.sort((a, b) => b.date.localeCompare(a.date) || b.start.localeCompare(a.start))
   return {
-    employee: person.data,
+    employee: { ...person.data, employee_no: person.data.employee_code ?? (person.data.employee_no == null ? null : String(person.data.employee_no)) },
     shifts: history.slice(0, 150),
     checklists: (checklists.data ?? []).map(({ checklist_kind, ...row }) => ({ ...row, kind: checklist_kind })),
     orders: orders.data ?? [], payslips: documents.data ?? [], canReadPayslips,

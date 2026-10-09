@@ -238,7 +238,8 @@ function ShiftCard({
             מאוישת ({coverage.assigned}/{coverage.needed})
           </Pill>
         )}
-        {mode === 'staff' && coverage.state === 'partial' && !mine && !myPendingRequest && !past && <Pill tone="info">אפשר לבקש להצטרף</Pill>}
+        {mode === 'staff' && shift.requestsOpen && coverage.state !== 'full' && !mine && !myPendingRequest && !past && <Pill tone="info">פתוחה לבקשות</Pill>}
+        {mode === 'staff' && !shift.requestsOpen && !mine && !past && <Pill tone="neutral">לא פתוחה לבקשות</Pill>}
         {swapPending && (
           <Pill tone="swap" icon={<ArrowLeftRight size={13} aria-hidden="true" />}>
             החלפה ממתינה

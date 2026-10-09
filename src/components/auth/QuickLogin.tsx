@@ -186,8 +186,8 @@ export default function QuickLogin({ next = '/staff' }: { next?: '/pos' | '/staf
 
   const submit = useCallback(
     async (finalCode: string) => {
-      const no = Number(employeeNo)
-      if (!Number.isInteger(no) || no < 1 || no > 99999) {
+      const no = employeeNo.trim()
+      if (!/^\d{1,5}$/.test(no) || !/[1-9]/.test(no)) {
         // The code stays: only the missing number needs fixing.
         setError(t('me.quick.login.needNumber'))
         numberRef.current?.focus()

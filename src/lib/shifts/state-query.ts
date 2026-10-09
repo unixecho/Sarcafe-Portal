@@ -96,10 +96,10 @@ export async function loadShiftsState(
 /** Only the shift menu is public to staff before publishing. Assignees and private notes stay private. */
 async function loadPlanningShifts(service: Service, branchId: string, centerWeek: string): Promise<PlanningShift[]> {
   const { data } = await service.from('shifts')
-    .select('id, week_id, shift_date, start_time, end_time, preset_id')
+    .select('id, week_id, shift_date, start_time, end_time, preset_id, requests_open')
     .eq('branch_id', branchId).gte('shift_date', centerWeek).lte('shift_date', addDays(centerWeek, 13))
     .order('shift_date').order('start_time')
-  return (data ?? []).map((s) => ({ id: s.id, weekId: s.week_id, date: s.shift_date, startTime: s.start_time, endTime: s.end_time, presetId: s.preset_id }))
+  return (data ?? []).map((s) => ({ id: s.id, weekId: s.week_id, date: s.shift_date, startTime: s.start_time, endTime: s.end_time, presetId: s.preset_id, requestsOpen: s.requests_open === true }))
 }
 
 async function loadSaturdayBalance(service: Service, branchId: string, centerWeek: string): Promise<SaturdayBalance[]> {

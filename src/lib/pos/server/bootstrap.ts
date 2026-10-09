@@ -103,9 +103,9 @@ export async function loadBootstrap(input: BootstrapInput): Promise<BootstrapRes
   // returned; a failed read just hides the Me sheet's code row, it does not break the app.
   const [quick, quickFacts] = await Promise.all([
     input.quick ?? staff.quick ?? sessionIsQuick().catch(() => true),
-    service.from('staff').select('employee_no, pin_hash').eq('id', staff.id).maybeSingle(),
+    service.from('staff').select('employee_no, employee_code, pin_hash').eq('id', staff.id).maybeSingle(),
   ])
-  const facts = (quickFacts.data as { employee_no: number | null; pin_hash: string | null } | null) ?? null
+  const facts = (quickFacts.data as { employee_no: number | null; employee_code: string | null; pin_hash: string | null } | null) ?? null
 
   const me = {
     id: staff.id,
@@ -114,7 +114,7 @@ export async function loadBootstrap(input: BootstrapInput): Promise<BootstrapRes
     colour: staff.colour ?? null,
     // A quick-login session is floor work only: never a manager, whatever the person is.
     isManager: !quick && (chosen ? canEditMenu(staff, chosen.id) : hasAnyMenuEditAccess(staff)),
-    employeeNo: facts?.employee_no ?? null,
+    employeeNo: facts?.employee_code ?? (facts?.employee_no == null ? null : String(facts.employee_no)),
     hasPasscode: facts?.pin_hash != null,
     quickSession: quick,
     codeOnly: staff.codeOnly === true,
