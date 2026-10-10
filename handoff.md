@@ -2,7 +2,7 @@
 
 ## Codex addendum, 2026-10-11: employee week and public branch experience implemented locally
 
-Release approval was received on 2026-10-11. Production migration `20261010145257_cross_branch_published_schedule_access.sql` was applied through the authenticated Supabase SQL Editor and recorded in `supabase_migrations.schema_migrations`. A production verification query confirmed the ledger row, helper function, service-role execution, and browser-role denial. The application changes are ready for the approved `main` push; update this paragraph with the commit and Vercel deployment after the release completes. Existing unrelated dirty/untracked files remain preserved.
+This release is live from application commit `ff9980e` on `main`. Vercel deployment `dpl_Fv52YadWgGt8t5FVPkC8YQN22LhB` reached Ready and serves `https://sarcafe-portal.vercel.app`. Production migration `20261010145257_cross_branch_published_schedule_access.sql` was applied through the authenticated Supabase SQL Editor and recorded in `supabase_migrations.schema_migrations`. A production verification query confirmed the ledger row, helper function, service-role execution, and browser-role denial. Existing unrelated dirty/untracked files remain preserved.
 
 ### Confirmed requirements and implemented behavior
 
@@ -31,8 +31,9 @@ Release approval was received on 2026-10-11. Production migration `2026101014525
 - `npm run check:app-layout` — 173 passed with the installed Playwright Chromium runtime; seven-day responsive layout and swap payload contracts are covered.
 - `npm run check:staff-access` — 51 passed.
 - `npm run build` — passed after the complete integrated diff. Real Chrome smoke checks at 390 px and 1440 px rendered both branches, seven hours rows and no horizontal overflow. The final automated reload-persistence helper produced no output; cursor/persistence behavior was source-reviewed and statically checked instead.
+- Production smoke test — `/`, both branch menu routes and the protected employee schedule responded correctly; the live Maor portal rendered its new backdrop and a seven-day opening-hours disclosure, while the signed-out schedule route redirected to login as expected.
 
-**Exact next step:** commit/push the reviewed application slice to `main`, confirm the Vercel production deployment reaches Ready, then run an authenticated two-branch employee pilot plus a customer refresh test on both Maor and Givat Haviva. Confirm a cross-branch open-shift request can be approved without exposing any draft or event schedule.
+**Exact next step:** run an authenticated two-branch employee pilot plus a customer refresh test on both Maor and Givat Haviva. Confirm a cross-branch open-shift request can be approved without exposing any draft or event schedule.
 
 ## Codex addendum, 2026-10-10: schedule publication fix, responsive saves and employee identity live
 
