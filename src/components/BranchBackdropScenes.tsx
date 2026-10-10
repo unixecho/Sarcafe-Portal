@@ -18,7 +18,7 @@ const SCENES: Record<string, readonly Scene[]> = {
 }
 
 const SCENE_CURSOR_KEY = 'sarcafe:public-scene:v1:'
-const SCENE_INTERVAL_MS = 14_000
+const SCENE_INTERVAL_MS = 60_000
 const EMPTY_SCENES: readonly Scene[] = []
 
 function readNextScene(branchSlug: string, count: number): number {
@@ -100,8 +100,8 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
         }
         return
       }
-      const timeline = gsap.timeline({ defaults: { duration: 1.35, ease: 'power2.inOut' }, onComplete: () => setOutgoingIndex(null) })
-      timeline.to(outgoing, { autoAlpha: 0 }, 0).to(active, { autoAlpha: 1 }, 0)
+      const timeline = gsap.timeline({ defaults: { duration: 4, ease: 'power2.inOut' }, onComplete: () => setOutgoingIndex(null) })
+      timeline.to(active, { autoAlpha: 1 }, 0)
     },
     { scope: rootRef, dependencies: [activeIndex, outgoingIndex, reducedMotion], revertOnUpdate: true }
   )

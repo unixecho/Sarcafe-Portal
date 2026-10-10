@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Codex addendum, 2026-10-11: branch backdrop transition polish ready for release
+
+The user approved a direct `main` release. Selected Maor and Givat Haviva pages now use a generated branch image as the CSS fallback, so the legacy `/background.jpg` and `/background-wide.jpg` artwork cannot flash through while the dynamic scene loads or crossfades. Automatic changes run once per minute instead of every 14 seconds; the incoming image fades over the fully opaque outgoing image for four seconds, avoiding the mid-transition transparency dip. Refresh still advances the branch-local scene. The `ביקורות` cue has 16px more separation above it.
+
+Verification: `npm run typecheck`, `npm run check:intro` (444/0), `npm run build`, and `git diff --check` passed. No migration is required. Existing unrelated dirty/untracked files remain preserved.
+
+**Exact next step:** push the focused UI commit to `main`, wait for the production deployment to reach Ready, then verify both branch pages on the live mobile layout and leave the overnight device check to the owner.
+
 ## Codex addendum, 2026-10-11: employee week and public branch experience implemented locally
 
 This release is live from application commit `ff9980e` on `main`. Vercel deployment `dpl_Fv52YadWgGt8t5FVPkC8YQN22LhB` reached Ready and serves `https://sarcafe-portal.vercel.app`. Production migration `20261010145257_cross_branch_published_schedule_access.sql` was applied through the authenticated Supabase SQL Editor and recorded in `supabase_migrations.schema_migrations`. A production verification query confirmed the ledger row, helper function, service-role execution, and browser-role denial. Existing unrelated dirty/untracked files remain preserved.

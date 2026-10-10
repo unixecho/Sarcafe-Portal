@@ -10,7 +10,7 @@ const BranchBackdropScenes = dynamic(() => import('@/components/BranchBackdropSc
 export default function PublicBackdrop({ children, branchSlug = null }: { children: ReactNode; branchSlug?: string | null }) {
   const hasBranchScenes = branchSlug === 'maor' || branchSlug === 'givat-haviva'
   return (
-    <div className="public-backdrop">
+    <div className={`public-backdrop${hasBranchScenes ? ` public-backdrop--${branchSlug}` : ''}`}>
       {hasBranchScenes ? <BranchBackdropScenes key={branchSlug} branchSlug={branchSlug} /> : null}
       <div className="public-backdrop__content">{children}</div>
     </div>

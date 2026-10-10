@@ -1040,6 +1040,7 @@ html[dir='rtl'] .menu-item-name {
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
+  margin-top: 16px;
 }
 [dir='rtl'] .portal-cue {
   padding: 8px 10px 8px 16px;
@@ -1466,6 +1467,19 @@ html[dir='rtl'] .menu-item-name {
   background-attachment: fixed, fixed, fixed;
   background-color: var(--bg);
 }
+.public-backdrop--maor {
+  background-image: url('/backdrops/maor-1-portrait.webp');
+}
+.public-backdrop--givat-haviva {
+  background-image: url('/backdrops/givat-haviva-1-portrait.webp');
+}
+.public-backdrop--maor,
+.public-backdrop--givat-haviva {
+  background-position: center 38%;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
 .public-backdrop__scenes {
   position: absolute;
   inset: 0;
@@ -1511,6 +1525,16 @@ html[dir='rtl'] .menu-item-name {
   }
   .public-backdrop__scene img {
     object-position: center 44%;
+  }
+  .public-backdrop--maor {
+    background-image: url('/backdrops/maor-1-wide.webp');
+  }
+  .public-backdrop--givat-haviva {
+    background-image: url('/backdrops/givat-haviva-1-wide.webp');
+  }
+  .public-backdrop--maor,
+  .public-backdrop--givat-haviva {
+    background-position: center 44%;
   }
 }
 @media print {
