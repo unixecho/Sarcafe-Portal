@@ -500,5 +500,31 @@ section('wiring: where it is mounted, and how it decides')
   check('the harness is wired into package.json', /"check:intro": "node scripts\/check-intro\.mjs"/.test(read('package.json')))
 }
 
+section('public portal: branch scenes and opening hours')
+{
+  const page = read('src/app/page.tsx')
+  const backdrop = read('src/components/BranchBackdropScenes.tsx')
+  const backdropShell = read('src/components/PublicBackdrop.tsx')
+  const hours = read('src/lib/shifts/hours.ts')
+  const branchServer = read('src/lib/branches/server.ts')
+  const css = read('src/app/globals.css')
+  const assets = ['maor', 'givat-haviva'].flatMap((branch) =>
+    [1, 2, 3].flatMap((index) => [`public/backdrops/${branch}-${index}-portrait.webp`, `public/backdrops/${branch}-${index}-wide.webp`])
+  )
+
+  check('all three responsive scenes exist for both permanent branches', assets.every((asset) => existsSync(new URL(asset, root))))
+  check('the selected branch is passed into the decorative backdrop', /<PublicBackdrop branchSlug=\{branch\?\.slug \?\? null\}>/.test(page))
+  check('each refresh advances a branch-local scene cursor', backdrop.includes('previous + 1') && backdrop.includes('sarcafe:public-scene:'))
+  check('scene changes crossfade through the installed GSAP runtime', /gsap\.timeline/.test(backdrop) && /to\(outgoing/.test(backdrop) && /to\(active/.test(backdrop))
+  check('the animation bundle is deferred until a supported branch scene is selected', /dynamic\(\(\) => import\('@\/components\/BranchBackdropScenes'\)/.test(backdropShell) && /hasBranchScenes \? <BranchBackdropScenes/.test(backdropShell))
+  check('motion stops for reduced-motion visitors and while the page is hidden', /prefers-reduced-motion: reduce/.test(backdrop) && /reducedMotion\) return/.test(backdrop) && /document\.visibilityState !== 'visible'/.test(backdrop))
+  check('branch persistence uses a customer-only localStorage key and rejects stale slugs', page.includes("sarcafe:public-branch") && /payload\.branches\.some\(\(candidate\) => candidate\.slug === saved\)/.test(page))
+  check('the weekly-hours disclosure uses the shared accessible accordion contract', /label=\{t\.openingHours\}/.test(page) && /aria-expanded=\{open\}/.test(page) && /inert=\{!open\}/.test(page))
+  check('weekly hours expose exactly seven sanitized slots', /Array\.from\(\{ length: 7 \}/.test(hours) && /safeTime\(override\.open/.test(hours) && /safeTime\(override\.close/.test(hours))
+  check('unconfigured hours remain distinct from an intentionally closed day', /hoursConfigured: false, openNow: true/.test(hours) && /hoursConfigured: true, openNow: false/.test(hours))
+  check('the public branch DTO includes the sanitized week and configured flag', /weeklyHours: state\.weeklyHours/.test(branchServer) && /hoursConfigured: state\.hoursConfigured/.test(branchServer))
+  check('branch artwork uses positive stacking, never the Chromium-broken negative layer', /\.public-backdrop__scene[\s\S]*?z-index: 0/.test(css) && /\.public-backdrop__content[\s\S]*?z-index: 2/.test(css))
+}
+
 console.log(`\n${failures.length === 0 ? 'ok' : 'FAILED'}: ${pass} passed, ${failures.length} failed`)
 process.exit(failures.length === 0 ? 0 : 1)

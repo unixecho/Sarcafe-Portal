@@ -63,7 +63,7 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
   for (const list of shiftsByDate.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime))
 
   return (
-    <div className={mode === 'manager' ? 'sch-week sch-week--manager' : 'sch-week'}>
+    <div className={`sch-week sch-week--${mode}`}>
       {dates.map((date, dow) => {
         const all = shiftsByDate.get(date) ?? []
         const dayShifts = onlyMine ? all.filter((s) => (byShift.get(s.id) ?? []).some((a) => a.staffId === viewer)) : all
@@ -72,9 +72,6 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
         const hours = hoursFor(date, db.settings)
         const relative = relativeDayLabel(date, db.now)
         const note = dayNotes?.[date]
-        // On the employee's own view, a closed day with nothing on it is just noise.
-        if (mode === 'staff' && onlyMine && dayShifts.length === 0 && !isToday) return null
-
         return (
           <section key={date} className={`sch-day${isToday ? ' sch-day--today' : ''}${isWorkingDay ? '' : ' sch-day--closed'}`} aria-label={`${weekdayLongLabel(dow)} ${formatDateLabel(date)}`}>
             <header className="sch-day__head">

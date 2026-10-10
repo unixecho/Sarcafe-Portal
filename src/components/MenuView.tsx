@@ -92,6 +92,7 @@ export default function MenuView({
   feedbackEnabled = false,
   cartEnabled = false,
   hoursToday = null,
+  hoursConfigured = false,
   openNow = true,
 }: {
   branchSlug: BranchSlug
@@ -99,6 +100,7 @@ export default function MenuView({
   feedbackEnabled?: boolean
   cartEnabled?: boolean
   hoursToday?: BranchHours
+  hoursConfigured?: boolean
   openNow?: boolean
 }) {
   const [lang, setLang] = useLanguage()
@@ -234,7 +236,7 @@ export default function MenuView({
   const brand = localized(menu.name, lang)
 
   const content = (
-    <PublicBackdrop>
+    <PublicBackdrop branchSlug={branchSlug}>
       <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', paddingBottom: 48, position: 'relative' }}>
         <div className="menu-sticky" ref={stickyRef}>
         <div className="menu-sticky-inner">
@@ -270,14 +272,14 @@ export default function MenuView({
               gap: 6,
               fontSize: '0.76rem',
               fontWeight: 600,
-              color: openNow ? 'var(--text-dim)' : 'var(--text-faint)',
+              color: hoursConfigured && openNow ? 'var(--text-dim)' : 'var(--text-faint)',
             }}
           >
             <span
               aria-hidden="true"
-              style={{ width: 7, height: 7, borderRadius: '50%', background: openNow ? 'var(--sage-soft)' : 'var(--text-faint)', flexShrink: 0 }}
+              style={{ width: 7, height: 7, borderRadius: '50%', background: hoursConfigured && openNow ? 'var(--sage-soft)' : 'var(--text-faint)', flexShrink: 0 }}
             />
-            {hoursStatusLabel({ hoursToday, openNow }, lang)}
+            {hoursStatusLabel({ hoursToday, hoursConfigured, openNow }, lang)}
           </p>
 
           {menu.activeVariant && !menu.isDefaultVariant && (

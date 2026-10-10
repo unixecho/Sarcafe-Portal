@@ -1,5 +1,14 @@
 # Staff & Scheduling
 
+## Employee week, branch browsing and shift intents — 2026-10-11
+
+- The employee board keeps all seven days visible. It uses seven columns on wide screens, two columns on tablets and one column on phones, so an empty day no longer disappears and changes the mental map of the week.
+- Google-linked active staff can browse the frozen published schedules of every active permanent branch from an explicit branch selector. Event schedules remain branch-scoped. This published-only permission does not grant draft access, management, availability submission, delegation or fair-fill eligibility in the other branch.
+- A staff member may ask to join a shift in another permanent branch only when that shift is present in the published snapshot and its published `requestsOpen` flag is true. A later unpublished opening or closing does not change what employees can request. Approval still runs the existing conflict, capacity, availability and manager-confirmation checks.
+- The employee request list contains only open, future shifts the employee does not already hold. When none qualify it says `אין כרגע משמרות פתוחות שדורשות עובדים.` Published open-shift requests stay available after the separate Tuesday availability deadline; draft-week requests still respect that deadline.
+- An owned shift now exposes two explicit intents: **מסירת משמרת** sends no return assignment and can target one eligible colleague or everyone; **החלפת משמרת** requires a named colleague and one of that colleague's eligible shifts in return. Both remain proposals until the colleague and/or manager complete the existing approval flow.
+- Cross-branch browsing and direct join requests are added by migration `20261010145257_cross_branch_published_schedule_access.sql`. The migration preserves the original branch-scoped `sched_can_view` rule for operational actions and adds a narrower published-permanent helper. It is created locally but is not applied to production yet.
+
 ## Production schedule responsiveness and identity update — 2026-10-10
 
 - Published snapshots are normalized from PostgreSQL snake-case fields before the manager compares them with the live draft. Republishing an unchanged week now returns to zero unpublished changes; opening/closing employee requests is deliberately counted as a real change.

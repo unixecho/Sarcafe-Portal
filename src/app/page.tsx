@@ -21,6 +21,7 @@ import {
   ChevronRight,
   ChevronsDown,
   ExternalLink,
+  Clock3,
 } from 'lucide-react'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
@@ -44,6 +45,9 @@ type PortalCopy = {
   menu: string
   instagram: string
   payment: string
+  openingHours: string
+  hoursUnavailable: string
+  closed: string
   paused: string
   payboxManual: string
   reviewsCue: string
@@ -65,6 +69,9 @@ const T: Record<Lang, PortalCopy> = {
     menu: 'תפריט דיגיטלי',
     instagram: 'אינסטגרם',
     payment: 'תשלום',
+    openingHours: 'שעות פתיחה',
+    hoursUnavailable: 'שעות הפתיחה עדיין לא עודכנו. מומלץ ליצור איתנו קשר לפני ההגעה.',
+    closed: 'סגור',
     paused: 'ידני',
     payboxManual: `נא להזין ידנית ב־PayBox: ${PAYBOX_PHONE_NUMBER}`,
     reviewsCue: 'ביקורות',
@@ -84,6 +91,9 @@ const T: Record<Lang, PortalCopy> = {
     menu: 'Digital Menu',
     instagram: 'Instagram',
     payment: 'Payment',
+    openingHours: 'Opening hours',
+    hoursUnavailable: 'Opening hours have not been updated yet. Please contact us before visiting.',
+    closed: 'Closed',
     paused: 'Manual',
     payboxManual: `Enter this number manually in PayBox: ${PAYBOX_PHONE_NUMBER}`,
     reviewsCue: 'Reviews',
@@ -103,6 +113,9 @@ const T: Record<Lang, PortalCopy> = {
     menu: 'القائمة الرقمية',
     instagram: 'إنستغرام',
     payment: 'الدفع',
+    openingHours: 'ساعات العمل',
+    hoursUnavailable: 'لم يتم تحديث ساعات العمل بعد. يُنصح بالتواصل معنا قبل الوصول.',
+    closed: 'مغلق',
     paused: 'يدوي',
     payboxManual: `يرجى إدخال الرقم يدوياً في PayBox: ${PAYBOX_PHONE_NUMBER}`,
     reviewsCue: 'التقييمات',
@@ -114,6 +127,12 @@ const T: Record<Lang, PortalCopy> = {
 }
 
 const CURRENT_TAG: Record<Lang, string> = { he: 'סניף נוכחי', en: 'Current', ar: 'الحالي' }
+const WEEKDAYS: Record<Lang, readonly string[]> = {
+  he: ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+  ar: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'],
+}
+const PUBLIC_BRANCH_KEY = 'sarcafe:public-branch:v1'
 
 const LOGO_TAP_STAFF_ENTRANCE = 5
 const LOGO_TAP_WINDOW_MS = 600
@@ -124,6 +143,7 @@ export default function PortalPage() {
   const [branches, setBranches] = useState<Branch[] | null>(null)
   const [branchSlug, setBranchSlug] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
+  const [hoursOpen, setHoursOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [feedbackEnabled, setFeedbackEnabled] = useState(false)
   const logoTapCount = useRef(0)
@@ -137,6 +157,9 @@ export default function PortalPage() {
   // discoverable-by-anyone-who-knows path, same idea).
   function onLogoTap() {
     setBranchSlug(null)
+    try {
+      localStorage.removeItem(PUBLIC_BRANCH_KEY)
+    } catch {}
     logoTapCount.current += 1
     if (logoTapTimer.current) clearTimeout(logoTapTimer.current)
     if (logoTapCount.current >= LOGO_TAP_STAFF_ENTRANCE) {
@@ -199,7 +222,13 @@ export default function PortalPage() {
     fetch('/api/branches')
       .then((res) => (res.ok ? res.json() : null))
       .then((payload: { branches: Branch[] } | null) => {
-        if (!cancelled && payload) setBranches(payload.branches)
+        if (cancelled || !payload) return
+        setBranches(payload.branches)
+        try {
+          const saved = localStorage.getItem(PUBLIC_BRANCH_KEY)
+          if (saved && payload.branches.some((candidate) => candidate.slug === saved)) setBranchSlug(saved)
+          else if (saved) localStorage.removeItem(PUBLIC_BRANCH_KEY)
+        } catch {}
       })
       .catch(() => {
         if (!cancelled) setBranches([])
@@ -217,6 +246,10 @@ export default function PortalPage() {
   // runLocalTransition's doc comment for why this needs flushSync and its
   // own view-transition-name instead of reusing the page-nav machinery.
   function selectBranch(slug: string | null) {
+    try {
+      if (slug) localStorage.setItem(PUBLIC_BRANCH_KEY, slug)
+      else localStorage.removeItem(PUBLIC_BRANCH_KEY)
+    } catch {}
     runLocalTransition('portal-panel', slug ? 'forward' : 'back', () => {
       flushSync(() => {
         setBranchSlug(slug)
@@ -228,13 +261,14 @@ export default function PortalPage() {
         // same decision, free to drift away from the first.
         setPanelPushed(true)
         setNavOpen(false)
+        setHoursOpen(false)
         setPayOpen(false)
       })
     })
   }
 
   return (
-    <PublicBackdrop>
+    <PublicBackdrop branchSlug={branch?.slug ?? null}>
       <main id="main" tabIndex={-1}
         style={{
           minHeight: '100dvh',
@@ -395,7 +429,7 @@ export default function PortalPage() {
                     gap: 6,
                     fontSize: '0.82rem',
                     fontWeight: 600,
-                    color: branch.openNow ? 'var(--text-dim)' : 'var(--text-faint)',
+                    color: branch.hoursConfigured !== false && branch.openNow ? 'var(--text-dim)' : 'var(--text-faint)',
                   }}
                 >
                   <span
@@ -404,7 +438,7 @@ export default function PortalPage() {
                       width: 7,
                       height: 7,
                       borderRadius: '50%',
-                      background: branch.openNow ? 'var(--sage-soft)' : 'var(--text-faint)',
+                      background: branch.hoursConfigured !== false && branch.openNow ? 'var(--sage-soft)' : 'var(--text-faint)',
                       flexShrink: 0,
                     }}
                   />
@@ -414,6 +448,17 @@ export default function PortalPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="rise" style={{ animationDelay: '110ms' }}>
+                  <ExpandableAction
+                    open={hoursOpen}
+                    onToggle={() => setHoursOpen((value) => !value)}
+                    icon={<Clock3 size={18} />}
+                    label={t.openingHours}
+                  >
+                    <WeeklyHours branch={branch} lang={lang} unavailable={t.hoursUnavailable} closed={t.closed} />
+                  </ExpandableAction>
+                </div>
+
                 <div className="rise" style={{ animationDelay: '140ms' }}>
                   <ExpandableAction open={navOpen} onToggle={() => setNavOpen((v) => !v)} icon={<MapPin size={18} />} label={t.navigation}>
                     <ActionLink href={branch.links.navGoogleMaps} icon={<MapPin size={16} />} label="Google Maps" />
@@ -691,6 +736,7 @@ function ExpandableAction({
           both menu accordions in this codebase set inert too. */}
       <div
         id={bodyId}
+        className="accordion-body"
         inert={!open}
         style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows 0.4s var(--ease)' }}
       >
@@ -699,6 +745,23 @@ function ExpandableAction({
         </div>
       </div>
     </div>
+  )
+}
+
+function WeeklyHours({ branch, lang, unavailable, closed }: { branch: Branch; lang: Lang; unavailable: string; closed: string }) {
+  if (branch.hoursConfigured === false || !branch.weeklyHours) return <p className="portal-hours-unavailable">{unavailable}</p>
+  return (
+    <dl className="portal-hours-list">
+      {WEEKDAYS[lang].map((day, index) => {
+        const hours = branch.weeklyHours?.[index] ?? null
+        return (
+          <div key={day} className="portal-hours-row" data-closed={!hours}>
+            <dt>{day}</dt>
+            <dd>{hours ? <bdi dir="ltr">{hours.open}–{hours.close}</bdi> : closed}</dd>
+          </div>
+        )
+      })}
+    </dl>
   )
 }
 

@@ -640,6 +640,64 @@ for (const f of files.filter((x) => x > NEW_MIG)) {
   try { await db.exec(readFileSync(MIG + f, 'utf8')); check(`apply ${f}`, true) }
   catch (e) { console.error(e); check(`apply ${f}`, false, String(e.message)); process.exit(1) }
 }
+
+section('cross-branch published schedules stay read/request-only')
+const crossStaff = await addStaff({ first: 'Cross branch', branch: ghav })
+const unlinkedCross = await addStaff({ first: 'Unlinked cross branch', branch: ghav, auth: false })
+check('linked staff may browse a permanent branch while strict operational scope stays unchanged',
+  (await one(`select public.sched_can_browse_published($1,$2) browse, public.sched_can_view($1,$2) scoped, public.sched_can_manage($1,$2) manage`, [crossStaff.id, maor])).browse === true
+  && (await one(`select public.sched_can_view($1,$2) scoped`, [crossStaff.id, maor])).scoped === false
+  && (await one(`select public.sched_can_manage($1,$2) manage`, [crossStaff.id, maor])).manage === false)
+check('an unlinked or inactive employee cannot cross branches',
+  (await one(`select public.sched_can_browse_published($1,$3) unlinked, public.sched_can_browse_published($2,$3) inactive`, [unlinkedCross.id, gone.id, maor])).unlinked === false
+  && (await one(`select public.sched_can_browse_published($1,$3) unlinked, public.sched_can_browse_published($2,$3) inactive`, [unlinkedCross.id, gone.id, maor])).inactive === false)
+
+const crossWeekStart = '2032-01-04'
+const crossWeek = await weekOf(maor, crossWeekStart)
+const snapshotOpen = await save(owner, crossWeek, { p_date: day(1, crossWeekStart), p_start: '07:00', p_end: '13:00' })
+await db.query(`update public.shifts set requests_open=true where id=$1`, [snapshotOpen.shiftId])
+await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: crossWeek })
+await db.query(`update public.shifts set requests_open=false where id=$1`, [snapshotOpen.shiftId])
+const crossRequest = await rpc('sched_request_shift', { p_actor: crossStaff.id, p_shift: snapshotOpen.shiftId, p_note: null })
+check('another-branch employee can request a published permanent-branch shift', crossRequest.ok === true, JSON.stringify(crossRequest))
+check('published request-open state wins over an unpublished live edit',
+  crossRequest.ok === true && (await one(`select terms from public.shift_requests where id=$1`, [crossRequest.requestId])).terms.start === '07:00')
+check('the cross-branch requester can cancel their own pending request',
+  (await rpc('sched_cancel_request', { p_actor: crossStaff.id, p_request: crossRequest.requestId })).ok === true)
+const approvedCrossRequest = await rpc('sched_request_shift', { p_actor: crossStaff.id, p_shift: snapshotOpen.shiftId, p_note: null })
+const approvedCross = await rpc('sched_decide_request', { p_actor: owner.id, p_request: approvedCrossRequest.requestId, p_approve: true, p_note: null, p_force: false })
+const crossAssignment = (await assignmentsOf(snapshotOpen.shiftId)).find((assignment) => assignment.staff_id === crossStaff.id)
+check('a manager can approve the cross-branch request without widening manual scheduling scope',
+  approvedCross.ok === true
+  && !!crossAssignment
+  && (await one(`select public.sched_can_view($1,$2) scoped`, [crossStaff.id, maor])).scoped === false)
+check('later shift edits preserve that approved assignment, but cannot add cross-branch staff manually',
+  (await save(owner, crossWeek, { p_shift_id: snapshotOpen.shiftId, p_date: day(1, crossWeekStart), p_start: '07:00', p_end: '13:00', p_assignees: JSON.stringify([asg(crossStaff.id, 'barista', crossAssignment?.id)]) })).ok === true
+  && (await save(owner, crossWeek, { p_date: day(4, crossWeekStart), p_start: '08:00', p_end: '12:00', p_assignees: JSON.stringify([asg(crossStaff.id)]) })).reason === 'wrong_branch')
+
+const snapshotClosed = await save(owner, crossWeek, { p_date: day(2, crossWeekStart), p_start: '13:00', p_end: '19:00' })
+await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: crossWeek })
+await db.query(`update public.shifts set requests_open=true where id=$1`, [snapshotClosed.shiftId])
+check('an unpublished live opening cannot expose a shift that is closed in the snapshot',
+  (await rpc('sched_request_shift', { p_actor: crossStaff.id, p_shift: snapshotClosed.shiftId, p_note: null })).reason === 'requests_not_open')
+
+const crossDraftStart = '2032-01-11'
+const crossDraft = await weekOf(maor, crossDraftStart)
+const draftShift = await save(owner, crossDraft, { p_date: day(1, crossDraftStart), p_start: '08:00', p_end: '12:00' })
+await db.query(`update public.shifts set requests_open=true where id=$1`, [draftShift.shiftId])
+check('cross-branch access never opens a draft or availability submission',
+  (await rpc('sched_request_shift', { p_actor: crossStaff.id, p_shift: draftShift.shiftId, p_note: null })).reason === 'forbidden'
+  && (await rpc('sched_submit_availability', { p_actor: crossStaff.id, p_branch: maor, p_week_start: crossDraftStart, p_entries: '[]', p_note: null, p_status: 'draft' })).reason === 'forbidden')
+
+const eventBranch = (await one(`insert into public.branches (slug, name, kind) values ('cross-event-fixture', '{"he":"אירוע"}', 'event') returning id`)).id
+const eventWeek = await weekOf(eventBranch, crossWeekStart)
+const eventShift = await save(owner, eventWeek, { p_date: day(3, crossWeekStart), p_start: '10:00', p_end: '14:00' })
+await db.query(`update public.shifts set requests_open=true where id=$1`, [eventShift.shiftId])
+await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: eventWeek })
+check('event schedules remain branch-scoped',
+  (await one(`select public.sched_can_browse_published($1,$2) browse`, [crossStaff.id, eventBranch])).browse === false
+  && (await rpc('sched_request_shift', { p_actor: crossStaff.id, p_shift: eventShift.shiftId, p_note: null })).reason === 'forbidden')
+
 const planningMigration = files.find((f) => f.endsWith('_schedule_planning_fair_fill.sql'))
 await db.exec(readFileSync(MIG + planningMigration, 'utf8'))
 check('planning migration may be run again', true)

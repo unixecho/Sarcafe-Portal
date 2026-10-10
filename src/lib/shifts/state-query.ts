@@ -1,5 +1,5 @@
 // Server-only read path. Runs on the SERVICE ROLE client (the caller was
-// already authorized by requireScheduleViewer()/requireScheduleManager()
+// already authorized by requirePublishedScheduleViewer()/requireScheduleManager()
 // in the route), so this must do by hand what RLS would otherwise enforce
 // for a non-manager: read published-only data from published_snapshot,
 // never the live schedule_weeks/shifts/shift_assignments rows, and scope
@@ -9,6 +9,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import type { StaffRow } from '@/lib/owner/guard'
 import { isOp } from '@/lib/staff/access'
+import { canViewSchedule } from './access'
 import { addDays, durationMinutes, wallClockNow, weekStartOf } from './time'
 import {
   serializeAssignment,
@@ -41,6 +42,7 @@ export async function loadShiftsState(
   const service = createServiceRoleClient()
   const centerWeek = weekStartOf(requestedWeekStart)
   const windowStarts = [addDays(centerWeek, -7), centerWeek, addDays(centerWeek, 7)]
+  const branchScoped = canViewSchedule(viewer, branchId)
 
   const settingsRow = await ensureSettingsRow(service, branchId)
   const settings = serializeSettings(settingsRow)
@@ -54,20 +56,24 @@ export async function loadShiftsState(
   if (!settingsRow.safety) settings.safety = DEFAULT_SAFETY
   // Who may manage is the manager's business; it is not something to hand every employee.
   if (!isManager) settings.scheduleManagers = []
+  // Cross-branch access is a published board, not membership in that branch.
+  if (!branchScoped) settings.features = { ...settings.features, availability: false, swaps: false }
 
-  const [roster, tz] = await Promise.all([loadRoster(service, branchId, isManager), branchTimezone(service, branchId)])
+  const [roster, tz] = await Promise.all([loadRoster(service, branchId, isManager, viewer.id, branchScoped), branchTimezone(service, branchId)])
 
   const [weeks, shifts, assignments] = isManager
     ? await loadLive(service, branchId, windowStarts)
     : await loadPublishedOnly(service, branchId, windowStarts)
 
   const [availability, swaps, requests, notifications, audit, planningShifts, saturdayBalance] = await Promise.all([
-    settings.features.availability ? loadAvailability(service, branchId, windowStarts, viewer, isManager) : Promise.resolve([]),
-    settings.features.swaps ? loadSwaps(service, branchId, viewer, isManager) : Promise.resolve([]),
+    branchScoped && settings.features.availability ? loadAvailability(service, branchId, windowStarts, viewer, isManager) : Promise.resolve([]),
+    branchScoped && settings.features.swaps ? loadSwaps(service, branchId, viewer, isManager) : Promise.resolve([]),
     loadRequests(service, branchId, viewer, isManager),
     loadNotifications(service, branchId, viewer),
     isManager ? loadAudit(service, branchId) : Promise.resolve([]),
-    loadPlanningShifts(service, branchId, centerWeek),
+    branchScoped
+      ? loadPlanningShifts(service, branchId, centerWeek)
+      : Promise.resolve(shifts.map((s) => ({ id: s.id, weekId: s.weekId, date: s.date, startTime: s.startTime, endTime: s.endTime, presetId: s.presetId, requestsOpen: s.requestsOpen }))),
     isManager ? loadSaturdayBalance(service, branchId, centerWeek) : Promise.resolve([]),
   ])
 
@@ -153,7 +159,7 @@ async function branchTimezone(service: Service, branchId: string): Promise<strin
  * has left can be flagged); an employee gets only active colleagues, and only
  * their names — never the manager's private notes or hour caps.
  */
-async function loadRoster(service: Service, branchId: string, isManager: boolean) {
+async function loadRoster(service: Service, branchId: string, isManager: boolean, viewerStaffId: string, branchScoped: boolean) {
   const [{ data: staffRows }, { data: memberRows }] = await Promise.all([
     service
       .from('staff')
@@ -162,7 +168,7 @@ async function loadRoster(service: Service, branchId: string, isManager: boolean
   ])
   const members = new Map((memberRows ?? []).map((m) => [m.staff_id as string, m as Record<string, unknown>]))
   return (staffRows ?? [])
-    .filter((s) => (isManager || s.active !== false) && (s.branch_id === null || s.branch_id === branchId || isOp(s)))
+    .filter((s) => (isManager || s.active !== false) && (branchScoped ? s.branch_id === null || s.branch_id === branchId || isOp(s) : s.id === viewerStaffId))
     .map((s) => serializeRosterRow(s as Record<string, unknown>, members.get(s.id as string), isManager))
 }
 

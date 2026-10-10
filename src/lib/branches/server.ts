@@ -27,7 +27,12 @@ const COLUMNS = `${BASE_COLUMNS}, kind`
 // this stays the one place branches/server.ts reaches past the caller's own
 // session, purely to compute a public-safe derived value (today's hours +
 // open-now), never to expose the settings row itself.
-const UNCONFIGURED_OPEN_STATE: BranchOpenState = { hoursToday: null, openNow: true }
+const UNCONFIGURED_OPEN_STATE: BranchOpenState = {
+  hoursToday: null,
+  weeklyHours: null,
+  hoursConfigured: false,
+  openNow: true,
+}
 
 function toBranch(row: BranchRow, openState: BranchOpenState | undefined): Branch {
   const state = openState ?? UNCONFIGURED_OPEN_STATE
@@ -46,6 +51,8 @@ function toBranch(row: BranchRow, openState: BranchOpenState | undefined): Branc
     },
     reviews: row.reviews ?? null,
     hoursToday: state.hoursToday,
+    weeklyHours: state.weeklyHours,
+    hoursConfigured: state.hoursConfigured,
     openNow: state.openNow,
   }
 }

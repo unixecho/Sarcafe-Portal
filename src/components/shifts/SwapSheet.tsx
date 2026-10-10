@@ -8,28 +8,33 @@ import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { clashesFor, isActiveSwap, nameOf, swapPendingAssignmentIds } from '@/lib/shifts/view'
 import { formatShiftLabel, hasStarted, isolatedRange, weekStartOf } from '@/lib/shifts/time'
 
-// "Ask someone to cover / swap my shift" in three plain questions:
-//   1. Who?            a specific colleague, or "anyone who can" (open to all)
-//   2. In return?      nothing (I just hand the shift over) or one of THEIR shifts
-//   3. Anything to add? (optional note)
-// and then a sentence that says exactly what will happen if everyone agrees —
-// including that nothing changes until the manager approves.
+export type SwapIntent = 'handover' | 'exchange'
+
+export function swapRequestTerms(intent: SwapIntent, mode: 'person' | 'open', targetId: string | null, returnId: string | null) {
+  if (intent === 'exchange') return targetId && returnId ? { targetStaffId: targetId, returnAssignmentId: returnId } : null
+  if (mode === 'person') return targetId ? { targetStaffId: targetId, returnAssignmentId: null } : null
+  return { targetStaffId: null, returnAssignmentId: null }
+}
+
 export default function SwapSheet({
   open,
   onClose,
   assignmentId,
   shiftLabel,
+  initialIntent,
   onDone,
 }: {
   open: boolean
   onClose: () => void
   assignmentId: string
   shiftLabel: string
+  initialIntent: SwapIntent
   onDone: () => void
 }) {
   const { db, dispatch } = useShifts()
   const titleId = useId()
-  const [mode, setMode] = useState<'person' | 'open'>('person')
+  const [intent, setIntent] = useState<SwapIntent>(initialIntent)
+  const [mode, setMode] = useState<'person' | 'open'>(initialIntent === 'handover' ? 'open' : 'person')
   const [targetId, setTargetId] = useState<string | null>(null)
   const [returnId, setReturnId] = useState<string | null>(null)
   const [reason, setReason] = useState('')
@@ -68,7 +73,8 @@ export default function SwapSheet({
   const targetName = targetId ? nameOf(db, targetId) : null
   const returned = returnId ? theirShifts.find((t) => t.a.id === returnId) : undefined
   const alreadySwapping = db.swaps.some((s) => isActiveSwap(s) && (s.assignmentId === mine.id || s.returnAssignmentId === mine.id))
-  const canSubmit = mode === 'open' || (!!targetId && !busy)
+  const terms = swapRequestTerms(intent, mode, targetId, returnId)
+  const canSubmit = !busy && !!terms && (intent !== 'exchange' || !!returned)
 
   function close() {
     setError(null)
@@ -76,17 +82,25 @@ export default function SwapSheet({
   }
 
   async function submit() {
+    if (!canSubmit || !terms) return
     setBusy(true)
     setError(null)
     const res = await dispatch(
       {
         type: 'requestSwap',
         assignmentId,
-        targetStaffId: mode === 'person' ? targetId : null,
-        returnAssignmentId: mode === 'person' ? returnId : null,
+        ...terms,
         reason: reason.trim() || null,
       },
-      { quiet: true, success: mode === 'person' ? `הבקשה נשלחה ל${targetName} ✓ ברגע שיגיב/תגיב — היא תעבור למנהל/ת.` : 'הבקשה נפתחה לכולם ✓ ברגע שמישהו יתנדב — היא תעבור למנהל/ת.' }
+      {
+        quiet: true,
+        success:
+          intent === 'exchange'
+            ? `בקשת ההחלפה נשלחה ל${targetName}. לאחר תשובה היא תעבור למנהל/ת.`
+            : mode === 'person'
+              ? `בקשת המסירה נשלחה ל${targetName}. לאחר תשובה היא תעבור למנהל/ת.`
+              : 'המשמרת נפתחה למסירה. לאחר שמישהו יתנדב היא תעבור למנהל/ת.',
+      }
     )
     setBusy(false)
     if (res.ok) onDone()
@@ -94,21 +108,22 @@ export default function SwapSheet({
   }
 
   // The sentence the whole sheet builds toward.
-  const summary =
-    mode === 'open'
-      ? `אתם מבקשים שמישהו יחליף אתכם ב${shiftLabel}. כל עמית/ה שיכול/ה יוכל/תוכל להתנדב, ואז המנהל/ת יחליטו.`
-      : !targetId
-        ? null
-        : returned
-          ? `אתם נותנים ל${targetName} את ${shiftLabel}, ומקבלים ממנו/ה את ${formatShiftLabel(returned.shift.date, returned.shift.startTime, returned.shift.endTime)}.`
-          : `אתם נותנים ל${targetName} את ${shiftLabel}, ולא מקבלים משמרת בתמורה.`
+  const summary = intent === 'exchange'
+    ? targetId && returned
+      ? `אתם נותנים ל${targetName} את ${shiftLabel}, ומקבלים ממנו/ה את ${formatShiftLabel(returned.shift.date, returned.shift.startTime, returned.shift.endTime)}.`
+      : null
+    : mode === 'open'
+      ? `אתם מציעים את ${shiftLabel} לכל עמית/ה שיכול/ה לקחת אותה, בלי לקבל משמרת בתמורה.`
+      : targetId
+        ? `אתם מוסרים ל${targetName} את ${shiftLabel}, בלי לקבל משמרת בתמורה.`
+        : null
 
   return (
     <SheetShell open={open} onClose={close} labelledBy={titleId} className="sch-sheet">
       <div className="sch-sheet__head">
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 id={titleId} className="sch-sheet__title">
-            בקשת החלפה
+            {intent === 'handover' ? 'מסירת משמרת' : 'החלפת משמרת'}
           </h2>
           <p className="sch-sheet__sub">{shiftLabel}</p>
         </div>
@@ -118,33 +133,50 @@ export default function SwapSheet({
       </div>
 
       <div className="sheet-scroll" style={{ gap: 18 }}>
-        {alreadySwapping && <InlineError>כבר קיימת בקשת החלפה פתוחה על המשמרת הזו.</InlineError>}
+        {alreadySwapping && <InlineError>כבר קיימת בקשה פתוחה על המשמרת הזו.</InlineError>}
 
         <div className="sch-block">
           <span className="sch-label" style={{ margin: 0 }}>
-            1. מי יחליף אתכם?
+            מה תרצו לעשות?
           </span>
           <div className="sch-row" role="radiogroup" aria-label="סוג הבקשה">
-            <button type="button" role="radio" aria-checked={mode === 'person'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('person')}>
-              עמית/ה מסוים/ת
+            <button type="button" role="radio" aria-checked={intent === 'handover'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setIntent('handover'); setMode('open'); setTargetId(null); setReturnId(null) }}>
+              למסור בלי תמורה
             </button>
-            <button type="button" role="radio" aria-checked={mode === 'open'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setMode('open'); setReturnId(null) }}>
-              פתוח לכולם
+            <button type="button" role="radio" aria-checked={intent === 'exchange'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setIntent('exchange'); setMode('person'); setTargetId(null); setReturnId(null) }}>
+              להחליף משמרות
             </button>
           </div>
+        </div>
+
+        <div className="sch-block">
+          <span className="sch-label" style={{ margin: 0 }}>
+            1. {intent === 'handover' ? 'למי למסור את המשמרת?' : 'עם מי להחליף?'}
+          </span>
+          {intent === 'handover' && (
+            <div className="sch-row" role="radiogroup" aria-label="סוג הבקשה">
+              <button type="button" role="radio" aria-checked={mode === 'person'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setMode('person')}>
+                עמית/ה מסוים/ת
+              </button>
+              <button type="button" role="radio" aria-checked={mode === 'open'} className="sch-chip press" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setMode('open'); setReturnId(null) }}>
+                פתוח לכולם
+              </button>
+            </div>
+          )}
 
           {mode === 'person' && (
             <div role="radiogroup" aria-label="בחירת עמית/ה" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {colleagues.length === 0 && <p className="sch-sub">אין עמיתים אחרים לבקש מהם.</p>}
               {colleagues.map(({ row, clash }) => {
                 const noLogin = !row.hasLogin
+                const cannotReceive = noLogin || (intent === 'handover' && !!clash)
                 return (
                   <button
                     key={row.staffId}
                     type="button"
                     role="radio"
                     aria-checked={targetId === row.staffId}
-                    disabled={noLogin}
+                    disabled={cannotReceive}
                     className="sch-pick press"
                     onClick={() => {
                       setTargetId(row.staffId)
@@ -155,7 +187,7 @@ export default function SwapSheet({
                     <span className="sch-pick__main">
                       <span className="sch-pick__name">{row.displayName}</span>
                       {noLogin && <span className="sch-pick__hint">אין לו/ה כניסה לאפליקציה, ולכן אי אפשר לשלוח לו/ה בקשה</span>}
-                      {clash && !noLogin && <span className="sch-pick__hint" style={{ color: 'var(--warn)' }}>עובד/ת בשעות האלה ({isolatedRange(clash.startTime, clash.endTime)}) — אפשר רק להחליף משמרת בתמורה</span>}
+                      {clash && !noLogin && <span className="sch-pick__hint" style={{ color: 'var(--warn)' }}>{intent === 'handover' ? `כבר עובד/ת בשעות האלה (${isolatedRange(clash.startTime, clash.endTime)})` : `עובד/ת בשעות האלה (${isolatedRange(clash.startTime, clash.endTime)}) — בחרו את המשמרת הזו בתמורה`}</span>}
                     </span>
                     <span className="sch-check" aria-hidden="true">
                       {targetId === row.staffId && <Check size={16} />}
@@ -167,21 +199,12 @@ export default function SwapSheet({
           )}
         </div>
 
-        {mode === 'person' && targetId && (
+        {intent === 'exchange' && targetId && (
           <div className="sch-block">
             <span className="sch-label" style={{ margin: 0 }}>
-              2. מה מקבלים בתמורה?
+              2. איזו משמרת מקבלים בתמורה?
             </span>
             <div role="radiogroup" aria-label="תמורה" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button type="button" role="radio" aria-checked={returnId === null} className="sch-pick press" onClick={() => setReturnId(null)}>
-                <span className="sch-pick__main">
-                  <span className="sch-pick__name">כלום — אני רק מעביר/ה את המשמרת</span>
-                  <span className="sch-pick__hint">{targetName} ייקח/תיקח את המשמרת שלכם</span>
-                </span>
-                <span className="sch-check" aria-hidden="true">
-                  {returnId === null && <Check size={16} />}
-                </span>
-              </button>
               {theirShifts.map(({ a, shift, clash }) => (
                 <button key={a.id} type="button" role="radio" aria-checked={returnId === a.id} className="sch-pick press" onClick={() => setReturnId(a.id)}>
                   <span className="sch-pick__main">
@@ -200,7 +223,7 @@ export default function SwapSheet({
         )}
 
         <label>
-          <span className="sch-label">{mode === 'person' ? '3. ' : '2. '}הערה (לא חובה)</span>
+          <span className="sch-label">{intent === 'exchange' ? '3. ' : '2. '}הערה (לא חובה)</span>
           <input className="sch-input" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="למשל: יש לי תור לרופא" />
         </label>
 
@@ -209,7 +232,7 @@ export default function SwapSheet({
             <Pill tone="info">מה יקרה</Pill>
             <p style={{ margin: 0, lineHeight: 1.6 }}>{summary}</p>
             <p className="sch-sub">
-              {mode === 'person' ? `${targetName} צריך/ה להסכים, ואז` : ''} המנהל/ת צריכים לאשר. <strong>עד האישור הלוח לא משתנה</strong> — המשמרת נשארת שלכם.
+              {mode === 'person' ? `${targetName} צריך/ה להסכים, ואז ` : ''}המנהל/ת צריכים לאשר. <strong>עד האישור הלוח לא משתנה</strong> — המשמרת נשארת שלכם.
             </p>
           </div>
         )}
@@ -221,7 +244,7 @@ export default function SwapSheet({
           ביטול
         </button>
         <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: 2 }} disabled={!canSubmit || busy || alreadySwapping} onClick={submit}>
-          {busy ? 'שולח…' : mode === 'person' && !targetId ? 'בחרו עמית/ה' : 'שליחת הבקשה'}
+          {busy ? 'שולח…' : !canSubmit ? intent === 'exchange' && targetId ? 'בחרו משמרת בתמורה' : 'בחרו עמית/ה' : intent === 'handover' ? 'שליחת בקשת המסירה' : 'שליחת בקשת ההחלפה'}
         </button>
       </div>
     </SheetShell>

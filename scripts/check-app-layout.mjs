@@ -45,6 +45,7 @@ const Notifications = load('src/components/app/DashboardNotifications.tsx').defa
 const Record = load('src/components/staff/StaffRecordsView.tsx').default
 const PayslipRecord = load('src/components/staff/StaffRecordsView.tsx', { react: { ...React, useState: (value) => React.useState(value === 'shifts' ? 'payslips' : value) } }).default
 const Week = load('src/components/shifts/WeekGrid.tsx').default
+const { swapRequestTerms } = load('src/components/shifts/SwapSheet.tsx')
 const { CalendarDays, ClipboardCheck, ShoppingBag, Users, Receipt } = require('lucide-react')
 const rawStyle = ['src/app/globals.css', 'src/components/app/app.css', 'src/components/staff/records.css', 'src/components/shifts/schedule.css'].map((file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/^@import[^\r\n]+;/gm, '')).join('\n')
 const style = (await require('postcss')([require('tailwindcss'), require('autoprefixer')]).process(rawStyle, { from: path.join(root, 'src/app/globals.css') })).css
@@ -70,10 +71,14 @@ const pages = {
   employee: shell('תיק עובד', h(Record, { initial: record, owner: true })),
   payslips: shell('תיק עובד', h(PayslipRecord, { initial: record, owner: true })),
   schedule: shell('סידור עבודה', h('div', { className: 'sch-board-scroll', role: 'region', 'aria-label': 'לוח שבועי', tabIndex: 0 }, h(Week, { weekStart: '2030-01-06', db, shifts, assignments, mode: 'manager', onShiftClick: () => {} })), true),
-  staffSchedule: shell('המשמרות שלי', h(Week, { weekStart: '2030-01-06', db, shifts, assignments, mode: 'staff', onShiftClick: () => {} })),
+  staffSchedule: shell('המשמרות שלי', h(Week, { weekStart: '2030-01-06', db, shifts, assignments: assignments.slice(0, 2), mode: 'staff', onlyMine: true, onShiftClick: () => {} })),
 }
 const browser = await chromium.launch({ headless: true, ...(process.env.TEST_BROWSER ? { executablePath: process.env.TEST_BROWSER } : {}) })
 let checks = 0
+assert.deepEqual(swapRequestTerms('handover', 'open', null, 'ignored'), { targetStaffId: null, returnAssignmentId: null }, 'Open handover never requests a return shift'); checks++
+assert.deepEqual(swapRequestTerms('handover', 'person', 'colleague', 'ignored'), { targetStaffId: 'colleague', returnAssignmentId: null }, 'Named handover never requests a return shift'); checks++
+assert.equal(swapRequestTerms('exchange', 'person', 'colleague', null), null, 'Exchange requires a return shift'); checks++
+assert.deepEqual(swapRequestTerms('exchange', 'person', 'colleague', 'assignment'), { targetStaffId: 'colleague', returnAssignmentId: 'assignment' }, 'Exchange sends both sides'); checks++
 try {
   for (const width of [320, 390, 768, 1760]) {
     const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'reduce' })
@@ -93,6 +98,11 @@ try {
         const board = await page.locator('.sch-board-scroll').evaluate((e) => ({ width: e.clientWidth, scroll: e.scrollWidth, overflow: getComputedStyle(e).overflowX }))
         assert.equal(board.overflow, 'auto', 'Week overflow stays inside board'); checks++
         if (width === 1760) { assert.ok(board.scroll <= board.width + 1, 'All seven days fit at wide desktop'); checks++ }
+      }
+      if (name === 'staffSchedule') {
+        assert.equal(await page.locator('.sch-day').count(), 7, 'Employee sees all seven days, including empty days'); checks++
+        const columns = await page.locator('.sch-week--staff').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)
+        assert.equal(columns, width <= 600 ? 1 : width <= 1100 ? 2 : 7, `Employee week uses the responsive grid at ${width}px`); checks++
       }
       if (width === 390 || width === 1760 && name === 'schedule') await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true })
     }

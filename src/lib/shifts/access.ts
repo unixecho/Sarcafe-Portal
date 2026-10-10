@@ -14,7 +14,7 @@
 import type { AccessRow } from '@/lib/staff/access'
 import { isOp } from '@/lib/staff/access'
 
-type ScheduleAccessRow = AccessRow & { id?: string }
+type ScheduleAccessRow = AccessRow & { id?: string; auth_user_id?: string | null }
 
 const inScope = (row: AccessRow, branchId: string) => row.branch_id === null || row.branch_id === undefined || row.branch_id === branchId
 
@@ -23,6 +23,17 @@ export function canViewSchedule(row: ScheduleAccessRow | null | undefined, branc
   if (!row) return false
   if (isOp(row)) return true
   return inScope(row, branchId)
+}
+
+/** Published-only browsing may cross branch boundaries for Google-linked staff,
+ *  but never into an event branch. Operational access still uses canViewSchedule. */
+export function canBrowsePublishedSchedule(
+  row: ScheduleAccessRow | null | undefined,
+  branchId: string,
+  branchKind: 'permanent' | 'event'
+): boolean {
+  if (!row) return false
+  return canViewSchedule(row, branchId) || (branchKind === 'permanent' && !!row.auth_user_id)
 }
 
 /** Manage: owner, or (in scope) badge='general_manager', or delegated via this

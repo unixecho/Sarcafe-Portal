@@ -1,5 +1,39 @@
 # Sarcafe — cross-agent handoff
 
+## Codex addendum, 2026-10-11: employee week and public branch experience implemented locally
+
+Release approval was received on 2026-10-11. Production migration `20261010145257_cross_branch_published_schedule_access.sql` was applied through the authenticated Supabase SQL Editor and recorded in `supabase_migrations.schema_migrations`. A production verification query confirmed the ledger row, helper function, service-role execution, and browser-role denial. The application changes are ready for the approved `main` push; update this paragraph with the commit and Vercel deployment after the release completes. Existing unrelated dirty/untracked files remain preserved.
+
+### Confirmed requirements and implemented behavior
+
+- `/staff/schedule` now uses the available desktop width and always renders all seven days: seven columns on wide screens, two on tablets and one on phones. Employees get an explicit selector for every active permanent branch plus their assigned event branch, if any.
+- Cross-branch permission is deliberately narrow. Active Google-linked staff may read frozen published schedules and request a shift whose published snapshot says it is open. Draft data, event branches, management, delegation, availability submission and fair-fill eligibility keep the original branch scope. Published snapshot state wins over an unpublished live open/closed edit.
+- The employee request surface filters to open, future, unowned shifts and uses the exact empty state `אין כרגע משמרות פתוחות שדורשות עובדים.` Availability submission still closes on Tuesday; a separately published open-shift request remains usable after that cutoff.
+- Owned shifts now present **מסירת משמרת** and **החלפת משמרת** as separate actions. Handover always sends no return shift and can be named or open to everyone. Exchange requires a named colleague and a return shift. Conflict and manager-approval rules are unchanged.
+- The public portal has a localized, accessible seven-day opening-hours disclosure for each selected branch. Missing settings are distinguished from an intentionally closed day.
+- Maor and Givat Haviva each have three new responsive scene pairs under `public/backdrops/` (wide and portrait, 12 WebP files total). The selected branch advances its scene on refresh and crossfades to the next preloaded scene every 14 seconds. Rotation pauses while hidden and does not cycle for reduced-motion visitors. The GSAP scene bundle loads only for the two supported branches; other public pages retain the existing fallback background. Customer branch and scene preferences use separate versioned local-storage keys.
+- Public menu pages inherit the matching branch scene and the corrected configured/unconfigured hours status. Reviews retain their existing unboxed layout.
+- The `ponytail` and `thermo-nuclear-code-quality-review` skills were installed into the user's Codex skills directory. `pstack` remains uninstalled because several unrelated projects use that name and the requested upstream has not been identified.
+
+### Main files
+
+- Employee schedule UI: `src/components/shifts/{AvailabilityPortal,MyRequests,ShiftActionSheet,SwapSheet,WeekGrid,StaffScheduleShell}.tsx`, `src/components/shifts/schedule.css`, `src/app/staff/schedule/page.tsx`.
+- Published cross-branch boundary: `src/lib/shifts/{access,guard,dispatch-write,state-query}.ts`, the shifts state route, migration `20261010145257_cross_branch_published_schedule_access.sql`, and schedule verification scripts.
+- Public portal: `src/app/page.tsx`, `src/components/{PublicBackdrop,BranchBackdropScenes,MenuView}.tsx`, public menu page, `src/lib/{branches,branches/server}.ts`, `src/lib/shifts/hours.ts`, `src/app/globals.css`, generated `public/backdrops/*.webp`, and intro checks.
+- Documentation: this handoff and `docs/STAFF_SCHEDULING.md`.
+
+### Verification
+
+- `npm run typecheck` — passed.
+- `npm run check:intro` — 442 passed, 0 failed.
+- `npm run check:schedule` — 167 passed, 0 failed.
+- `npm run verify:schedule-sql` — 292 passed, 0 failed; every migration applies in order and the new access path is privilege-tested.
+- `npm run check:app-layout` — 173 passed with the installed Playwright Chromium runtime; seven-day responsive layout and swap payload contracts are covered.
+- `npm run check:staff-access` — 51 passed.
+- `npm run build` — passed after the complete integrated diff. Real Chrome smoke checks at 390 px and 1440 px rendered both branches, seven hours rows and no horizontal overflow. The final automated reload-persistence helper produced no output; cursor/persistence behavior was source-reviewed and statically checked instead.
+
+**Exact next step:** commit/push the reviewed application slice to `main`, confirm the Vercel production deployment reaches Ready, then run an authenticated two-branch employee pilot plus a customer refresh test on both Maor and Givat Haviva. Confirm a cross-branch open-shift request can be approved without exposing any draft or event schedule.
+
 ## Codex addendum, 2026-10-10: schedule publication fix, responsive saves and employee identity live
 
 Application commit `fbeef6d` is on `main` and live through Vercel deployment `dpl_F5FymnhQ8nVQYKyxgE9HA4NJCBBR` at `https://sarcafe-portal.vercel.app`. Migration `20261009153126_staff_avatar_emoji.sql` was applied to production Supabase project `moiunkugxgsgbdokaxbr` through the authenticated SQL Editor and recorded in `supabase_migrations.schema_migrations`; a production query confirmed both the column and constraint. The pre-existing `.gitignore` modification and unrelated untracked skill/Graphify/native-store files remain untouched.

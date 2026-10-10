@@ -1105,6 +1105,55 @@ html[dir='rtl'] .menu-item-name {
   animation-play-state: paused;
   opacity: 0;
 }
+
+.portal-hours-list {
+  margin: 0;
+  padding: 2px 14px 6px;
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
+}
+.portal-hours-row {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-block-end: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+.portal-hours-row:last-child {
+  border-block-end: 0;
+}
+.portal-hours-row dt,
+.portal-hours-row dd {
+  margin: 0;
+}
+.portal-hours-row dt {
+  color: var(--text-dim);
+  text-align: start;
+  font-weight: 600;
+}
+.portal-hours-row dd {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.portal-hours-row[data-closed='true'] dd {
+  color: var(--text-faint);
+}
+.portal-hours-unavailable {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: start;
+}
 @keyframes portal-cta-review-shimmer {
   0%,
   58% {
@@ -1392,9 +1441,7 @@ html[dir='rtl'] .menu-item-name {
    `body::before`). Wraps <main> via components/PublicBackdrop.tsx — the
    owner app never uses this.
 
-   Deliberately NOT `position: fixed` + negative z-index on a separate
-   layer (what this used to be, with the image on one element and the
-   darkening gradient on its ::after). That combination reliably goes
+   Deliberately NOT `position: fixed` + negative z-index. That combination reliably goes
    unpainted in Chromium after a BACK-direction document.startViewTransition
    finishes — not just this element, ANY negative-z-index layer, confirmed
    live with a freshly-created test element that had zero transition
@@ -1402,16 +1449,15 @@ html[dir='rtl'] .menu-item-name {
    of the root capture via its own view-transition-name all failed to fix
    it — the paint is genuinely stuck, not just stale, until a hard refresh.
 
-   `background-attachment: fixed` gets the same visual result (the image
-   stays put while content scrolls over it) as a genuine background of this
-   wrapping element instead — painted behind its own children automatically,
-   no z-index/stacking involved anywhere, so there's nothing for that bug to
-   land on. The darkening gradients are extra layers in this same
-   background (first-listed paints on top) instead of a separate ::after,
-   since multiple layers of ONE element's background need no stacking
-   order of their own either.
+   The legacy illustration remains the element background and is the fallback
+   for public pages without a selected branch. Selected branches add fixed,
+   positive-stack picture layers so they can crossfade without reintroducing
+   Chromium's negative-layer paint failure.
    ========================================================================== */
 .public-backdrop {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
   background-image: linear-gradient(180deg, rgba(21, 15, 12, 0.55) 0%, rgba(21, 15, 12, 0.72) 45%, var(--bg) 92%),
     radial-gradient(circle at 50% 0%, rgba(21, 15, 12, 0.2), transparent 55%), url('/background.jpg');
   background-position: 0 0, 0 0, center 25%;
@@ -1419,6 +1465,40 @@ html[dir='rtl'] .menu-item-name {
   background-repeat: no-repeat, no-repeat, no-repeat;
   background-attachment: fixed, fixed, fixed;
   background-color: var(--bg);
+}
+.public-backdrop__scenes {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.public-backdrop__scene,
+.public-backdrop__shade {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.public-backdrop__scene {
+  z-index: 0;
+  display: block;
+  will-change: opacity;
+}
+.public-backdrop__scene img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 38%;
+}
+.public-backdrop__shade {
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(13, 10, 8, 0.48) 0%, rgba(16, 11, 9, 0.66) 48%, var(--bg) 96%),
+    radial-gradient(circle at 50% 12%, rgba(21, 15, 12, 0.05), rgba(21, 15, 12, 0.28) 68%);
+}
+.public-backdrop__content {
+  position: relative;
+  z-index: 2;
+  min-height: 100dvh;
 }
 @media (min-width: 900px) {
   .public-backdrop {
@@ -1428,6 +1508,15 @@ html[dir='rtl'] .menu-item-name {
     background-size: auto, auto, cover;
     background-repeat: no-repeat, no-repeat, no-repeat;
     background-attachment: fixed, fixed, fixed;
+  }
+  .public-backdrop__scene img {
+    object-position: center 44%;
+  }
+}
+@media print {
+  .public-backdrop__scene,
+  .public-backdrop__shade {
+    display: none;
   }
 }
 

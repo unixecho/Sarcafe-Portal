@@ -21,6 +21,7 @@ export type BranchSlug = string
  * lib/shifts/hours.ts; this file only carries the resulting shape so it
  * stays importable from Client Components. */
 export type BranchHours = { open: string; close: string } | null
+export type BranchWeeklyHours = BranchHours[]
 
 export type LocalizedText = { he: string; en?: string; ar?: string }
 
@@ -52,6 +53,10 @@ export type Branch = {
    * normalizeReviews() rather than treating null as "show nothing." */
   reviews: PortalReviewsBlock | null
   hoursToday: BranchHours
+  /** null means the owner has not configured operating hours yet. A seven
+   * item array uses Sunday at index 0; a null item is a configured closed day. */
+  weeklyHours?: BranchWeeklyHours | null
+  hoursConfigured?: boolean
   /** Whether the branch is inside its operating-hours window right now, as
    * of when this Branch was fetched — a page-load snapshot, not a live
    * tick, same freshness contract as everything else on the portal/menu
@@ -74,18 +79,24 @@ function isolateDigits(value: string): string {
   return `⁦${value}⁩`
 }
 
-const HOURS_COPY: Record<Lang, { closedToday: string; openUntil: (close: string) => string; closedNow: (open: string, close: string) => string }> = {
+const HOURS_COPY: Record<
+  Lang,
+  { unavailable: string; closedToday: string; openUntil: (close: string) => string; closedNow: (open: string, close: string) => string }
+> = {
   he: {
+    unavailable: 'שעות הפתיחה טרם עודכנו',
     closedToday: 'סגור היום',
     openUntil: (close) => `פתוח עד ${isolateDigits(close)}`,
     closedNow: (open, close) => `סגור כרגע · ${isolateDigits(`${open}–${close}`)}`,
   },
   en: {
+    unavailable: 'Opening hours are not available yet',
     closedToday: 'Closed today',
     openUntil: (close) => `Open until ${isolateDigits(close)}`,
     closedNow: (open, close) => `Closed now · ${isolateDigits(`${open}–${close}`)}`,
   },
   ar: {
+    unavailable: 'لم يتم تحديث ساعات العمل بعد',
     closedToday: 'مغلق اليوم',
     openUntil: (close) => `مفتوح حتى ${isolateDigits(close)}`,
     closedNow: (open, close) => `مغلق الآن · ${isolateDigits(`${open}–${close}`)}`,
@@ -95,8 +106,9 @@ const HOURS_COPY: Record<Lang, { closedToday: string; openUntil: (close: string)
 /** One label for "is this branch open, and until/since when" — shared by
  * the portal's branch picker/detail panel and the public menu header, so
  * the wording never drifts between the two places it appears. */
-export function hoursStatusLabel(branch: Pick<Branch, 'hoursToday' | 'openNow'>, lang: Lang): string {
+export function hoursStatusLabel(branch: Pick<Branch, 'hoursToday' | 'openNow' | 'hoursConfigured'>, lang: Lang): string {
   const copy = HOURS_COPY[lang] ?? HOURS_COPY.he
+  if (branch.hoursConfigured === false) return copy.unavailable
   if (!branch.hoursToday) return copy.closedToday
   return branch.openNow ? copy.openUntil(branch.hoursToday.close) : copy.closedNow(branch.hoursToday.open, branch.hoursToday.close)
 }

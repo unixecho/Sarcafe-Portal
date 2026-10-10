@@ -226,6 +226,7 @@ const ownerScoped = { id: 'o2', role: 'owner', badge: 'owner', branch_id: 'B1' }
 const gm1 = { id: 'g', role: 'staff', badge: 'general_manager', branch_id: 'B1' }
 const gmAll = { id: 'ga', role: 'staff', badge: 'general_manager', branch_id: null }
 const barista = { id: 'b', role: 'staff', badge: 'barista', branch_id: 'B1' }
+const linkedBarista = { ...barista, auth_user_id: 'auth-b' }
 check('owner manages every branch (even one with a branch_id set)', A.canManageSchedule(owner, 'B2', []) && A.canManageSchedule(ownerScoped, 'B2', []))
 check('an owner can always VIEW (never branch-scoped)', A.canViewSchedule(ownerScoped, 'B2'))
 check('a GM manages their own branch only', A.canManageSchedule(gm1, 'B1', []) && !A.canManageSchedule(gm1, 'B2', []))
@@ -234,9 +235,11 @@ check('a barista manages nothing…', !A.canManageSchedule(barista, 'B1', []))
 check('…until their branch delegates to them', A.canManageSchedule(barista, 'B1', ['b']))
 check('…and a delegation in B1 does not make them a manager in B2 (scoped)', !A.canManageSchedule(barista, 'B2', ['b']))
 check('a barista views their own branch, not the other', A.canViewSchedule(barista, 'B1') && !A.canViewSchedule(barista, 'B2'))
+check('a Google-linked barista can browse another permanent branch without gaining ordinary branch scope', A.canBrowsePublishedSchedule(linkedBarista, 'B2', 'permanent') && !A.canViewSchedule(linkedBarista, 'B2'))
+check('published browsing never crosses into an event branch or admits an unlinked employee', !A.canBrowsePublishedSchedule(linkedBarista, 'B2', 'event') && !A.canBrowsePublishedSchedule(barista, 'B2', 'permanent'))
 check('delegating the schedule is narrower than managing it', A.canDelegateSchedule(owner, 'B1') && A.canDelegateSchedule(gm1, 'B1') && !A.canDelegateSchedule(barista, 'B1') && !A.canDelegateSchedule(gm1, 'B2'))
 check('a delegate cannot delegate', !A.canDelegateSchedule(barista, 'B1'))
-check('null row = no access to anything', !A.canViewSchedule(null, 'B1') && !A.canManageSchedule(null, 'B1', []) && !A.canDelegateSchedule(undefined, 'B1'))
+check('null row = no access to anything', !A.canViewSchedule(null, 'B1') && !A.canBrowsePublishedSchedule(null, 'B1', 'permanent') && !A.canManageSchedule(null, 'B1', []) && !A.canDelegateSchedule(undefined, 'B1'))
 
 // ============================================================================================================
 section('the action schema — strict, so a wrong or malicious body is a 400, not a write')

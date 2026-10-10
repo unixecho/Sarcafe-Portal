@@ -29,6 +29,7 @@ export default async function PublicMenuPage({ params }: { params: Promise<{ bra
       feedbackEnabled={feedbackEnabled}
       cartEnabled={cartEnabled}
       hoursToday={branchRow.hoursToday}
+      hoursConfigured={branchRow.hoursConfigured}
       openNow={branchRow.openNow}
     />
   )

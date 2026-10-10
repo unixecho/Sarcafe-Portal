@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { InlineError, Notice } from '@/components/shifts/ui'
-import { addDays, formatDateLabel, formatShiftRange, requestDeadline, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, formatShiftRange, hasStarted, requestDeadline, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import type { AvailabilityEntry, AvailabilityKind } from '@/lib/shifts/types'
 
 const KIND_LABELS: Record<Exclude<AvailabilityKind, 'partial'>, string> = { unavailable: 'לא זמין/ה', prefer: 'מעדיף/ה לעבוד' }
@@ -36,9 +36,19 @@ export default function AvailabilityPortal() {
   if (!db || !db.settings.features.availability) return null
   const isPast = addDays(target, 6) < db.now.date
   const closed = !requestsOpen(target, db.now)
-  const locked = isPast || closed
+  const availabilityLocked = isPast || closed
   const dates = weekDates(target)
-  const choices = db.planningShifts.filter((s) => s.date >= target && s.date <= addDays(target, 6))
+  const targetWeek = db.weeks.find((week) => week.weekStart === target)
+  const shiftRequestsLocked = targetWeek?.status !== 'published' && closed
+  const requestChoices = [...(targetWeek?.status === 'published' ? db.shifts : db.planningShifts)]
+  const choices = requestChoices.filter(
+    (shift) =>
+      shift.date >= target &&
+      shift.date <= addDays(target, 6) &&
+      shift.requestsOpen &&
+      !hasStarted(shift, db.now) &&
+      !db.assignments.some((assignment) => assignment.shiftId === shift.id && assignment.staffId === db.viewerStaffId)
+  )
   const dirty = JSON.stringify(entries) !== JSON.stringify(existing?.entries ?? []) || note !== (existing?.note ?? '')
 
   function setKind(date: string, kind: AvailabilityKind | null) {
@@ -92,8 +102,8 @@ export default function AvailabilityPortal() {
       </div>
 
       <div className={`sch-card ${closed ? '' : 'sch-card--attention'}`}>
-        <div className="sch-row"><Clock3 size={18} aria-hidden="true" /><strong>{closed ? 'הגשת הבקשות נסגרה' : `מגישים עד יום שלישי ${formatDateLabel(requestDeadline(target))}`}</strong></div>
-        <p className="sch-sub">{closed ? 'המנהל/ת מכינים את הלוח. לשינוי מאוחר פנו אליהם. לאחר הפרסום אפשר לבקש החלפה.' : 'עד חצות, שעון ישראל. סמנו זמינות ובחרו משמרות מועדפות; המנהל/ת מחליטים על השיבוץ.'}</p>
+        <div className="sch-row"><Clock3 size={18} aria-hidden="true" /><strong>{closed ? 'הגשת הזמינות נסגרה' : `מגישים עד יום שלישי ${formatDateLabel(requestDeadline(target))}`}</strong></div>
+        <p className="sch-sub">{closed ? 'המנהל/ת מכינים את הלוח. לשינוי זמינות מאוחר פנו אליהם. משמרת שפורסמה ונפתחה לבקשות עדיין אפשר לבקש.' : 'עד חצות, שעון ישראל. סמנו זמינות ובחרו משמרות מועדפות; המנהל/ת מחליטים על השיבוץ.'}</p>
       </div>
       <p className="sch-sub">סמנו ימים שבהם <strong>אי אפשר</strong> לכם לעבוד, שעות חלקיות או העדפה. יום שלא סימנתם — אתם זמינים.</p>
 
@@ -115,14 +125,14 @@ export default function AvailabilityPortal() {
               {(['unavailable', 'prefer', 'partial'] as const).map((k) => {
                 const active = entry?.kind === k
                 return (
-                  <button key={k} type="button" className="sch-chip press" aria-pressed={active} disabled={locked} onClick={() => setKind(date, active ? null : k)}>
+                  <button key={k} type="button" className="sch-chip press" aria-pressed={active} disabled={availabilityLocked} onClick={() => setKind(date, active ? null : k)}>
                     {k === 'partial' ? 'שעות מסוימות' : KIND_LABELS[k]}
                   </button>
                 )
               })}
               {entry?.kind === 'partial' && <div className="sch-row" style={{ width: '100%' }}>
-                <label style={{ flex: 1 }}><span className="sch-label">משעה</span><input type="time" className="sch-input ltr-isolate" value={entry.from ?? ''} disabled={locked} onChange={(e) => setTime(date, 'from', e.target.value)} /></label>
-                <label style={{ flex: 1 }}><span className="sch-label">עד שעה</span><input type="time" className="sch-input ltr-isolate" value={entry.to ?? ''} disabled={locked} onChange={(e) => setTime(date, 'to', e.target.value)} /></label>
+                <label style={{ flex: 1 }}><span className="sch-label">משעה</span><input type="time" className="sch-input ltr-isolate" value={entry.from ?? ''} disabled={availabilityLocked} onChange={(e) => setTime(date, 'from', e.target.value)} /></label>
+                <label style={{ flex: 1 }}><span className="sch-label">עד שעה</span><input type="time" className="sch-input ltr-isolate" value={entry.to ?? ''} disabled={availabilityLocked} onChange={(e) => setTime(date, 'to', e.target.value)} /></label>
               </div>}
             </div>
           )
@@ -131,16 +141,16 @@ export default function AvailabilityPortal() {
 
       <label>
         <span className="sch-label">הערה למנהל/ת (לא חובה)</span>
-        <input className="sch-input" value={note} maxLength={300} disabled={locked} onChange={(e) => setNote(e.target.value)} placeholder="משהו שחשוב למנהל/ת לדעת" />
+        <input className="sch-input" value={note} maxLength={300} disabled={availabilityLocked} onChange={(e) => setNote(e.target.value)} placeholder="משהו שחשוב למנהל/ת לדעת" />
       </label>
 
       {error && <InlineError>{error}</InlineError>}
 
       <div className="sch-row">
-        <button type="button" className="sch-btn press" style={{ flex: 1 }} disabled={!!saving || locked || !dirty} onClick={() => submit('draft')}>
+        <button type="button" className="sch-btn press" style={{ flex: 1 }} disabled={!!saving || availabilityLocked || !dirty} onClick={() => submit('draft')}>
           {saving === 'draft' ? 'שומר…' : 'שמירת טיוטה'}
         </button>
-        <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: 2 }} disabled={!!saving || locked || (!dirty && existing?.status === 'submitted')} onClick={() => submit('submitted')}>
+        <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: 2 }} disabled={!!saving || availabilityLocked || (!dirty && existing?.status === 'submitted')} onClick={() => submit('submitted')}>
           {saving === 'submitted' ? 'שולח…' : existing?.status === 'submitted' ? 'הגשה מחדש' : 'הגשה למנהל/ת'}
         </button>
       </div>
@@ -148,13 +158,13 @@ export default function AvailabilityPortal() {
       <section className="sch-wrap" aria-label="בקשות למשמרות">
         <div className="sch-row"><CalendarPlus size={19} aria-hidden="true" /><h3 className="sch-h">משמרות שתרצו לעבוד בהן</h3></div>
         <p className="sch-sub">רק משמרות שהמנהל/ת פתחו לבקשות זמינות כאן. הבקשה נשלחת מיד, והשיבוץ הסופי מופיע אחרי אישור ופרסום.</p>
-        {choices.length === 0 && <p className="sch-sub">עוד לא הוגדרו משמרות לשבוע הזה. אפשר להגיש זמינות בינתיים.</p>}
+        {choices.length === 0 && <p className="sch-sub">אין כרגע משמרות פתוחות שדורשות עובדים.</p>}
         {choices.map((s) => {
           const r = db.requests.find((r) => r.shiftId === s.id && r.staffId === db.viewerStaffId && (r.status === 'pending' || r.status === 'approved'))
           const preset = db.settings.presets.find((p) => p.id === s.presetId)
           return <div key={s.id} className="sch-card sch-choice-row">
             <div style={{ flex: 1 }}><strong>{weekdayLongLabel(new Date(`${s.date}T00:00:00Z`).getUTCDay())} {formatDateLabel(s.date)}</strong><p className="sch-sub"><span className="ltr-isolate">{formatShiftRange(s.startTime, s.endTime)}</span>{preset ? ` · ${preset.name}` : ''}</p></div>
-            {r ? <span className={`sch-pill sch-pill--${r.status === 'approved' ? 'ok' : 'info'}`}>{r.status === 'approved' ? 'אושרה' : 'הבקשה נשלחה'}</span> : s.requestsOpen ? <button type="button" className="sch-btn sch-btn--sm press" disabled={locked || !!requestBusy} onClick={() => request(s.id)}>{requestBusy === s.id ? 'שולח…' : 'לבקש משמרת'}</button> : <span className="sch-pill sch-pill--neutral">לא פתוחה לבקשות</span>}
+            {r ? <span className={`sch-pill sch-pill--${r.status === 'approved' ? 'ok' : 'info'}`}>{r.status === 'approved' ? 'אושרה' : 'הבקשה נשלחה'}</span> : <button type="button" className="sch-btn sch-btn--sm press" disabled={shiftRequestsLocked || !!requestBusy} onClick={() => request(s.id)}>{requestBusy === s.id ? 'שולח…' : shiftRequestsLocked ? 'הבקשות נסגרו' : 'לבקש משמרת'}</button>}
           </div>
         })}
       </section>

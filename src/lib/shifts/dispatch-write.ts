@@ -1,7 +1,7 @@
 // Server-only write path. One switch over every ScheduleAction. Each case
 //   1. resolves the branch the target row belongs to (never trusting a client's
 //      idea of it),
-//   2. authorises via requireScheduleManager()/requireScheduleViewer() — the
+//   2. authorises via the matching schedule guard — the
 //      primary gate, resolved from the session, never from the body,
 //   3. calls ONE database function (migration 024) with the caller's staff id as
 //      the explicit actor. Those functions re-check the same rule, apply the
@@ -15,7 +15,7 @@
 
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ApiError, NotFound } from '@/lib/http/errors'
-import { requireScheduleDelegator, requireScheduleManager, requireScheduleViewer } from './guard'
+import { requirePublishedScheduleViewer, requireScheduleDelegator, requireScheduleManager, requireScheduleViewer } from './guard'
 import { scheduleMessage, scheduleStatus, type Details } from './messages'
 import { requireStaff } from '@/lib/staff/guard'
 import { addDays, weekStartOf } from './time'
@@ -283,13 +283,13 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
 
     case 'requestShift': {
       const branchId = await branchOfShift(service, action.shiftId)
-      const actor = await requireScheduleViewer(branchId)
+      const actor = await requirePublishedScheduleViewer(branchId)
       return callSched(service, 'sched_request_shift', { p_actor: actor.id, p_shift: action.shiftId, p_note: action.note ?? null })
     }
 
     case 'cancelRequest': {
       const branchId = await branchOfRequest(service, action.requestId)
-      const actor = await requireScheduleViewer(branchId)
+      const actor = await requirePublishedScheduleViewer(branchId)
       return callSched(service, 'sched_cancel_request', { p_actor: actor.id, p_request: action.requestId })
     }
 

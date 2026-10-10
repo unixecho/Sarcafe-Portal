@@ -13,11 +13,16 @@ import { toMinutes } from './time'
 import type { HM } from './types'
 
 export type DayHours = { open: HM; close: HM }
+export type WeeklyHours = Array<DayHours | null>
 
 export type BranchOpenState = {
   /** Today's configured hours in the branch's own timezone, or null when
-   * today isn't a working day at all (or hours were never configured). */
+   * today isn't a working day. */
   hoursToday: DayHours | null
+  /** A sanitized Sunday-to-Saturday schedule. null means no settings row
+   * exists, which is distinct from a configured closed day. */
+  weeklyHours: WeeklyHours | null
+  hoursConfigured: boolean
   /** Whether the branch is inside its operating-hours window right now. */
   openNow: boolean
 }
@@ -29,18 +34,19 @@ type RawSettings = {
   day_hours: Record<number, DayHours> | null
 }
 
-// Not a working day: real, intentional data — gating should treat this as
-// closed. Distinct from "never configured" below, which fails open instead.
-const CLOSED: BranchOpenState = { hoursToday: null, openNow: false }
-
 // No shift_settings row at all (a brand-new branch that's never had its
 // schedule settings opened) or a read error. Fails open, same posture as
 // lib/settings/server.ts's readSetting(): missing configuration must never
 // brick the tablet feature or hide the public menu's live counts — it only
 // means "hours aren't configured yet," not "closed."
-const UNCONFIGURED: BranchOpenState = { hoursToday: null, openNow: true }
+const UNCONFIGURED: BranchOpenState = { hoursToday: null, weeklyHours: null, hoursConfigured: false, openNow: true }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const VALID_HM = /^(?:[01]\d|2[0-3]):[0-5]\d$/
+
+function safeTime(value: unknown, fallback: HM): HM {
+  return typeof value === 'string' && VALID_HM.test(value) ? (value as HM) : fallback
+}
 
 function partsInTimezone(timezone: string, at: Date): { dayOfWeek: number; hm: HM } {
   try {
@@ -71,15 +77,23 @@ function partsInTimezone(timezone: string, at: Date): { dayOfWeek: number; hm: H
 export function computeOpenState(settings: RawSettings | null | undefined, timezone: string, at: Date = new Date()): BranchOpenState {
   if (!settings) return UNCONFIGURED
 
-  const workingDays = settings.working_days ?? [0, 1, 2, 3, 4, 5, 6]
-  const openTime = settings.open_time ?? '07:00'
-  const closeTime = settings.close_time ?? '19:00'
+  const workingDays = (settings.working_days ?? [0, 1, 2, 3, 4, 5, 6]).filter(
+    (day): day is number => Number.isInteger(day) && day >= 0 && day <= 6
+  )
+  const openTime = safeTime(settings.open_time, '07:00')
+  const closeTime = safeTime(settings.close_time, '19:00')
   const dayHours = settings.day_hours ?? {}
+  const weeklyHours: WeeklyHours = Array.from({ length: 7 }, (_, day) => {
+    if (!workingDays.includes(day)) return null
+    const rawOverride = dayHours[day]
+    const override = rawOverride && typeof rawOverride === 'object' ? hoursForDay(day, openTime, closeTime, dayHours) : { open: openTime, close: closeTime }
+    return { open: safeTime(override.open, openTime), close: safeTime(override.close, closeTime) }
+  })
 
   const { dayOfWeek, hm } = partsInTimezone(timezone, at)
-  if (!workingDays.includes(dayOfWeek)) return CLOSED
+  const hours = weeklyHours[dayOfWeek] ?? null
+  if (!hours) return { hoursToday: null, weeklyHours, hoursConfigured: true, openNow: false }
 
-  const hours = hoursForDay(dayOfWeek, openTime, closeTime, dayHours)
   const nowMin = toMinutes(hm)
   const openMin = toMinutes(hours.open)
   const closeMin = toMinutes(hours.close)
@@ -88,7 +102,7 @@ export function computeOpenState(settings: RawSettings | null | undefined, timez
   // same convention lib/shifts/time.ts's crossesMidnight uses for shifts.
   const openNow = closeMin <= openMin ? nowMin >= openMin || nowMin < closeMin : nowMin >= openMin && nowMin < closeMin
 
-  return { hoursToday: hours, openNow }
+  return { hoursToday: hours, weeklyHours, hoursConfigured: true, openNow }
 }
 
 async function fetchSettingsMap(branchIds: string[]): Promise<Map<string, RawSettings>> {

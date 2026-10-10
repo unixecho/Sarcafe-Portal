@@ -3,7 +3,7 @@
 // (staff has no select policy for authenticated), independent of whatever
 // middleware already decided. This is the PRIMARY authorization layer for
 // every shifts API route; the sched_* SQL functions (migration 024) re-check the
-// same rule from the explicit actor id as a second, independent layer.
+// matching action-specific rule from the explicit actor id as a second layer.
 //
 // A quick-login session (employee number + passcode) is floor-work-only
 // everywhere in this app. Scheduling, requests and swaps require Google for
@@ -12,7 +12,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { Unauthorized, Forbidden } from '@/lib/http/errors'
 import type { StaffRow } from '@/lib/owner/guard'
-import { canDelegateSchedule, canManageSchedule, canViewSchedule } from '@/lib/shifts/access'
+import { canBrowsePublishedSchedule, canDelegateSchedule, canManageSchedule, canViewSchedule } from '@/lib/shifts/access'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 
 type Resolved = { staff: StaffRow | null; scheduleManagers: string[]; quick: boolean }
@@ -30,6 +30,24 @@ export async function requireScheduleViewer(branchId: string): Promise<StaffRow>
   const { staff } = await resolve(branchId)
   if (!staff) throw Unauthorized()
   if (!canViewSchedule(staff, branchId)) throw Forbidden('No access to this branch.')
+  return staff
+}
+
+/** Read a frozen schedule (and request one of its open shifts) without granting
+ *  any of the branch's draft, availability, swap or management permissions. */
+export async function requirePublishedScheduleViewer(branchId: string): Promise<StaffRow> {
+  const { staff } = await resolve(branchId)
+  if (!staff) throw Unauthorized()
+  if (canViewSchedule(staff, branchId)) return staff
+
+  const { data: branch } = await createServiceRoleClient()
+    .from('branches')
+    .select('kind')
+    .eq('id', branchId)
+    .eq('active', true)
+    .maybeSingle()
+  const kind = branch?.kind === 'event' ? 'event' : branch ? 'permanent' : null
+  if (!kind || !canBrowsePublishedSchedule(staff, branchId, kind)) throw Forbidden('No access to this branch.')
   return staff
 }
 
