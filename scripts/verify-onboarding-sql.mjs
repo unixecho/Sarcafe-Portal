@@ -26,6 +26,13 @@ await db.exec(`
 const migrations = fileURLToPath(new URL('../supabase/migrations/', import.meta.url))
 for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) await db.exec(readFileSync(migrations + file, 'utf8'))
 check('all migrations apply in order', true)
+// A second signature under an existing function name breaks the REST layer for JSON calls
+// (PGRST203) unless the argument names differ. pos_verify_pin once did exactly that and
+// locked everyone out. sched_save_shift is the one deliberate pair: its new overload adds
+// p_requests_open, so the names tell PostgREST which to call. Anything new needs a new name.
+const overloaded = (await db.query(`select proname, count(*)::int n from pg_proc p where pronamespace='public'::regnamespace and prokind='f' and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e') group by proname having count(*)>1`)).rows.map((r) => r.proname)
+check('no function name has two signatures (except sched_save_shift)', JSON.stringify(overloaded.filter((name) => name !== 'sched_save_shift')) === '[]')
+check('pos_verify_pin has exactly one signature (text, text)', JSON.stringify((await db.query(`select p.oid::regprocedure::text sig from pg_proc p where p.proname='pos_verify_pin' and p.pronamespace='public'::regnamespace`)).rows.map((r) => r.sig)) === '["pos_verify_pin(text,text)"]')
 const branch = (await one(`select id from public.branches where slug='givat-haviva'`)).id
 const owner = (await one(`insert into public.staff(first_name,last_name,role,badge,branch_id) values('Owner','Fixture','owner','owner',$1) returning id`, [branch])).id
 const createWorker = async (name = 'Employee') => one(`insert into public.staff(first_name,last_name,branch_id) values($1,'Fixture',$2) returning id,employee_no`, [name, branch])
