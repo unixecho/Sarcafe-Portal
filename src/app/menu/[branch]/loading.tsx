@@ -11,8 +11,10 @@ import PublicBackdrop from '@/components/PublicBackdrop'
  * skeleton at all. Same sticky header height, same chip rail, same category
  * card metrics — only the contents are grey.
  *
- * It also wraps PublicBackdrop for the same reason: without it the
- * illustrated ground would pop in a frame later than everything else.
+ * It also wraps PublicBackdrop for the same reason: without it the ground
+ * would be a frame late. `hold` because this shell cannot know the branch: the
+ * menu's own backdrop fades its scenes in, and a stand-in picture here would
+ * be swapped out the moment it lands.
  *
  * §4.10's honesty rule applies to the counts — five collapsed category rows
  * is what a real menu looks like at rest, so that is what is promised here.
@@ -21,7 +23,7 @@ import PublicBackdrop from '@/components/PublicBackdrop'
  */
 export default function MenuLoading() {
   return (
-    <PublicBackdrop>
+    <PublicBackdrop hold>
       <div className="menu-sticky">
         <div className="menu-topbar">
           <div className="menu-lang-slot">

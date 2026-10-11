@@ -6,19 +6,27 @@ import gsap from 'gsap'
 
 type Scene = { portrait: string; wide: string }
 
+const scenesFor = (slug: string): readonly Scene[] =>
+  [1, 2, 3].map((index) => ({
+    portrait: `/backdrops/${slug}-${index}-portrait.webp`,
+    wide: `/backdrops/${slug}-${index}-wide.webp`,
+  }))
+
+const MAOR = scenesFor('maor')
+const GIVAT_HAVIVA = scenesFor('givat-haviva')
+
 const SCENES: Record<string, readonly Scene[]> = {
-  maor: [1, 2, 3].map((index) => ({
-    portrait: `/backdrops/maor-${index}-portrait.webp`,
-    wide: `/backdrops/maor-${index}-wide.webp`,
-  })),
-  'givat-haviva': [1, 2, 3].map((index) => ({
-    portrait: `/backdrops/givat-haviva-${index}-portrait.webp`,
-    wide: `/backdrops/givat-haviva-${index}-wide.webp`,
-  })),
+  maor: MAOR,
+  'givat-haviva': GIVAT_HAVIVA,
+  // Pages with no branch (the picker above all) alternate both branches' art,
+  // so consecutive landings never repeat a picture.
+  portal: MAOR.flatMap((scene, index) => [scene, GIVAT_HAVIVA[index]!]),
 }
 
 const SCENE_CURSOR_KEY = 'sarcafe:public-scene:v1:'
 const SCENE_INTERVAL_MS = 60_000
+const FIRST_REVEAL_S = 1.2
+const CROSSFADE_S = 4
 const EMPTY_SCENES: readonly Scene[] = []
 
 function readNextScene(branchSlug: string, count: number): number {
@@ -48,9 +56,18 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
   const scenes = SCENES[branchSlug] ?? EMPTY_SCENES
   const rootRef = useRef<HTMLDivElement>(null)
   const initializedBranch = useRef<string | null>(null)
+  const mounted = useRef(true)
+  const revealed = useRef(false)
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [outgoingIndex, setOutgoingIndex] = useState<number | null>(null)
   const [reducedMotion, setReducedMotion] = useState(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -64,9 +81,13 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
     if (scenes.length === 0 || initializedBranch.current === branchSlug) return
     initializedBranch.current = branchSlug
     const next = readNextScene(branchSlug, scenes.length)
-    setActiveIndex(next)
     setOutgoingIndex(null)
     rememberScene(branchSlug, next)
+    // The first picture is only mounted once it has decoded, so it fades in
+    // over the plain ground instead of popping in half way through the load.
+    void preloadScene(scenes[next]!).then(() => {
+      if (mounted.current) setActiveIndex(next)
+    })
   }, [branchSlug, scenes])
 
   useEffect(() => {
@@ -92,7 +113,7 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
       const active = rootRef.current?.querySelector<HTMLElement>('[data-scene-state="active"]')
       const outgoing = rootRef.current?.querySelector<HTMLElement>('[data-scene-state="outgoing"]')
       if (!active) return
-      if (!outgoing || reducedMotion) {
+      if (reducedMotion || (!outgoing && revealed.current)) {
         gsap.set(active, { autoAlpha: 1 })
         if (outgoing) {
           gsap.set(outgoing, { autoAlpha: 0 })
@@ -100,8 +121,16 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
         }
         return
       }
-      const timeline = gsap.timeline({ defaults: { duration: 4, ease: 'power2.inOut' }, onComplete: () => setOutgoingIndex(null) })
-      timeline.to(active, { autoAlpha: 1 }, 0)
+      // fromTo, not a React-set opacity of 0: revertOnUpdate restores whatever
+      // inline style existed before the tween, and that has to be "visible".
+      const timeline = gsap.timeline({
+        defaults: { duration: outgoing ? CROSSFADE_S : FIRST_REVEAL_S, ease: 'power2.inOut' },
+        onComplete: () => {
+          revealed.current = true
+          setOutgoingIndex(null)
+        },
+      })
+      timeline.fromTo(active, { autoAlpha: 0 }, { autoAlpha: 1 }, 0)
     },
     { scope: rootRef, dependencies: [activeIndex, outgoingIndex, reducedMotion], revertOnUpdate: true }
   )
@@ -119,12 +148,7 @@ export default function BranchBackdropScenes({ branchSlug }: { branchSlug: strin
       {visibleScenes.map(({ index, state }) => {
         const scene = scenes[index]!
         return (
-          <picture
-            key={`${branchSlug}-${index}`}
-            data-scene-state={state}
-            className="public-backdrop__scene"
-            style={{ opacity: state === 'active' && outgoingIndex !== null ? 0 : 1 }}
-          >
+          <picture key={`${branchSlug}-${index}`} data-scene-state={state} className="public-backdrop__scene">
             <source media="(min-width: 900px)" srcSet={scene.wide} />
             <img src={scene.portrait} alt="" decoding="async" />
           </picture>

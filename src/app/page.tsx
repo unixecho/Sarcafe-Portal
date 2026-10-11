@@ -268,7 +268,7 @@ export default function PortalPage() {
   }
 
   return (
-    <PublicBackdrop branchSlug={branch?.slug ?? null}>
+    <PublicBackdrop branchSlug={branch?.slug ?? null} hold={branches === null}>
       <main id="main" tabIndex={-1}
         style={{
           minHeight: '100dvh',
