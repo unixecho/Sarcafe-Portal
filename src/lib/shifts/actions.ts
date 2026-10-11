@@ -47,11 +47,16 @@ export type ScheduleAction =
   | { type: 'setDayNote'; weekId: string; date: ISODate; note: string }
   | { type: 'updateSettings'; branchId: string; patch: Record<string, unknown> }
   | { type: 'setMember'; branchId: string; staffId: string; patch: Record<string, unknown> }
+  /** The settings screen's Save: every changed setting and every changed person's scheduling flags,
+   *  written in one request. Each part is authorised and validated exactly as its single action is. */
+  | { type: 'saveDraft'; branchId: string; settings?: Record<string, unknown>; members?: { staffId: string; patch: Record<string, unknown> }[] }
   // ---- an employee ----
   | { type: 'submitAvailability'; branchId: string; weekStart: ISODate; entries: unknown[]; note?: string | null; status: 'draft' | 'submitted' }
   | { type: 'requestShift'; shiftId: string; note?: string | null }
   | { type: 'cancelRequest'; requestId: string }
   | { type: 'requestSwap'; assignmentId: string; targetStaffId?: string | null; returnAssignmentId?: string | null; reason?: string | null }
+  /** Ask the colleague who holds `assignmentId` to hand it to me, nothing offered in return. */
+  | { type: 'requestTake'; assignmentId: string; reason?: string | null }
   | { type: 'respondSwap'; swapId: string; accept: boolean }
   | { type: 'cancelSwap'; swapId: string }
   // ---- a manager deciding ----

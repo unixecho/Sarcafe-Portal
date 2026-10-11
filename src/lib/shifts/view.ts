@@ -4,7 +4,7 @@
 // requests are waiting on whom, which shifts clash.
 
 import { coverageOf, isFull, type Coverage } from './coverage'
-import { formatShiftLabel, intervalOf } from './time'
+import { formatShiftLabel, hasStarted, intervalOf, weekStartOf } from './time'
 import type { Assignment, ScheduleStaffRow, Shift, ShiftRequest, ShiftsDB, SwapRequest, SwapSide } from './types'
 
 /** A real name for a person id. Live roster first (a renamed person is renamed
@@ -32,6 +32,20 @@ export function indexByShift(assignments: Assignment[]): Map<string, Assignment[
 }
 
 export const isActiveSwap = (s: Pick<SwapRequest, 'status'>) => s.status === 'open' || s.status === 'peer_accepted'
+
+type SwapParties = Pick<SwapRequest, 'direction' | 'fromStaffId' | 'toStaffId'>
+
+/** Who started a swap. A hand-over or exchange is started by the person giving the shift;
+ *  a take by the person who wants it. */
+export const swapInitiatorId = (s: SwapParties): string | null => (s.direction === 'take' ? s.toStaffId : s.fromStaffId)
+
+/** Who has to answer it first: the named taker of a give (null = an open offer anyone may
+ *  take), or the person holding the shift for a take. */
+export const swapResponderId = (s: SwapParties): string | null => (s.direction === 'take' ? s.fromStaffId : s.toStaffId)
+
+/** The names recorded on the swap for each side, for when the live roster no longer has the person. */
+export const swapInitiatorName = (s: SwapParties & Pick<SwapRequest, 'fromStaffName' | 'toStaffName'>) => (s.direction === 'take' ? s.toStaffName : s.fromStaffName)
+export const swapResponderName = (s: SwapParties & Pick<SwapRequest, 'fromStaffName' | 'toStaffName'>) => (s.direction === 'take' ? s.fromStaffName : s.toStaffName)
 
 /** Assignment ids that are part of a live swap (either side) — "swap pending" is derived
  *  from the swaps list; the assignment itself is never altered by a pending swap. */
@@ -63,9 +77,9 @@ export function managerInbox(db: Pick<ShiftsDB, 'requests' | 'swaps'>) {
   return { requests, swaps, count: requests.length + swaps.length }
 }
 
-/** What is waiting on THIS EMPLOYEE: swap proposals addressed to them. */
+/** What is waiting on THIS EMPLOYEE: swap proposals addressed to them, and colleagues asking for their shift. */
 export function employeeInbox(db: Pick<ShiftsDB, 'swaps' | 'viewerStaffId'>) {
-  const proposals = db.swaps.filter((s) => s.status === 'open' && s.toStaffId === db.viewerStaffId && s.fromStaffId !== db.viewerStaffId)
+  const proposals = db.swaps.filter((s) => s.status === 'open' && !!db.viewerStaffId && swapResponderId(s) === db.viewerStaffId && swapInitiatorId(s) !== db.viewerStaffId)
   return { proposals, count: proposals.length }
 }
 
@@ -91,6 +105,29 @@ export function clashesFor(
     if (i.start < t.end && t.start < i.end) out.push(s)
   }
   return out
+}
+
+/** One of MY upcoming shifts I could give a colleague in exchange for the shift `target` they
+ *  hold. `blocked` says why it cannot be offered: taking `target` would overlap another shift of
+ *  mine (the one offered is excluded, it goes away), or the colleague already works when the
+ *  one offered happens (`target` is excluded, it goes away). */
+export type ExchangeOffer = { assignment: Assignment; shift: Shift; blocked: 'mine_overlaps' | 'theirs_overlaps' | null }
+
+export function exchangeOffers(db: Pick<ShiftsDB, 'viewerStaffId' | 'shifts' | 'assignments' | 'swaps' | 'now'>, target: Shift, holderId: string): ExchangeOffer[] {
+  const me = db.viewerStaffId
+  if (!me) return []
+  const pending = swapPendingAssignmentIds(db.swaps)
+  const shiftById = new Map(db.shifts.map((s) => [s.id, s]))
+  const offers: ExchangeOffer[] = []
+  for (const assignment of db.assignments) {
+    if (assignment.staffId !== me || pending.has(assignment.id)) continue
+    const shift = shiftById.get(assignment.shiftId)
+    if (!shift || shift.id === target.id || shift.branchId !== target.branchId || hasStarted(shift, db.now)) continue
+    const mineOverlaps = clashesFor(me, target, weekStartOf(target.date), db.shifts, db.assignments, shift.id).length > 0
+    const theirsOverlaps = !mineOverlaps && clashesFor(holderId, shift, weekStartOf(shift.date), db.shifts, db.assignments, target.id).length > 0
+    offers.push({ assignment, shift, blocked: mineOverlaps ? 'mine_overlaps' : theirsOverlaps ? 'theirs_overlaps' : null })
+  }
+  return offers.sort((a, b) => a.shift.date.localeCompare(b.shift.date) || a.shift.startTime.localeCompare(b.shift.startTime))
 }
 
 /** Coverage plus the pieces the board needs for one shift. */

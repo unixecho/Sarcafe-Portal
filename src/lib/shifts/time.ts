@@ -158,6 +158,36 @@ export function hasStarted(shift: Pick<Shift, 'date' | 'startTime'>, now: WallCl
   return shift.startTime <= now.time
 }
 
+/** Minutes from the branch's `now` until the shift starts (negative once it has). */
+export function minutesUntilStart(shift: Pick<Shift, 'date' | 'startTime'>, now: WallClock): number {
+  return daysBetween(now.date, shift.date) * 24 * 60 + toMinutes(shift.startTime) - toMinutes(now.time)
+}
+
+/** Minutes from `now` until the shift ends; a shift that runs past midnight ends the next day. */
+export function minutesUntilEnd(shift: Pick<Shift, 'date' | 'startTime' | 'endTime'>, now: WallClock): number {
+  return minutesUntilStart(shift, now) + durationMinutes(shift)
+}
+
+export function hasEnded(shift: Pick<Shift, 'date' | 'startTime' | 'endTime'>, now: WallClock): boolean {
+  return minutesUntilEnd(shift, now) <= 0
+}
+
+const hoursText = (h: number) => (h === 1 ? 'שעה' : h === 2 ? 'שעתיים' : `${h} שעות`)
+const daysText = (d: number) => (d === 1 ? 'יום' : d === 2 ? 'יומיים' : `${d} ימים`)
+
+/** How long, in the words a person says it: "25 דק׳" / "שעתיים ו־10 דק׳" / "3 ימים". Callers put "בעוד" in front. */
+export function formatCountdown(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes))
+  if (m < 1) return 'ממש עכשיו'
+  if (m < 60) return `${m} דק׳`
+  if (m < 24 * 60) {
+    const h = Math.floor(m / 60)
+    const rest = m % 60
+    return rest === 0 ? hoursText(h) : `${hoursText(h)} ו־${rest} דק׳`
+  }
+  return daysText(Math.floor(m / (24 * 60)))
+}
+
 /** The branch's current date + time on its own clock. Server-side. */
 export function wallClockNow(timeZone: string, at: Date = new Date()): WallClock {
   try {

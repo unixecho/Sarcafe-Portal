@@ -45,6 +45,7 @@ const Notifications = load('src/components/app/DashboardNotifications.tsx').defa
 const Record = load('src/components/staff/StaffRecordsView.tsx').default
 const PayslipRecord = load('src/components/staff/StaffRecordsView.tsx', { react: { ...React, useState: (value) => React.useState(value === 'shifts' ? 'payslips' : value) } }).default
 const Week = load('src/components/shifts/WeekGrid.tsx').default
+const Employee = load('src/components/shifts/EmployeeSchedule.tsx')
 const { swapRequestTerms } = load('src/components/shifts/SwapSheet.tsx')
 const { CalendarDays, ClipboardCheck, ShoppingBag, Users, Receipt } = require('lucide-react')
 const rawStyle = ['src/app/globals.css', 'src/components/app/app.css', 'src/components/staff/records.css', 'src/components/shifts/schedule.css'].map((file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/^@import[^\r\n]+;/gm, '')).join('\n')
@@ -65,13 +66,19 @@ const record = { employee: { id: 'fixture', first_name: 'עובד', last_name: '
 const db = { settings: { roles: [{ id: 'barista', name: 'בריסטה', color: '#ff7a45' }], presets: [], stations: [], workingDays: [0,1,2,3,4,5,6], dayHours: {}, openTime: '07:00', closeTime: '19:00' }, roster: [{ staffId: 'fixture', displayName: 'עובד לדוגמה', active: true }], now: { date: '2030-01-06', time: '06:00' }, viewerStaffId: 'fixture', requests: [], swaps: [] }
 const shifts = Array.from({ length: 7 }, (_, index) => ({ id: `s${index}`, date: `2030-01-${String(6 + index).padStart(2, '0')}`, startTime: '07:00', endTime: '14:00', requirements: [{ roleId: 'barista', count: 2 }] }))
 const assignments = shifts.map((s) => ({ id: `a${s.id}`, shiftId: s.id, staffId: 'fixture', roleId: 'barista' }))
+const staffAssignments = assignments.slice(0, 2)
+const staffDb = { ...db, shifts, assignments: staffAssignments, weeks: [] }
+const staffDays = Employee.buildWeek(staffDb, '2030-01-06', shifts, staffAssignments)
 const shell = (title, content, wide = false) => h('div', { className: 'native-app' }, h('main', { className: 'app-page', style: wide ? { maxWidth: 1760 } : undefined }, h(Header, { title, backHref: '/staff' }), content))
 const pages = {
   dashboard: shell('Sarcafe צוות', h(React.Fragment, null, h('div', { className: 'app-welcome' }, h('div', null, h('h2', null, 'שלום, צוות Sarcafe'), h('p', null, 'המשמרות, המשימות והצוות שלך.'))), h(Notifications, { initialNotifications: notification, initialUnread: 1 }), h(Categories, { categories, staff: true }))),
   employee: shell('תיק עובד', h(Record, { initial: record, owner: true })),
   payslips: shell('תיק עובד', h(PayslipRecord, { initial: record, owner: true })),
-  schedule: shell('סידור עבודה', h('div', { className: 'sch-board-scroll', role: 'region', 'aria-label': 'לוח שבועי', tabIndex: 0 }, h(Week, { weekStart: '2030-01-06', db, shifts, assignments, mode: 'manager', onShiftClick: () => {} })), true),
-  staffSchedule: shell('המשמרות שלי', h(Week, { weekStart: '2030-01-06', db, shifts, assignments: assignments.slice(0, 2), mode: 'staff', onlyMine: true, onShiftClick: () => {} })),
+  schedule: shell('סידור עבודה', h('div', { className: 'sch-board-scroll', role: 'region', 'aria-label': 'לוח שבועי', tabIndex: 0 }, h(Week, { weekStart: '2030-01-06', db, shifts, assignments, onShiftClick: () => {} })), true),
+  staffSchedule: shell('המשמרות שלי', h(React.Fragment, null,
+    h(Employee.NextShiftHero, { db: staffDb, onOpen: () => {}, onBrowse: () => {}, onShare: () => {} }),
+    h(Employee.WeekStrip, { db: staffDb, days: staffDays, selected: '2030-01-06', onSelect: () => {} }),
+    h(Employee.EmployeeWeek, { db: staffDb, days: staffDays, assignments: staffAssignments, view: 'mine', selected: '2030-01-06', onOpenShift: () => {} }))),
 }
 const browser = await chromium.launch({ headless: true, ...(process.env.TEST_BROWSER ? { executablePath: process.env.TEST_BROWSER } : {}) })
 let checks = 0
@@ -100,9 +107,16 @@ try {
         if (width === 1760) { assert.ok(board.scroll <= board.width + 1, 'All seven days fit at wide desktop'); checks++ }
       }
       if (name === 'staffSchedule') {
-        assert.equal(await page.locator('.sch-day').count(), 7, 'Employee sees all seven days, including empty days'); checks++
-        const columns = await page.locator('.sch-week--staff').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)
-        assert.equal(columns, width <= 600 ? 1 : width <= 1100 ? 2 : 7, `Employee week uses the responsive grid at ${width}px`); checks++
+        assert.equal(await page.locator('.ew-day').count(), 7, 'Employee sees all seven days, including days off'); checks++
+        assert.equal(await page.locator('.ew-strip__day').count(), 7, 'The week strip has one button per day'); checks++
+        assert.equal(await page.locator('.ew-hero').count(), 1, 'The next shift is the first thing on the screen'); checks++
+        assert.equal(await page.locator('.ew-shift--mine').count(), 2, 'Both of the employee\'s shifts are highlighted'); checks++
+        assert.ok(await page.locator('.ew-day__empty').count() >= 5, 'Days without a shift read as days off'); checks++
+        for (const box of await page.locator('.ew-strip__day, .ew-shift, .ew-hero__actions .sch-btn, .ew-hero__main').evaluateAll((elements) => elements.map((e) => ({ width: e.getBoundingClientRect().width, height: e.getBoundingClientRect().height })))) {
+          assert.ok(box.width >= 44 && box.height >= 44, 'Employee schedule tap target is too small'); checks++
+        }
+        const strip = await page.locator('.ew-strip').evaluate((e) => ({ columns: getComputedStyle(e).gridTemplateColumns.split(' ').length, position: getComputedStyle(e).position }))
+        assert.deepEqual(strip, { columns: 7, position: 'sticky' }, 'The week strip is seven columns and stays under the header'); checks++
       }
       if (width === 390 || width === 1760 && name === 'schedule') await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true })
     }

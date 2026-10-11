@@ -1766,13 +1766,19 @@ html[dir='ltr'][data-local-nav='back']::view-transition-new(portal-panel) {
    back/forward never goes through the JS push path, so this fallback is what
    a hardware back button actually renders).
 
-   BOTH keyframes must end at `transform: none`. animation-fill-mode: both
-   makes the final frame persist, and any lingering transform on this wrapper
-   turns it into the containing block for every position:fixed descendant —
-   which would re-anchor every sheet in the app to the page instead of the
-   viewport (§4.14a). `none` is the only safe final value. */
+   The fill is `backwards`, never `both`, and BOTH keyframes still end at
+   `transform: none`. A forwards fill keeps the interpolated last frame alive,
+   and Chromium resolves translateX(-3%) -> none to an identity MATRIX that
+   stays on the wrapper for good (measured live: computed transform
+   `matrix(1, 0, 0, 1, 0, 0)` long after the animation finished). Any
+   transform at all turns this wrapper into the containing block for every
+   position:fixed descendant, which re-anchors them to the page instead of the
+   viewport (§4.14a): the public backdrop's picture and shade were stretched
+   over the whole page height and scrolled with the content. With `backwards`
+   the animation has no effect once it ends, so the element falls back to its
+   own style, which has no transform. */
 .page-enter {
-  animation: page-in-from-left 0.32s var(--ease) both;
+  animation: page-in-from-left 0.32s var(--ease) backwards;
 }
 @keyframes page-in-from-left {
   from {
@@ -1930,9 +1936,9 @@ html[dir='ltr'][data-nav='back'] .page-enter {
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   /* REMOVE. The push and the fallback entrance are both decoration over a
-     navigation that has already happened. `page-in` runs with `both`, so
-     removing the animation is also what guarantees the page is visible —
-     the from-frame is opacity 0. */
+     navigation that has already happened. `page-in` fills `backwards`, so
+     during its run the from-frame is opacity 0 and removing the animation
+     is what guarantees the page is simply visible. */
   .page-enter {
     animation: none;
   }

@@ -104,6 +104,14 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('setMember'), branchId: uuid, staffId: uuid, patch: memberPatch }).strict(),
   z
     .object({
+      type: z.literal('saveDraft'),
+      branchId: uuid,
+      settings: settingsPatchSchema.optional(),
+      members: z.array(z.object({ staffId: uuid, patch: memberPatch }).strict()).max(200).optional(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('submitAvailability'),
       branchId: uuid,
       weekStart: isoDate,
@@ -117,6 +125,7 @@ export const actionSchema = z.discriminatedUnion('type', [
   z
     .object({ type: z.literal('requestSwap'), assignmentId: uuid, targetStaffId: uuid.nullish(), returnAssignmentId: uuid.nullish(), reason: note })
     .strict(),
+  z.object({ type: z.literal('requestTake'), assignmentId: uuid, reason: note }).strict(),
   z.object({ type: z.literal('respondSwap'), swapId: uuid, accept: z.boolean() }).strict(),
   z.object({ type: z.literal('cancelSwap'), swapId: uuid }).strict(),
   z.object({ type: z.literal('decideRequest'), requestId: uuid, approve: z.boolean(), note, force: z.boolean().optional() }).strict(),

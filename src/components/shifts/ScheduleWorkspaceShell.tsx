@@ -14,7 +14,7 @@ export default function ScheduleWorkspaceShell({ branches, initialBranch }: { br
       {branches.length > 1 && <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />}
       {branch && (
         <ShiftsProvider key={branch} branchSlug={branch}>
-          <ScheduleWorkspace />
+          <ScheduleWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} />
         </ShiftsProvider>
       )}
     </div>

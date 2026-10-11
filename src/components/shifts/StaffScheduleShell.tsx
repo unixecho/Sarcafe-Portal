@@ -15,32 +15,19 @@ export default function StaffScheduleShell({ branches, initialBranch }: { branch
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {branches.length > 1 && (
-        <section className="sch-card" aria-label="בחירת סניף לצפייה" style={{ gap: 10 }}>
-          <div>
-            <strong>לוחות הסניפים</strong>
-            <p className="sch-sub">בחרו סניף כדי לראות את הלוח שפורסם ואת המשמרות הפתוחות לבקשות.</p>
-          </div>
-          <div className="sch-row" role="group" aria-label="סניף" style={{ flexWrap: 'wrap' }}>
-            {branches.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`sch-btn press${branch === option.slug ? ' sch-btn--primary' : ''}`}
-                style={{ flex: '1 1 180px' }}
-                aria-pressed={branch === option.slug}
-                onClick={() => selectBranch(option.slug)}
-              >
-                {option.name.he}
-              </button>
-            ))}
-          </div>
-        </section>
+        <div className="sch-segment ew-branches" role="group" aria-label="בחירת סניף לצפייה">
+          {branches.map((option) => (
+            <button key={option.id} type="button" className="press" aria-pressed={branch === option.slug} onClick={() => selectBranch(option.slug)}>
+              {option.name.he}
+            </button>
+          ))}
+        </div>
       )}
       {branch && (
         <ShiftsProvider key={branch} branchSlug={branch}>
-          <StaffWorkspace />
+          <StaffWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} />
         </ShiftsProvider>
       )}
     </div>

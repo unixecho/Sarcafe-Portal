@@ -1,143 +1,39 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { useShifts } from '@/components/shifts/ShiftsProvider'
+import { useSettingsDraft } from '@/components/shifts/SettingsDraft'
 import { TimeWheel } from '@/components/WheelPicker'
 import { ACCENT_COLORS } from '@/lib/shifts/config'
 import { randomId } from '@/lib/menu/id'
-import type { ShiftPreset, ShiftRole, Station } from '@/lib/shifts/types'
-
-const SAVE_DEBOUNCE_MS = 500
-
-/**
- * Buffers local edits and coalesces them into ONE dispatch call after a
- * short pause, instead of firing on every keystroke/click. This is
- * deliberately NOT the "optimistic reducer mirroring server logic" that
- * lib/shifts/actions.ts's header explains this module avoids elsewhere —
- * these three lists (role/station names, preset times) carry no safety
- * rules to duplicate; the fix here only changes WHEN the existing
- * dispatch() fires, never what it does. dispatch() itself still owns the
- * real state (a fresh server read replaces `local` on success).
- *
- * Root cause of "it doesn't let me type — every keystroke waits on
- * Supabase": the input's value used to be bound straight to the
- * server-round-tripped prop, with `onSave` (async) called on every
- * change. Typing a second character before the first request resolved
- * had nothing to display it against.
- */
-function useOptimisticList<T>(remote: T[], save: (next: T[]) => Promise<boolean>) {
-  const [local, setLocal] = useState(remote)
-  const confirmed = useRef(remote)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [error, setError] = useState(false)
-
-  // Adopt a change that came from elsewhere (another tab, a refresh after
-  // a DIFFERENT action) only while nothing is buffered locally — never
-  // clobber an edit that hasn't saved yet.
-  useEffect(() => {
-    if (timer.current) return
-    confirmed.current = remote
-    setLocal(remote)
-  }, [remote])
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current)
-  }, [])
-
-  function mutate(updater: (prev: T[]) => T[]) {
-    const next = updater(local)
-    setLocal(next)
-    setError(false)
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(async () => {
-      timer.current = null
-      const ok = await save(next)
-      if (ok) {
-        confirmed.current = next
-      } else {
-        setLocal(confirmed.current)
-        setError(true)
-        window.setTimeout(() => setError(false), 3200)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  return { list: local, mutate, error }
-}
+import type { ShiftPreset } from '@/lib/shifts/types'
 
 // Three near-identical add/rename/delete editors (roles, stations, shift
-// templates) — a simpler always-append list, given Sarcafe's small, fairly fixed
-// vocabulary for a two-branch coffee truck vs. a full bar's role/station catalog.
-// Each saves ITSELF (debounced) and says so: "נשמר" after a success, a plain
-// warning (and the change put back) after a failure.
-function useCatalogSave(key: 'roles' | 'stations' | 'presets') {
-  const { db, dispatch } = useShifts()
-  return async (value: unknown[]) => {
-    const res = await dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: { [key]: value } }, { success: 'נשמר ✓' })
-    return res.ok
-  }
-}
+// templates) — a simple always-append list, given Sarcafe's small, fairly fixed
+// vocabulary for a two-branch coffee truck.
+//
+// They edit the settings DRAFT (SettingsDraft.tsx): typing, adding, deleting or
+// turning a wheel changes only what is on screen. Nothing is sent until the
+// manager presses Save in the bar at the bottom of the screen.
 
 export function RoleCatalog() {
-  const { db } = useShifts()
-  const save = useCatalogSave('roles')
-  if (!db) return null
-  return <RoleList items={db.settings.roles} onSave={save as (v: ShiftRole[]) => Promise<boolean>} />
-}
-
-export function StationCatalog() {
-  const { db } = useShifts()
-  const save = useCatalogSave('stations')
-  if (!db) return null
-  return <StationList items={db.settings.stations} onSave={save as (v: Station[]) => Promise<boolean>} />
-}
-
-export function PresetCatalog() {
-  const { db } = useShifts()
-  const save = useCatalogSave('presets')
-  if (!db) return null
-  return <PresetList items={db.settings.presets} onSave={save as (v: ShiftPreset[]) => Promise<boolean>} defaultStart={db.settings.openTime} defaultEnd={db.settings.closeTime} />
-}
-
-function SaveWarning() {
-  return (
-    <p role="alert" style={{ margin: '6px 0 0', fontSize: '0.76rem', color: '#ff6b6b' }}>
-      השמירה נכשלה — השינוי הוחזר. אפשר לנסות שוב.
-    </p>
-  )
-}
-
-function RoleList({ items, onSave }: { items: ShiftRole[]; onSave: (v: ShiftRole[]) => Promise<boolean> }) {
-  const { list, mutate, error } = useOptimisticList(items, onSave)
+  const { settings, patch } = useSettingsDraft()
+  const roles = settings.roles
   const [name, setName] = useState('')
   function add() {
     if (!name.trim()) return
-    mutate((prev) => [...prev, { id: randomId('role'), name: name.trim(), color: ACCENT_COLORS[prev.length % ACCENT_COLORS.length]! }])
+    patch({ roles: [...roles, { id: randomId('role'), name: name.trim(), color: ACCENT_COLORS[roles.length % ACCENT_COLORS.length]! }] })
     setName('')
   }
   return (
     <section>
       <h3 style={sectionTitleStyle}>תפקידים</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {list.map((role) => (
+        {roles.map((role) => (
           <div key={role.id} style={rowStyle}>
             <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: '50%', background: role.color, flexShrink: 0 }} />
-            <input
-              value={role.name}
-              onChange={(e) => {
-                const value = e.target.value
-                mutate((prev) => prev.map((i) => (i.id === role.id ? { ...i, name: value } : i)))
-              }}
-              style={rowInputStyle}
-            />
-            <button
-              type="button"
-              className="press"
-              onClick={() => mutate((prev) => prev.filter((i) => i.id !== role.id))}
-              aria-label="מחיקת תפקיד"
-              style={deleteBtnStyle}
-            >
+            <input value={role.name} aria-label="שם התפקיד" onChange={(e) => patch({ roles: roles.map((i) => (i.id === role.id ? { ...i, name: e.target.value } : i)) })} style={rowInputStyle} />
+            <button type="button" className="press" onClick={() => patch({ roles: roles.filter((i) => i.id !== role.id) })} aria-label="מחיקת תפקיד" style={deleteBtnStyle}>
               <Trash2 size={14} aria-hidden="true" />
             </button>
           </div>
@@ -149,43 +45,30 @@ function RoleList({ items, onSave }: { items: ShiftRole[]; onSave: (v: ShiftRole
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
-      {error && <SaveWarning />}
     </section>
   )
 }
 
-function StationList({ items, onSave }: { items: Station[]; onSave: (v: Station[]) => Promise<boolean> }) {
-  const { list, mutate, error } = useOptimisticList(items, onSave)
+export function StationCatalog() {
+  const { settings, patch } = useSettingsDraft()
+  const stations = settings.stations
   const [name, setName] = useState('')
   function add() {
     if (!name.trim()) return
-    mutate((prev) => [...prev, { id: randomId('station'), name: name.trim(), emoji: '📍' }])
+    patch({ stations: [...stations, { id: randomId('station'), name: name.trim(), emoji: '📍' }] })
     setName('')
   }
   return (
     <section>
       <h3 style={sectionTitleStyle}>עמדות</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {list.map((station) => (
+        {stations.map((station) => (
           <div key={station.id} style={rowStyle}>
             <span aria-hidden="true" style={{ fontSize: '1rem' }}>
               {station.emoji}
             </span>
-            <input
-              value={station.name}
-              onChange={(e) => {
-                const value = e.target.value
-                mutate((prev) => prev.map((i) => (i.id === station.id ? { ...i, name: value } : i)))
-              }}
-              style={rowInputStyle}
-            />
-            <button
-              type="button"
-              className="press"
-              onClick={() => mutate((prev) => prev.filter((i) => i.id !== station.id))}
-              aria-label="מחיקת עמדה"
-              style={deleteBtnStyle}
-            >
+            <input value={station.name} aria-label="שם העמדה" onChange={(e) => patch({ stations: stations.map((i) => (i.id === station.id ? { ...i, name: e.target.value } : i)) })} style={rowInputStyle} />
+            <button type="button" className="press" onClick={() => patch({ stations: stations.filter((i) => i.id !== station.id) })} aria-label="מחיקת עמדה" style={deleteBtnStyle}>
               <Trash2 size={14} aria-hidden="true" />
             </button>
           </div>
@@ -197,22 +80,22 @@ function StationList({ items, onSave }: { items: Station[]; onSave: (v: Station[
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
-      {error && <SaveWarning />}
     </section>
   )
 }
 
-function PresetList({ items, onSave, defaultStart, defaultEnd }: { items: ShiftPreset[]; onSave: (v: ShiftPreset[]) => Promise<boolean>; defaultStart: string; defaultEnd: string }) {
-  const { list, mutate, error } = useOptimisticList(items, onSave)
+export function PresetCatalog() {
+  const { settings, patch } = useSettingsDraft()
+  const presets = settings.presets
   const [name, setName] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   function add() {
     if (!name.trim()) return
-    mutate((prev) => [...prev, { id: randomId('preset'), name: name.trim(), startTime: defaultStart, endTime: defaultEnd }])
+    patch({ presets: [...presets, { id: randomId('preset'), name: name.trim(), startTime: settings.openTime, endTime: settings.closeTime }] })
     setName('')
   }
-  function update(id: string, patch: Partial<ShiftPreset>) {
-    mutate((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+  function update(id: string, change: Partial<ShiftPreset>) {
+    patch({ presets: presets.map((i) => (i.id === id ? { ...i, ...change } : i)) })
   }
   return (
     <section>
@@ -222,26 +105,23 @@ function PresetList({ items, onSave, defaultStart, defaultEnd }: { items: ShiftP
         בלוח שומרות את השעות שלהן.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {list.map((preset) => {
+        {presets.map((preset) => {
           const open = openId === preset.id
           return (
             <div key={preset.id} style={{ borderRadius: 10, border: '1px solid var(--line-strong)', background: 'var(--bg)', overflow: 'hidden' }}>
               <div style={{ ...rowStyle, padding: 6 }}>
-                <input
-                  value={preset.name}
-                  onChange={(e) => update(preset.id, { name: e.target.value })}
-                  style={{ ...rowInputStyle, flex: 1, border: 'none', background: 'transparent' }}
-                />
+                <input value={preset.name} aria-label="שם התבנית" onChange={(e) => update(preset.id, { name: e.target.value })} style={{ ...rowInputStyle, flex: 1, border: 'none', background: 'transparent' }} />
                 <button
                   type="button"
                   className="press ltr-isolate"
                   aria-label={`שעות ${preset.name}: ${preset.startTime} עד ${preset.endTime} — לחצו לשינוי`}
+                  aria-expanded={open}
                   onClick={() => setOpenId(open ? null : preset.id)}
                   style={{ ...rowInputStyle, width: 'auto', padding: '0 10px', background: 'var(--bg-elev-2)', fontVariantNumeric: 'tabular-nums' }}
                 >
                   {preset.startTime}–{preset.endTime}
                 </button>
-                <button type="button" className="press" onClick={() => mutate((prev) => prev.filter((i) => i.id !== preset.id))} aria-label="מחיקת תבנית" style={deleteBtnStyle}>
+                <button type="button" className="press" onClick={() => patch({ presets: presets.filter((i) => i.id !== preset.id) })} aria-label="מחיקת תבנית" style={deleteBtnStyle}>
                   <Trash2 size={14} aria-hidden="true" />
                 </button>
               </div>
@@ -262,7 +142,6 @@ function PresetList({ items, onSave, defaultStart, defaultEnd }: { items: ShiftP
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
-      {error && <SaveWarning />}
     </section>
   )
 }

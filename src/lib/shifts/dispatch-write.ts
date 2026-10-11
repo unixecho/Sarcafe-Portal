@@ -266,6 +266,16 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       })
     }
 
+    case 'saveDraft': {
+      // Settings first, then each person: every part re-authorises and validates itself, and the first
+      // refusal stops the rest, so a rejected change is never half-applied behind a success message.
+      const settings = action.settings ?? {}
+      if (Object.keys(settings).length > 0) await performDispatch({ type: 'updateSettings', branchId: action.branchId, patch: settings })
+      const members = action.members ?? []
+      for (const member of members) await performDispatch({ type: 'setMember', branchId: action.branchId, staffId: member.staffId, patch: member.patch })
+      return { settings: Object.keys(settings).length, members: members.length }
+    }
+
     // ============================================================ an employee
     case 'submitAvailability': {
       const staff = await requireScheduleViewer(action.branchId)
@@ -303,6 +313,12 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
         p_return: action.returnAssignmentId ?? null,
         p_reason: action.reason ?? null,
       })
+    }
+
+    case 'requestTake': {
+      const branchId = await branchOfAssignment(service, action.assignmentId)
+      const actor = await requireScheduleViewer(branchId)
+      return callSched(service, 'sched_request_take', { p_actor: actor.id, p_assignment: action.assignmentId, p_reason: action.reason ?? null })
     }
 
     case 'respondSwap': {

@@ -8,14 +8,13 @@ import { formatDateLabel, formatShiftLabel, hasStarted, relativeDayLabel, weekDa
 import { staffColor } from '@/lib/shifts/people'
 import type { Assignment, Shift, ShiftsDB, Warning } from '@/lib/shifts/types'
 
-// ONE renderer for a week, used by the manager's board and the employee's
-// schedule, so a shift looks the same to both. Every state is a word + an icon +
-// a colour (never colour alone):
+// The manager's week board. (The employee's own view is EmployeeSchedule.tsx.)
+// Every state is a word + an icon + a colour (never colour alone):
 //   ללא שיבוץ      nobody is on it
 //   חסר/ה …        it needs more people than it has
 //   מאוישת         it has everyone it asked for
 //   החלפה ממתינה   a swap involving it is waiting (the schedule itself is unchanged)
-//   N בקשות        employees asked to join (manager) / "ביקשת להצטרף" (employee)
+//   N בקשות        employees asked to join
 //   שימו לב        a rule is bent (rest, hours, availability, a person who left)
 
 type Props = {
@@ -23,14 +22,11 @@ type Props = {
   db: ShiftsDB
   shifts: Shift[]
   assignments: Assignment[]
-  mode: 'manager' | 'staff'
   warnings?: Warning[]
-  /** staff mode: only shifts this person is on. */
-  onlyMine?: boolean
   onShiftClick?: (shift: Shift) => void
-  /** manager: add a shift on this date. */
+  /** Add a shift on this date. */
   onAdd?: (date: string) => void
-  /** manager: edit the note of this date. */
+  /** Edit the note of this date. */
   onEditNote?: (date: string) => void
   dayNotes?: Record<string, string>
 }
@@ -38,7 +34,7 @@ type Props = {
 // Warnings the coverage pills already say in their own words.
 const COVERED_BY_PILLS = new Set(['understaffed', 'overstaffed', 'unassigned_shift'])
 
-export default function WeekGrid({ weekStart, db, shifts, assignments, mode, warnings, onlyMine, onShiftClick, onAdd, onEditNote, dayNotes }: Props) {
+export default function WeekGrid({ weekStart, db, shifts, assignments, warnings, onShiftClick, onAdd, onEditNote, dayNotes }: Props) {
   const dates = weekDates(weekStart)
   const viewer = db.viewerStaffId
   const byShift = indexByShift(assignments)
@@ -63,10 +59,9 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
   for (const list of shiftsByDate.values()) list.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.endTime.localeCompare(b.endTime))
 
   return (
-    <div className={`sch-week sch-week--${mode}`}>
+    <div className="sch-week sch-week--manager">
       {dates.map((date, dow) => {
-        const all = shiftsByDate.get(date) ?? []
-        const dayShifts = onlyMine ? all.filter((s) => (byShift.get(s.id) ?? []).some((a) => a.staffId === viewer)) : all
+        const dayShifts = shiftsByDate.get(date) ?? []
         const isWorkingDay = db.settings.workingDays.includes(dow)
         const isToday = date === db.now.date
         const hours = hoursFor(date, db.settings)
@@ -82,14 +77,14 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
               {relative && <Pill tone="mine">{relative}</Pill>}
               {!isWorkingDay && <Pill tone="neutral">יום סגור</Pill>}
               {dow === 6 && isWorkingDay && <Pill tone="info">שבת · 150%</Pill>}
-              {mode === 'manager' && onAdd && (
+              {onAdd && (
                 <button type="button" className="sch-add press" onClick={() => onAdd(date)} aria-label={`הוספת משמרת ל${weekdayLongLabel(dow)} ${formatDateLabel(date)}`}>
                   <Plus size={16} aria-hidden="true" /> משמרת
                 </button>
               )}
             </header>
 
-            {(isWorkingDay || note || (mode === 'manager' && onEditNote)) && (
+            {(isWorkingDay || note || onEditNote) && (
               <p className="sch-day__meta">
                 {isWorkingDay && (
                   <span>
@@ -97,7 +92,7 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
                   </span>
                 )}
                 {note && <span style={{ color: 'var(--neon-soft)', fontWeight: 600 }}>· {note}</span>}
-                {mode === 'manager' && onEditNote && (
+                {onEditNote && (
                   <button type="button" className="sch-note" onClick={() => onEditNote(date)}>
                     {note ? 'עריכת הערה' : 'הערה ליום'}
                   </button>
@@ -106,7 +101,7 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
             )}
 
             {dayShifts.length === 0 ? (
-              mode === 'manager' && onAdd ? (
+              onAdd ? (
                 <button type="button" className="sch-add sch-add--block press" onClick={() => onAdd(date)}>
                   <Plus size={16} aria-hidden="true" /> הוספת משמרת
                 </button>
@@ -120,7 +115,6 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
                     key={shift.id}
                     shift={shift}
                     db={db}
-                    mode={mode}
                     assignments={byShift.get(shift.id) ?? []}
                     warnings={warningsByShift.get(shift.id) ?? []}
                     swapIds={swapIds}
@@ -142,7 +136,6 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, mode, war
 function ShiftCard({
   shift,
   db,
-  mode,
   assignments,
   warnings,
   swapIds,
@@ -153,7 +146,6 @@ function ShiftCard({
 }: {
   shift: Shift
   db: ShiftsDB
-  mode: 'manager' | 'staff'
   assignments: Assignment[]
   warnings: Warning[]
   swapIds: Set<string>
@@ -166,14 +158,13 @@ function ShiftCard({
   const mine = !!viewer && assignments.some((a) => a.staffId === viewer)
   const past = hasStarted(shift, db.now)
   const swapPending = assignments.some((a) => swapIds.has(a.id))
-  const myPendingRequest = !!viewer && db.requests.some((r) => r.shiftId === shift.id && r.staffId === viewer && r.status === 'pending')
   const preset = matchPreset(shift, db.settings.presets) ?? (shift.presetId ? db.settings.presets.find((p) => p.id === shift.presetId) : undefined)
   const station = shift.stationId ? db.settings.stations.find((s) => s.id === shift.stationId) : undefined
   const otherWarnings = warnings.filter((w) => !COVERED_BY_PILLS.has(w.code))
   const hasError = otherWarnings.some((w) => w.severity === 'error')
 
   const classes = ['sch-shift']
-  if (mode === 'manager' && coverage.state === 'unassigned') classes.push('sch-shift--empty')
+  if (coverage.state === 'unassigned') classes.push('sch-shift--empty')
   if (hasError) classes.push('sch-shift--problem')
   if (mine) classes.push('sch-shift--mine')
   if (past) classes.push('sch-shift--past')
@@ -195,18 +186,13 @@ function ShiftCard({
             · {station.emoji} {station.name}
           </span>
         )}
-        {mode === 'staff' && mine && <Pill tone="mine">המשמרת שלך</Pill>}
       </div>
 
       <div className="sch-shift__chips">
         {assignments.length === 0 ? (
-          mode === 'manager' ? (
-            <Pill tone="warn" icon={<UserX size={13} aria-hidden="true" />}>
-              ללא שיבוץ — לחצו לשיבוץ
-            </Pill>
-          ) : (
-            <span className="sch-sub sch-faint">אף אחד עוד לא משובץ</span>
-          )
+          <Pill tone="warn" icon={<UserX size={13} aria-hidden="true" />}>
+            ללא שיבוץ — לחצו לשיבוץ
+          </Pill>
         ) : (
           assignments.map((a) => {
             const row = a.staffId ? db.roster.find((r) => r.staffId === a.staffId) : undefined
@@ -238,24 +224,17 @@ function ShiftCard({
             מאוישת ({coverage.assigned}/{coverage.needed})
           </Pill>
         )}
-        {mode === 'staff' && shift.requestsOpen && coverage.state !== 'full' && !mine && !myPendingRequest && !past && <Pill tone="info">פתוחה לבקשות</Pill>}
-        {mode === 'staff' && !shift.requestsOpen && !mine && !past && <Pill tone="neutral">לא פתוחה לבקשות</Pill>}
         {swapPending && (
           <Pill tone="swap" icon={<ArrowLeftRight size={13} aria-hidden="true" />}>
             החלפה ממתינה
           </Pill>
         )}
-        {mode === 'manager' && requestCount > 0 && (
+        {requestCount > 0 && (
           <Pill tone="info" icon={<BellRing size={13} aria-hidden="true" />}>
             {requestCount === 1 ? 'בקשה להצטרף' : `${requestCount} בקשות להצטרף`}
           </Pill>
         )}
-        {mode === 'staff' && myPendingRequest && (
-          <Pill tone="info" icon={<BellRing size={13} aria-hidden="true" />}>
-            ביקשת להצטרף
-          </Pill>
-        )}
-        {mode === 'manager' && otherWarnings.length > 0 && (
+        {otherWarnings.length > 0 && (
           <Pill tone={hasError ? 'danger' : 'warn'} icon={<AlertTriangle size={13} aria-hidden="true" />}>
             {otherWarnings[0]!.message}
             {otherWarnings[0]!.staffId ? ` · ${nameOf(db, otherWarnings[0]!.staffId)}` : ''}

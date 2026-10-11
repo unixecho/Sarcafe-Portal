@@ -548,6 +548,7 @@ check('…and the swap history survived (rows kept; links cleared)', (await one(
 check('…with the dates and people still readable from the record', (await one(`select terms->'from'->>'label' l, from_staff_name from public.shift_swaps where id = $1`, [swap1.swapId])).l.includes('07:00'))
 
 // ============================================================================
+// ============================================================================
 section('copying a week')
 const cw = '2030-04-07'
 const wc = await weekOf(maor, cw)
@@ -641,6 +642,96 @@ for (const f of files.filter((x) => x > NEW_MIG)) {
   catch (e) { console.error(e); check(`apply ${f}`, false, String(e.message)); process.exit(1) }
 }
 
+section('taking a colleague\'s shift: asked by the person who WANTS it, answered by the holder, decided by a manager')
+const tk = '2030-03-10'
+const wTk = await weekOf(maor, tk)
+const tkMon = await save(owner, wTk, { p_date: day(1, tk), p_start: '09:00', p_end: '13:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+const tkTue = await save(owner, wTk, { p_date: day(2, tk), p_start: '09:00', p_end: '13:00', p_assignees: JSON.stringify([asg(yossi.id), asg(delegate.id)]) })
+const tkWed = await save(owner, wTk, { p_date: day(3, tk), p_start: '09:00', p_end: '13:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+const tkThu = await save(owner, wTk, { p_date: day(4, tk), p_start: '09:00', p_end: '13:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+await save(owner, wTk, { p_date: day(1, tk), p_start: '11:00', p_end: '15:00', p_assignees: JSON.stringify([asg(delegate.id)]) }) // overlaps Monday for Dalia
+const aMon = (await assignmentsOf(tkMon.shiftId))[0]
+const aTue = (await assignmentsOf(tkTue.shiftId)).find((a) => a.staff_id === yossi.id)
+const aWed = (await assignmentsOf(tkWed.shiftId))[0]
+const aThu = (await assignmentsOf(tkThu.shiftId))[0]
+const take = (actor, assignment, reason = null) => rpc('sched_request_take', { p_actor: actor.id, p_assignment: assignment.id, p_reason: reason })
+const respond = (actor, swapId, accept) => rpc('sched_respond_swap', { p_actor: actor.id, p_swap: swapId, p_accept: accept })
+const decide = (actor, swapId, approve) => rpc('sched_decide_swap', { p_actor: actor.id, p_swap: swapId, p_approve: approve, p_note: null })
+const withdraw = (actor, swapId) => rpc('sched_cancel_swap', { p_actor: actor.id, p_swap: swapId })
+const statusOf = async (swapId) => (await one(`select status from public.shift_swaps where id = $1`, [swapId])).status
+check('(setup) an unpublished week offers nothing to take', (await take(dana, aMon)).reason === 'not_published')
+await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: wTk })
+check('you cannot take your own shift', (await take(yossi, aMon)).reason === 'bad_target')
+check('a person from another branch cannot ask', (await take(omer, aMon)).reason === 'forbidden')
+check('a deactivated person cannot ask', (await take(gone, aMon)).reason === 'forbidden')
+check('someone already working at that time is refused, naming the clash', await (async () => {
+  const r = await take(delegate, aMon)
+  return r.reason === 'busy' && r.details.with.start === '11:00'
+})())
+check('someone already ON that shift cannot take a colleague\'s place on it', (await take(delegate, aTue)).reason === 'already_assigned')
+
+const danaNotesBefore = (await notesFor(dana)).length
+const tk1 = await take(dana, aMon, 'אשמח לקחת')
+check('Dana asks Yossi for his Monday morning (nothing offered in return)', tk1.ok === true, JSON.stringify(tk1))
+const t1 = await one(`select * from public.shift_swaps where id = $1`, [tk1.swapId])
+check('it is a TAKE: OPEN, held by Yossi, wanted by Dana, no return shift, and it remembers what was asked', t1.direction === 'take' && t1.status === 'open' && t1.from_staff_id === yossi.id && t1.to_staff_id === dana.id && t1.return_assignment_id === null && t1.from_staff_name === 'Yossi' && t1.to_staff_name === 'Dana' && t1.terms.from.start === '09:00' && t1.terms.to === null && t1.reason === 'אשמח לקחת')
+check('A PENDING TAKE DOES NOT TOUCH THE SCHEDULE (live)', (await assignmentsOf(tkMon.shiftId))[0].staff_id === yossi.id)
+check('…nor what employees see (snapshot)', (await one(`select published_snapshot->'assignments' a from public.schedule_weeks where id = $1`, [wTk])).a.find((a) => a.id === aMon.id).staff_id === yossi.id)
+check('Yossi — the holder — is told, and Dana (the asker) is not', (await notesFor(yossi)).some((n) => n.kind === 'swap.request' && /Dana/.test(n.title) && /בלי משמרת בתמורה/.test(n.body)) && (await notesFor(dana)).length === danaNotesBefore)
+check('a second ask for the same shift is refused', (await take(gm, aMon)).reason === 'duplicate_swap')
+check('…and so is offering that shift to someone else while it is spoken for', (await rpc('sched_request_swap', { p_actor: yossi.id, p_assignment: aMon.id, p_target: tamar.id, p_return: null, p_reason: null })).reason === 'duplicate_swap')
+check('the asker cannot accept their own ask', (await respond(dana, tk1.swapId, true)).reason === 'forbidden')
+check('a colleague who is not involved cannot answer it', (await respond(tamar, tk1.swapId, true)).reason === 'forbidden')
+check('a manager cannot approve before the holder agreed', (await decide(owner, tk1.swapId, true)).reason === 'not_pending')
+check('only the asker or a manager can withdraw it: neither the holder nor a bystander', (await withdraw(yossi, tk1.swapId)).reason === 'forbidden' && (await withdraw(tamar, tk1.swapId)).reason === 'forbidden')
+const tkAcc = await respond(yossi, tk1.swapId, true)
+check('Yossi agrees → it waits for the manager', tkAcc.ok === true && tkAcc.status === 'peer_accepted', JSON.stringify(tkAcc))
+check('Dana stays the TAKER: the holder\'s answer does not overwrite her', await (async () => {
+  const s = await one(`select to_staff_id, to_staff_name, from_staff_id from public.shift_swaps where id = $1`, [tk1.swapId])
+  return s.to_staff_id === dana.id && s.to_staff_name === 'Dana' && s.from_staff_id === yossi.id
+})())
+check('STILL nothing changed in the schedule', (await assignmentsOf(tkMon.shiftId))[0].staff_id === yossi.id)
+check('Dana is told Yossi agreed; managers are told it needs them', (await notesFor(dana)).some((n) => n.kind === 'swap.accepted' && /Yossi/.test(n.title)) && (await notesFor(owner)).some((n) => n.kind === 'swap.awaiting' && /Yossi/.test(n.body) && /Dana/.test(n.body)))
+check('an employee cannot approve it, not even one of the two', (await decide(yossi, tk1.swapId, true)).reason === 'forbidden' && (await decide(dana, tk1.swapId, true)).reason === 'forbidden' && (await decide(tamar, tk1.swapId, true)).reason === 'forbidden')
+const tkAppr = await decide(owner, tk1.swapId, true)
+check('the manager approves → Monday morning is now Dana\'s (live)', tkAppr.ok === true && (await assignmentsOf(tkMon.shiftId))[0].staff_id === dana.id && (await assignmentsOf(tkMon.shiftId))[0].staff_name === 'Dana', JSON.stringify(tkAppr))
+check('…and in what employees see, immediately', (await one(`select published_snapshot->'assignments' a from public.schedule_weeks where id = $1`, [wTk])).a.find((a) => a.id === aMon.id).staff_id === dana.id)
+check('both are told the outcome', (await notesFor(yossi)).some((n) => n.kind === 'swap.approved') && (await notesFor(dana)).some((n) => n.kind === 'swap.approved'))
+check('an approved take cannot be decided twice', (await decide(owner, tk1.swapId, true)).reason === 'not_pending')
+
+// the holder says no
+const tk2 = await take(delegate, aWed)
+check('Dalia asks Yossi for his Wednesday', tk2.ok === true, JSON.stringify(tk2))
+check('the holder declining → declined, schedule untouched, the asker told', (await respond(yossi, tk2.swapId, false)).status === 'declined' && (await assignmentsOf(tkWed.shiftId))[0].staff_id === yossi.id && (await notesFor(delegate)).some((n) => n.kind === 'swap.declined' && /Yossi/.test(n.title)))
+const tk3 = await take(delegate, aWed)
+check('after a decline she can ask again', tk3.ok === true)
+check('the asker withdraws her own ask, and it cannot be withdrawn twice', (await withdraw(delegate, tk3.swapId)).ok === true && (await withdraw(delegate, tk3.swapId)).reason === 'not_pending')
+const tk4 = await take(delegate, aWed)
+check('a manager can withdraw it too, and the record says who did', (await withdraw(owner, tk4.swapId)).ok === true && (await one(`select cancel_reason from public.shift_swaps where id = $1`, [tk4.swapId])).cancel_reason === 'בוטלה על ידי המנהל/ת')
+
+// asked while free, double-booked by the time the holder answers
+const tk5 = await take(dana, aThu)
+await save(owner, wTk, { p_date: day(4, tk), p_start: '10:00', p_end: '12:00', p_assignees: JSON.stringify([asg(dana.id)]) })
+const tkBusy = await respond(yossi, tk5.swapId, true)
+check('if the asker became busy meanwhile, the holder\'s agreement is refused and names her', tkBusy.reason === 'busy' && tkBusy.details.name === 'Dana', JSON.stringify(tkBusy))
+check('…the ask stays open and Thursday is still Yossi\'s', (await statusOf(tk5.swapId)) === 'open' && (await assignmentsOf(tkThu.shiftId)).some((a) => a.staff_id === yossi.id))
+await save(owner, wTk, { p_shift_id: tkThu.shiftId, p_date: day(4, tk), p_start: '09:00', p_end: '13:00', p_assignees: '[]' })
+check('taking the holder off the shift cancels the ask and tells the asker', (await statusOf(tk5.swapId)) === 'cancelled' && (await notesFor(dana)).some((n) => n.kind === 'swap.cancelled'))
+
+// who may ask at all
+await rpc('sched_set_member', { p_actor: owner.id, p_branch: maor, p_staff: dana.id, p_patch: JSON.stringify({ schedulable: false }) })
+check('someone marked not-schedulable in this branch cannot ask for a shift', (await take(dana, aWed)).reason === 'not_schedulable')
+await rpc('sched_set_member', { p_actor: owner.id, p_branch: maor, p_staff: dana.id, p_patch: JSON.stringify({ schedulable: true }) })
+const tkPast = '2020-01-12'
+const wTkPast = await weekOf(maor, tkPast)
+const tkPastShift = await save(owner, wTkPast, { p_date: day(2, tkPast), p_start: '07:00', p_end: '09:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: wTkPast })
+check('a shift that already started cannot be asked for', (await take(dana, (await assignmentsOf(tkPastShift.shiftId))[0])).reason === 'past')
+check('swaps that existed before this feature are "give" swaps', (await one(`select count(*)::int n from public.shift_swaps where direction = 'give'`)).n > 5)
+check('the direction column only accepts give or take', (await throws(`update public.shift_swaps set direction = 'sideways' where id = $1`, [tk1.swapId], /shift_swaps_direction_check/)) === true)
+check('a browser session cannot ask for a shift', await asRole('authenticated', dana.authId, () => refused(`select public.sched_request_take('${dana.id}', '${aWed.id}', null)`)) === true)
+
+// ============================================================================
 section('cross-branch published schedules stay read/request-only')
 const crossStaff = await addStaff({ first: 'Cross branch', branch: ghav })
 const unlinkedCross = await addStaff({ first: 'Unlinked cross branch', branch: ghav, auth: false })

@@ -11,15 +11,6 @@ const POLL_MS = 15_000
 const GENERIC_ERROR = 'משהו השתבש. בדקו את החיבור לרשת ונסו שוב.'
 
 function applyLocalAction(current: ShiftsDB, action: ScheduleAction, data?: Record<string, unknown>): ShiftsDB {
-  if (action.type === 'setMember') {
-    return {
-      ...current,
-      roster: current.roster.map((row) => (row.staffId === action.staffId ? { ...row, ...action.patch } : row)),
-    }
-  }
-  if (action.type === 'updateSettings') {
-    return { ...current, settings: { ...current.settings, ...action.patch } }
-  }
   if (action.type === 'setDayNote') {
     return {
       ...current,
@@ -44,8 +35,9 @@ function applyLocalAction(current: ShiftsDB, action: ScheduleAction, data?: Reco
   return current
 }
 
-const instantAction = (action: ScheduleAction) =>
-  action.type === 'saveShift' || action.type === 'setMember' || action.type === 'updateSettings' || action.type === 'setDayNote'
+// Settings and people's scheduling flags are not here on purpose: they are edited in the settings draft
+// (SettingsDraft.tsx) and sent once, by Save, as 'saveDraft' — which waits for the server's reading.
+const instantAction = (action: ScheduleAction) => action.type === 'saveShift' || action.type === 'setDayNote'
 
 type DispatchOptions = {
   /** Words shown after the action succeeds (a plain sentence, or built from what the action returned). */
@@ -64,7 +56,7 @@ type ShiftsContextValue = {
   setWeekStart: (iso: string) => void
   goToToday: () => void
   /** Sends an action and keeps the interface responsive while the database remains
-   *  authoritative. Safe settings/member edits are reflected immediately; a saved
+   *  authoritative. A day note is reflected immediately; a saved
    *  shift is applied from the server's confirmed response, then a quiet full read
    *  reconciles related warnings/audit data. EVERY outcome is visible — a
    *  success toast with the words passed in `success`, or the server's plain-Hebrew
@@ -145,9 +137,9 @@ export default function ShiftsProvider({
   const dispatch = useCallback(
     async (action: ScheduleAction, options: DispatchOptions = {}): Promise<DispatchResult> => {
       busy.current++
-      // These patches are reversible views of the exact validated action. The
+      // A day note is a reversible view of the exact validated action. The
       // database still makes the decision; a refusal below reloads the truth.
-      if (action.type === 'setMember' || action.type === 'updateSettings' || action.type === 'setDayNote') {
+      if (action.type === 'setDayNote') {
         setDb((current) => (current ? applyLocalAction(current, action) : current))
       }
       try {

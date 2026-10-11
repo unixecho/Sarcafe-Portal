@@ -1,5 +1,30 @@
 # Staff & Scheduling
 
+## Taking a colleague's shift, the settings draft, per-day hours and the shareable week — 2026-10-11
+
+**Why.** An employee with no shifts of their own (the test employee account was the case that exposed it) had no way to ask for a colleague's shift: swaps could only be started by the person *giving* a shift away, and "request to join" needs a shift the manager opened with a free slot. Separately, every settings control autosaved after a pause (one round trip plus a refetch per scroll-wheel landing), hours were edited as "usual hours + hidden per-day overrides", and the printed week was a plain white table.
+
+### Swaps: every real-life case
+- **Give** (hand-over to a named colleague or to everyone), **exchange** (my shift for theirs) and **request to join** (manager opens a slot) are unchanged.
+- **Take** (new): from any colleague's shift an employee can ask the person who holds it to hand it over, no shift offered back (`requestTake`). Or offer one of their own upcoming shifts in return, which is an ordinary exchange started from the asker's side. The holder answers first (agree/decline, in the shift sheet or in "הבקשות שלי"), then a manager decides exactly as for any swap. The schedule never changes before approval.
+- Database: migration `20261011120000_swap_take_requests.sql` adds `shift_swaps.direction` (`give` default | `take`), `sched_request_take`, and updates `sched_respond_swap` / `sched_cancel_swap` so that for a take the holder answers and the asker (or a manager) withdraws. `sched_decide_swap` is unchanged. Checks are the same rules as a hand-over: published, not started, no double-booking, schedulable, one live swap per assignment. Not yet applied to production until the owner says so; code that calls it fails with the generic message until then.
+- TypeScript: `SwapRequest.direction`, `swapInitiatorId/ResponderId/…Name`, `exchangeOffers()` in `lib/shifts/view.ts`; `TakeSheet.tsx`; `ShiftActionSheet.tsx` (answer a take inline, ask a colleague); `MyRequests.tsx`.
+
+### Employee schedule (`/staff/schedule`)
+Rebuilt as an iPhone-style screen: large title, segmented control, a hero card for the next shift (or the one in progress, with a live countdown), a sticky week strip, and grouped day lists (`EmployeeSchedule.tsx`, `.ew-*` styles). Wide screens get one centred column. The manager's `WeekGrid` is now manager-only.
+
+### Shareable week (replaces the white print table)
+`SchedulePoster.tsx` + `lib/shifts/poster-{model,render,pdf}.ts`: a poster in the brand look (the branch's generated photograph fading into the espresso ground, cream badge, glass day cards, coloured people chips, today highlighted, draft clearly marked), drawn on a canvas in the browser from the schedule already on screen. It is shared as a picture or a one-page PDF through the phone's own share sheet (Web Share with files), with download as the fallback. Employees can share their own week or everyone's; managers use "שיתוף והדפסת השבוע". `/owner/schedule/print` now shows the same poster.
+
+### Settings draft
+All settings controls (hours, safety rules, feature switches, roles, stations, shift templates, who is schedulable / default role / weekly cap, who manages) edit a **local draft** (`SettingsDraft.tsx`, pure logic in `lib/shifts/draft.ts`). Nothing is sent until **שמירה**; one `saveDraft` request then carries the settings and every changed person, each part validated and authorised as before. The draft survives tab switches and reloads (sessionStorage per branch), the bar names what is unsaved, and a value turned back to what is saved stops being a change. A reload warns while there are unsaved changes.
+
+### Opening hours (what customers see)
+The editor is one row per day (open/closed and hours) plus a live "how customers see it" preview that uses the same list and wording as the public page. Stored shape is unchanged (`working_days`, `open_time`, `close_time`, `day_hours`), but edits are written back from the whole week (`lib/shifts/hours-edit.ts`): the usual hours are the pair most open days share and an override exists only where a day differs, so a stale override can no longer hide a change. Customer pages read the same four fields live (no caching); Maor's 2026-10-11 report was a Sunday entry (07:00–19:00) that silently beat the new usual hours (07:30–18:30), which this removes.
+
+### Verification
+`verify:schedule-sql` 333 (40 new for takes), `check:schedule` 234, `check:app-layout` 237 (run with `TEST_BROWSER` pointing at Edge), `check:intro` 448; a scratch Next build with synthetic data was driven in a real browser: take request end to end, hero/countdown, share sheet with PNG + PDF generation, and 19 draft checks (nothing sent while editing, one request on Save, reload restore, discard). Not verified: a real iPhone, real Google sessions, native share sheet delivery.
+
 ## Employee week, branch browsing and shift intents — 2026-10-11
 
 - The employee board keeps all seven days visible. It uses seven columns on wide screens, two columns on tablets and one column on phones, so an empty day no longer disappears and changes the mental map of the week.

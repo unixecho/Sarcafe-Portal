@@ -127,6 +127,7 @@ export function serializeAvailability(row: Record<string, unknown>): Availabilit
 export function serializeSwap(row: Record<string, unknown>): SwapRequest {
   return {
     id: row.id as string,
+    direction: row.direction === 'take' ? 'take' : 'give',
     assignmentId: (row.assignment_id as string | null) ?? null,
     returnAssignmentId: (row.return_assignment_id as string | null) ?? null,
     fromStaffId: row.from_staff_id as string,

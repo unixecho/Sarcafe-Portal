@@ -5,7 +5,7 @@ import { Check, Hand, Inbox, X } from 'lucide-react'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { Avatar, EmptyState, Notice, Pill, RequestStatusPill, SwapStatusPill } from '@/components/shifts/ui'
-import { clashesFor, employeeInbox, isActiveSwap, nameOf, requestLabel, sideLabel } from '@/lib/shifts/view'
+import { clashesFor, employeeInbox, isActiveSwap, nameOf, requestLabel, sideLabel, swapInitiatorId, swapInitiatorName, swapResponderId, swapResponderName } from '@/lib/shifts/view'
 import { formatShiftLabel, timeAgoHe, weekStartOf } from '@/lib/shifts/time'
 import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
 
@@ -25,7 +25,7 @@ export default function MyRequests() {
   const inbox = employeeInbox(db)
   const openOffers = db.swaps.filter((s) => s.status === 'open' && s.toStaffId === null && s.fromStaffId !== me)
   const myRequests = db.requests.filter((r) => r.staffId === me)
-  const mySwaps = db.swaps.filter((s) => s.fromStaffId === me || (s.toStaffId === me && s.status !== 'open'))
+  const mySwaps = db.swaps.filter((s) => swapInitiatorId(s) === me || (swapResponderId(s) === me && s.status !== 'open'))
 
   const active = [
     ...myRequests.filter((r) => r.status === 'pending').map((r) => ({ kind: 'request' as const, at: r.createdAt, r })),
@@ -40,10 +40,10 @@ export default function MyRequests() {
 
   async function respond(s: SwapRequest, accept: boolean) {
     setBusy(s.id)
-    const from = nameOf(db!, s.fromStaffId, s.fromStaffName)
+    const asker = nameOf(db!, swapInitiatorId(s), swapInitiatorName(s))
     const res = await dispatch(
       { type: 'respondSwap', swapId: s.id, accept },
-      { quiet: true, success: accept ? 'הסכמתם ✓ הבקשה עברה למנהל/ת. הלוח ישתנה רק אחרי שיאשרו.' : `סירבתם. ${from} קיבל/ה הודעה.` }
+      { quiet: true, success: accept ? 'הסכמתם ✓ הבקשה עברה למנהל/ת. הלוח ישתנה רק אחרי שיאשרו.' : `סירבתם. ${asker} קיבל/ה הודעה.` }
     )
     setBusy(null)
     if (!res.ok) setConfirm({ title: 'לא הצלחנו', body: res.message, confirmLabel: 'הבנתי', cancelLabel: 'סגירה', onYes: () => undefined })
@@ -56,7 +56,7 @@ export default function MyRequests() {
   }
   async function cancelSwap(s: SwapRequest) {
     setBusy(s.id)
-    await dispatch({ type: 'cancelSwap', swapId: s.id }, { success: `בקשת ${s.terms.to ? 'ההחלפה' : 'המסירה'} בוטלה — המשמרת נשארה שלכם` })
+    await dispatch({ type: 'cancelSwap', swapId: s.id }, { success: s.direction === 'take' ? 'הבקשה בוטלה' : `בקשת ${s.terms.to ? 'ההחלפה' : 'המסירה'} בוטלה — המשמרת נשארה שלכם` })
     setBusy(null)
   }
 
@@ -71,7 +71,7 @@ export default function MyRequests() {
         <EmptyState
           icon={<Inbox size={30} aria-hidden="true" />}
           title="אין עדיין בקשות"
-          hint="בקשת הצטרפות זמינה רק במשמרת שהמנהל/ת פתחו לבקשות. למסירה או להחלפה של משמרת שלכם — פתחו אותה ובחרו את הפעולה המתאימה."
+          hint="בקשת הצטרפות זמינה במשמרת שהמנהל/ת פתחו לבקשות. רוצים משמרת של עמית/ה? פתחו אותה בלוח ובקשו אותה. למסירה או להחלפה של משמרת שלכם — פתחו אותה ובחרו את הפעולה."
         />
       )}
 
@@ -81,18 +81,20 @@ export default function MyRequests() {
           {inbox.proposals.map((s) => {
             const from = s.terms.from
             const to = s.terms.to
-            const fromName = nameOf(db, s.fromStaffId, s.fromStaffName)
-            const clash = clashOf(from)
+            const take = s.direction === 'take'
+            // `fromName` is whoever started it: the giver of a hand-over or exchange, the asker of a take.
+            const fromName = nameOf(db, swapInitiatorId(s), swapInitiatorName(s))
+            const clash = take ? undefined : clashOf(from)
             return (
               <article key={s.id} className="sch-card sch-card--attention">
                 <div className="sch-row">
                   <Avatar name={fromName} large />
-                  <strong style={{ flex: 1 }}>{fromName} {to ? 'מבקש/ת להחליף איתכם' : 'מבקש/ת למסור לכם משמרת'}</strong>
+                  <strong style={{ flex: 1 }}>{fromName} {take ? 'מבקש/ת לקחת ממך משמרת' : to ? 'מבקש/ת להחליף איתכם' : 'מבקש/ת למסור לכם משמרת'}</strong>
                 </div>
                 <div className="sch-card" style={{ background: 'var(--bg-elev-2)', gap: 6 }}>
                   <div>
                     <span className="sch-faint" style={{ fontSize: '0.76rem', fontWeight: 700 }}>
-                      {fromName} נותן/ת לכם:
+                      {take ? `${fromName} רוצה לקחת ממך:` : `${fromName} נותן/ת לכם:`}
                     </span>
                     <div style={{ fontWeight: 800 }}>{sideLabel(from)}</div>
                   </div>
@@ -100,7 +102,7 @@ export default function MyRequests() {
                     <span className="sch-faint" style={{ fontSize: '0.76rem', fontWeight: 700 }}>
                       ובתמורה:
                     </span>
-                    <div style={{ fontWeight: 800 }}>{to ? `אתם נותנים ל${fromName}: ${sideLabel(to)}` : 'כלום — רק מעבירים לכם את המשמרת'}</div>
+                    <div style={{ fontWeight: 800 }}>{take ? `כלום — המשמרת עוברת ל${fromName}` : to ? `אתם נותנים ל${fromName}: ${sideLabel(to)}` : 'כלום — רק מעבירים לכם את המשמרת'}</div>
                   </div>
                 </div>
                 {s.reason && <p className="sch-sub">״{s.reason}״</p>}
@@ -210,15 +212,18 @@ function SwapRow({ s, busy, onCancel }: { s: SwapRequest; busy?: boolean; onCanc
   const { db } = useShifts()
   if (!db) return null
   const me = db.viewerStaffId
-  const iAmRequester = s.fromStaffId === me
+  const iAmRequester = swapInitiatorId(s) === me
   const isExchange = !!s.terms.to
-  const other = iAmRequester ? (s.toStaffId ? nameOf(db, s.toStaffId, s.toStaffName) : null) : nameOf(db, s.fromStaffId, s.fromStaffName)
+  const isTake = s.direction === 'take'
+  const responder = swapResponderId(s)
+  const other = iAmRequester ? (responder ? nameOf(db, responder, swapResponderName(s)) : null) : nameOf(db, swapInitiatorId(s), swapInitiatorName(s))
+  const kind = isExchange ? 'החלפת משמרת' : isTake ? 'בקשה לקחת משמרת' : 'מסירת משמרת'
   const text: Record<SwapRequest['status'], string> = {
     open: other ? `מחכים לתשובה מ${other}.` : 'פתוח לכולם — מחכים שמישהו יתנדב.',
     peer_accepted: `${other ?? 'עמית/ה'} הסכים/ה. מחכים לאישור המנהל/ת.`,
-    approved: iAmRequester ? `אושרה ✓ המשמרת עברה ל${other}.` : 'אושרה ✓ הלוח עודכן.',
+    approved: isTake ? (iAmRequester ? 'אושרה ✓ המשמרת עברה אליכם.' : `אושרה ✓ המשמרת עברה ל${other}.`) : iAmRequester ? `אושרה ✓ המשמרת עברה ל${other}.` : 'אושרה ✓ הלוח עודכן.',
     rejected: 'המנהל/ת לא אישרו. הלוח לא השתנה.',
-    declined: `${other ?? 'העמית/ה'} לא יכול/ה ${isExchange ? 'להחליף' : 'לקחת את המשמרת'}.`,
+    declined: `${other ?? 'העמית/ה'} לא יכול/ה ${isExchange ? 'להחליף' : isTake ? 'למסור את המשמרת' : 'לקחת את המשמרת'}.`,
     cancelled: 'בוטלה.',
   }
   return (
@@ -231,13 +236,13 @@ function SwapRow({ s, busy, onCancel }: { s: SwapRequest; busy?: boolean; onCanc
       </div>
       <div style={{ fontWeight: 800 }}>{sideLabel(s.terms.from)}</div>
       {s.terms.to && <div className="sch-sub">בתמורה: {sideLabel(s.terms.to)}</div>}
-      <p className="sch-sub">{isExchange ? 'החלפת משמרת' : 'מסירת משמרת'} · {text[s.status]}</p>
+      <p className="sch-sub">{kind} · {text[s.status]}</p>
       {s.reason && <p className="sch-sub">ההערה: ״{s.reason}״</p>}
       {s.decisionNote && <p className="sch-sub">תשובת המנהל/ת: ״{s.decisionNote}״</p>}
       {s.cancelReason && s.status === 'cancelled' && <p className="sch-sub">{s.cancelReason}</p>}
       {onCancel && iAmRequester && (
         <button type="button" className="sch-btn sch-btn--sm sch-btn--danger press" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={onCancel}>
-          ביטול בקשת {isExchange ? 'ההחלפה' : 'המסירה'}
+          ביטול {isExchange ? 'בקשת ההחלפה' : isTake ? 'הבקשה' : 'בקשת המסירה'}
         </button>
       )}
     </article>

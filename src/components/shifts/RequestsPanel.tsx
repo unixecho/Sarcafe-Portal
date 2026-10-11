@@ -253,7 +253,9 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
               <div className="sch-row" style={{ flexWrap: 'wrap' }}>
                 <SwapStatusPill status="open" />
                 <strong style={{ flex: 1, minWidth: 0 }}>
-                  {nameOf(db, s.fromStaffId, s.fromStaffName)} {s.toStaffId ? `מבקש/ת להעביר ל${nameOf(db, s.toStaffId, s.toStaffName)}` : '· פתוח לכולם'}
+                  {s.direction === 'take'
+                    ? `${nameOf(db, s.toStaffId, s.toStaffName)} מבקש/ת לקחת מ${nameOf(db, s.fromStaffId, s.fromStaffName)}`
+                    : `${nameOf(db, s.fromStaffId, s.fromStaffName)} ${s.toStaffId ? `מבקש/ת להעביר ל${nameOf(db, s.toStaffId, s.toStaffName)}` : '· פתוח לכולם'}`}
                 </strong>
               </div>
               <p className="sch-sub">{sideLabel(s.terms.from)}</p>

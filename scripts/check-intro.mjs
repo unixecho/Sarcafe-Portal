@@ -529,6 +529,7 @@ section('public portal: branch scenes and opening hours')
   check('the public branch DTO includes the sanitized week and configured flag', /weeklyHours: state\.weeklyHours/.test(branchServer) && /hoursConfigured: state\.hoursConfigured/.test(branchServer))
   check('branch artwork uses positive stacking, never the Chromium-broken negative layer', /\.public-backdrop__scene[\s\S]*?z-index: 0/.test(css) && /\.public-backdrop__content[\s\S]*?z-index: 2/.test(css))
   check('no page falls back to the legacy illustration any more', !/url\(['"]?\/background(-wide)?\.jpg/.test(css) && !/background(-wide)?\.jpg/.test(backdrop + backdropShell) && /\.public-backdrop \{[^}]*background-color: var\(--bg\)/.test(css))
+  check('the page-entrance wrapper keeps no forwards fill, so it cannot anchor the fixed backdrop layers to the page', /\.page-enter \{\s*animation: page-in-from-left [^;]*backwards;/.test(css) && !/\.page-enter \{\s*animation: [^;]*both;/.test(css))
 }
 
 console.log(`\n${failures.length === 0 ? 'ok' : 'FAILED'}: ${pass} passed, ${failures.length} failed`)

@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { useState, type CSSProperties } from 'react'
+import { ExternalLink } from 'lucide-react'
 import Switch from '@/components/Switch'
 import { TimeWheel } from '@/components/WheelPicker'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
+import { useSettingsDraft } from '@/components/shifts/SettingsDraft'
 import { PresetCatalog, RoleCatalog, StationCatalog } from '@/components/shifts/CatalogEditor'
 import RosterPanel from '@/components/shifts/RosterPanel'
+import { hoursStatusLabel } from '@/lib/branches'
 import { SAFETY_BOUNDS } from '@/lib/shifts/config'
-import { weekdayLabel } from '@/lib/shifts/time'
-import type { SafetyRules, ShiftSettings } from '@/lib/shifts/types'
-
-const SAVE_DEBOUNCE_MS = 500
+import { effectiveWeek, openStatus, settingsFromWeek, usualHours, type DayHours, type HoursWeek } from '@/lib/shifts/hours-edit'
+import { weekdayLongLabel } from '@/lib/shifts/time'
+import type { SafetyRules } from '@/lib/shifts/types'
 
 const SAFETY_LABELS: Record<keyof SafetyRules, string> = {
   maxWeeklyHours: 'מקסימום שעות שבועיות',
@@ -20,206 +21,23 @@ const SAFETY_LABELS: Record<keyof SafetyRules, string> = {
   maxConsecutiveDays: 'מקסימום ימים רצופים',
 }
 
-/**
- * Same fix as CatalogEditor.tsx's useOptimisticList, generalized to a
- * settings-shaped object with partial patches: every control here
- * (working-day chips, hours, safety sliders, feature switches) used to
- * read its displayed value straight from `db.settings` — the server's
- * last confirmed read — and call dispatch() synchronously on every click,
- * so a tap only visually registered once the round trip finished. Local
- * state now updates instantly; the patches merge and coalesce into one
- * dispatch after a short pause. Not an optimistic mirror of business
- * logic (lib/shifts/actions.ts's header) — a settings patch has none to
- * duplicate, it's just object merge.
- */
-function useOptimisticSettings<T extends Record<string, unknown>>(remote: T, save: (patch: Partial<T>) => Promise<boolean>) {
-  const [local, setLocal] = useState(remote)
-  const confirmed = useRef(remote)
-  const pending = useRef<Partial<T>>({})
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    if (timer.current) return
-    confirmed.current = remote
-    setLocal(remote)
-  }, [remote])
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current)
-  }, [])
-
-  function patch(partial: Partial<T>) {
-    setLocal((prev) => ({ ...prev, ...partial }))
-    pending.current = { ...pending.current, ...partial }
-    setError(false)
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(async () => {
-      const toSave = pending.current
-      pending.current = {}
-      timer.current = null
-      const ok = await save(toSave)
-      if (ok) {
-        confirmed.current = { ...confirmed.current, ...toSave }
-      } else {
-        setLocal(confirmed.current)
-        setError(true)
-        window.setTimeout(() => setError(false), 3200)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  return { settings: local, patch, error }
-}
-
-// The permanently-editable settings screen: working days/hours, safety
-// rules, feature flags, catalogs, and the roster (staff scheduling flags)
-// — all in one place, same shape as AyekaBar's own ManagerPanel.
+// The permanently-editable settings screen: opening hours, safety rules, feature
+// flags, catalogs, and the roster (staff scheduling flags) — all in one place.
+// Every control edits the settings DRAFT (SettingsDraft.tsx) and nothing is sent
+// until the manager presses Save in the bar that appears at the bottom.
 export default function ManagerPanel() {
-  const { db, dispatch } = useShifts()
-  const { settings, patch, error } = useOptimisticSettings(
-    db?.settings ?? EMPTY_SETTINGS,
-    async (p) => (await dispatch({ type: 'updateSettings', branchId: db!.branchId, patch: p }, { success: 'ההגדרות נשמרו ✓' })).ok,
-  )
-  const [openDayOverride, setOpenDayOverride] = useState<number | null>(null)
-
+  const { db } = useShifts()
+  const { settings, patch } = useSettingsDraft()
   if (!db) return null
-
-  function toggleWorkingDay(day: number) {
-    const next = settings.workingDays.includes(day) ? settings.workingDays.filter((d) => d !== day) : [...settings.workingDays, day].sort()
-    patch({ workingDays: next })
-  }
-
-  // Friday/Saturday running short hours is the whole reason this exists —
-  // dayHours (already in the settings shape and already read by
-  // lib/shifts/config.ts's hoursForDay(), just never had an editor) is a
-  // sparse override map, so a day with no entry simply falls back to the
-  // global openTime/closeTime above. Adding an override seeds it FROM the
-  // current global hours (a sensible starting point to then shorten),
-  // rather than an empty "00:00" nobody would recognize as "not set yet."
-  function addDayOverride(day: number) {
-    patch({ dayHours: { ...settings.dayHours, [day]: { open: settings.openTime, close: settings.closeTime } } })
-    setOpenDayOverride(day)
-  }
-  function updateDayOverride(day: number, fields: Partial<{ open: string; close: string }>) {
-    const current = settings.dayHours[day]
-    if (!current) return
-    patch({ dayHours: { ...settings.dayHours, [day]: { ...current, ...fields } } })
-  }
-  function removeDayOverride(day: number) {
-    const next = { ...settings.dayHours }
-    delete next[day]
-    patch({ dayHours: next })
-    if (openDayOverride === day) setOpenDayOverride(null)
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <p className="sch-sub">ההגדרות נשמרות לבד, ברגע שמשנים אותן. הן חלות על הסניף שבחרתם למעלה.</p>
+      <p className="sch-sub">אפשר לשנות כאן כמה שרוצים — שום דבר לא נשמר עד שלוחצים ״שמירה״ בתחתית המסך. ההגדרות חלות על הסניף שבחרתם למעלה.</p>
+
+      <HoursEditor />
 
       <section>
         <PresetCatalog />
-      </section>
-
-      <section>
-        <h3 style={sectionTitleStyle}>ימי פעילות</h3>
-        <div role="group" aria-label="ימי פעילות" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {Array.from({ length: 7 }, (_, d) => d).map((day) => {
-            const active = settings.workingDays.includes(day)
-            return (
-              <button
-                key={day}
-                type="button"
-                className="press"
-                aria-pressed={active}
-                onClick={() => toggleWorkingDay(day)}
-                style={{
-                  minHeight: 36,
-                  padding: '0 12px',
-                  borderRadius: 999,
-                  border: `1px solid ${active ? 'var(--neon)' : 'var(--line-strong)'}`,
-                  background: active ? 'rgba(255,122,69,0.14)' : 'var(--bg-elev)',
-                  color: active ? 'var(--neon-soft)' : 'var(--text-dim)',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {weekdayLabel(day)}
-              </button>
-            )
-          })}
-        </div>
-      </section>
-
-      <section>
-        <h3 style={sectionTitleStyle}>שעות פעילות</h3>
-        <div className="ltr-isolate" style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-          <div>
-            <span style={{ ...labelStyle, textAlign: 'center', display: 'block' }}>פתיחה</span>
-            <TimeWheel value={settings.openTime} onChange={(v) => patch({ openTime: v })} label="שעת פתיחה" />
-          </div>
-          <div>
-            <span style={{ ...labelStyle, textAlign: 'center', display: 'block' }}>סגירה</span>
-            <TimeWheel value={settings.closeTime} onChange={(v) => patch({ closeTime: v })} label="שעת סגירה" />
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h3 style={sectionTitleStyle}>שעות מותאמות ליום ספציפי</h3>
-        <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
-          למשל שישי ושבת עם שעות קצרות יותר מהרגיל — יום ללא התאמה משתמש בשעות הפעילות הרגילות שלמעלה.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {Array.from({ length: 7 }, (_, d) => d).map((day) => {
-            const override = settings.dayHours[day]
-            const editing = openDayOverride === day
-            return (
-              <div key={day} style={{ borderRadius: 10, border: '1px solid var(--line-strong)', background: 'var(--bg)', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
-                  <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 600 }}>{weekdayLabel(day)}</span>
-                  {override ? (
-                    <>
-                      <span className="ltr-isolate" style={{ fontSize: '0.8rem', color: 'var(--neon-soft)', fontWeight: 700 }}>
-                        {override.open}–{override.close}
-                      </span>
-                      <IconBtn label="עריכת השעות" onClick={() => setOpenDayOverride(editing ? null : day)}>
-                        <Pencil size={14} />
-                      </IconBtn>
-                      <IconBtn label="הסרת ההתאמה — חזרה לשעות הרגילות" onClick={() => removeDayOverride(day)}>
-                        <Trash2 size={14} />
-                      </IconBtn>
-                    </>
-                  ) : (
-                    <>
-                      <span className="ltr-isolate" style={{ fontSize: '0.76rem', color: 'var(--text-faint)' }}>
-                        {settings.openTime}–{settings.closeTime}
-                      </span>
-                      <button
-                        type="button"
-                        className="press"
-                        onClick={() => addDayOverride(day)}
-                        style={{ minHeight: 32, padding: '0 10px', borderRadius: 999, border: '1px solid var(--line-strong)', background: 'var(--bg-elev-2)', color: 'var(--text-dim)', fontSize: '0.74rem', cursor: 'pointer' }}
-                      >
-                        שעות מותאמות
-                      </button>
-                    </>
-                  )}
-                </div>
-                {override && editing && (
-                  <div className="rise ltr-isolate" style={{ padding: '4px 10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                    <TimeWheel value={override.open} onChange={(v) => updateDayOverride(day, { open: v })} label="פתיחה" />
-                    <span aria-hidden="true" style={{ color: 'var(--text-faint)' }}>
-                      —
-                    </span>
-                    <TimeWheel value={override.close} onChange={(v) => updateDayOverride(day, { close: v })} label="סגירה" />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
       </section>
 
       <section>
@@ -253,24 +71,10 @@ export default function ManagerPanel() {
       <section>
         <h3 style={sectionTitleStyle}>יכולות</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <FeatureRow
-            label="הגשת זמינות עצמית"
-            on={settings.features.availability}
-            onToggle={(v) => patch({ features: { ...settings.features, availability: v } })}
-          />
-          <FeatureRow
-            label="בקשות החלפת משמרות"
-            on={settings.features.swaps}
-            onToggle={(v) => patch({ features: { ...settings.features, swaps: v } })}
-          />
+          <FeatureRow label="הגשת זמינות עצמית" on={settings.features.availability} onToggle={(v) => patch({ features: { ...settings.features, availability: v } })} />
+          <FeatureRow label="בקשות החלפת משמרות" on={settings.features.swaps} onToggle={(v) => patch({ features: { ...settings.features, swaps: v } })} />
         </div>
       </section>
-
-      {error && (
-        <p role="alert" style={{ margin: 0, fontSize: '0.78rem', color: '#ff6b6b' }}>
-          השמירה נכשלה — השינוי הוחזר. אפשר לנסות שוב.
-        </p>
-      )}
 
       <section>
         <RoleCatalog />
@@ -288,18 +92,108 @@ export default function ManagerPanel() {
   )
 }
 
-function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+// One row per day, exactly what customers are shown. There is no separate
+// "usual hours" with special exceptions hiding behind it (see lib/shifts/hours-edit.ts):
+// every change is written back from the whole week.
+function HoursEditor() {
+  const { db, branchSlug } = useShifts()
+  const { settings, patch } = useSettingsDraft()
+  const [openDay, setOpenDay] = useState<number | null>(null)
+  if (!db) return null
+
+  const week = effectiveWeek(settings)
+  const keep = usualHours(settings)
+  const setWeek = (next: HoursWeek) => patch(settingsFromWeek(next, keep))
+  const setDay = (day: number, hours: DayHours | null) => setWeek(week.map((h, d) => (d === day ? hours : h)))
+  const status = openStatus(week, db.now)
+
   return (
-    <button
-      type="button"
-      className="press"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid var(--line-strong)', background: 'var(--bg-elev-2)', color: 'var(--text)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}
-    >
-      {children}
-    </button>
+    <section aria-labelledby="hours-title">
+      <h3 id="hours-title" style={sectionTitleStyle}>
+        שעות פעילות
+      </h3>
+      <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: 'var(--text-faint)' }}>
+        השעות של כל יום, בדיוק כמו שהלקוחות רואים אותן בדף הסניף ובתפריט הדיגיטלי. יום שסגור לא מוצג כפתוח.
+      </p>
+
+      <ul className="sch-hours" aria-label="שעות הפעילות לפי יום">
+        {week.map((hours, day) => {
+          const editing = openDay === day && !!hours
+          return (
+            <li key={day} className="sch-hours__row">
+              <div className="sch-hours__head">
+                <span className="sch-hours__day">{weekdayLongLabel(day)}</span>
+                {hours ? (
+                  <button
+                    type="button"
+                    className="sch-hours__time ltr-isolate press"
+                    aria-expanded={editing}
+                    aria-label={`שעות ${weekdayLongLabel(day)}: ${hours.open} עד ${hours.close} — לחצו לשינוי`}
+                    onClick={() => setOpenDay(editing ? null : day)}
+                  >
+                    {hours.open}–{hours.close}
+                  </button>
+                ) : (
+                  <span className="sch-hours__closed">סגור</span>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!hours}
+                  aria-label={`פתוח ב${weekdayLongLabel(day)}`}
+                  className="press"
+                  onClick={() => {
+                    if (hours && openDay === day) setOpenDay(null)
+                    setDay(day, hours ? null : keep)
+                  }}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <Switch on={!!hours} />
+                </button>
+              </div>
+              {editing && hours && (
+                <div className="sch-hours__edit rise">
+                  <div className="ltr-isolate" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                    <TimeWheel value={hours.open} onChange={(v) => setDay(day, { ...hours, open: v })} label="שעת פתיחה" />
+                    <span aria-hidden="true" style={{ color: 'var(--text-faint)' }}>
+                      —
+                    </span>
+                    <TimeWheel value={hours.close} onChange={(v) => setDay(day, { ...hours, close: v })} label="שעת סגירה" />
+                  </div>
+                  <button type="button" className="sch-btn sch-btn--sm press" onClick={() => setWeek(week.map((h) => (h ? hours : null)))}>
+                    החלת השעות האלה על כל הימים הפתוחים
+                  </button>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      <div className="sch-hours-preview" aria-label="כך הלקוחות רואים את השעות">
+        <div className="sch-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span className="sch-label" style={{ margin: 0 }}>
+            כך הלקוחות רואים את זה
+          </span>
+          <a className="sch-hours-preview__link" href={`/menu/${branchSlug}`} target="_blank" rel="noopener noreferrer">
+            התפריט הדיגיטלי <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        </div>
+        <p className="sch-hours-preview__status">
+          <span aria-hidden="true" className={`sch-hours-preview__dot${status.openNow ? ' sch-hours-preview__dot--open' : ''}`} />
+          {hoursStatusLabel({ hoursToday: status.today, openNow: status.openNow, hoursConfigured: true }, 'he')}
+        </p>
+        <dl className="portal-hours-list">
+          {week.map((hours, day) => (
+            <div key={day} className="portal-hours-row" data-closed={!hours}>
+              <dt>{weekdayLongLabel(day)}</dt>
+              <dd>{hours ? <bdi dir="ltr">{hours.open}–{hours.close}</bdi> : 'סגור'}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="sch-sub">מתעדכן אצל הלקוחות ברגע שלוחצים ״שמירה״ — אין צורך לפרסם בנפרד.</p>
+      </div>
+    </section>
   )
 }
 
@@ -320,25 +214,6 @@ function FeatureRow({ label, on, onToggle }: { label: string; on: boolean; onTog
       </button>
     </div>
   )
-}
-
-// Placeholder shape fed to the hook before `db` loads — never rendered
-// (the component returns null first), only keeps the hook's generic type
-// stable across the loading -> loaded transition.
-const EMPTY_SETTINGS: ShiftSettings = {
-  branchId: '',
-  workingDays: [],
-  openTime: '00:00',
-  closeTime: '00:00',
-  dayHours: {},
-  roles: [],
-  stations: [],
-  presets: [],
-  safety: { maxWeeklyHours: 0, minRestHours: 0, maxDailyHours: 0, maxConsecutiveDays: 0 },
-  ruleSeverity: {},
-  features: { availability: false, swaps: false },
-  scheduleManagers: [],
-  onboardedAt: null,
 }
 
 const sectionTitleStyle: CSSProperties = { margin: '0 0 10px', fontSize: '0.9rem', fontWeight: 700 }

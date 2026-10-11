@@ -128,6 +128,12 @@ export type AvailabilitySubmission = {
 //     └──(requester / manager / a schedule change)──> cancelled
 export type SwapStatus = 'open' | 'peer_accepted' | 'approved' | 'rejected' | 'declined' | 'cancelled'
 
+/** Who started it. 'give': the person giving `assignmentId` away (hand-over or exchange),
+ *  answered by `toStaffId` (or any colleague for an open offer). 'take': the person who
+ *  WANTS that shift (`toStaffId`), answered by the person holding it (`fromStaffId`).
+ *  Either way `fromStaffId` holds `assignmentId` now and `toStaffId` gets it on approval. */
+export type SwapDirection = 'give' | 'take'
+
 /** What one side of a swap looked like when it was agreed. Kept on the swap
  *  itself so the record stays readable after the shifts are edited or deleted. */
 export type SwapSide = {
@@ -146,6 +152,7 @@ export type SwapSide = {
 
 export type SwapRequest = {
   id: string
+  direction: SwapDirection
   /** null once the underlying assignment is gone (history survives). */
   assignmentId: string | null
   /** The shift the other person gives in return (an exchange); null = a hand-over. */

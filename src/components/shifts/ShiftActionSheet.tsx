@@ -1,22 +1,24 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { ArrowLeftRight, BellRing, Hand, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, BellRing, Check, ChevronLeft, Hand, UserPlus, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import SwapSheet, { type SwapIntent } from '@/components/shifts/SwapSheet'
-import { InlineError, Notice, Person, Pill, RequestStatusPill, SwapStatusPill } from '@/components/shifts/ui'
+import TakeSheet from '@/components/shifts/TakeSheet'
+import { Avatar, InlineError, Notice, Person, Pill, RequestStatusPill, SwapStatusPill } from '@/components/shifts/ui'
 import { coverageOf } from '@/lib/shifts/coverage'
 import { matchPreset } from '@/lib/shifts/presets'
 import { formatShiftLabel, hasStarted, weekStartOf, formatDayLabel } from '@/lib/shifts/time'
-import { clashesFor, indexByShift, isActiveSwap, nameOf, rosterRow } from '@/lib/shifts/view'
+import { clashesFor, indexByShift, isActiveSwap, nameOf, rosterRow, sideLabel, swapInitiatorId, swapInitiatorName, swapPendingAssignmentIds, swapResponderId, swapResponderName } from '@/lib/shifts/view'
 
 // One shift, from the employee's side: what it is, who is on it, and the one or
 // two things they can do about it — all explained in the sheet itself, so nobody
 // has to know what a "swap" or a "request" is before tapping.
-//   my shift          -> give it away or exchange it with a colleague
-//   someone else's    -> ask to join it, if it still needs people and I am free
+//   my shift          -> give it away or exchange it with a colleague; answer a colleague who asked for it
+//   someone else's    -> ask to join it if it still needs people, or ask whoever holds it
+//                        to hand it over (nothing back) or swap it for one of mine
 // Everything that would change the schedule goes to the manager first; this sheet
 // says so in words before the button is pressed.
 export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string | null; onClose: () => void }) {
@@ -27,6 +29,7 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
   const [error, setError] = useState<string | null>(null)
   const [swapOpen, setSwapOpen] = useState(false)
   const [swapIntent, setSwapIntent] = useState<SwapIntent>('handover')
+  const [takeFor, setTakeFor] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
 
   const shift = db && shiftId ? db.shifts.find((s) => s.id === shiftId) : undefined
@@ -41,12 +44,18 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
   const preset = matchPreset(shift, db.settings.presets) ?? (shift.presetId ? db.settings.presets.find((p) => p.id === shift.presetId) : undefined)
   const roleById = new Map(db.settings.roles.map((r) => [r.id, r]))
   const mySwap = mine ? db.swaps.find((s) => isActiveSwap(s) && (s.assignmentId === mine.id || s.returnAssignmentId === mine.id)) : undefined
+  const iAmAsking = !!mySwap && swapInitiatorId(mySwap) === me
+  const iMustAnswer = !!mySwap && mySwap.status === 'open' && swapResponderId(mySwap) === me && !iAmAsking
   const myRequest = db.requests.find((r) => r.shiftId === shift.id && r.staffId === me && r.status === 'pending')
   const lastRequest = db.requests.find((r) => r.shiftId === shift.id && r.staffId === me && r.status !== 'pending')
   const clash = me && !mine ? clashesFor(me, shift, weekStartOf(shift.date), db.shifts, db.assignments)[0] : undefined
   const unavailable = !!me && db.availability.some((a) => a.staffId === me && a.entries.some((e) => e.date === shift.date && e.kind === 'unavailable'))
   const full = cov.needed > 0 && cov.assigned >= cov.needed
   const label = formatShiftLabel(shift.date, shift.startTime, shift.endTime)
+  const swapsOn = db.settings.features.swaps
+  const canAsk = swapsOn && !!me && !(myRow && !myRow.schedulable)
+  const spokenFor = swapPendingAssignmentIds(db.swaps)
+  const colleagues = on.filter((a) => a.staffId && a.staffId !== me)
 
   function close() {
     setNote('')
@@ -73,6 +82,19 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
     else setError(res.message)
   }
 
+  async function answerSwap(accept: boolean) {
+    if (!mySwap) return
+    setBusy(true)
+    setError(null)
+    const res = await dispatch(
+      { type: 'respondSwap', swapId: mySwap.id, accept },
+      { quiet: true, success: accept ? 'הסכמתם ✓ הבקשה עברה למנהל/ת. הלוח ישתנה רק אחרי שיאשרו.' : 'סירבתם. המשמרת נשארה שלכם.' }
+    )
+    setBusy(false)
+    if (res.ok) close()
+    else setError(res.message)
+  }
+
   function askCancelSwap() {
     if (!mySwap) return
     const requestKind = mySwap.returnAssignmentId ? 'ההחלפה' : 'המסירה'
@@ -92,9 +114,22 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
     })
   }
 
+  // The sentence that says what a live swap on MY shift is, from my side of it.
+  const swapStory = (() => {
+    if (!mySwap) return ''
+    const other = iAmAsking ? nameOf(db, swapResponderId(mySwap), swapResponderName(mySwap)) : nameOf(db, swapInitiatorId(mySwap), swapInitiatorName(mySwap))
+    if (mySwap.status === 'peer_accepted') return `${other} ואתם הסכמתם. עכשיו מחכים לאישור המנהל/ת.`
+    if (iMustAnswer) {
+      if (mySwap.direction === 'take') return `${other} מבקש/ת לקחת ממך את המשמרת הזו, בלי משמרת בתמורה.`
+      return `${other} מבקש/ת להחליף איתך: ${sideLabel(mySwap.terms.from)} תמורת המשמרת הזו.`
+    }
+    if (mySwap.returnAssignmentId) return `ביקשתם מ${other} להחליף איתכם. מחכים לתשובה.`
+    return mySwap.toStaffId ? `ביקשתם למסור את המשמרת ל${other}. מחכים לתשובה.` : 'פתחתם את המשמרת למסירה. מחכים שמישהו יתנדב.'
+  })()
+
   return (
     <>
-      <SheetShell open onClose={close} labelledBy={titleId} suspended={swapOpen || !!confirm} className="sch-sheet">
+      <SheetShell open onClose={close} labelledBy={titleId} suspended={swapOpen || !!takeFor || !!confirm} className="sch-sheet">
         <div className="sch-sheet__head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 id={titleId} className="sch-sheet__title">
@@ -138,21 +173,25 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
                   <div className="sch-row" style={{ flexWrap: 'wrap' }}>
                     <SwapStatusPill status={mySwap.status} />
                   </div>
-                  <p className="sch-sub" style={{ color: 'var(--text)' }}>
-                    {mySwap.status === 'open' &&
-                      (mySwap.returnAssignmentId
-                        ? `ביקשתם מ${nameOf(db, mySwap.toStaffId, mySwap.toStaffName)} להחליף איתכם. מחכים לתשובה.`
-                        : mySwap.toStaffId
-                          ? `ביקשתם למסור את המשמרת ל${nameOf(db, mySwap.toStaffId, mySwap.toStaffName)}. מחכים לתשובה.`
-                          : 'פתחתם את המשמרת למסירה. מחכים שמישהו יתנדב.')}
-                    {mySwap.status === 'peer_accepted' && `${nameOf(db, mySwap.toStaffId, mySwap.toStaffName)} הסכים/ה. עכשיו מחכים לאישור המנהל/ת.`}
-                  </p>
+                  <p className="sch-sub" style={{ color: 'var(--text)' }}>{swapStory}</p>
                   <p className="sch-sub">עד שהמנהל/ת יאשרו — המשמרת נשארת שלכם.</p>
-                  <button type="button" className="sch-btn sch-btn--danger press" disabled={busy} onClick={askCancelSwap}>
-                    ביטול בקשת {mySwap.returnAssignmentId ? 'ההחלפה' : 'המסירה'}
-                  </button>
+                  {iMustAnswer && (
+                    <div className="sch-row">
+                      <button type="button" className="sch-btn sch-btn--ok press" style={{ flex: 2 }} disabled={busy} onClick={() => answerSwap(true)}>
+                        <Check size={18} aria-hidden="true" /> אני מסכים/ה
+                      </button>
+                      <button type="button" className="sch-btn sch-btn--danger press" style={{ flex: 1 }} disabled={busy} onClick={() => answerSwap(false)}>
+                        <X size={18} aria-hidden="true" /> לא יכול/ה
+                      </button>
+                    </div>
+                  )}
+                  {iAmAsking && (
+                    <button type="button" className="sch-btn sch-btn--danger press" disabled={busy} onClick={askCancelSwap}>
+                      ביטול בקשת {mySwap.returnAssignmentId ? 'ההחלפה' : 'המסירה'}
+                    </button>
+                  )}
                 </div>
-              ) : db.settings.features.swaps ? (
+              ) : swapsOn ? (
                 <>
                   <p className="sch-sub">לא יכולים להגיע? בחרו אם למסור את המשמרת בלי לקבל אחרת, או להחליף אותה עם עמית/ה. הלוח משתנה רק אחרי אישור המנהל/ת.</p>
                   <div className="sch-row" style={{ flexWrap: 'wrap' }}>
@@ -184,13 +223,13 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
                   </button>
                 </div>
               ) : !shift.requestsOpen ? (
-                <Notice tone="info">המנהל/ת לא פתחו את המשמרת הזו לבקשות. אפשר לפתוח משמרת שלכם ולבקש החלפה או למסור אותה בלי משמרת חוזרת.</Notice>
+                <Notice tone="info">המנהל/ת לא פתחו את המשמרת הזו להצטרפות חדשה.{colleagues.length > 0 && canAsk ? ' אפשר לבקש ממי שמשובץ/ת בה לקחת אותה או להחליף איתכם — למטה.' : ' אפשר לפתוח משמרת שלכם ולבקש החלפה או למסור אותה בלי משמרת חוזרת.'}</Notice>
               ) : myRow && !myRow.schedulable ? (
                 <Notice tone="warn">אתם מוגדרים כלא זמינים לשיבוץ בסניף הזה, ולכן אי אפשר לבקש משמרת. לשינוי — פנו למנהל/ת.</Notice>
               ) : clash ? (
                 <Notice tone="warn">אתם כבר עובדים בשעות האלה ({formatShiftLabel(clash.date, clash.startTime, clash.endTime)}), ולכן אי אפשר להצטרף.</Notice>
               ) : full ? (
-                <Notice tone="info">המשמרת כבר מאוישת. אם אתם רוצים לעבוד בה — אפשר לפתוח את אחת המשמרות שלכם ולבקש להחליף עם מי שמשובץ/ת בה.</Notice>
+                <Notice tone="info">המשמרת כבר מאוישת. אפשר לבקש ממי שמשובץ/ת בה לקחת אותה, או להחליף איתכם.</Notice>
               ) : unavailable ? (
                 <Notice tone="warn">סימנתם שאתם לא זמינים ביום הזה, ולכן אי אפשר לבקש את המשמרת. אם התחרטתם — עדכנו קודם בלשונית &quot;בקשות לשבוע&quot;.</Notice>
               ) : (
@@ -213,6 +252,35 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
                   {lastRequest.decisionNote ? ` ״${lastRequest.decisionNote}״` : ''}
                 </p>
               )}
+
+              {/* Ask the colleague who already holds it. */}
+              {canAsk && colleagues.length > 0 && (
+                <div className="sch-card" style={{ gap: 10 }}>
+                  <div>
+                    <span className="sch-label" style={{ margin: 0 }}>
+                      רוצים בדיוק את המשמרת הזו?
+                    </span>
+                    <p className="sch-sub">אפשר לבקש ממי שמשובץ/ת בה למסור אותה לכם, או להחליף אותה בעוד משמרת שלכם. הוא/היא מחליטים, ואז המנהל/ת מאשרים.</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {colleagues.map((a) => {
+                      const row = rosterRow(db, a.staffId)
+                      const name = nameOf(db, a.staffId, a.staffName)
+                      const hint = !row?.hasLogin ? 'אין לו/ה כניסה לאפליקציה, ולכן אי אפשר לשלוח בקשה' : spokenFor.has(a.id) ? 'כבר יש בקשה פתוחה על המשמרת הזו' : null
+                      return (
+                        <button key={a.id} type="button" className="sch-pick press" disabled={!!hint} onClick={() => setTakeFor(a.id)}>
+                          <Avatar name={name} emoji={row?.avatarEmoji} />
+                          <span className="sch-pick__main">
+                            <span className="sch-pick__name">בקשה מ{name}</span>
+                            {hint && <span className="sch-pick__hint">{hint}</span>}
+                          </span>
+                          <ChevronLeft size={18} aria-hidden="true" className="dir-flip" />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -221,6 +289,7 @@ export default function ShiftActionSheet({ shiftId, onClose }: { shiftId: string
       </SheetShell>
 
       {mine && swapOpen && <SwapSheet open onClose={() => setSwapOpen(false)} assignmentId={mine.id} shiftLabel={label} initialIntent={swapIntent} onDone={() => { setSwapOpen(false); close() }} />}
+      {takeFor && <TakeSheet open onClose={() => setTakeFor(null)} assignmentId={takeFor} onDone={() => { setTakeFor(null); close() }} />}
 
       <ConfirmSheet
         request={confirm}

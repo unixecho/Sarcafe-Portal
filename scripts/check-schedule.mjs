@@ -66,7 +66,7 @@ function emit(tsPath) {
 
 // Pure modules only. Server-only files (guard, state-query, dispatch-write) and
 // type-only files are deliberately NOT here — and the purity check below proves it.
-const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people']
+const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf']
 for (const n of PURE) emit(join(SHIFTS, `${n}.ts`))
 emit(join(SRC, 'lib', 'staff', 'access.ts'))
 
@@ -83,6 +83,10 @@ const A = await load('lib/shifts/access.mjs')
 const S = await load('lib/shifts/schema.mjs')
 const Z = await load('lib/shifts/serialize.mjs')
 const People = await load('lib/shifts/people.mjs')
+const HE = await load('lib/shifts/hours-edit.mjs')
+const Dr = await load('lib/shifts/draft.mjs')
+const PM = await load('lib/shifts/poster-model.mjs')
+const PDF = await load('lib/shifts/poster-pdf.mjs')
 
 // ---- Output ---------------------------------------------------------------------------------------------
 let pass = 0
@@ -350,6 +354,128 @@ eq('back-to-back (13:00 / 13:00) is NOT a clash', V.clashesFor('dana', wsh[2], w
 eq('a night shift\'s tail clashes with 01:00–03:00 the next morning', V.clashesFor('dana', wsh[3], wk, wsh, wa).map((s) => s.id), ['n1'])
 eq('ignoring the shift being edited', V.clashesFor('dana', wsh[0], wk, wsh, wa, 'c1').map((s) => s.id), ['n1'].filter(() => false))
 eq('requests by shift only groups PENDING ones', [...V.pendingRequestsByShift([{ status: 'pending', shiftId: 's1' }, { status: 'approved', shiftId: 's1' }, { status: 'pending', shiftId: null }]).keys()], ['s1'])
+
+section('taking a colleague\'s shift — who started it, who answers, what can be offered')
+check('requestTake parses an assignment and an optional note', S.parseAction({ type: 'requestTake', assignmentId: U }).type === 'requestTake' && S.parseAction({ type: 'requestTake', assignmentId: U, reason: 'אשמח' }).type === 'requestTake')
+check('requestTake refuses a field it does not know (no staff id can be named)', throwsZod(() => S.parseAction({ type: 'requestTake', assignmentId: U, targetStaffId: U2 })))
+check('…or a note over 300 characters', throwsZod(() => S.parseAction({ type: 'requestTake', assignmentId: U, reason: 'x'.repeat(301) })))
+const giveSwap = { direction: 'give', fromStaffId: 'yossi', toStaffId: 'dana', fromStaffName: 'Yossi', toStaffName: 'Dana' }
+const takeSwap = { direction: 'take', fromStaffId: 'yossi', toStaffId: 'dana', fromStaffName: 'Yossi', toStaffName: 'Dana' }
+eq('a give is started by the giver and answered by the named taker', [V.swapInitiatorId(giveSwap), V.swapResponderId(giveSwap)], ['yossi', 'dana'])
+eq('a take is started by the person who wants the shift and answered by whoever holds it', [V.swapInitiatorId(takeSwap), V.swapResponderId(takeSwap)], ['dana', 'yossi'])
+eq('an open hand-over has nobody who must answer yet', V.swapResponderId({ direction: 'give', fromStaffId: 'yossi', toStaffId: null }), null)
+eq('the recorded names follow the same sides', [V.swapInitiatorName(takeSwap), V.swapResponderName(takeSwap)], ['Dana', 'Yossi'])
+const takeInbox = { swaps: [{ ...takeSwap, id: 't', status: 'open' }, { ...giveSwap, id: 'g', status: 'open', fromStaffId: 'x', toStaffId: 'yossi' }], viewerStaffId: 'yossi' }
+eq('the holder sees a colleague asking for their shift (and a hand-over aimed at them)', V.employeeInbox(takeInbox).proposals.map((s) => s.id), ['t', 'g'])
+eq('the asker does NOT see their own ask as waiting on them', V.employeeInbox({ ...takeInbox, viewerStaffId: 'dana' }).count, 0)
+eq('once the holder agreed it is no longer waiting on the holder', V.employeeInbox({ swaps: [{ ...takeSwap, id: 't', status: 'peer_accepted' }], viewerStaffId: 'yossi' }).count, 0)
+
+const xShifts = [
+  sh('t', '2030-01-07', '09:00', '13:00'), // the shift I want (Yossi\'s, Monday)
+  sh('m1', '2030-01-08', '09:00', '13:00'), // mine, Tuesday
+  sh('m5', '2030-01-10', '09:00', '13:00'), // mine, Thursday
+  sh('y3', '2030-01-10', '10:00', '12:00'), // Yossi works Thursday too
+  sh('past', '2030-01-06', '06:00', '08:00'), // mine, already started
+  { ...sh('other', '2030-01-09', '09:00', '13:00'), branchId: 'B2' }, // mine, another branch
+]
+const xAssign = [as('at', 't', 'yossi'), as('am1', 'm1', 'dana'), as('am5', 'm5', 'dana'), as('ay3', 'y3', 'yossi'), as('apast', 'past', 'dana'), as('aother', 'other', 'dana')]
+const xDb = (extra = {}) => ({ viewerStaffId: 'dana', shifts: xShifts, assignments: xAssign, swaps: [], now: { date: '2030-01-06', time: '12:00' }, ...extra })
+const offered = V.exchangeOffers(xDb(), xShifts[0], 'yossi')
+eq('only my upcoming shifts in the same branch can be offered, in date order', offered.map((o) => o.shift.id), ['m1', 'm5'])
+eq('a shift the colleague cannot work (they are already on another then) is blocked, the rest are free', offered.map((o) => o.blocked), [null, 'theirs_overlaps'])
+const withClash = V.exchangeOffers(xDb({ shifts: [...xShifts, sh('m3', '2030-01-07', '12:00', '16:00')], assignments: [...xAssign, as('am3', 'm3', 'dana')] }), xShifts[0], 'yossi')
+eq('if I already work when the wanted shift is, only the shift that overlaps it can be given back', withClash.map((o) => [o.shift.id, o.blocked]), [['m3', null], ['m1', 'mine_overlaps'], ['m5', 'mine_overlaps']])
+eq('a shift already promised in another swap cannot be offered again', V.exchangeOffers(xDb({ swaps: [{ status: 'open', assignmentId: 'am1', returnAssignmentId: null }] }), xShifts[0], 'yossi').map((o) => o.shift.id), ['m5'])
+eq('with no signed-in viewer there is nothing to offer', V.exchangeOffers(xDb({ viewerStaffId: null }), xShifts[0], 'yossi'), [])
+
+section('opening hours — one row per day, what customers see is what is edited')
+// Maor\'s real settings on 2026-10-11: the usual hours were changed to 07:30–18:30 but Sunday kept an old 07:00–19:00 entry.
+const maorHours = { workingDays: [0, 1, 2, 3, 4, 5], openTime: '07:30', closeTime: '18:30', dayHours: { 0: { open: '07:00', close: '19:00' }, 5: { open: '07:30', close: '13:00' } } }
+const maorWeek = HE.effectiveWeek(maorHours)
+eq('the week is each day\'s real hours, Saturday closed (what the public page shows)', maorWeek.map((h) => (h ? `${h.open}-${h.close}` : null)), ['07:00-19:00', '07:30-18:30', '07:30-18:30', '07:30-18:30', '07:30-18:30', '07:30-13:00', null])
+eq('writing a week back and reading it again changes nothing', HE.effectiveWeek(HE.settingsFromWeek(maorWeek)), maorWeek)
+const stored = HE.settingsFromWeek(maorWeek)
+eq('the usual hours are the pair most open days share, and only different days get an entry', [stored.openTime, stored.closeTime, Object.keys(stored.dayHours)], ['07:30', '18:30', ['0', '5']])
+const sundayFixed = HE.settingsFromWeek(maorWeek.map((h, d) => (d === 0 ? { open: '07:30', close: '18:30' } : h)))
+eq('setting Sunday to the same hours as the others removes the entry that was hiding the new hours', [Object.keys(sundayFixed.dayHours), sundayFixed.workingDays], [['5'], [0, 1, 2, 3, 4, 5]])
+const oneDay = HE.settingsFromWeek([null, null, { open: '09:00', close: '14:00' }, null, null, null, null])
+eq('a single open day becomes the usual hours with no entries', [oneDay.workingDays, oneDay.openTime, oneDay.closeTime, oneDay.dayHours], [[2], '09:00', '14:00', {}])
+eq('a week with every day closed keeps the hours the branch had', HE.settingsFromWeek(maorWeek.map(() => null), { open: '08:00', close: '20:00' }).openTime, '08:00')
+eq('a tie between two sets of hours goes to the earlier day', HE.settingsFromWeek([{ open: '08:00', close: '12:00' }, { open: '09:00', close: '15:00' }, null, null, null, null, null]).openTime, '08:00')
+const sunday = (time) => HE.openStatus(maorWeek, { date: '2026-10-11', time })
+eq('2026-10-11 is a Sunday: open until 19:00 and shown as today\'s hours', [sunday('10:08').today, sunday('10:08').openNow, sunday('18:59').openNow, sunday('19:00').openNow, sunday('06:59').openNow], [{ open: '07:00', close: '19:00' }, true, true, false, false])
+eq('a closed day is closed all day', HE.openStatus(maorWeek, { date: '2026-10-17', time: '12:00' }), { today: null, openNow: false })
+eq('a window that crosses midnight is open late and early', [HE.openStatus([{ open: '20:00', close: '02:00' }, null, null, null, null, null, null], { date: '2026-10-11', time: '23:30' }).openNow, HE.openStatus([{ open: '20:00', close: '02:00' }, null, null, null, null, null, null], { date: '2026-10-11', time: '01:00' }).openNow], [true, true])
+
+section('settings draft — what changed, what is invalid, what survives')
+const dRemote = { settings: { ...baseSettings, presets: [{ id: 'm', name: 'בוקר', startTime: '07:00', endTime: '13:00' }] }, roster: roster.map((r) => ({ ...r })) }
+eq('an empty draft changes nothing', Dr.draftChanges(dRemote, Dr.EMPTY_DRAFT).count, 0)
+eq('a value turned back to what is saved stops being a change', Dr.pruneDraft(dRemote, { settings: { openTime: '07:00' }, members: {} }), { settings: {}, members: {} })
+eq('…and a draft that has nothing to drop is returned as the same object', (() => { const d = { settings: { openTime: '08:00' }, members: {} }; return Dr.pruneDraft(dRemote, d) === d })(), true)
+const hoursDraft = { settings: { openTime: '07:30', closeTime: '18:30', dayHours: { 5: { open: '07:30', close: '13:00' } } }, members: { dana: { maxWeeklyHours: 30 } } }
+const hc = Dr.draftChanges(dRemote, hoursDraft)
+eq('three changed hours fields read as ONE thing, "opening hours", next to the one employee (4 changes, 2 labels)', [hc.count, hc.labels], [4, ['שעות פעילות', 'עובד/ת אחד/ת']])
+eq('two people read as a count', Dr.draftChanges(dRemote, { settings: {}, members: { dana: { schedulable: false }, yossi: { schedulable: false } } }).labels, ['2 עובדים'])
+eq('a person\'s flag equal to the saved one is dropped', Dr.pruneDraft(dRemote, { settings: {}, members: { dana: { schedulable: true } } }), { settings: {}, members: {} })
+eq('a name typed with stray spaces is sent trimmed, and equals the saved one once trimmed', [Dr.draftChanges(dRemote, { settings: { roles: [{ id: 'barista', name: '  בריסטה ', color: '#fff' }] }, members: {} }).count, Dr.draftChanges(dRemote, { settings: { roles: [{ id: 'barista', name: '  קופאי/ת ', color: '#fff' }] }, members: {} }).settings.roles[0].name], [0, 'קופאי/ת'])
+eq('the screens see the draft on top of what is saved', [Dr.withDraft(dRemote.settings, hoursDraft).openTime, Dr.rosterWithDraft(dRemote.roster, hoursDraft).find((r) => r.staffId === 'dana').maxWeeklyHours, Dr.rosterWithDraft(dRemote.roster, hoursDraft).find((r) => r.staffId === 'yossi').maxWeeklyHours], ['07:30', 30, null])
+const valid = Dr.editableOf(dRemote.settings)
+eq('valid settings have no problem', Dr.validateSettings(valid), null)
+check('a role with no name is refused, saying where', /תפקידים/.test(Dr.validateSettings({ ...valid, roles: [{ id: 'x', name: '  ', color: '#fff' }] }) ?? ''))
+check('a template whose start and end are the same is refused, naming it', /בוקר/.test(Dr.validateSettings({ ...valid, presets: [{ id: 'm', name: 'בוקר', startTime: '07:00', endTime: '07:00' }] }) ?? ''))
+check('a name over 40 characters is refused', Dr.validateSettings({ ...valid, stations: [{ id: 's', name: 'x'.repeat(41), emoji: '📍' }] }) !== null)
+check('a safety rule outside its range is refused', Dr.validateSettings({ ...valid, safety: { ...valid.safety, maxWeeklyHours: 5 } }) !== null)
+check('saveDraft parses settings and people together', S.parseAction({ type: 'saveDraft', branchId: U, settings: { openTime: '07:30', dayHours: { 5: { open: '07:30', close: '13:00' } } }, members: [{ staffId: U2, patch: { schedulable: false, maxWeeklyHours: 30 } }] }).type === 'saveDraft')
+check('saveDraft refuses an unknown settings key (nobody can slip a status in)', throwsZod(() => S.parseAction({ type: 'saveDraft', branchId: U, settings: { onboardedAt: 'x' } })))
+check('saveDraft refuses an unknown person field', throwsZod(() => S.parseAction({ type: 'saveDraft', branchId: U, members: [{ staffId: U2, patch: { active: false } }] })))
+check('saveDraft refuses more than 200 people', throwsZod(() => S.parseAction({ type: 'saveDraft', branchId: U, members: Array.from({ length: 201 }, () => ({ staffId: U2, patch: {} })) })))
+
+section('the employee\'s clock — how long until a shift, is it under way')
+const clock = (date, time) => ({ date, time })
+const mon = sh('mon', '2030-01-07', '07:00', '13:00')
+eq('minutes until a shift later today', T.minutesUntilStart(mon, clock('2030-01-07', '05:30')), 90)
+eq('…the evening before it', T.minutesUntilStart(mon, clock('2030-01-06', '20:00')), 11 * 60)
+eq('…and negative once it has started', T.minutesUntilStart(mon, clock('2030-01-07', '08:00')), -60)
+eq('a shift is under way between its start and its end', [T.hasStarted(mon, clock('2030-01-07', '10:00')) && !T.hasEnded(mon, clock('2030-01-07', '10:00')), T.hasEnded(mon, clock('2030-01-07', '13:00')), T.hasEnded(mon, clock('2030-01-07', '12:59'))], [true, true, false])
+const night = sh('night', '2030-01-07', '22:00', '02:00')
+eq('a shift past midnight is still on at 01:00 the next day and over at 02:00', [T.hasEnded(night, clock('2030-01-08', '01:00')), T.hasEnded(night, clock('2030-01-08', '02:00')), T.minutesUntilEnd(night, clock('2030-01-07', '23:00'))], [false, true, 180])
+eq('countdown wording: minutes, an hour, two hours, hours and minutes, days', [0, 25, 60, 120, 135, 5 * 60, 24 * 60, 3 * 24 * 60].map(T.formatCountdown), ['ממש עכשיו', '25 דק׳', 'שעה', 'שעתיים', 'שעתיים ו־15 דק׳', '5 שעות', 'יום', '3 ימים'])
+
+section('the shareable poster — what it says, and the PDF it can become')
+const posterRoster = ['dana', 'yossi', 'tamar'].map((id) => ({ ...roster[0], staffId: id, displayName: id === 'dana' ? 'דנה' : id === 'yossi' ? 'יוסי' : 'תמר', hasLogin: true }))
+const posterShifts = [sh('p1', '2030-01-07', '07:00', '17:00'), sh('p2', '2030-01-07', '17:00', '21:00'), sh('p3', '2030-01-09', '07:00', '17:00')]
+const posterAssign = [as('q1', 'p1', 'dana'), as('q2', 'p1', 'yossi'), as('q3', 'p2', 'tamar'), as('q4', 'p3', 'dana')]
+const posterDb = {
+  settings: { ...baseSettings, workingDays: [0, 1, 2, 3, 4, 5], presets: [{ id: 'm', name: 'בוקר', startTime: '07:00', endTime: '17:00' }], stations: [{ id: 'counter', name: 'דוכן', emoji: '☕' }] },
+  roster: posterRoster, weeks: [{ id: 'W', weekStart: wk, status: 'published', dayNotes: { '2030-01-07': 'סגירה מוקדמת' } }],
+  shifts: posterShifts, assignments: posterAssign, now: { date: '2030-01-06', time: '09:00' }, viewerStaffId: 'dana',
+}
+const mine = PM.buildPosterModel(posterDb, { weekStart: wk, scope: 'mine', branchName: 'מאור' })
+const everyone = PM.buildPosterModel(posterDb, { weekStart: wk, scope: 'everyone', branchName: 'מאור' })
+eq('the week is seven days from Sunday, Saturday closed when the branch does not open', [mine.days.length, mine.days[0].weekday, mine.days[6].closed, mine.days[1].closed], [7, 'יום ראשון', true, false])
+eq('my poster has only my shifts, but still every day', [mine.days.map((d) => d.rows.length).join(''), everyone.days.map((d) => d.rows.length).join('')], ['0101000', '0201000'])
+eq('on my poster I am "אתם" and my colleague on the same shift is named', mine.days[1].rows[0].people.map((p) => [p.name, p.mine]), [['אתם', true], ['יוסי', false]])
+eq('the summary counts my shifts and hours / the team\'s shifts and people', [mine.summary, everyone.summary], ['2 משמרות · 20 ש׳', '3 משמרות · 3 עובדים'])
+eq('titles, range, published state and the day note travel into the model', [mine.title, everyone.title, mine.rangeLabel, mine.published, mine.days[1].note], ['המשמרות שלי', 'לוח משמרות', everyone.rangeLabel, true, 'סגירה מוקדמת'])
+eq('today and tomorrow are marked from the branch\'s own clock', [mine.days[0].today, mine.days[0].relative, mine.days[1].relative], [true, 'היום', 'מחר'])
+eq('a shift reads as its time, template and place', [mine.days[1].rows[0].time, mine.days[1].rows[0].label, everyone.days[1].rows[0].mine, everyone.days[1].rows[1].mine], ['07:00–17:00', 'בוקר', true, false])
+eq('a draft week says so', PM.buildPosterModel({ ...posterDb, weeks: [{ ...posterDb.weeks[0], status: 'draft' }] }, { weekStart: wk, scope: 'everyone', branchName: 'מאור' }).published, false)
+eq('a week with no shifts says there is nothing yet', PM.buildPosterModel({ ...posterDb, shifts: [], assignments: [] }, { weekStart: wk, scope: 'everyone', branchName: 'מאור' }).summary, 'עוד אין משמרות בשבוע הזה')
+eq('a person with no shifts that week is told so', PM.buildPosterModel({ ...posterDb, viewerStaffId: 'tamar', assignments: [] }, { weekStart: wk, scope: 'mine', branchName: 'מאור' }).summary, 'אין לכם משמרות השבוע')
+
+const fakeJpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 0xff, 0xd9])
+const pdf = PDF.pdfFromJpeg(fakeJpeg, 1080, 2160, 'לוח משמרות')
+const pdfText = Buffer.from(pdf).toString('latin1')
+check('the PDF starts and ends like a PDF', pdfText.startsWith('%PDF-1.4') && pdfText.endsWith('%%EOF\n'))
+check('the cross-reference table points at every object', await (async () => {
+  const start = Number(/startxref\n(\d+)\n/.exec(pdfText)[1])
+  if (pdfText.slice(start, start + 4) !== 'xref') return false
+  const entries = [...pdfText.slice(start).matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]))
+  return entries.length === 6 && entries.every((offset, i) => pdfText.slice(offset).startsWith(`${i + 1} 0 obj`))
+})())
+check('the JPEG is embedded untouched, with its true length', Buffer.from(pdf).includes(Buffer.from(fakeJpeg)) && /\/Length 11 >>/.test(pdfText) && /\/Filter \/DCTDecode/.test(pdfText))
+eq('the page is A4-wide and as tall as the picture needs', /\/MediaBox \[0 0 (\d+) (\d+)\]/.exec(pdfText).slice(1).map(Number), [595, 1190])
+check('the title is stored as UTF-16 so Hebrew survives', /\/Title <FEFF05DC05D505D7/i.test(pdfText))
 
 // ============================================================================================================
 section('purity — these modules know nothing about React, Next or the database')

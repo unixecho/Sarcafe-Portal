@@ -48,7 +48,7 @@ export default async function SchedulePrintPage({
 
   return (
     <ShiftsProvider branchSlug={branch.slug} initialWeekStart={weekStart}>
-      <PrintView />
+      <PrintView branchName={branch.name.he} />
     </ShiftsProvider>
   )
 }

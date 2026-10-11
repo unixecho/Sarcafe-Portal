@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Copy, Eraser, Inbox, MoreHorizontal, Printer, Send, Undo2, WandSparkles, X } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Copy, Eraser, Inbox, MoreHorizontal, Send, Share, Undo2, WandSparkles, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
@@ -12,6 +12,8 @@ import WarningsPanel from '@/components/shifts/WarningsPanel'
 import RequestsPanel from '@/components/shifts/RequestsPanel'
 import PlanningPanel from '@/components/shifts/PlanningPanel'
 import ManagerPanel from '@/components/shifts/ManagerPanel'
+import { SettingsDraftProvider, SettingsSaveBar, useSettingsDirty } from '@/components/shifts/SettingsDraft'
+import ScheduleShareSheet from '@/components/shifts/SchedulePoster'
 import ShiftsAuditTrail from '@/components/shifts/ShiftsAuditTrail'
 import NotificationsSheet, { NotificationsButton } from '@/components/shifts/NotificationsSheet'
 import { EmptyState, InlineError } from '@/components/shifts/ui'
@@ -26,13 +28,28 @@ type Tab = 'week' | 'requests' | 'problems' | 'settings' | 'log'
 
 type SheetState = { shiftId: string | null; date: string; weekId: string }
 
-export default function ScheduleWorkspace() {
+// The settings draft wraps the whole workspace, not just the settings tab: switching tabs must not lose
+// what has been edited, and the "unsaved changes" bar belongs on every tab.
+export default function ScheduleWorkspace({ branchName }: { branchName: string }) {
+  const { db } = useShifts()
+  if (!db) return <ScheduleWorkspaceBody branchName={branchName} />
+  return (
+    <SettingsDraftProvider>
+      <ScheduleWorkspaceBody branchName={branchName} />
+      <SettingsSaveBar />
+    </SettingsDraftProvider>
+  )
+}
+
+function ScheduleWorkspaceBody({ branchName }: { branchName: string }) {
   const { branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, refresh } = useShifts()
+  const settingsDirty = useSettingsDirty()
   const [tab, setTab] = useState<Tab>('week')
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const lastSheet = useRef<SheetState | null>(null)
   if (sheet) lastSheet.current = sheet
   const [moreOpen, setMoreOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [notesOpen, setNotesOpen] = useState(false)
   const [confirm, setConfirm] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
   const [prompt, setPrompt] = useState<(PromptRequest & { date: string }) | null>(null)
@@ -217,6 +234,7 @@ export default function ScheduleWorkspace() {
           {tabs.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className="sch-tab press" onClick={() => setTab(t.id)}>
               {t.label}
+              {t.id === 'settings' && settingsDirty && <span className="sch-dot" role="img" aria-label="יש שינויים שלא נשמרו" />}
               {t.badge && (
                 <span className={`sch-badge${t.badge.tone ? ` sch-badge--${t.badge.tone}` : ''}`} aria-label={`${t.badge.n} ממתינים`}>
                   {t.badge.n}
@@ -335,7 +353,6 @@ export default function ScheduleWorkspace() {
             db={db}
             shifts={weekShifts}
             assignments={weekAssignments}
-            mode="manager"
             warnings={weekWarnings}
             dayNotes={currentWeek?.dayNotes}
             onShiftClick={(s) => openShift(s.id, s.date)}
@@ -388,7 +405,7 @@ export default function ScheduleWorkspace() {
       />
 
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)}>
-        <MoreRow icon={<Printer size={20} aria-hidden="true" />} title="הדפסת השבוע" hint="נפתח בחלון חדש — אפשר להדפיס או לשמור כ-PDF" href={`/owner/schedule/print?branch=${branchSlug}&week=${weekStart}`} />
+        <MoreRow icon={<Share size={20} aria-hidden="true" />} title="שיתוף והדפסת השבוע" hint="תמונה או PDF בעיצוב Sarcafe — לשליחה בוואטסאפ, לשמירה או להדפסה" onClick={() => { setMoreOpen(false); setShareOpen(true) }} />
         <MoreRow
           icon={<Copy size={20} aria-hidden="true" />}
           title="העתקה מהשבוע הקודם"
@@ -401,6 +418,7 @@ export default function ScheduleWorkspace() {
       </MoreSheet>
 
       <NotificationsSheet open={notesOpen} onClose={() => setNotesOpen(false)} onFollow={follow} />
+      <ScheduleShareSheet open={shareOpen} onClose={() => setShareOpen(false)} weekStart={weekStart} branchName={branchName} scopes={['everyone']} />
 
       <PromptSheet
         request={prompt}
