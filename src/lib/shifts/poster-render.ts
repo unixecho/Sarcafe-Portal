@@ -141,8 +141,8 @@ function layout(ctx: Ctx, model: PosterModel, assets: PosterAssets, font: string
     const inner = badge * 0.94
     ctx.drawImage(assets.logo, right - badge / 2 - inner / 2, 44 + badge / 2 - 6 - inner / 2, inner, inner)
   }
-  text(`Sarcafe · ${model.branchName}`, right - badge - 12, 66, { size: 13, weight: 700, color: NEON_SOFT })
-  text(model.title, right, 128, { size: 34, weight: 800, color: INK })
+  text('Sarcafe', right - badge - 12, 66, { size: 13, weight: 700, color: NEON_SOFT })
+  text(`${model.title} · ${model.branchName}`, right, 128, { size: 32, weight: 800, color: INK, maxWidth: POSTER_WIDTH - PAD * 2 })
   const rangeW = text(model.rangeLabel, right, 156, { size: 16, weight: 600, color: DIM, dir: 'ltr' })
   if (model.published) pill('פורסם', right - rangeW - 12, 141, SAGE, 'rgba(147,163,111,0.22)')
   else pill('טיוטה — טרם פורסם', right - rangeW - 12, 141, WARN, 'rgba(255,200,87,0.18)')

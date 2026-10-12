@@ -9,8 +9,9 @@
 //   * a TEMPLATE (ShiftPreset) is a suggestion — "morning 07:00–13:00";
 //   * a SHIFT owns its own explicit start/end. Creating a shift copies a
 //     template's times into it (and remembers which template, as a label);
-//   * editing a template later therefore never moves a shift already scheduled —
-//     only shifts created afterwards start from the new times.
+//   * a shift that still names a template follows it: preset-sync.ts moves it when
+//     the template's hours are edited. A shift with hand-typed times has no template
+//     (the sheet clears presetId) and keeps them.
 
 import { hoursForDay } from './config'
 import type { HM, ISODate, ShiftPreset, ShiftSettings } from './types'

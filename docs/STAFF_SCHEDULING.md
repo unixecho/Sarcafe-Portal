@@ -159,7 +159,7 @@ Everything below was confirmed against the **live database**, not guessed from t
 ### Shift times: templates vs. scheduled shifts
 - A **template** (Settings → "תבניות משמרת") is a suggestion. A **shift owns its own explicit start/end.**
 - Creating a shift copies a template's times into it. The sheet suggests the first template **not already used that day** (add a second shift to a day that has "בוקר" and it offers "ערב"); with no templates it uses that day's opening hours (incl. the Friday/Saturday overrides).
-- Editing a template later **never moves existing shifts** — only shifts created afterwards start from the new times. `preset_id` is just a label.
+- Editing a template later **moves the shifts that still name it** (2026-10-12; this used to be the opposite, which left the board and the shared PDF on hours the settings no longer said). `lib/shifts/preset-sync.ts` runs when settings are saved and whenever the schedule is read: live shifts dated today or later whose `preset_id` is a template with different times take the template's times, the published copy employees read (`published_snapshot`) moves with them, and the people on those shifts get a notification. A shift whose times were typed by hand has no `preset_id` (the sheet clears it) and is never touched; past shifts are never touched.
 - One label function writes a shift everywhere (`formatShiftLabel`, mirrored by SQL `sched_fmt`): board, sheet, employee view, requests, swaps, notifications, audit. Time ranges are bidi-isolated so they read `07:00–13:00` inside Hebrew text.
 
 ### The manager's board (`/owner/schedule`)

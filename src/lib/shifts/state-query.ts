@@ -24,6 +24,7 @@ import {
   serializeWeek,
 } from './serialize'
 import { DEFAULT_PRESETS, DEFAULT_ROLES, DEFAULT_SAFETY, DEFAULT_STATIONS } from './config'
+import { syncShiftsToPresets } from './preset-sync'
 import type { Assignment, PlanningShift, SaturdayBalance, Shift, ShiftsDB } from './types'
 
 const AUDIT_LIMIT = 60
@@ -59,7 +60,15 @@ export async function loadShiftsState(
   // Cross-branch access is a published board, not membership in that branch.
   if (!branchScoped) settings.features = { ...settings.features, availability: false, swaps: false }
 
-  const [roster, tz] = await Promise.all([loadRoster(service, branchId, isManager, viewer.id, branchScoped), branchTimezone(service, branchId)])
+  const tz = await branchTimezone(service, branchId)
+  // The shift hours in settings are the truth: shifts made from a template follow it, before anything is read.
+  // A failure here must never take the schedule down — it simply retries on the next read.
+  try {
+    await syncShiftsToPresets(service, { branchId, presets: settings.presets, timezone: tz, actorId: isManager ? viewer.id : null })
+  } catch (error) {
+    console.error('shifts: syncing shift hours to the templates failed', error instanceof Error ? error.message : error)
+  }
+  const roster = await loadRoster(service, branchId, isManager, viewer.id, branchScoped)
 
   const [weeks, shifts, assignments] = isManager
     ? await loadLive(service, branchId, windowStarts)

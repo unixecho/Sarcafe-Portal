@@ -1627,6 +1627,41 @@ details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
 .ew-share__actions .sch-btn {
   flex: 1 1 140px;
 }
+/* Inside the share sheet the picture is the part that scrolls; the buttons stay pinned at the
+   bottom, always whole and above the phone's home bar — they used to sit after a tall picture
+   and were cut off by the browser's bottom toolbar. */
+.sheet-panel .ew-share {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sheet-panel .ew-share__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overscroll-behavior: contain;
+}
+.sheet-panel .ew-share__actions {
+  flex: none;
+}
+.sheet-panel .ew-share__actions .sch-btn--primary {
+  flex-basis: 100%;
+}
+.sheet-panel .ew-share .sch-sub {
+  flex: none;
+  margin: 0;
+}
+/* The branch and scope choosers: compact pills at the start (right, in Hebrew) of the sheet, not full width. */
+.ew-share__pickers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  flex: none;
+  margin-bottom: 10px;
+}
+.ew-share__pickers .sch-segment button {
+  min-height: 38px;
+}
 .ew-printpage {
   max-width: 640px;
   margin: 0 auto;

@@ -22,6 +22,7 @@ import { addDays, weekStartOf } from './time'
 import type { ScheduleAction } from './actions'
 import type { SettingsPatch } from './schema'
 import { DEFAULT_PRESETS } from './config'
+import { syncShiftsToPresets } from './preset-sync'
 
 type Service = ReturnType<typeof createServiceRoleClient>
 type Row = Record<string, unknown>
@@ -244,6 +245,18 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       }
       const { error } = await service.from('shift_settings').update(update).eq('branch_id', action.branchId)
       if (error) throw new ApiError(500, 'internal_error', INTERNAL)
+
+      // Changed shift templates move the shifts already scheduled on them (and the published copy), so the
+      // board, the employees' schedule and the shared PDF all show the hours the settings say.
+      if ('presets' in patch) {
+        const { data: branch } = await service.from('branches').select('timezone').eq('id', action.branchId).maybeSingle()
+        await syncShiftsToPresets(service, {
+          branchId: action.branchId,
+          presets: Array.isArray(patch.presets) ? patch.presets : [],
+          timezone: (branch?.timezone as string | undefined) || 'Asia/Jerusalem',
+          actorId: actor.id,
+        }).catch((error) => console.error('shifts: syncing shift hours after a settings save failed', error instanceof Error ? error.message : error))
+      }
 
       const labels = Array.from(new Set(Object.keys(patch).map((k) => SETTINGS_LABELS[k]).filter(Boolean)))
       await service.rpc('sched_log', {

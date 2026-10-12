@@ -37,11 +37,18 @@ export default async function StaffIndexPage() {
     : { data: [] }
   const publishedIds = new Set((publishedWeeks ?? []).map((week) => week.id as string))
   const nextShift = (assignedShifts ?? []).find((shift) => publishedIds.has(shift.week_id as string) && (shift.shift_date > today || shift.start_time > currentTime)) ?? null
-  const { data: shiftSettings } = nextShift
-    ? await service.from('shift_settings').select('stations').eq('branch_id', nextShift.branch_id).maybeSingle()
-    : { data: null }
+  const [{ data: shiftSettings }, { data: shiftBranch }] = nextShift
+    ? await Promise.all([
+        service.from('shift_settings').select('stations').eq('branch_id', nextShift.branch_id).maybeSingle(),
+        service.from('branches').select('name, kind').eq('id', nextShift.branch_id).maybeSingle(),
+      ])
+    : [{ data: null }, { data: null }]
   const stations = Array.isArray(shiftSettings?.stations) ? shiftSettings.stations as { id: string; name: string }[] : []
   const station = nextShift?.station_id ? stations.find((item) => item.id === nextShift.station_id) : null
+  // Some people work both branches, so the card says WHICH branch the shift is at. A festival (event) branch is
+  // the exception: there the place that matters is the station, as before.
+  const branchName = (shiftBranch?.name as { he?: string } | null)?.he ?? null
+  const place = shiftBranch?.kind === 'event' || !branchName ? station?.name || 'העמדה טרם נקבעה' : station?.name ? `${branchName} · ${station.name}` : branchName
   const categories: DashboardCategory[] = [
     { title: 'המשמרת שלי', entries: [
       { href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה — הכל במקום אחד' },
@@ -69,7 +76,7 @@ export default async function StaffIndexPage() {
         <span className="app-shift-focus__copy">
           <small>המשמרת הבאה שלך</small>
           {nextShift ? (
-            <><strong><span dir="ltr">{nextShift.shift_date} · {nextShift.start_time}–{nextShift.end_time}</span></strong><span className="app-shift-focus__zone"><MapPin size={15} aria-hidden="true" />{station?.name || 'העמדה טרם נקבעה'}</span></>
+            <><strong><span dir="ltr">{nextShift.shift_date} · {nextShift.start_time}–{nextShift.end_time}</span></strong><span className="app-shift-focus__zone"><MapPin size={15} aria-hidden="true" />{place}</span></>
           ) : (
             <><strong>{fullLogin ? 'אין משמרת קרובה בלוח שפורסם' : 'כניסה מלאה מציגה את הסידור שלך'}</strong><span>פתיחת לוח המשמרות והבקשות</span></>
           )}

@@ -13,7 +13,7 @@ import RequestsPanel from '@/components/shifts/RequestsPanel'
 import PlanningPanel from '@/components/shifts/PlanningPanel'
 import ManagerPanel from '@/components/shifts/ManagerPanel'
 import { SettingsDraftProvider, SettingsSaveBar, useSettingsDirty } from '@/components/shifts/SettingsDraft'
-import ScheduleShareSheet from '@/components/shifts/SchedulePoster'
+import ScheduleShareSheet, { type ShareBranch } from '@/components/shifts/SchedulePoster'
 import ShiftsAuditTrail from '@/components/shifts/ShiftsAuditTrail'
 import NotificationsSheet, { NotificationsButton } from '@/components/shifts/NotificationsSheet'
 import { EmptyState, InlineError } from '@/components/shifts/ui'
@@ -30,18 +30,18 @@ type SheetState = { shiftId: string | null; date: string; weekId: string }
 
 // The settings draft wraps the whole workspace, not just the settings tab: switching tabs must not lose
 // what has been edited, and the "unsaved changes" bar belongs on every tab.
-export default function ScheduleWorkspace({ branchName }: { branchName: string }) {
+export default function ScheduleWorkspace({ branchName, shareBranches }: { branchName: string; shareBranches?: ShareBranch[] }) {
   const { db } = useShifts()
-  if (!db) return <ScheduleWorkspaceBody branchName={branchName} />
+  if (!db) return <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} />
   return (
     <SettingsDraftProvider>
-      <ScheduleWorkspaceBody branchName={branchName} />
+      <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} />
       <SettingsSaveBar />
     </SettingsDraftProvider>
   )
 }
 
-function ScheduleWorkspaceBody({ branchName }: { branchName: string }) {
+function ScheduleWorkspaceBody({ branchName, shareBranches }: { branchName: string; shareBranches?: ShareBranch[] }) {
   const { branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, refresh } = useShifts()
   const settingsDirty = useSettingsDirty()
   const [tab, setTab] = useState<Tab>('week')
@@ -298,6 +298,9 @@ function ScheduleWorkspaceBody({ branchName }: { branchName: string }) {
                   <Send size={18} aria-hidden="true" /> {published ? 'פרסום העדכון לעובדים' : 'פרסום לעובדים'}
                 </button>
               )}
+              <button type="button" className="sch-btn press" onClick={() => setShareOpen(true)} aria-label="שיתוף הלוח של הסניפים: תמונה, PDF וקישור">
+                <Share size={18} aria-hidden="true" /> שיתוף
+              </button>
               <button type="button" className="sch-btn press" onClick={() => setMoreOpen(true)} aria-label="עוד פעולות: הדפסה, העתקה, ניקוי">
                 <MoreHorizontal size={20} aria-hidden="true" /> עוד
               </button>
@@ -418,7 +421,7 @@ function ScheduleWorkspaceBody({ branchName }: { branchName: string }) {
       </MoreSheet>
 
       <NotificationsSheet open={notesOpen} onClose={() => setNotesOpen(false)} onFollow={follow} />
-      <ScheduleShareSheet open={shareOpen} onClose={() => setShareOpen(false)} weekStart={weekStart} branchName={branchName} scopes={['everyone']} />
+      <ScheduleShareSheet open={shareOpen} onClose={() => setShareOpen(false)} weekStart={weekStart} branchName={branchName} scopes={['everyone']} branches={shareBranches} />
 
       <PromptSheet
         request={prompt}

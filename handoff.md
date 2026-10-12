@@ -1,6 +1,26 @@
 # Sarcafe — cross-agent handoff
 
-## Claude addendum, 2026-10-11 (latest): employee number + six-digit code sign-in broken by a duplicate SQL function — fix pushed, migration NOT yet applied to production
+## Claude addendum, 2026-10-12 (latest): schedule sharing for both branches, shift hours follow settings, next-shift card names the branch — committed locally, NOT pushed, nothing applied to production
+
+**Asked by the owner.** (1) Share both branches' schedule from the scheduler dashboard; branch name in every shared output; share buttons were cut off; link to the staff schedule at the bottom of the shared text. (2) Published schedule and PDF showed hours different from the shift hours in branch settings. (3) The staff home "next shift" card said "station not set" instead of which branch.
+
+**Found (read-only SQL, 2026-10-12).** Maor's templates are morning 07:30-13:00 and evening 16:30-18:30, but its scheduled shifts (and the published snapshot) still held 07:00-13:00 and 13:00-19:00: shifts copy a template's times at creation and editing the template never moved them. Givat Haviva matched. Maor's three shifts with no template (07:00-19:00, 07:00-16:00, 16:00-19:00 on 14/15 Oct) are hand-typed and stay as they are.
+
+**Changed.**
+- `src/lib/shifts/preset-sync.ts` (new): live shifts dated today or later that still name a template move to its hours; the published copy (`published_snapshot`) moves with them; assigned people get a `schedule.hours_synced` notification; one audit row. Called from `updateSettings` (when `presets` is in the patch, `dispatch-write.ts`) and at the top of `loadShiftsState` (`state-query.ts`), so the FIRST read after deploy heals the leftover drift (Maor) and notifies the people on it. Failures are logged and never break the read. No migration; no new SQL function.
+- `SchedulePoster.tsx`: the share sheet has a branch selector (right-aligned pills; managers get every branch they manage, the other branch is read through `/api/shifts/state`), the picture scrolls while the buttons stay pinned at the bottom of the sheet (they were cut off by the phone's bottom bar), a new "share link" button, and the message (title, branch, dates, link on its own last line) travels with PDF, picture and link. The poster title now reads "<title> · <branch>"; file names and the PDF title carry the branch slug/name.
+- `ScheduleWorkspace.tsx`: a visible "שיתוף" button in the week card (it used to live only under "עוד").
+- `src/lib/shifts/share-text.ts` (new): link and message. Link = `https://sarcafe-portal.vercel.app/staff/schedule/<branch slug>`. New route `src/app/staff/schedule/[branch]/page.tsx` shares `StaffSchedulePageBody.tsx` with `/staff/schedule`; the branch is a path segment because `/login?next=` only allows plain path characters, so it survives sign-in.
+- `src/app/staff/page.tsx`: the next-shift card shows "<branch> · <station>" (or just the branch when the station is unset); an event branch keeps the station text.
+- Docs: `docs/STAFF_SCHEDULING.md` "Shift times: templates vs. scheduled shifts" rewritten (it said the opposite).
+
+**Verified.** `tsc --noEmit` clean. Scratch-copy build plus a throwaway two-branch fixture in the browser pane at phone width: sheet buttons whole and pinned, branch switch loads the other branch with its own poster, a stubbed `navigator.share` received the title, message and file, `/staff/schedule/givat-haviva` while signed out redirects to `/login?next=%2Fstaff%2Fschedule%2Fgivat-haviva`. NOT verified: the sync against the real database (it runs on first read after deploy), the real iOS share sheet (some apps drop the text when a file is attached, hence the separate link button), Google sign-in click-through.
+
+**Decisions to know.** "Branch selector center right" was read as the selector inside the share sheet, aligned to the right (start). The sync can leave a person double-booked if a template moved into another of their shifts; the board's warnings show it, it is not blocked. `integrate/pos-and-scheduling` had one uncommitted line (`.env*` in `.gitignore`), now in `git stash@{0}` ("epitaxy: pre-switch"); local `main` was 41 commits behind `origin/main` and was fast-forwarded.
+
+**Next.** Owner approves a push to `main`; after deploy open the scheduler as the owner once (that read runs the sync), check Maor's week and the PDF, and check what employees were notified.
+
+## Claude addendum, 2026-10-11: employee number + six-digit code sign-in broken by a duplicate SQL function — fix pushed, migration NOT yet applied to production
 
 **Report.** The owner could not sign in with the six-digit code on several accounts.
 

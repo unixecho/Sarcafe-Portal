@@ -13,8 +13,8 @@ export type ShiftRole = { id: string; name: string; color: string }
 export type Station = { id: string; name: string; emoji: string }
 export type RoleRequirement = { roleId: string; min: number; max?: number }
 /** A shift TEMPLATE: the times offered by default when a shift is created.
- *  It is never consulted again once a shift exists — a shift owns its own
- *  explicit start/end, so editing a template can never move scheduled shifts. */
+ *  A shift copies its times from it and remembers which one;
+ *  a shift that still names its template follows it (preset-sync.ts). */
 export type ShiftPreset = { id: string; name: string; startTime: HM; endTime: HM; roleId?: string; stationId?: string }
 
 export type SafetyRules = {
