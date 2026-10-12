@@ -68,18 +68,17 @@ function subscriptionMatchesKey(subscription: PushSubscription, desiredKey: Uint
   return existingBytes.every((byte, i) => byte === desiredKey[i])
 }
 
-/** Subscribes this browser to push and reports it to the server against
- *  `token`. Returns whether it fully succeeded — every failure mode
- *  (permission denied elsewhere in the flow, subscribe() throwing, the
- *  server rejecting it) is the caller's responsibility to surface, this
- *  just does the mechanics and never throws. */
-export async function subscribeToOrderPush(token: string, pageUrl: string): Promise<boolean> {
+/** The browser-level push subscription for this origin, created if needed. A browser has ONE per
+ *  service worker, so the customer order page and the staff app on the same phone share it: each
+ *  just tells the server which order / which person it belongs to. Returns null when push cannot
+ *  be set up (no key configured, worker failed, permission not granted). Never throws. */
+async function getBrowserSubscription(): Promise<PushSubscription | null> {
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-  if (!publicKey) return false
+  if (!publicKey) return null
 
   try {
     const registration = await registerOrderServiceWorker()
-    if (!registration) return false
+    if (!registration) return null
 
     const desiredKey = urlBase64ToUint8Array(publicKey)
     let subscription = await registration.pushManager.getSubscription()
@@ -103,6 +102,22 @@ export async function subscribeToOrderPush(token: string, pageUrl: string): Prom
         applicationServerKey: desiredKey as BufferSource,
       })
     }
+    return subscription
+  } catch (err) {
+    console.error('Push subscribe failed:', err)
+    return null
+  }
+}
+
+/** Subscribes this browser to push and reports it to the server against
+ *  `token`. Returns whether it fully succeeded — every failure mode
+ *  (permission denied elsewhere in the flow, subscribe() throwing, the
+ *  server rejecting it) is the caller's responsibility to surface, this
+ *  just does the mechanics and never throws. */
+export async function subscribeToOrderPush(token: string, pageUrl: string): Promise<boolean> {
+  try {
+    const subscription = await getBrowserSubscription()
+    if (!subscription) return false
 
     const res = await fetch('/api/order/subscribe', {
       method: 'POST',
@@ -123,8 +138,9 @@ export async function unsubscribeFromOrderPush(token: string): Promise<void> {
     const subscription = await registration?.pushManager.getSubscription()
     if (!subscription) return
 
+    // Only the SERVER row is removed. The browser subscription is shared with the staff app on this
+    // phone (see getBrowserSubscription), and once no row points at it nothing is ever sent to it.
     const endpoint = subscription.endpoint
-    await subscription.unsubscribe()
     await fetch('/api/order/unsubscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,4 +149,59 @@ export async function unsubscribeFromOrderPush(token: string): Promise<void> {
   } catch (err) {
     console.error('Push unsubscribe failed:', err)
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Staff app: the same mechanics, reported against the signed-in PERSON instead of an order.
+// ---------------------------------------------------------------------------------------------
+
+async function staffPushRequest(payload: Record<string, unknown>): Promise<Response | null> {
+  try {
+    return await fetch('/api/staff/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  } catch {
+    return null
+  }
+}
+
+/** Subscribes this phone to the signed-in person's alerts. Call only after permission is granted. */
+export async function subscribeStaffPush(): Promise<boolean> {
+  const subscription = await getBrowserSubscription()
+  if (!subscription) return false
+  const res = await staffPushRequest({ action: 'subscribe', subscription: subscription.toJSON() })
+  return res?.ok === true
+}
+
+/** True only when this browser holds a subscription AND the server has it filed under the signed-in person. */
+export async function isStaffPushActive(): Promise<boolean> {
+  try {
+    if (!isPushSupported() || Notification.permission !== 'granted') return false
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js')
+    const subscription = await registration?.pushManager.getSubscription()
+    if (!subscription) return false
+    const res = await staffPushRequest({ action: 'status', endpoint: subscription.endpoint })
+    if (!res?.ok) return false
+    return ((await res.json()) as { subscribed?: boolean }).subscribed === true
+  } catch {
+    return false
+  }
+}
+
+/** Stops alerts to this phone for the signed-in person. */
+export async function unsubscribeStaffPush(): Promise<void> {
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js')
+    const subscription = await registration?.pushManager.getSubscription()
+    if (!subscription) return
+    await staffPushRequest({ action: 'unsubscribe', endpoint: subscription.endpoint })
+  } catch (err) {
+    console.error('Staff push unsubscribe failed:', err)
+  }
+}
+
+export type StaffPushTest = { configured: boolean; subscriptions: number; sent: number; error: { statusCode: number | null; detail: string } | null }
+
+export async function sendStaffPushTest(): Promise<StaffPushTest | null> {
+  const res = await staffPushRequest({ action: 'test' })
+  if (!res?.ok) return null
+  return (await res.json()) as StaffPushTest
 }

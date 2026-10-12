@@ -18,6 +18,8 @@ import 'server-only'
 //   * the people on the changed shifts are told.
 // Shifts with no template (custom hours typed by hand) are never touched.
 
+import { after } from 'next/server'
+import { flushStaffPush } from '@/lib/push/staff'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { formatDateLabel, wallClockNow } from './time'
 import type { ShiftPreset } from './types'
@@ -114,6 +116,11 @@ export async function syncShiftsToPresets(
       p_link: { tab: 'schedule', weekStart: weekOfStaff.get(staffId) },
     })
     notified++
+  }
+
+  if (notified > 0) {
+    // The people just told get the push too. after() needs a request scope; outside one the scheduled run carries it.
+    try { after(() => flushStaffPush()) } catch { /* no request scope */ }
   }
 
   if (moved > 0 || changedShifts > 0) {

@@ -1,7 +1,8 @@
-// Minimal Web Push service worker — order tracking only, no offline
-// caching/PWA shell (that's a separate, much bigger scope this app hasn't
-// asked for). Two jobs: show the notification a `push` event carries, and
-// focus/open the order page on click.
+// Minimal Web Push service worker — no offline caching/PWA shell (that's a
+// separate, much bigger scope this app hasn't asked for). Two jobs: show the
+// notification a `push` event carries, and focus/open its page on click.
+// It serves two audiences from one registration: customers tracking an order
+// (payload carries `orderId`) and staff (payload carries a `staff-…` tag).
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -19,8 +20,9 @@ self.addEventListener('push', (event) => {
     data = {}
   }
 
-  const title = data.title || 'עדכון הזמנה'
-  const url = data.url || '/order'
+  const title = data.title || (data.orderId ? 'עדכון הזמנה' : 'Sarcafe')
+  const url = data.url || (data.orderId ? '/order' : '/staff')
+  const isStaff = typeof data.tag === 'string' && data.tag.startsWith('staff-')
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -35,21 +37,29 @@ self.addEventListener('push', (event) => {
       dir: 'rtl',
       lang: 'he',
       // A repeat push for the SAME order replaces its own earlier
-      // notification instead of stacking a second one in the tray.
-      tag: data.orderId ? `order-${data.orderId}` : undefined,
-      data: { url },
+      // notification instead of stacking a second one in the tray. Staff
+      // alerts bring their own tag (one per inbox row, or a per-person digest).
+      tag: data.orderId ? `order-${data.orderId}` : isStaff ? data.tag : undefined,
+      data: { url, staff: isStaff },
     })
   )
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/order'
+  const notified = event.notification.data || {}
+  const url = notified.url || '/order'
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url.includes(url) && 'focus' in client) return client.focus()
+      }
+      // A staff member with the app already open is taken to the page in that window,
+      // not handed a second one. (A customer's order page is never navigated away.)
+      if (notified.staff) {
+        const open = clientList.find((client) => 'navigate' in client && 'focus' in client)
+        if (open) return open.navigate(url).then((moved) => (moved || open).focus()).catch(() => (self.clients.openWindow ? self.clients.openWindow(url) : undefined))
       }
       if (self.clients.openWindow) return self.clients.openWindow(url)
       return undefined

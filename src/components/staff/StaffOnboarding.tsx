@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, CalendarDays, Check, ClipboardCheck, Home, KeyRound, Smartphone } from 'lucide-react'
+import { ArrowRight, CalendarDays, Check, ClipboardCheck, Home, KeyRound } from 'lucide-react'
 import LogoMark from '@/components/LogoMark'
 import GoogleLinkButton from '@/components/staff/GoogleLinkButton'
+import StaffPushCard from '@/components/staff/StaffPushCard'
 import { InlineError } from '@/components/shifts/ui'
 import { messageOf } from '@/components/staff/types'
 import '@/components/shifts/schedule.css'
@@ -81,8 +82,8 @@ export default function StaffOnboarding() {
           <div><CalendarDays size={22} aria-hidden="true" /><span><strong>משמרות והזמנות מהירות</strong><small>{person.hasGoogle ? 'חשבון Google מקושר' : 'כניסה אישית עם Google'}</small></span>{person.hasGoogle && <Check size={18} aria-label="מקושר" />}</div>
         </div>
         {!person.hasGoogle && <><p className="onboard__hint">קשרו את חשבון Google האישי שלכם כדי לפתוח את לוח המשמרות וההזמנות המהירות.</p><GoogleLinkButton prepared={prepared} /></>}
+        <StaffPushCard variant="wizard" />
         <Link href="/staff" className="sch-btn press">{person.hasGoogle ? 'למסך הבית שלי' : 'המשך עם הקוד האישי'}</Link>
-        <div className="onboard__install"><Smartphone size={22} aria-hidden="true" /><p>באייפון: פתחו ב-Safari, לחצו על שיתוף ואז ״הוספה למסך הבית״. Sarcafe יהיה תמיד במרחק נגיעה.</p></div>
       </div>}
       {!loading && !person && <Link href="/login?next=/staff&quick=1" className="sch-btn sch-btn--primary press">כניסה עם מספר עובד וקוד</Link>}
     </section>

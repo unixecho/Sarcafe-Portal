@@ -4,6 +4,7 @@ import { CalendarClock, ChevronLeft, ClipboardCheck, MapPin, Receipt, ShoppingBa
 import OwnerHeader from '@/components/OwnerHeader'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
+import StaffPushCard from '@/components/staff/StaffPushCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -83,6 +84,7 @@ export default async function StaffIndexPage() {
         </span>
         <ChevronLeft size={19} aria-hidden="true" className="app-row__chevron" />
       </Link>
+      <StaffPushCard />
       <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={count.count ?? 0} initialError={!!updates.error || !!count.error} scheduleHref={scheduleHref} />
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account"><Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link><InstallAppButton /></div>

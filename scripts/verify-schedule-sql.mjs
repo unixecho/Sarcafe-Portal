@@ -642,6 +642,58 @@ for (const f of files.filter((x) => x > NEW_MIG)) {
   catch (e) { console.error(e); check(`apply ${f}`, false, String(e.message)); process.exit(1) }
 }
 
+section('staff push (20261012120000) — the inbox is also the outbox')
+check('rows that existed before the migration are stamped as already handled (no buzz for old news)', (await one(`select count(*)::int n from public.schedule_notifications where push_sent_at is null`)).n === 0)
+check('the push subscription table is unreadable from a browser', await asRole('authenticated', dana.authId, () => refused(`select * from public.staff_push_subscriptions`)) === true && await asRole('anon', null, () => refused(`select * from public.staff_push_subscriptions`)) === true)
+check('…and service_role can use it', (await one(`select has_table_privilege('service_role', 'public.staff_push_subscriptions', 'insert') ok`)).ok === true)
+{
+  await q(`insert into public.staff_push_subscriptions (staff_id, endpoint, p256dh, auth) values ($1, 'https://push.example/one', 'k', 'a')`, [dana.id])
+  await q(`insert into public.staff_push_subscriptions (staff_id, endpoint, p256dh, auth) values ($1, 'https://push.example/one', 'k', 'a') on conflict (endpoint) do update set staff_id = excluded.staff_id`, [yossi.id])
+  const rows = await q(`select staff_id from public.staff_push_subscriptions where endpoint = 'https://push.example/one'`)
+  check('one phone belongs to one person: signing in as someone else moves the subscription', rows.length === 1 && rows[0].staff_id === yossi.id)
+}
+{
+  const key = 'shift-soon:test'
+  await q(`insert into public.schedule_notifications (branch_id, staff_id, kind, title, dedupe_key) values ($1, $2, 'shift.soon', 't', $3)`, [maor, dana.id, key])
+  const again = await q(`insert into public.schedule_notifications (branch_id, staff_id, kind, title, dedupe_key) values ($1, $2, 'shift.soon', 't', $3) on conflict (staff_id, dedupe_key) do nothing returning id`, [maor, dana.id, key])
+  check('a timed reminder is written once per person and key', again.length === 0)
+  const two = await q(`insert into public.schedule_notifications (branch_id, staff_id, kind, title) values ($1, $2, 'x', 'a'), ($1, $2, 'x', 'b') returning id`, [maor, dana.id])
+  check('ordinary notifications (no key) never collide', two.length === 2)
+  check('a new notification starts unsent', (await one(`select count(*)::int n from public.schedule_notifications where dedupe_key = $1 and push_sent_at is null`, [key])).n === 1)
+}
+{
+  const wOpen = await weekOf(maor, '2030-03-17')
+  const sOpen = await save(owner, wOpen, { p_date: '2030-03-18', p_start: '09:00', p_end: '12:00', p_assignees: JSON.stringify([asg(dana.id)]) })
+  await rpc('sched_publish_week', { p_actor: owner.id, p_week_id: wOpen })
+  const aOpen = (await assignmentsOf(sOpen.shiftId))[0]
+  const openCount = async () => (await q(`select 1 from public.schedule_notifications where kind = 'swap.open'`)).length
+  const named = await rpc('sched_request_swap', { p_actor: dana.id, p_assignment: aOpen.id, p_target: yossi.id, p_return: null, p_reason: null })
+  check('an offer to a NAMED colleague announces nothing to the rest of the branch', named.ok === true && (await openCount()) === 0)
+  await rpc('sched_cancel_swap', { p_actor: dana.id, p_swap: named.swapId })
+  const open = await rpc('sched_request_swap', { p_actor: dana.id, p_assignment: aOpen.id, p_target: null, p_return: null, p_reason: null })
+  check('Dana offers the shift to everyone', open.ok === true, JSON.stringify(open))
+  const told = await q(`select staff_id, title, body, link, push_sent_at from public.schedule_notifications where kind = 'swap.open'`)
+  const toldIds = told.map((n) => n.staff_id)
+  check('the colleagues who could take it are told (who, which shift, where to answer)', toldIds.includes(yossi.id) && toldIds.includes(delegate.id) && told.every((n) => /Dana/.test(n.title) && /09:00/.test(n.body) && n.link.tab === 'requests'), JSON.stringify(told))
+  check('the person giving it away is not told', !toldIds.includes(dana.id))
+  check('a deactivated person is not told', !toldIds.includes(gone.id))
+  check('the announcements wait to be pushed', told.every((n) => n.push_sent_at === null))
+  const dup = await rpc('sched_request_swap', { p_actor: dana.id, p_assignment: aOpen.id, p_target: null, p_return: null, p_reason: null })
+  check('a refused duplicate offer announces nothing more', dup.reason === 'duplicate_swap' && (await openCount()) === told.length)
+  await rpc('sched_cancel_swap', { p_actor: dana.id, p_swap: open.swapId })
+}
+check('the open-offer trigger function is not callable from a browser', await asRole('authenticated', owner.authId, () => refused(`select public.sched_notify_open_swap()`)) === true)
+
+section('staff push scheduler (20261012130000) — functions exist, stay closed, and degrade quietly without pg_cron')
+for (const sig of ['public.staff_push_verify_cron(text)', 'public.staff_push_tick()', 'public.staff_push_cron_status()']) {
+  const r = await one(`select has_function_privilege('anon', $1, 'execute') a, has_function_privilege('authenticated', $1, 'execute') b, has_function_privilege('public', $1, 'execute') c, has_function_privilege('service_role', $1, 'execute') d`, [sig])
+  check(`${sig} is executable by service_role only`, !r.a && !r.b && !r.c && r.d === true)
+}
+check('a wrong, short or empty secret is never accepted', (await one(`select public.staff_push_verify_cron('x') a, public.staff_push_verify_cron(null) b, public.staff_push_verify_cron(repeat('a', 64)) c`)).a === false && (await one(`select public.staff_push_verify_cron(null) b`)).b === false && (await one(`select public.staff_push_verify_cron(repeat('a', 64)) c`)).c === false)
+check('the tick never raises where the scheduler does not exist', await (async () => { try { await db.query(`select public.staff_push_tick()`); return true } catch { return false } })())
+check('the status reports "not available" instead of failing', (await one(`select public.staff_push_cron_status() s`)).s.available === false)
+check('exactly one function of each name (no overloads)', (await one(`select count(*)::int n from pg_proc where proname in ('staff_push_verify_cron','staff_push_tick','staff_push_cron_status')`)).n === 3)
+
 section('taking a colleague\'s shift: asked by the person who WANTS it, answered by the holder, decided by a manager')
 const tk = '2030-03-10'
 const wTk = await weekOf(maor, tk)

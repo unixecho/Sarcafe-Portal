@@ -6,6 +6,8 @@ import OwnerHeader from '@/components/OwnerHeader'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardLive from '@/components/DashboardLive'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
+import StaffPushCard from '@/components/staff/StaffPushCard'
+import DevPushPanel from '@/components/staff/DevPushPanel'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
@@ -14,6 +16,7 @@ import { readDashboardSignals } from '@/lib/owner/signals'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
+import { isPushDeveloper } from '@/lib/push/dev'
 import { isChecklistDeveloper } from '@/lib/checklists/developer'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +35,7 @@ export default async function OwnerDashboardPage() {
       <main id="main" tabIndex={-1} className="app-page">
         <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
         <section className="app-hero"><h2>שלום, {me?.first_name || 'צוות Sarcafe'}</h2><p>הכניסה עם הקוד מאפשרת לעבוד בצ׳קליסטים ובקופת האירועים. אפשר להיכנס עם Google כדי לפתוח את כלי הניהול.</p></section>
+        <StaffPushCard />
         <DashboardNotifications scheduleHref="/login?next=/staff/schedule" />
         <DashboardSections staff categories={[
           { title: 'במשמרת', entries: [{ href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה' }, { href: '/pos', icon: Receipt, label: 'קופת אירועים', description: 'הזמנות ועמדות הכנה' }] },
@@ -83,11 +87,13 @@ export default async function OwnerDashboardPage() {
     <main id="main" tabIndex={-1} className="app-page">
       <OwnerHeader title="לוח הבקרה" homeHref="/owner/dashboard" />
       <div className="app-welcome"><div><h2>שלום, {me?.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div><span className="app-date">{date}</span></div>
+      <StaffPushCard />
       <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" />
       <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
       {checklistIssues === null && <p className="app-notifications__error" role="status">מצב הדיווחים אינו זמין כרגע. אפשר לפתוח את הצ׳קליסטים כדי לנסות שוב.</p>}
       <DashboardSections categories={categories} />
       <div className="app-group app-account"><InstallAppButton /></div>
+      {isPushDeveloper(me) && <DevPushPanel />}
       {(me?.badge === 'developer' || isChecklistDeveloper(me?.email)) && <div className="app-group app-account"><Link href="/staff/checklists" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>תצוגת הצ׳קליסט לעובד</strong><small>בדיקת חוויית המשמרת</small></span></Link></div>}
     </main>
   )

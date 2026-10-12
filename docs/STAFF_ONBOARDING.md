@@ -32,3 +32,7 @@ API contract:
 Verification: `node scripts/verify-onboarding-sql.mjs` runs the real local PostgreSQL workflow for expiry, replay, regeneration, PIN strength, atomic setup, Google conflicts, unchanged authority, invalidation and browser denial. These are isolated fixtures, not production writes. TypeScript and production build are checked by the root session. A real owner/employee Google sign-in and iPhone Home Screen pilot remain required before release confidence.
 
 Employee records, payslip privacy and staff notifications are documented separately in [STAFF_RECORDS.md](./STAFF_RECORDS.md). Scheduling rules remain in [STAFF_SCHEDULING.md](./STAFF_SCHEDULING.md); checklist behavior in [STAFF_CHECKLISTS.md](./STAFF_CHECKLISTS.md).
+
+## Push notifications step — 2026-10-12
+
+The wizard final screen now shows the home-screen + notifications card (`StaffPushCard`, variant `wizard`), replacing the old one-line iPhone install note. See `docs/STAFF_PUSH.md`.

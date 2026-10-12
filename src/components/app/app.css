@@ -219,3 +219,44 @@
 @media (prefers-reduced-motion: reduce) { .app-row, .app-nav__panel { transition: none; } .app-route-loading::after { animation:none; width:100%; opacity:.65; } }
 .app-install__primary { display: flex; align-items: center; justify-content: center; gap: 9px; background: var(--neon); color: var(--bg); border: 0; border-radius: 16px; font-weight: 700; font-size: .95rem; cursor: pointer; }
 .app-install-trigger { width: 100%; text-align: start; font: inherit; border: 0; background: none; cursor: pointer; }
+
+/* Staff push-notification card (StaffPushCard): onboarding wizard + staff / owner home. */
+.app-push { display: grid; gap: 16px; padding: 18px; margin-block-end: 18px; border: 1px solid color-mix(in srgb, var(--neon) 28%, var(--line)); border-radius: 23px; background: var(--bg-elev); }
+.app-push--on, .app-push--denied { border-color: var(--line); gap: 12px; padding: 14px 16px; }
+.app-push__head { display: flex; align-items: flex-start; gap: 12px; }
+.app-push__head > div { flex: 1; min-width: 0; }
+.app-push__head h2 { margin: 0 0 5px; font-size: 1.05rem; line-height: 1.4; letter-spacing: -.02em; }
+.app-push__head p { margin: 0; color: var(--text-dim); font-size: .85rem; line-height: 1.65; }
+.app-push__icon { display: grid; place-items: center; flex: 0 0 46px; height: 46px; border-radius: 15px; background: color-mix(in srgb, var(--neon) 15%, var(--bg-elev)); color: var(--neon-soft); }
+.app-push__list { list-style: none; display: grid; gap: 10px; margin: 0; padding: 0; }
+.app-push__list li { display: flex; align-items: flex-start; gap: 11px; font-size: .86rem; line-height: 1.6; color: var(--text-dim); }
+.app-push__list svg { flex: 0 0 auto; margin-block-start: 2px; color: var(--neon-soft); }
+.app-push__row { display: flex; align-items: center; gap: 12px; }
+.app-push__row > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.app-push__row strong { font-size: .92rem; }
+.app-push__row small { color: var(--text-dim); font-size: .79rem; line-height: 1.55; }
+.app-push__ok { flex: 0 0 auto; color: var(--neon-2, var(--neon-soft)); }
+.app-push__icon-button { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; color: var(--text-dim); cursor: pointer; }
+.app-push__test { min-height: 44px; border: 1px solid var(--line-strong); border-radius: 13px; background: transparent; color: var(--text-dim); font-size: .82rem; font-weight: 600; cursor: pointer; }
+.app-push__note { margin: 0; color: var(--text-dim); font-size: .79rem; line-height: 1.6; }
+.app-push__detail { margin: 6px 0 0; padding: 7px 9px; border-radius: 8px; background: var(--bg); color: var(--text-faint); font: .7rem ui-monospace, monospace; word-break: break-word; user-select: text; }
+
+/* Developer notification test bench (DevPushPanel). */
+.app-dev { display: grid; gap: 14px; padding: 16px; margin-block-start: 22px; border: 1px dashed color-mix(in srgb, var(--neon) 40%, var(--line)); border-radius: 23px; background: var(--bg-elev); }
+.app-dev__head { display: flex; align-items: flex-start; gap: 11px; color: var(--neon-soft); }
+.app-dev__head > svg { flex: 0 0 auto; margin-block-start: 3px; }
+.app-dev__head > div { flex: 1; min-width: 0; color: var(--text); }
+.app-dev__head h2 { margin: 0 0 3px; font-size: 1rem; }
+.app-dev__head p { margin: 0; color: var(--text-dim); font-size: .8rem; line-height: 1.55; }
+.app-dev__status { display: grid; gap: 9px; margin: 0; padding: 12px 14px; border-radius: 16px; background: var(--bg); font-size: .8rem; line-height: 1.55; }
+.app-dev__status > div { display: grid; gap: 2px; }
+.app-dev__status dt { color: var(--text-faint); font-size: .72rem; }
+.app-dev__status dd { margin: 0; color: var(--text-dim); word-break: break-word; }
+.app-dev__status small { color: var(--text-faint); }
+.app-dev__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.app-dev__button { display: grid; gap: 3px; align-content: start; min-height: 64px; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 15px; background: var(--bg-elev-2); color: var(--text); text-align: start; cursor: pointer; font: inherit; }
+.app-dev__button strong { font-size: .84rem; }
+.app-dev__button small { color: var(--text-dim); font-size: .7rem; line-height: 1.45; }
+.app-dev__button--quiet { background: transparent; }
+.app-dev__button:disabled { opacity: .55; cursor: default; }
+@media (max-width: 340px) { .app-dev__grid { grid-template-columns: 1fr; } }

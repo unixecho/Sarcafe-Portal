@@ -37,7 +37,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 
 let vapidReady: boolean | null = null
 
-function ensureVapidConfigured(): boolean {
+export function ensureVapidConfigured(): boolean {
   if (vapidReady !== null) return vapidReady
 
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY

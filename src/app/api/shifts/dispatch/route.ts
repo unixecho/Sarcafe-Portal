@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { after, NextResponse, type NextRequest } from 'next/server'
 import { apiRoute, ApiError } from '@/lib/http/errors'
+import { flushStaffPush } from '@/lib/push/staff'
 import { performDispatch } from '@/lib/shifts/dispatch-write'
 import { parseAction } from '@/lib/shifts/schema'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -26,6 +27,9 @@ export const POST = apiRoute(async (request: NextRequest) => {
   }
   const action = parseAction(body)
   const data = await performDispatch(action)
+  // Whatever this write put in people's inboxes (a swap request, a published week, an approval) is
+  // pushed to their phones now. after(): a serverless function can be frozen once the response is sent.
+  after(() => flushStaffPush())
   // Saving a shift used to force the browser to make a second full-state
   // request before it could close the sheet. Return the small authoritative
   // slice that changed so the board can update immediately, then reconcile
