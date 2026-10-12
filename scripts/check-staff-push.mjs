@@ -46,9 +46,38 @@ const night = { kind: 'closing', date: '2026-10-12', startTime: '18:00', endTime
 check('a shift that runs past midnight is due the NEXT day, not at 02:10 today', R.minutesPastDue(night, { date: '2026-10-12', time: '23:00' }) < 0 && R.minutesPastDue(night, { date: '2026-10-13', time: '02:10' }) === 0)
 const opening = { kind: 'opening', date: '2026-10-12', startTime: '07:30', endTime: '13:00' }
 check('opening is due an hour after the shift STARTS', R.minutesPastDue(opening, { date: '2026-10-12', time: '08:29' }) < 0 && R.minutesPastDue(opening, { date: '2026-10-12', time: '08:30' }) === 0)
-check('handover follows the end of the shift like closing', R.minutesPastDue({ ...closing, kind: 'handover' }, { date: '2026-10-12', time: '19:10' }) === 0)
+const departing = { kind: 'handover', date: '2026-10-12', startTime: '07:30', endTime: '13:00', shiftHasOpening: true }
+check('the handover of the employee who also opens is due after their shift ENDS', R.minutesPastDue(departing, { date: '2026-10-12', time: '13:09' }) < 0 && R.minutesPastDue(departing, { date: '2026-10-12', time: '13:10' }) === 0)
+const arriving = { kind: 'handover', date: '2026-10-12', startTime: '13:00', endTime: '19:00', shiftHasOpening: false }
+check('the handover of the evening employee (no opening on their shift) is due an hour after their shift STARTS', R.minutesPastDue(arriving, { date: '2026-10-12', time: '13:59' }) < 0 && R.minutesPastDue(arriving, { date: '2026-10-12', time: '14:00' }) === 0)
+check('a handover with no hint about the shift is treated as the arriving side (1 h after the start)',R.minutesPastDue({ ...closing, kind: 'handover' }, { date: '2026-10-12', time: '14:00' }) === 0)
+check('closing stays an end-of-shift checklist whatever else is on the shift', R.minutesPastDue({ ...closing, shiftHasOpening: false }, { date: '2026-10-12', time: '19:10' }) === 0)
 check('a shift from yesterday is a full day overdue (the caller cuts it off at the reminder window)', R.minutesPastDue(closing, { date: '2026-10-13', time: '19:10' }) === 24 * 60)
-check('the owner hears later than the employee, and within the reminder window', R.OWNER_ESCALATION_MINUTES > 0 && R.OWNER_ESCALATION_MINUTES < R.REMINDER_WINDOW_MINUTES)
+check('owners and developers are told when the checklist becomes due, inside the reminder window', R.OWNER_ESCALATION_MINUTES === 0 && R.OWNER_ESCALATION_MINUTES < R.REMINDER_WINDOW_MINUTES)
+check('the evening-shift report (a 13:00-19:00 shift, now 21:20) is still inside the reminder window', R.minutesPastDue({ ...closing, shiftHasOpening: false }, { date: '2026-10-12', time: '21:20' }) <= R.REMINDER_WINDOW_MINUTES)
+
+section('15 minutes before the shift')
+const evening = { date: '2026-10-12', startTime: '16:30', endTime: '18:30' }
+check('not yet at 16:14', !R.isPreShift(evening, { date: '2026-10-12', time: '16:14' }))
+check('on from 16:15 until the shift starts', R.isPreShift(evening, { date: '2026-10-12', time: '16:15' }) && R.isPreShift(evening, { date: '2026-10-12', time: '16:29' }))
+check('over once the shift has started', !R.isPreShift(evening, { date: '2026-10-12', time: '16:30' }))
+check('a shift at 00:10 is announced from 23:55 the day before', R.isPreShift({ date: '2026-10-13', startTime: '00:10' }, { date: '2026-10-12', time: '23:55' }))
+
+section('your shift tomorrow / today')
+const sh = { date: '2026-10-13', startTime: '07:00', endTime: '13:00' }
+check('tomorrow\'s shift: nothing before 19:00', R.shiftReminderPhase(sh, { date: '2026-10-12', time: '18:59' }) === null)
+check('tomorrow\'s shift: "eve" from 19:00', R.shiftReminderPhase(sh, { date: '2026-10-12', time: '19:00' }) === 'eve' && R.shiftReminderPhase(sh, { date: '2026-10-12', time: '20:30' }) === 'eve')
+check('"eve" is dropped after its window (a scheduler outage does not send it at midnight)', R.shiftReminderPhase(sh, { date: '2026-10-12', time: '23:30' }) === null)
+check('today: nothing before 07:00', R.shiftReminderPhase(sh, { date: '2026-10-13', time: '06:59' }) === null)
+check('today: "today" from 07:00', R.shiftReminderPhase(sh, { date: '2026-10-13', time: '07:00' }) === 'today')
+check('today: not for a shift that is already over', R.shiftReminderPhase({ date: '2026-10-13', startTime: '07:00', endTime: '09:00' }, { date: '2026-10-13', time: '09:30' }) === null)
+check('a shift two days away gets nothing yet', R.shiftReminderPhase({ ...sh, date: '2026-10-14' }, { date: '2026-10-12', time: '19:30' }) === null)
+
+section('requests for the week')
+check('Sunday 10:00 → "open" for the following Sunday, closing Tuesday', JSON.stringify(R.requestsReminder({ date: '2026-10-11', time: '10:00' })) === JSON.stringify({ phase: 'open', targetWeek: '2026-10-18', closeDate: '2026-10-13' }))
+check('Monday 10:00 → "closing" tomorrow (Tuesday)', JSON.stringify(R.requestsReminder({ date: '2026-10-12', time: '10:00' })) === JSON.stringify({ phase: 'closing', targetWeek: '2026-10-18', closeDate: '2026-10-13' }))
+check('nothing before 10:00, after the window, or on other days', R.requestsReminder({ date: '2026-10-11', time: '09:59' }) === null && R.requestsReminder({ date: '2026-10-12', time: '18:00' }) === null && R.requestsReminder({ date: '2026-10-13', time: '10:00' }) === null && R.requestsReminder({ date: '2026-10-17', time: '10:00' }) === null)
+check('the weekday maths agrees with the app (2026-10-11 is a Sunday)', R.weekdayOf('2026-10-11') === 0 && R.sundayOnOrBefore('2026-10-14') === '2026-10-11')
 
 section('where tapping an alert goes')
 check('a path the app wrote is kept', R.pushPathFor('checklist.late', { url: '/staff/checklists' }) === '/staff/checklists')
@@ -79,7 +108,14 @@ check(
   'the card is on the staff home, both owner dashboard views and the onboarding wizard',
   /<StaffPushCard/.test(read('src/app/staff/page.tsx')) && (ownerDash.match(/<StaffPushCard/g) ?? []).length === 2 && /<StaffPushCard variant="wizard"/.test(read('src/components/staff/StaffOnboarding.tsx'))
 )
-check('request-driven writes push what they just notified', /after\(\(\) => flushStaffPush\(\)\)/.test(read('src/app/api/shifts/dispatch/route.ts')))
+const dispatch = read('src/app/api/shifts/dispatch/route.ts')
+check('request-driven writes push what they just notified', /after\(async \(\) => \{[\s\S]*await flushStaffPush\(\)/.test(dispatch))
+check('publishing announces the requests for the week after, BEFORE the flush', /publishWeek'\) await announceRequestsOpen\(action\.weekId\)/.test(dispatch) && dispatch.indexOf('announceRequestsOpen(action.weekId)') < dispatch.indexOf('await flushStaffPush()'))
+const rem = read('src/lib/push/staff-reminders.ts')
+check('checklists are found through the SHIFTS in range, never by when the checklist row was created (it dropped every checklist after day 3)', /\.in\('shift_id'/.test(rem) && !/created_at/.test(rem))
+check('an owner who is also the assignee is told about their own missing checklist (self-test)', !/owner\.id === d\.staffId/.test(rem) && /badge\.eq\.developer/.test(rem))
+check('every reminder is written once: each one carries a dedupe key', (rem.match(/dedupe_key: `/g) ?? []).length >= 6)
+check('the weekly request reminders cover permanent branches only, schedulable Google-linked staff, and skip people who already submitted', /branch\.kind !== 'permanent'/.test(rem) && /auth_user_id/.test(rem) && /status', 'submitted'/.test(rem))
 const push = read('src/lib/push/staff.ts')
 check('rows are claimed BEFORE sending (at-most-once, no double sends from overlapping runs)', push.indexOf('.update({ push_sent_at: now })') > -1 && push.indexOf('.update({ push_sent_at: now })') < push.indexOf('sendToOne(service, device, payload)'))
 check('a gone subscription (404/410) is deleted', /404 \|\| statusCode === 410/.test(push))

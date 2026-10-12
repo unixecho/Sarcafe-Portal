@@ -13,9 +13,23 @@ pushes (Web Push, the same VAPID keys the customer order page uses) the things t
 | Swap accepted / declined / approved / rejected | both sides, managers when it needs them | at each step | `sched_respond_swap`, `sched_decide_swap` |
 | Shift request approved / rejected | the requester | on decision | `sched_decide_request` |
 | **Someone is giving a shift to everyone** | colleagues who could take it (same branch, schedulable, not already on that shift) | the moment the offer is made | trigger `shift_swaps_notify_open` (new) |
-| **Your shift starts within the hour** | the person on it (published weeks only) | once per assignment | scheduled run, `staff-reminders.ts` (new) |
-| **Checklist not submitted** | the person assigned | opening: 60 min after the shift starts; handover/closing: 10 min after it ends (6 h window) | scheduled run (new) |
-| **Checklist still missing** | owners (the checklist inbox is owner-only) | 40 min after it became due | scheduled run (new) |
+| **You work tomorrow** | the person on a published shift | 19:00 the evening before (dropped after 4 h) | scheduled run, `staff-reminders.ts` |
+| **You work today** | the same | 07:00 on the day (dropped after 4 h or once the shift is over) | scheduled run |
+| **Checklist waiting, shift starts in 15 min** | the person assigned | 15 minutes before the shift starts; one alert per shift naming every checklist | scheduled run |
+| **Checklist not submitted** | the person assigned | when it falls due: opening and the *arriving* handover 60 min after the shift STARTS; closing and the *departing* handover 10 min after it ENDS (6 h window) | scheduled run |
+| **Checklist still missing** | every owner and developer, the assignee included (so an owner on shift can test it on themselves) | the same moment it falls due (`OWNER_ESCALATION_MINUTES = 0`) | scheduled run |
+| **Requests for the week** | schedulable, Google-linked employees of the branch | when a schedule is published (requests for the week after it, open until that week's Tuesday); Sunday 10:00 "they are open"; Monday 10:00 "they close tomorrow (Tuesday)". Sunday/Monday skip anyone who already submitted for that week | `announceRequestsOpen` after a publish; scheduled run |
+
+Which handover is which: the first shift of a day gets opening + handover (the handover is the one it leaves
+behind, at the end); a later shift gets handover (+ closing) and the handover is the one it takes over, an hour
+after it starts. The rule is "the shift has an opening checklist" (`dueAnchor` in `staff-rules.ts`).
+
+All times are the branch's local time (`branches.timezone`). Timing constants live at the top of `staff-rules.ts`.
+
+**2026-10-12 bug fixed.** The scheduled run found checklists by when the checklist row was created (last 3
+days). Rows are created when the week is generated, days ahead, so after three days no checklist was seen and
+nobody was reminded (an evening shift's 19:10 reminders were never written). They are now found through the
+shifts in range (yesterday .. tomorrow), whatever the age of the row.
 
 Everything that already wrote to the in-app inbox is pushed with no change at its call site: the inbox
 (`schedule_notifications`) is also the outbox.

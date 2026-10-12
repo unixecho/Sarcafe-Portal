@@ -15,11 +15,15 @@ type SendResult = { inserted: number; claimed: number; sent: number; devices: nu
 
 const TEMPLATES: { id: string; label: string; hint: string }[] = [
   { id: 'schedule', label: 'סידור פורסם', hint: 'מוביל ללוח המשמרות' },
-  { id: 'shift_soon', label: 'משמרת מתחילה', hint: 'תזכורת שעה לפני' },
+  { id: 'shift_eve', label: 'משמרת מחר', hint: 'תזכורת 19:00 בערב שלפני' },
+  { id: 'shift_today', label: 'משמרת היום', hint: 'תזכורת 07:00 ביום המשמרת' },
+  { id: 'checklist_soon', label: 'צ׳קליסט לפני משמרת', hint: '15 דקות לפני תחילת המשמרת' },
   { id: 'checklist_late', label: 'צ׳קליסט לא הוגש', hint: 'מוביל לצ׳קליסטים' },
   { id: 'checklist_gap', label: 'צ׳קליסט חסר (בעלים)', hint: 'מוביל לתיבת הצ׳קליסטים' },
   { id: 'open_shift', label: 'משמרת מוצעת לכולם', hint: 'מוסרים משמרת' },
   { id: 'swap_request', label: 'בקשת החלפה', hint: 'מחכה לתשובה' },
+  { id: 'requests_open', label: 'בקשות לשבוע פתוחות', hint: 'סידור פורסם / יום ראשון' },
+  { id: 'requests_closing', label: 'הבקשות נסגרות מחר', hint: 'תזכורת יום שני' },
   { id: 'digest', label: 'ארבע התראות ביחד', hint: 'אמור להתכנס להודעה אחת' },
 ]
 
