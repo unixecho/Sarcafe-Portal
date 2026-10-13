@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { Download, Share, Smartphone, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import '@/components/app/app.css'
@@ -10,6 +11,8 @@ const STORAGE_KEY = 'sarcafe:staff-install-intro:v1'
 export const STAFF_INSTALL_EVENT = 'sarcafe:staff-install-open'
 
 export default function StaffInstallIntro() {
+  const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null)
   const [ios, setIos] = useState(false)
@@ -55,6 +58,10 @@ export default function StaffInstallIntro() {
     finally { setBusy(false) }
   }
 
+  // iPhone saves the address of the page it is on, not the manifest's start page, so installing from the checklist
+  // or the till would make the icon open THAT page. Installing is therefore done from the staff home.
+  const needsHome = ios && !installed && pathname !== '/staff'
+
   return (
     <SheetShell open={open} onClose={close} labelledBy="staff-install-title" className="app-install">
       <div className="app-install__head">
@@ -62,7 +69,11 @@ export default function StaffInstallIntro() {
         <div style={{ flex: 1 }}><h2 id="staff-install-title">Sarcafe במסך הבית</h2><p>{installed ? 'Sarcafe כבר פתוחה כאפליקציה במסך הבית שלך.' : 'פתיחה ישירה למשמרות, לצ׳קליסטים ולכלים שלך, בחלון אפליקציה.'}</p></div>
         <button className="app-header__icon press" type="button" onClick={close} aria-label="סגירה"><X size={20} aria-hidden="true" /></button>
       </div>
-      {!installed && <ol className="app-install__steps">
+      {needsHome && <>
+        <p className="app-install__home">כדי שהאייקון יפתח תמיד את דף הבית של הצוות, מוסיפים אותו למסך הבית מדף הבית ולא מהדף שבו אתם נמצאים עכשיו.</p>
+        <button type="button" className="app-install__button app-install__primary press" onClick={() => router.push('/staff')}>מעבר לדף הבית</button>
+      </>}
+      {!installed && !needsHome && <ol className="app-install__steps">
         {ios ? <><li>פתחו את Sarcafe ב־Safari.</li><li><span>הקישו על שיתוף <Share size={16} style={{ verticalAlign: 'middle' }} aria-hidden="true" /> בתפריט הדפדפן.</span></li><li>בחרו „הוספה למסך הבית” ואשרו „הוספה”.</li></> : <><li>פתחו את תפריט הדפדפן.</li><li>בחרו „התקנת אפליקציה” או „הוספה למסך הבית”.</li><li>אשרו ופתחו את Sarcafe מהסמל במסך הבית.</li></>}
       </ol>}
       {error && <p className="app-notifications__error" role="alert">{error}</p>}

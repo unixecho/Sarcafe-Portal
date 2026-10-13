@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import PageTransitions from '@/components/PageTransitions'
+import StandaloneLaunchGuard from '@/components/StandaloneLaunchGuard'
 import IntroGate from '@/components/intro/IntroGate'
 import PublicA11yWidget from '@/components/PublicA11yWidget'
 import './globals.css'
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           דילוג לתוכן הראשי
         </a>
         <PageTransitions />
+        <StandaloneLaunchGuard />
         {/* Everything except fixed/portalled chrome lives inside this
             wrapper — the accessibility widget's contrast/grayscale/invert
             modes apply a `filter` here, never to <html>/<body>, so fixed

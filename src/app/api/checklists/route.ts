@@ -5,7 +5,9 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { ensureChecklistTemplates, flattenDefinition, loadStaffChecklistAssignments, syncPublishedChecklists } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistAnswer, type ChecklistDefinition } from '@/lib/checklists/types'
-import { isChecklistDeveloper } from '@/lib/checklists/developer'
+import { isDeveloper } from '@/lib/checklists/developer'
+import { isChecklistLocked, unlockText } from '@/lib/checklists/window'
+import { wallClockNow } from '@/lib/shifts/time'
 import { parseBody } from '@/lib/pos/server/guard'
 import { checkCredentialRateLimit, credentialFingerprint, clientIp } from '@/lib/rate-limit'
 
@@ -28,10 +30,10 @@ async function branchForRequest(request: NextRequest, staff: NonNullable<Awaited
   const slug = request.nextUrl.searchParams.get('branch')
   if (!slug) throw BadRequest('בחרו סניף.')
   const service = createServiceRoleClient()
-  const { data: branch } = await service.from('branches').select('id, slug, name').eq('slug', slug).eq('active', true).maybeSingle()
+  const { data: branch } = await service.from('branches').select('id, slug, name, timezone').eq('slug', slug).eq('active', true).maybeSingle()
   if (!branch) throw NotFound('הסניף לא נמצא.')
   if (staff.branch_id && staff.branch_id !== branch.id) throw Forbidden('אין גישה לסניף הזה.')
-  return branch as { id: string; slug: string; name: { he?: string } | null }
+  return branch as { id: string; slug: string; name: { he?: string } | null; timezone: string | null }
 }
 
 export const GET = apiRoute(async (request: NextRequest) => {
@@ -42,7 +44,8 @@ export const GET = apiRoute(async (request: NextRequest) => {
   await ensureChecklistTemplates(service, branch, staff.id)
   await syncPublishedChecklists(service, branch.id)
   const assignments = await loadStaffChecklistAssignments(service, branch, staff.id)
-  const developerMode = staff.badge === 'developer' || isChecklistDeveloper(staff.email)
+  const developerMode = isDeveloper(staff)
+  const serverNow = wallClockNow(branch.timezone || 'Asia/Jerusalem')
   const { data: previewRows } = developerMode
     ? await service
         .from('checklist_templates')
@@ -61,7 +64,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   }))
   const label = staff.display_name || [staff.first_name, staff.last_name].filter(Boolean).join(' ') || `עובד/ת ${staff.employee_no ?? ''}`.trim()
   return NextResponse.json(
-    { profile: { id: staff.id, label, email: staff.email, employeeNo: staff.employee_no, via: staff.via, hasGoogle: Boolean(staff.auth_user_id) }, assignments, developerMode, previews },
+    { profile: { id: staff.id, label, email: staff.email, employeeNo: staff.employee_no, via: staff.via, hasGoogle: Boolean(staff.auth_user_id) }, serverNow, assignments, developerMode, previews },
     { headers: { 'Cache-Control': 'private, no-store' } }
   )
 })
@@ -93,12 +96,21 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
   const { data: row } = await service
     .from('checklist_assignments')
-    .select('id, staff_id, status, template_snapshot')
+    .select('id, staff_id, status, template_snapshot, shift_id')
     .eq('id', body.assignmentId)
     .maybeSingle()
   if (!row) throw NotFound('הצ׳קליסט לא נמצא.')
   if (row.staff_id !== staff.id) throw Forbidden('הצ׳קליסט שייך לעובד/ת אחר/ת.')
   if (row.status === 'submitted') throw new ApiError(409, 'conflict', 'הצ׳קליסט כבר נשלח.')
+
+  // Not before the shift: a checklist cannot be started, saved or sent while its shift has not begun. The
+  // developer's test forms never reach this route (they live in the browser), so there is no bypass here.
+  const { data: shift } = await service.from('shifts').select('shift_date, start_time, end_time, branch_id').eq('id', row.shift_id).maybeSingle()
+  if (!shift) throw NotFound('המשמרת של הצ׳קליסט לא נמצאה.')
+  const { data: shiftBranch } = await service.from('branches').select('timezone').eq('id', shift.branch_id).maybeSingle()
+  const shiftTimes = { date: shift.shift_date as string, startTime: shift.start_time as string, endTime: shift.end_time as string }
+  const wallNow = wallClockNow((shiftBranch?.timezone as string | null) || 'Asia/Jerusalem')
+  if (isChecklistLocked(shiftTimes, wallNow)) throw new ApiError(409, 'too_early', `הצ׳קליסט עדיין נעול — המשמרת עוד לא התחילה. ${unlockText(shiftTimes, wallNow)}.`)
 
   if (body.action === 'save') {
     const { error } = await service

@@ -8,12 +8,15 @@ import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 
 export const dynamic = 'force-dynamic'
 
-export default async function StaffChecklistsPage() {
+export default async function StaffChecklistsPage({ searchParams }: { searchParams: Promise<{ branch?: string | string[] }> }) {
   const me = await resolveStaffIdentity()
   if (!me) redirect('/login?next=/staff/checklists&quick=1')
   const allBranches = await getBranches()
   const visibleBranches = me.branch_id ? allBranches.filter((branch) => branch.id === me.branch_id) : allBranches
-  const initialBranch = resolveCurrentBranchSlug(visibleBranches, (await cookies()).get(BRANCH_COOKIE)?.value)
+  // A link from the home screen's shift card names the shift's own branch; otherwise the remembered one.
+  const wanted = (await searchParams).branch
+  const requested = typeof wanted === 'string' ? wanted : undefined
+  const initialBranch = resolveCurrentBranchSlug(visibleBranches, requested && visibleBranches.some((branch) => branch.slug === requested) ? requested : (await cookies()).get(BRANCH_COOKIE)?.value)
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px 40px' }}>
       <OwnerHeader title="צ׳קליסט למשמרת" backHref="/staff" />

@@ -29,7 +29,7 @@ export function suggestedRoleId(
 }
 
 /** Stable, branch-local colors: adjacent staff get deliberately separated hues. */
-export function staffColor(staffId: string | null | undefined, roster: ScheduleStaffRow[]): string | undefined {
+export function staffColor(staffId: string | null | undefined, roster: Array<Pick<ScheduleStaffRow, 'staffId'>>): string | undefined {
   if (!staffId) return undefined
   const ids = [...new Set(roster.map((row) => row.staffId))].sort()
   const index = ids.indexOf(staffId)

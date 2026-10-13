@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check:schedule": "node scripts/check-schedule.mjs",
     "check:staff-push": "node scripts/check-staff-push.mjs",
+    "check:checklist-window": "node scripts/check-checklist-window.mjs",
     "check:intro": "node scripts/check-intro.mjs",
     "verify:schedule-sql": "node scripts/verify-schedule-sql.mjs",
     "verify:checklist-sql": "node scripts/verify-checklist-sql.mjs",

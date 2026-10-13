@@ -1,16 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Beaker, CheckCircle2, ChevronLeft, ClipboardCheck, ShieldCheck, Save, X } from 'lucide-react'
+import { AlertTriangle, Beaker, CheckCircle2, ChevronLeft, ClipboardCheck, Lock, ShieldCheck, Save, X } from 'lucide-react'
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import { flattenChecklistDefinition, type ChecklistAnswer, type ChecklistAssignment, type ChecklistItem, type ChecklistPreviewTemplate } from '@/lib/checklists/types'
+import { advanceClock, isChecklistLocked, unlockText, type WallClock } from '@/lib/checklists/window'
 import { messageOf } from '@/components/staff/types'
 import './checklists.css'
 
 type Payload = {
   profile: { id: string; label: string; email: string | null; employeeNo: string | null; via: 'google' | 'employee_code'; hasGoogle: boolean }
+  /** The branch's own wall clock when the list was fetched: the lock never trusts the phone's clock. */
+  serverNow: WallClock
   assignments: ChecklistAssignment[]
   developerMode: boolean
   previews: ChecklistPreviewTemplate[]
@@ -41,6 +44,18 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   const [currentCode, setCurrentCode] = useState('')
   const [newCode, setNewCode] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
+  // A deep link from the home screen ("?open=<assignment>" or, for a developer, "?preview=<kind>") is
+  // honoured once, after the list has loaded.
+  const deepLink = useRef<{ open: string | null; preview: string | null } | null>(null)
+  const fetchedAt = useRef(Date.now())
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    deepLink.current = { open: params.get('open'), preview: params.get('preview') }
+    // Re-evaluate the lock every 20 s so a checklist unlocks on its own when the shift begins.
+    const timer = window.setInterval(() => setTick((value) => value + 1), 20_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   async function load() {
     if (!branch) return
@@ -50,6 +65,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
       const res = await fetch(`/api/checklists?branch=${encodeURIComponent(branch)}`, { cache: 'no-store' })
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(messageOf(payload, 'לא הצלחנו לטעון את הצ׳קליסטים.'))
+      fetchedAt.current = Date.now()
       setData(payload as Payload)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'לא הצלחנו לטעון את הצ׳קליסטים.')
@@ -59,6 +75,18 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   }
   useEffect(() => void load(), [branch])
 
+  const clock = data ? advanceClock(data.serverNow, Date.now() - fetchedAt.current) : null
+  const lockedAt = (assignment: ChecklistAssignment) => Boolean(clock && !assignment.testMode && assignment.status !== 'submitted' && isChecklistLocked({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock))
+  useEffect(() => {
+    const link = deepLink.current
+    if (!data || !link || (!link.open && !link.preview)) return
+    deepLink.current = { open: null, preview: null }
+    const target = link.open ? data.assignments.find((assignment) => assignment.id === link.open) : null
+    if (target && target.status !== 'submitted' && !lockedAt(target)) return open(target)
+    const template = link.preview && data.developerMode ? data.previews.find((candidate) => candidate.kind === link.preview) : null
+    if (template) openPreview(template)
+  }, [data])
+
   const active = data?.assignments.find((assignment) => assignment.id === activeId) ?? null
   const categories = active?.template.categories ?? []
   const items = useMemo(() => (active ? flattenChecklistDefinition(active.template) : []), [active])
@@ -67,6 +95,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   const issues = items.filter((item) => answers[item.id]?.result === 'issue')
 
   function open(assignment: ChecklistAssignment) {
+    if (lockedAt(assignment)) return setError(`הצ׳קליסט עדיין נעול — המשמרת עוד לא התחילה. ${clock ? unlockText({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock) : ''}`)
     setActiveId(assignment.id)
     setAnswers(assignment.answers ?? {})
     const firstIncomplete = assignment.template.categories.findIndex((category) =>
@@ -378,13 +407,17 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
       {error && <div className="sch-error" role="alert">{error}<button className="sch-btn sch-btn--sm press" onClick={() => void load()}>ניסיון נוסף</button></div>}
       {loading && !data ? <div className="sk" style={{ height: 160 }} /> : (
         <div className="ck-grid">
-          {(data?.assignments ?? []).map((assignment) => (
-            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}`} disabled={assignment.status === 'submitted'} onClick={() => open(assignment)}>
-              <div className="sch-row"><ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" /><strong style={{ flex: 1 }}>{assignment.kindLabel}</strong><span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span></div>
+          {(data?.assignments ?? []).map((assignment) => {
+            const locked = lockedAt(assignment)
+            return (
+            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}${locked ? ' ck-card--locked' : ''}`} disabled={assignment.status === 'submitted' || locked} aria-disabled={assignment.status === 'submitted' || locked} onClick={() => open(assignment)}>
+              <div className="sch-row">{locked ? <Lock size={22} aria-hidden="true" /> : <ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" />}<strong style={{ flex: 1 }}>{assignment.kindLabel}</strong>{locked ? <span className="ck-status ck-status--locked">נעול</span> : <span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span>}</div>
+              {locked && clock && <span className="sch-sub">המשמרת עוד לא התחילה · {unlockText({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock)}</span>}
               <span>{new Date(`${assignment.shiftDate}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} · <span dir="ltr">{assignment.startTime}–{assignment.endTime}</span></span>
               {assignment.status === 'submitted' && <span className="sch-sub">נשלח {assignment.submittedAt ? new Date(assignment.submittedAt).toLocaleString('he-IL') : ''}{assignment.issueCount ? ` · ${assignment.issueCount} ליקויים דווחו` : ' · ללא ליקויים'}</span>}
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
       {!loading && data?.assignments.filter((assignment) => !assignment.testMode).length === 0 && <section className="ck-card" style={{ alignItems: 'center', textAlign: 'center', padding: 28 }}><ClipboardCheck size={36} color="var(--text-faint)" /><strong>אין כרגע צ׳קליסט שמחכה לכם</strong><span className="sch-sub">לאחר פרסום השיבוץ, הטופס המתאים יופיע כאן לפי המשמרת.</span></section>}

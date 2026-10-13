@@ -260,3 +260,38 @@
 .app-dev__button--quiet { background: transparent; }
 .app-dev__button:disabled { opacity: .55; cursor: default; }
 @media (max-width: 340px) { .app-dev__grid { grid-template-columns: 1fr; } }
+
+/* ---- Shift-status card on the staff home: next shift, on-shift now, and the checklist button ---- */
+.app-shiftcard {
+  display: grid; gap: 12px; margin-block: 0 24px; padding: 16px; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--neon) 38%, var(--line)); border-radius: 25px;
+  background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--neon) 16%, transparent), transparent 58%), var(--bg-elev);
+}
+.app-shiftcard--live { border-color: color-mix(in srgb, var(--success, #48b978) 55%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--success, #48b978) 18%, transparent), transparent 60%), var(--bg-elev); }
+.app-shiftcard--dev { border-style: dashed; border-color: color-mix(in srgb, var(--neon-2) 60%, var(--line)); }
+.app-shiftcard__link { display: flex; align-items: center; gap: 14px; color: var(--text); text-decoration: none; min-height: 76px; }
+.app-shiftcard__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--bg); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb, var(--neon) 28%, transparent); }
+.app-shiftcard--live .app-shiftcard__icon { background: var(--success, #48b978); box-shadow: 0 8px 24px color-mix(in srgb, var(--success, #48b978) 30%, transparent); }
+.app-shiftcard__copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.app-shiftcard__copy small { display: inline-flex; align-items: center; gap: 7px; color: var(--neon-soft); font-size: .75rem; font-weight: 650; }
+.app-shiftcard--live .app-shiftcard__copy small { color: var(--success, #48b978); }
+.app-shiftcard__copy strong { font-size: clamp(1rem, 3.6vw, 1.24rem); line-height: 1.35; letter-spacing: -.02em; }
+.app-shiftcard__copy > span:not(.app-shift-focus__zone) { color: var(--text-dim); font-size: .78rem; }
+.app-shiftcard__pulse { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--success, #48b978); animation: app-shiftcard-pulse 1.6s ease-out infinite; }
+@keyframes app-shiftcard-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success, #48b978) 60%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+.app-shiftcard__actions { display: grid; gap: 8px; }
+.app-shiftcard__cta {
+  display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 52px; padding: 0 16px; border-radius: 16px;
+  border: 1px solid var(--line-strong, var(--line)); background: var(--bg); color: var(--text); font: inherit; font-weight: 750; text-align: center; text-decoration: none; cursor: pointer;
+}
+.app-shiftcard__cta--primary { background: var(--neon); border-color: var(--neon); color: var(--bg); box-shadow: 0 10px 26px color-mix(in srgb, var(--neon) 30%, transparent); }
+.app-shiftcard__cta--locked, .app-shiftcard__cta--locked:disabled { opacity: .5; filter: grayscale(1); cursor: not-allowed; }
+.app-shiftcard__done { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--success, #48b978); font-weight: 700; }
+.app-shiftcard__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-shiftcard__badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--neon-2) 16%, transparent); color: var(--neon-2); font-size: .75rem; font-weight: 800; }
+.app-shiftcard__quiet { background: none; border: 0; color: var(--text-dim); min-height: 44px; padding-inline: 8px; font: inherit; font-size: .8rem; cursor: pointer; }
+.app-shiftcard__title { font-size: 1.15rem; }
+.app-shiftcard__note { margin: 0; color: var(--text-dim); font-size: .85rem; line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) { .app-shiftcard__pulse { animation: none; } }
+
+.app-install__home { margin: 0 0 12px; color: var(--text-dim); font-size: .9rem; line-height: 1.7; }

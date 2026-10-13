@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, Eye, FilePlus2, Plus, QrCode, RotateCcw, Send, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
+import { branchColor } from '@/lib/branches/color'
+import { advanceClock, checklistPhase, dayLabel, type ChecklistPhase, type WallClock } from '@/lib/checklists/window'
 import { KIND_LABELS, type ChecklistDefinition, type ChecklistKind } from '@/lib/checklists/types'
 import { messageOf } from '@/components/staff/types'
 import './checklists.css'
@@ -12,6 +14,9 @@ import './checklists.css'
 type TemplateRow = { id: string; kind: ChecklistKind; name: string; version: number; definition: ChecklistDefinition; published_at: string }
 type AssignmentRow = {
   id: string
+  staffId: string
+  staffColor: string | null
+  shiftId: string
   staffName: string
   employeeNo: string | null
   shiftDate: string
@@ -26,10 +31,13 @@ type AssignmentRow = {
   resolvedAt: string | null
   managerNote: string | null
 }
-type Payload = { branch: { id: string; slug: string; name: { he?: string } }; templates: TemplateRow[]; assignments: AssignmentRow[] }
+type Payload = { branch: { id: string; slug: string; name: { he?: string } }; serverNow: WallClock; templates: TemplateRow[]; assignments: AssignmentRow[] }
 type Tab = 'inbox' | 'coverage' | 'builder'
 
-const statusText = (row: AssignmentRow) => row.status === 'submitted' ? 'נשלח' : row.status === 'in_progress' ? 'בתהליך' : 'טרם התחיל'
+// What the owner reads in the status chip. A future checklist that was never started is greyed out and
+// cannot be touched (the server refuses it too); a started one that is still open says so.
+const STATUS_TEXT: Record<ChecklistPhase, string> = { submitted: 'נשלח', upcoming: 'עתידי', open: 'פתוח להגשה', late: 'לא הוגש בזמן' }
+const initialOf = (name: string) => Array.from(name.trim())[0] ?? '·'
 
 export default function OwnerChecklistWorkspace({ branches, initialBranch }: { branches: Branch[]; initialBranch: BranchSlug }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
@@ -44,6 +52,13 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
   const [entryUrl, setEntryUrl] = useState('')
   const [entryQr, setEntryQr] = useState('')
   const [copied, setCopied] = useState(false)
+  const fetchedAt = useRef(Date.now())
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    // Rows move from "future" to "open" on their own while the page stays open.
+    const timer = window.setInterval(() => setTick((value) => value + 1), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const url = `${window.location.origin}/login?next=/staff/checklists&quick=1`
@@ -65,6 +80,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
       const res = await fetch(`/api/owner/checklists?branch=${encodeURIComponent(branch)}`, { cache: 'no-store' })
       const payload = await res.json().catch(() => null)
       if (!res.ok) throw new Error(messageOf(payload, 'לא הצלחנו לטעון את הצ׳קליסטים.'))
+      fetchedAt.current = Date.now()
       setData(payload as Payload)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'לא הצלחנו לטעון את הצ׳קליסטים.')
@@ -94,7 +110,27 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
     localStorage.setItem(`sarcafe:checklist-draft:${branch}:${selected.kind}:${selected.version}`, JSON.stringify({ name: draftName, definition: draft }))
   }, [draft, draftName, selected?.id, branch])
   const inbox = useMemo(() => (data?.assignments ?? []).filter((row) => row.status === 'submitted' && row.issueCount > 0 && !row.resolvedAt), [data])
-  const overdue = useMemo(() => (data?.assignments ?? []).filter((row) => row.status !== 'submitted' && row.shiftDate && new Date(`${row.shiftDate}T${row.endTime || '23:59'}:00`).getTime() < Date.now()), [data])
+  const clock = data ? advanceClock(data.serverNow, Date.now() - fetchedAt.current) : null
+  const tracked = (() => {
+    if (!data || !clock) return { rows: [] as (AssignmentRow & { phase: ChecklistPhase })[], days: [] as { date: string; rows: (AssignmentRow & { phase: ChecklistPhase })[] }[], late: 0 }
+    const hasOpening = new Set(data.assignments.filter((row) => row.kind === 'opening').map((row) => row.shiftId))
+    const rows = data.assignments
+      .filter((row) => row.shiftDate)
+      .map((row) => ({ ...row, phase: checklistPhase({ date: row.shiftDate, startTime: row.startTime, endTime: row.endTime, kind: row.kind, status: row.status, shiftHasOpening: hasOpening.has(row.shiftId) }, clock) }))
+    // Today and what is coming first (nearest first), then what already happened (latest first).
+    const ahead = rows.filter((row) => row.shiftDate >= clock.date)
+    const behind = rows.filter((row) => row.shiftDate < clock.date)
+    const group = (list: typeof rows) => {
+      const days: { date: string; rows: typeof rows }[] = []
+      for (const row of list) {
+        const last = days[days.length - 1]
+        if (last && last.date === row.shiftDate) last.rows.push(row)
+        else days.push({ date: row.shiftDate, rows: [row] })
+      }
+      return days
+    }
+    return { rows, days: [...group(ahead), ...group(behind).reverse()], late: rows.filter((row) => row.phase === 'late').length }
+  })()
   const builderDirty = Boolean(selected && draft && (draftName !== selected.name || JSON.stringify(draft) !== JSON.stringify(selected.definition)))
 
   async function act(action: 'seen' | 'resolve', assignmentId: string, note?: string) {
@@ -253,14 +289,31 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
         {inbox.length === 0 && <section className="ck-card" style={{ alignItems: 'center', textAlign: 'center', padding: 30 }}><CheckCircle2 size={38} color="var(--success, #48b978)" /><strong>אין ליקויים פתוחים</strong><span className="sch-sub">דיווח חדש על מלאי, ניקיון או ציוד יופיע כאן מיד לאחר השליחה.</span></section>}
       </div>}
 
-      {tab === 'coverage' && data && <div className="ck-wrap">
-        {overdue.length > 0 && <div className="sch-error"><AlertTriangle size={18} /> {overdue.length} צ׳קליסטים ממשמרות שעברו עדיין לא נשלחו.</div>}
-        {(data.assignments ?? []).map((row) => <article key={row.id} className="ck-card" style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 180 }}><strong>{row.staffName}</strong><div className="sch-sub">{row.shiftDate} · <span dir="ltr">{row.startTime}–{row.endTime}</span> · {KIND_LABELS[row.kind]}</div></div>
-          <span className={`ck-status ck-status--${row.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusText(row)}</span>
-          {row.issueCount > 0 && <span className="ck-status ck-status--pending">{row.issueCount} ליקויים</span>}
-        </article>)}
-        {data.assignments.length === 0 && <section className="ck-card"><strong>עוד אין משמרות עם צ׳קליסטים</strong><span className="sch-sub">לאחר פרסום לוח המשמרות, הדרישות יופיעו כאן אוטומטית.</span></section>}
+      {tab === 'coverage' && data && clock && <div className="ck-wrap ck-track" dir="rtl">
+        {tracked.late > 0 && <div className="sch-error"><AlertTriangle size={18} /> {tracked.late} צ׳קליסטים לא הוגשו בזמן.</div>}
+        {tracked.days.map((day) => <section key={day.date} className="ck-track-day" aria-label={dayLabel(day.date)}>
+          <div className={`ck-spacer${day.date === clock.date ? ' ck-spacer--today' : ''}`} role="separator"><span>{dayLabel(day.date)}{day.date === clock.date ? ' · היום' : ''}</span></div>
+          {day.rows.map((row) => {
+            const future = row.phase === 'upcoming'
+            const started = row.status === 'in_progress' && row.phase !== 'submitted'
+            return <article key={row.id} className={`ck-track-row ck-track-row--${row.phase}`} aria-disabled={future || undefined} inert={future || undefined} style={{ '--emp': row.staffColor ?? 'var(--line)' } as React.CSSProperties}>
+              <span className="ck-person-dot" aria-hidden="true">{initialOf(row.staffName)}</span>
+              <div className="ck-track-main">
+                <strong>{row.staffName}</strong>
+                <div className="ck-track-meta">
+                  <span className="ck-branch-pill" style={{ '--branch': branchColor(data.branch.slug, branches) } as React.CSSProperties}><i aria-hidden="true" />{data.branch.name?.he ?? data.branch.slug}</span>
+                  <span>{KIND_LABELS[row.kind]}</span>
+                  <span dir="ltr">{row.startTime}–{row.endTime}</span>
+                </div>
+              </div>
+              <div className="ck-track-state">
+                <span className={`ck-status ck-status--${row.phase}`}>{started && row.phase !== 'late' ? 'בתהליך' : STATUS_TEXT[row.phase]}</span>
+                {row.issueCount > 0 && <span className="ck-status ck-status--pending">{row.issueCount} ליקויים</span>}
+              </div>
+            </article>
+          })}
+        </section>)}
+        {tracked.rows.length === 0 && <section className="ck-card"><strong>עוד אין משמרות עם צ׳קליסטים</strong><span className="sch-sub">לאחר פרסום לוח המשמרות, הדרישות יופיעו כאן אוטומטית.</span></section>}
       </div>}
 
       {tab === 'builder' && data && <div className="ck-wrap">

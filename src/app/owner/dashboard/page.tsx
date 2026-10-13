@@ -7,7 +7,6 @@ import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardLive from '@/components/DashboardLive'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
-import DevPushPanel from '@/components/staff/DevPushPanel'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
@@ -16,8 +15,7 @@ import { readDashboardSignals } from '@/lib/owner/signals'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
-import { isPushDeveloper } from '@/lib/push/dev'
-import { isChecklistDeveloper } from '@/lib/checklists/developer'
+import { isDeveloper } from '@/lib/checklists/developer'
 
 export const dynamic = 'force-dynamic'
 
@@ -93,8 +91,7 @@ export default async function OwnerDashboardPage() {
       {checklistIssues === null && <p className="app-notifications__error" role="status">מצב הדיווחים אינו זמין כרגע. אפשר לפתוח את הצ׳קליסטים כדי לנסות שוב.</p>}
       <DashboardSections categories={categories} />
       <div className="app-group app-account"><InstallAppButton /></div>
-      {isPushDeveloper(me) && <DevPushPanel />}
-      {(me?.badge === 'developer' || isChecklistDeveloper(me?.email)) && <div className="app-group app-account"><Link href="/staff/checklists" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>תצוגת הצ׳קליסט לעובד</strong><small>בדיקת חוויית המשמרת</small></span></Link></div>}
+      {isDeveloper(me) && <div className="app-group app-account"><Link href="/staff" className="app-row app-row--quiet"><span className="app-row__icon"><Users size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפאנל כמו שעובד רואה אותו</strong><small>כרטיס המשמרת וכפתור הצ׳קליסט</small></span></Link><Link href="/staff/dev" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>מצב מפתח</strong><small>בדיקת התראות, צ׳קליסטים ומשמרת בדיקה</small></span></Link></div>}
     </main>
   )
 }

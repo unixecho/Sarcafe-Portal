@@ -4,6 +4,9 @@ import { apiRoute, ApiError, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureChecklistTemplates, syncPublishedChecklists } from '@/lib/checklists/server'
+import { staffColor } from '@/lib/shifts/people'
+import { wallClockNow } from '@/lib/shifts/time'
+import { isOp } from '@/lib/staff/access'
 
 const itemSchema = z.object({
   id: z.string().min(1).max(100),
@@ -29,7 +32,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const slug = request.nextUrl.searchParams.get('branch')
   if (!slug) throw BadRequest('בחרו סניף.')
   const service = createServiceRoleClient()
-  const { data: branch } = await service.from('branches').select('id, slug, name').eq('slug', slug).eq('active', true).maybeSingle()
+  const { data: branch } = await service.from('branches').select('id, slug, name, timezone').eq('slug', slug).eq('active', true).maybeSingle()
   if (!branch) throw NotFound('הסניף לא נמצא.')
   await ensureChecklistTemplates(service, branch)
   await syncPublishedChecklists(service, branch.id)
@@ -45,10 +48,15 @@ export const GET = apiRoute(async (request: NextRequest) => {
   ])
   const staffIds = [...new Set((rows ?? []).map((row) => row.staff_id as string).filter(Boolean))]
   const shiftIds = [...new Set((rows ?? []).map((row) => row.shift_id as string))]
-  const [{ data: staff }, { data: shifts }] = await Promise.all([
+  const [{ data: staff }, { data: shifts }, { data: rosterRows }] = await Promise.all([
     staffIds.length ? service.from('staff').select('id, display_name, first_name, last_name, handle, employee_no, employee_code').in('id', staffIds) : Promise.resolve({ data: [] }),
     shiftIds.length ? service.from('shifts').select('id, shift_date, start_time, end_time').in('id', shiftIds) : Promise.resolve({ data: [] }),
+    // The scheduler's own roster for this branch, so a person has the same colour here as on the schedule.
+    service.from('staff').select('id, branch_id, role, badge'),
   ])
+  const roster = (rosterRows ?? [])
+    .filter((row) => row.branch_id === null || row.branch_id === branch.id || isOp(row))
+    .map((row) => ({ staffId: row.id as string }))
   const staffMap = new Map((staff ?? []).map((row) => [row.id as string, row]))
   const shiftMap = new Map((shifts ?? []).map((row) => [row.id as string, row]))
   const assignments = (rows ?? []).map((row) => {
@@ -57,6 +65,8 @@ export const GET = apiRoute(async (request: NextRequest) => {
     return {
       id: row.id,
       staffId: row.staff_id,
+      staffColor: staffColor(row.staff_id as string, roster) ?? null,
+      shiftId: row.shift_id,
       staffName: person?.display_name || [person?.first_name, person?.last_name].filter(Boolean).join(' ') || person?.handle || `עובד/ת ${person?.employee_code ?? person?.employee_no ?? ''}`.trim(),
       employeeNo: person?.employee_code ?? (person?.employee_no == null ? null : String(person.employee_no)),
       shiftDate: shift?.shift_date ?? '',
@@ -72,7 +82,10 @@ export const GET = apiRoute(async (request: NextRequest) => {
       managerNote: row.manager_note,
     }
   })
-  return NextResponse.json({ branch, templates: templates ?? [], assignments }, { headers: { 'Cache-Control': 'private, no-store' } })
+  // Chronological, so the tracker can group by day; the 150-row cut above is by creation, not by date.
+  assignments.sort((a, b) => a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime) || ({ opening: 0, handover: 1, closing: 2 }[a.kind as 'opening'] - { opening: 0, handover: 1, closing: 2 }[b.kind as 'opening']))
+  const serverNow = wallClockNow((branch.timezone as string | null) || 'Asia/Jerusalem')
+  return NextResponse.json({ branch: { id: branch.id, slug: branch.slug, name: branch.name }, serverNow, templates: templates ?? [], assignments }, { headers: { 'Cache-Control': 'private, no-store' } })
 })
 
 export const POST = apiRoute(async (request: NextRequest) => {

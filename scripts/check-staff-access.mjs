@@ -32,6 +32,7 @@ class Query {
   select(_columns, opts) { this.head = opts?.head; return this }
   eq(key, value) { this.filters.push((row) => row[key] === value); return this }
   is(key, value) { this.filters.push((row) => row[key] === value); return this }
+  neq(key, value) { this.filters.push((row) => row[key] !== value); return this }
   in(key, values) { this.filters.push((row) => values.includes(row[key])); return this }
   not(key, _op, value) { this.filters.push((row) => row[key] !== value); return this }
   order() { return this }
@@ -170,10 +171,50 @@ eq((await response.json()).next, `/pos?v=station&p=${SLIP}`, 'Linked employee ke
 verifiedLogin = { ok: true, staff_id: STAFF }
 sessionEvents = []
 response = await quick.POST(pinRequest('/pos', `sarcafe_pos_return=/pos?v=station&p=${SLIP}`))
-eq((await response.json()).next, '/staff/profile?setup=google', 'Unlinked employee is sent to verified Google setup before other destinations')
+eq((await response.json()).next, `/pos?v=station&p=${SLIP}`, 'Unlinked employee lands where they asked; the home page carries the Gmail-link card instead of a forced redirect')
 eq(response.headers.get('cache-control'), 'private, no-store', 'PIN login response cannot be cached')
 response = await quick.POST(pinRequest('/staff/schedule'))
-eq((await response.json()).next, '/staff/profile?setup=google', 'Schedule return path cannot bypass verified Google setup')
+eq((await response.json()).next, '/staff', 'Unlinked employee asking for the schedule lands on the home page, where the Gmail-link card is')
+response = await quick.POST(pinRequest('/staff'))
+eq((await response.json()).next, '/staff', 'Unlinked employee with the default destination lands on the home page, not the profile')
 eq(navigation.safePosReturn('https://foreign.example.test/pos'), null, 'External return destinations are refused')
 eq(navigation.safePosReturn(`/pos?v=station&p=${SLIP}&unknown=secret`), `/pos?v=station&p=${SLIP}`, 'Only whitelisted event navigation survives login')
+// A checklist cannot be started, saved or submitted before its shift has begun (the real route, fixture database).
+{
+  const FUTURE = '55555555-5555-4555-8555-555555555555'
+  const PAST = '66666666-6666-4666-8666-666666666666'
+  const template = { categories: [{ id: 'c', title: 'Fixture', items: [{ id: 'i', label: 'Machine', kind: 'status', issueType: 'equipment', required: true }] }] }
+  const checklistsApi = load('src/app/api/checklists/route.ts', {
+    ...overrides,
+    '@/lib/checklists/server': { ensureChecklistTemplates() {}, syncPublishedChecklists() {}, loadStaffChecklistAssignments: async () => [], flattenDefinition: (d) => d.categories.flatMap((c) => c.items.map((i) => ({ ...i, categoryId: c.id, categoryTitle: c.title }))) },
+    '@/lib/checklists/types': load('src/lib/checklists/types.ts'),
+    '@/lib/checklists/developer': load('src/lib/checklists/developer.ts'),
+    '@/lib/checklists/window': load('src/lib/checklists/window.ts'),
+    '@/lib/shifts/time': load('src/lib/shifts/time.ts'),
+  })
+  const post = (body) => new NextRequest('http://localhost/api/checklists', { method: 'POST', headers: { origin: 'http://localhost', host: 'localhost', 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const answers = { i: { result: 'ok', answeredAt: new Date().toISOString() } }
+  reset()
+  me = { id: STAFF, role: 'staff', badge: null, branch_id: null, active: true, email: null, via: 'employee_code', quick: true }
+  rows.branches[0].timezone = 'Asia/Jerusalem'
+  rows.shifts = [
+    { id: 'sh-future', branch_id: 'branch', shift_date: '2099-01-01', start_time: '07:00', end_time: '13:00' },
+    { id: 'sh-past', branch_id: 'branch', shift_date: '2020-01-01', start_time: '07:00', end_time: '13:00' },
+  ]
+  rows.checklist_assignments = [
+    { id: FUTURE, staff_id: STAFF, shift_id: 'sh-future', status: 'pending', template_snapshot: template },
+    { id: PAST, staff_id: STAFF, shift_id: 'sh-past', status: 'pending', template_snapshot: template },
+  ]
+  response = await checklistsApi.POST(post({ action: 'save', assignmentId: FUTURE, answers }))
+  eq(response.status, 409, 'Saving a checklist before its shift is refused')
+  eq((await response.json()).error.code, 'too_early', 'The refusal says the checklist is still locked')
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: FUTURE, answers, attested: true }))
+  eq(response.status, 409, 'Submitting a checklist before its shift is refused')
+  eq(rows.checklist_assignments[0].status, 'pending', 'A refused submit leaves the checklist untouched')
+  response = await checklistsApi.POST(post({ action: 'save', assignmentId: PAST, answers }))
+  eq(response.status, 200, 'Once the shift has started the checklist can be saved')
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: PAST, answers, attested: true }))
+  eq(response.status, 200, 'Once the shift has started the checklist can be submitted')
+  eq(rows.checklist_assignments[1].status, 'submitted', 'The submitted checklist is stored')
+}
 console.log(`Staff access checks: ${checks} passed`)

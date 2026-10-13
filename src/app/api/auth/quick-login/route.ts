@@ -68,13 +68,14 @@ export const POST = apiRoute(async (request: NextRequest) => {
     .eq('active', true)
     .maybeSingle()
   if (accessError || !access) throw fail()
-  const destination = !verified.auth_user_id
-    ? '/staff/profile?setup=google'
-    : next === '/pos'
-      ? safePosReturn(request.cookies.get(POS_RETURN_COOKIE)?.value) || '/pos'
-      : next === '/staff/schedule'
-        ? '/staff'
-        : next
+  // A person with no Google account linked is not forced onto the profile any more: they land where they asked
+  // (or on the home page), and the home page carries a "link your Gmail" card with a notification dot until
+  // they do. The schedule needs Google, so its return path becomes the home page, where that card is.
+  const destination = next === '/pos'
+    ? safePosReturn(request.cookies.get(POS_RETURN_COOKIE)?.value) || '/pos'
+    : next === '/staff/schedule'
+      ? '/staff'
+      : next
 
   const response = NextResponse.json({ ok: true, next: destination }, { headers: { 'Cache-Control': 'private, no-store', Pragma: 'no-cache' } })
   response.cookies.set(POS_RETURN_COOKIE, '', { path: '/', maxAge: 0 })

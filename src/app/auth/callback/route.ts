@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp, isStaff } from '@/lib/staff/access'
+import { isDeveloper } from '@/lib/checklists/developer'
 import { revokeEmployeeSession } from '@/lib/staff/session'
 import { clearLinkCookie, GOOGLE_LINK_COOKIE, ONBOARDING_HEADERS, tokenHash } from '@/lib/staff/invitations'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
     const station = next === '/pos' ? safePosReturn((await cookies()).get(POS_RETURN_COOKIE)?.value) : null
     return completedRedirect(station ?? next)
   }
-  if (isOp(staffRow)) return completedRedirect('/owner/dashboard')
+  // The developer lives in the employee panel (it has a door to the dashboard and to the dev tools).
+  if (isOp(staffRow) && !isDeveloper({ badge: staffRow?.badge as string | null, email: user.email })) return completedRedirect('/owner/dashboard')
   return completedRedirect('/staff')
 }

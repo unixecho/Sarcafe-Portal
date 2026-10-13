@@ -122,7 +122,9 @@ check('a gone subscription (404/410) is deleted', /404 \|\| statusCode === 410/.
 const mig = read('supabase/migrations/20261012120000_staff_push_notifications.sql')
 const devApi = api
 check('the developer actions are refused server-side for everyone else', /isPushDeveloper\(me\)\) throw Forbidden/.test(devApi) && /action: z\.literal\('dev_send'\)/.test(devApi))
-check('the developer panel is rendered only for developers', /isPushDeveloper\(me\) && <DevPushPanel \/>/.test(ownerDash) && (ownerDash.match(/<DevPushPanel/g) ?? []).length === 1)
+const devPage = read('src/app/staff/dev/page.tsx')
+check('the developer panel is rendered only for developers (the /staff/dev page; the owner dashboard only links to it)', /if \(!isDeveloper\(me\)\) redirect/.test(devPage) && (devPage.match(/<DevPushPanel/g) ?? []).length === 1 && !/<DevPushPanel/.test(ownerDash) && /isDeveloper\(me\)/.test(ownerDash))
+check('the page rule and the API rule are the same developer rule', /badge === 'developer' \|\| isChecklistDeveloper\(row\.email\)/.test(read('src/lib/checklists/developer.ts')) && /badge === 'developer' \|\| isChecklistDeveloper\(me\.email\)/.test(read('src/lib/push/dev.ts')))
 check('developer test rows are stamped read and go through the real inbox + flush', /read_at: now/.test(read('src/lib/push/dev.ts')) && /flushStaffPush\(\)/.test(read('src/lib/push/dev.ts')) && /from\('schedule_notifications'\)/.test(read('src/lib/push/dev.ts')))
 const sched = read('supabase/migrations/20261012130000_staff_push_scheduler.sql')
 check('scheduler migration: runs every 2 minutes under a fixed job name, secret from Vault, guarded for databases without the extensions', /cron\.schedule\('staff-push', '\*\/2 \* \* \* \*'/.test(sched) && /vault\.create_secret/.test(sched) && /pg_available_extensions/.test(sched) && !/Bearer [0-9a-f]{20,}/.test(sched))

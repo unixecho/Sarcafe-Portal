@@ -213,6 +213,42 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 .ck-status { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 9px; font-size: .76rem; font-weight: 800; }
 .ck-status--pending { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
 .ck-status--submitted { background: color-mix(in srgb, var(--success, #48b978) 14%, transparent); color: var(--success, #48b978); }
+.ck-status--open { background: color-mix(in srgb, var(--neon) 16%, transparent); color: var(--neon-soft); }
+.ck-status--late { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.ck-status--upcoming, .ck-status--locked { background: color-mix(in srgb, var(--text-faint) 14%, transparent); color: var(--text-faint); }
+
+/* A checklist whose shift has not started: greyed out and untouchable (the API refuses it as well). */
+.ck-card--locked, button.ck-card--locked:disabled { opacity: .5; filter: grayscale(1); cursor: not-allowed; }
+
+/* ---- Owner's shift tracker (מעקב משמרות): one row per checklist, a spacer with the day between days ---- */
+.ck-track { gap: 8px; }
+.ck-track-day { display: flex; flex-direction: column; gap: 8px; }
+.ck-spacer { display: flex; align-items: center; gap: 12px; margin-block: 10px 2px; color: var(--text-dim); font-weight: 800; font-size: .84rem; }
+.ck-spacer::before, .ck-spacer::after { content: ""; flex: 1; block-size: 1px; background: var(--line-strong, var(--line)); }
+.ck-spacer span { padding-inline: 4px; white-space: nowrap; }
+.ck-spacer--today { color: var(--neon-soft); }
+.ck-spacer--today::before, .ck-spacer--today::after { background: color-mix(in srgb, var(--neon) 55%, transparent); }
+.ck-track-row {
+  --emp: var(--line);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev);
+  border-inline-start: 5px solid var(--emp); /* the employee's own colour, the same as on the schedule */
+  transition: opacity .2s var(--ease), filter .2s var(--ease);
+}
+.ck-person-dot { inline-size: 36px; block-size: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--emp); color: #17110e; font-weight: 900; font-size: .95rem; }
+.ck-track-main { display: flex; flex-direction: column; gap: 5px; min-inline-size: 0; }
+.ck-track-main > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-track-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--text-dim); font-size: .8rem; }
+/* The branch is a SOLID tag in its own colour; the employee is a round avatar plus a coloured edge. Different shape, so the two colours are never mistaken for each other. */
+.ck-branch-pill { --branch: var(--neon); display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 6px; font-weight: 800; color: #17110e; background: var(--branch); }
+.ck-branch-pill i { display: none; }
+.ck-track-state { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.ck-track-row--upcoming { opacity: .42; filter: grayscale(1); pointer-events: none; user-select: none; }
+.ck-track-row--late { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+@media (max-width: 440px) {
+  .ck-track-row { grid-template-columns: auto minmax(0, 1fr); }
+  .ck-track-state { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; flex-wrap: wrap; }
+}
 .ck-inbox { display: flex; flex-direction: column; gap: 10px; }
 .ck-issue-row { border-inline-start: 4px solid var(--danger); }
 .ck-builder-category { border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; background: color-mix(in srgb, var(--bg-elev) 72%, transparent); }
