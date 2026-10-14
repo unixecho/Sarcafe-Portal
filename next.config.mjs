@@ -37,6 +37,15 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         ],
       },
+      // The ONE exception to "never framed": the payslip viewer shows a private document inside our own page. It is the
+      // last rule so it wins for this path; only our own origin may frame it, and the route checks who may read the file.
+      {
+        source: '/api/staff/payslips/:id/view',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        ],
+      },
     ]
   },
 }

@@ -67,12 +67,14 @@ const overrides = {
   '@/lib/staff/session': { resolveStaffIdentity: async () => me },
   '@/lib/staff/access': access,
   '@/lib/checklists/links': load('src/lib/checklists/links.ts'),
+  '@/lib/staff/zip': load('src/lib/staff/zip.ts'),
   '@/lib/rate-limit': { checkRateLimit: async () => true, checkCredentialRateLimit: async () => true },
 }
 const guard = load('src/lib/pos/server/guard.ts', overrides)
 overrides['@/lib/pos/server/guard'] = guard
 const records = load('src/lib/staff/records.ts', overrides)
 overrides['@/lib/staff/records'] = records
+overrides['@/lib/staff/payslips'] = load('src/lib/staff/payslips.ts', overrides)
 overrides['@/lib/owner/guard'] = { requireOwner: async () => { if (!me) throw errors.Unauthorized(); if (me.quick || me.via !== 'google' || !access.isOp(me)) throw errors.Forbidden(); return me } }
 const slips = load('src/app/api/staff/payslips/[id]/route.ts', overrides)
 const upload = load('src/app/api/owner/staff/[id]/payslips/route.ts', overrides)
@@ -319,5 +321,81 @@ eq(navigation.safePosReturn(`/pos?v=station&p=${SLIP}&unknown=secret`), `/pos?v=
     response = await midShift.POST(call({ action: 'submit', assignmentId: CLOSE, answers, attested: true }))
     eq([response.status, rows.checklist_assignments[1].status], [409, 'pending'], 'It cannot be submitted early either, and is left untouched')
   }
+}
+// The payslip viewer and the zip download: the same private access as the single download (real routes, fixture database).
+{
+  const viewRoute = load('src/app/api/staff/payslips/[id]/view/route.ts', overrides)
+  const zipRoute = load('src/app/api/staff/payslips/zip/route.ts', overrides)
+  const OWN_2 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  const PEER_2 = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  const get = (path) => new NextRequest(`http://localhost${path}`, { headers: { host: 'localhost' } })
+  const zipNames = async (res) => {
+    const bytes = Buffer.from(await res.arrayBuffer())
+    const end = bytes.length - 22
+    if (bytes.readUInt32LE(end) !== 0x06054b50) return null
+    const count = bytes.readUInt16LE(end + 10)
+    let at = bytes.readUInt32LE(end + 16)
+    const names = []
+    for (let i = 0; i < count; i++) {
+      const length = bytes.readUInt16LE(at + 28)
+      names.push(bytes.subarray(at + 46, at + 46 + length).toString('utf8'))
+      at += 46 + length + bytes.readUInt16LE(at + 30) + bytes.readUInt16LE(at + 32)
+    }
+    return names
+  }
+  const fresh = () => {
+    reset()
+    rows.staff_payslips.push(
+      { id: OWN_2, staff_id: STAFF, object_path: 'own-2.pdf', file_name: 'payslip.pdf', pay_month: '2030-02-01', content_type: 'application/pdf', byte_size: 24 },
+      { id: PEER_2, staff_id: PEER, object_path: 'peer-2.png', file_name: 'peer-2.png', pay_month: '2030-02-01', content_type: 'image/png', byte_size: 24 },
+    )
+  }
+  const asGoogleEmployee = { id: STAFF, via: 'google', quick: false, active: true, role: 'staff' }
+
+  fresh(); me = null
+  eq([(await viewRoute.GET(get('/'), ctx(SLIP))).status, (await zipRoute.GET(get(`/x?ids=${SLIP}`))).status], [401, 401], 'Signed-out visitors cannot view or zip payslips')
+  for (const identity of [{ id: STAFF, via: 'employee_code', quick: true }, { id: STAFF, via: 'google', quick: true }]) {
+    me = identity
+    eq([(await viewRoute.GET(get('/'), ctx(SLIP))).status, (await zipRoute.GET(get(`/x?ids=${SLIP}`))).status], [403, 403], 'A code session or the legacy PIN session cannot view or zip payslips')
+  }
+  eq(calls.filter((c) => c[0] === 'download').length, 0, 'A refused request never reads a file')
+
+  me = asGoogleEmployee
+  response = await viewRoute.GET(get('/'), ctx(SLIP))
+  eq(response.status, 200, 'An employee can view their own payslip')
+  eq([response.headers.get('content-type'), response.headers.get('content-disposition').startsWith('inline; filename="payslip.pdf"'), response.headers.get('x-frame-options'), response.headers.get('content-security-policy')], ['application/pdf', true, 'SAMEORIGIN', "frame-ancestors 'self'"], 'It is shown inline, framable by our own origin only')
+  eq([response.headers.get('cache-control'), response.headers.get('referrer-policy')], ['private, no-store', 'no-referrer'], 'The viewer response is private and uncacheable')
+  eq(Buffer.from(await response.arrayBuffer()).toString(), '%PDF-1.7 bytes of own.pdf', 'It serves exactly the stored file')
+  calls = []
+  response = await viewRoute.GET(get('/'), ctx(PEER_SLIP))
+  eq([response.status, calls.length], [404, 0], 'A colleague\'s payslip is a 404 and its file is never read')
+  response = await viewRoute.GET(get('/'), ctx('not-a-uuid'))
+  eq(response.status, 400, 'A malformed id is a 400')
+
+  fresh(); me = asGoogleEmployee
+  response = await zipRoute.GET(get(`/x?ids=${SLIP},${OWN_2}`))
+  eq(response.status, 200, 'An employee can zip several of their own payslips')
+  eq([response.headers.get('content-type'), response.headers.get('content-disposition').startsWith('attachment; filename="payslips.zip"; filename*=UTF-8\'\''), response.headers.get('cache-control')], ['application/zip', true, 'private, no-store'], 'It is an attachment named in Hebrew, private and uncacheable')
+  eq(await zipNames(response), ['payslip.pdf', 'payslip (2).pdf'], 'Both files are inside, oldest month first, the same name kept apart')
+  fresh(); calls = []
+  response = await zipRoute.GET(get(`/x?ids=${SLIP},${PEER_SLIP}`))
+  eq([response.status, calls.filter((c) => c[0] === 'download').length], [404, 0], 'One colleague\'s payslip in the selection fails the whole request, before any file is read')
+  for (const bad of ['', 'abc', `${SLIP},nope`, Array.from({ length: 101 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`).join(',')]) {
+    response = await zipRoute.GET(get(`/x?ids=${bad}`))
+    eq(response.status, 400, `A missing, malformed or oversized selection is a 400 (${bad.slice(0, 12) || 'empty'})`)
+  }
+  rows.staff_payslips[0].byte_size = 40 * 1024 * 1024
+  calls = []
+  response = await zipRoute.GET(get(`/x?ids=${SLIP}`))
+  eq([response.status, calls.filter((c) => c[0] === 'download').length], [413, 0], 'A selection larger than the cap is refused before anything is read')
+
+  fresh(); me = { ...asGoogleEmployee, role: 'owner' }
+  response = await zipRoute.GET(get(`/x?ids=${PEER_SLIP},${PEER_2}`))
+  eq([response.status, await zipNames(response)], [200, ['peer.pdf', 'peer-2.png']], 'An owner can zip any employee\'s payslips')
+  response = await viewRoute.GET(get('/'), ctx(PEER_2))
+  eq([response.status, response.headers.get('content-type')], [200, 'image/png'], 'An owner can view any employee\'s payslip, an image as an image')
+  rows.staff_payslips.find((r) => r.id === PEER_2).content_type = 'text/html'
+  response = await viewRoute.GET(get('/'), ctx(PEER_2))
+  eq([response.headers.get('content-type'), response.headers.get('content-disposition').startsWith('attachment')], ['application/octet-stream', true], 'Anything that is not a known document type is never rendered, only offered as a download')
 }
 console.log(`Staff access checks: ${checks} passed`)

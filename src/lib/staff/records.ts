@@ -25,7 +25,7 @@ export async function loadStaffRecords(staffId: string, canReadPayslips: boolean
     service.from('schedule_weeks').select('id, branch_id, published_snapshot').not('published_snapshot', 'is', null).order('week_start', { ascending: false }).limit(104),
     service.from('checklist_assignments').select('id, checklist_kind, status, issue_count, submitted_at, created_at, issues').eq('staff_id', staffId).order('created_at', { ascending: false }).limit(100),
     service.from('pos_orders').select('id, ticket_no, total_agorot, status, created_at').eq('created_by', staffId).order('created_at', { ascending: false }).limit(100),
-    canReadPayslips ? service.from('staff_payslips').select('id, pay_month, file_name, byte_size, uploaded_at').eq('staff_id', staffId).order('pay_month', { ascending: false }).order('uploaded_at', { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
+    canReadPayslips ? service.from('staff_payslips').select('id, pay_month, file_name, content_type, byte_size, uploaded_at').eq('staff_id', staffId).order('pay_month', { ascending: false }).order('uploaded_at', { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
     service.from('branches').select('id, name, slug'),
   ])
   if ([person, weeks, checklists, orders, documents, branches].some((r) => r.error)) throw new ApiError(503, 'unavailable', 'לא הצלחנו לטעון את תיק העובד. נסו שוב.')

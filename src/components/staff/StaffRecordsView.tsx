@@ -2,9 +2,10 @@
 
 import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { CalendarDays, ClipboardCheck, FileText, ShoppingBag, Upload, Download, LockKeyhole } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, FileText, ShoppingBag, Upload, LockKeyhole } from 'lucide-react'
 import type { StaffRecords } from '@/lib/staff/records-types'
 import EmojiAvatarPicker from '@/components/staff/EmojiAvatarPicker'
+import PayslipLibrary from '@/components/staff/PayslipLibrary'
 import './records.css'
 
 const TABS = [
@@ -16,7 +17,6 @@ const TABS = [
 const kinds: Record<string, string> = { opening: 'פתיחה', handover: 'העברת משמרת', closing: 'סגירה' }
 const status: Record<string, string> = { pending: 'ממתין', in_progress: 'במילוי', submitted: 'הוגש', open: 'בטיפול', completed: 'הושלמה', void: 'בוטלה' }
 const date = (value: string) => new Intl.DateTimeFormat('he-IL', { dateStyle: 'medium', timeZone: 'Asia/Jerusalem' }).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value))
-const monthLabel = (value: string) => new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric', timeZone: 'Asia/Jerusalem' }).format(new Date(`${value.slice(0, 7)}-15T12:00:00Z`))
 
 export default function StaffRecordsView({ initial, owner = false, children }: { initial: StaffRecords; owner?: boolean; children?: React.ReactNode }) {
   const [records, setRecords] = useState(initial)
@@ -84,7 +84,7 @@ export default function StaffRecordsView({ initial, owner = false, children }: {
             <button type="submit" className="sr-action press" disabled={busy}><Upload size={18}/>{busy ? 'מעלה את התלוש…' : 'העלאת תלוש'}</button>
             {error && <p role="alert" className="sr-attention">{error}</p>}{success && <p role="status">{success}</p>}
           </form>}
-          {records.payslips.length ? <ul className="sr-list">{records.payslips.map((p) => <li key={p.id}><span className="sr-row-icon"><FileText size={20}/></span><div><strong>{monthLabel(p.pay_month)}</strong><small>{p.file_name} · הועלה {date(p.uploaded_at)}</small></div><a className="sr-download press" href={`/api/staff/payslips/${p.id}`} aria-label={`הורדת תלוש ${monthLabel(p.pay_month)}`}><Download size={20}/>הורדה</a></li>)}</ul> : <Empty>תלושי השכר שיועלו יופיעו כאן</Empty>}
+          {records.payslips.length ? <PayslipLibrary payslips={records.payslips} /> : <Empty>תלושי השכר שיועלו יופיעו כאן</Empty>}
         </>}
       </>}
     </section>

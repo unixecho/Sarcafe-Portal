@@ -1,4 +1,4 @@
-export type Payslip = { id: string; pay_month: string; file_name: string; byte_size: number; uploaded_at: string }
+export type Payslip = { id: string; pay_month: string; file_name: string; content_type: string; byte_size: number; uploaded_at: string }
 export type StaffRecords = {
   employee: { id: string; first_name: string | null; last_name: string | null; display_name: string | null; employee_no: string | null; email: string | null; active: boolean; avatar_emoji: string | null }
   shifts: { id: string; date: string; start: string; end: string; label: string; branch: string }[]

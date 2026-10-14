@@ -24,3 +24,42 @@
 .sr-file-control { position:relative; display:flex; align-items:center; gap:10px; min-height:48px; padding:10px 12px; border:1px solid var(--sr-line); border-radius:12px; background:var(--bg); color:var(--text); font-size:.8rem; overflow:hidden; }.sr-file-control > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.sr-file-control svg { flex-shrink:0; }.sr-file-control:focus-within { outline:2px solid var(--neon); outline-offset:3px; }.sr-upload .sr-file-control input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; height:100%; }.sr-file-control:has(input:disabled) { opacity:.6; }
 @media(max-width:520px) { .sr-tabs button { flex-direction:column; font-size:.7rem; min-height:56px; }.sr-upload-fields { grid-template-columns:minmax(0,1fr); }.sr-list li { padding:14px 12px; gap:9px; }.sr-meta { max-width:82px; font-size:.7rem; }.sr-download { font-size:0; }.sr-row-icon { width:32px; height:32px; } }
 @media(prefers-reduced-motion:reduce) { .staff-records * { animation:none!important; transition:none!important; } }
+
+/* ---- Payslips: pick several, read them in the page ---- */
+.sr-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--sr-line); border-radius: 18px; background: var(--bg-elev); }
+.sr-bulk__count { flex: 1 1 140px; min-width: 0; color: var(--text-dim); font-size: .8rem; }
+.sr-action--small { min-height: 44px; padding: 8px 16px; font-size: .84rem; }
+.sr-action--ghost { background: color-mix(in srgb, var(--neon) 12%, var(--bg)); color: var(--text); }
+.sr-action:disabled:not([aria-busy]) { opacity: .45; cursor: not-allowed; }
+.sr-check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--text); font-size: .84rem; cursor: pointer; }
+.sr-check input { inline-size: 22px; block-size: 22px; margin: 0; accent-color: var(--neon); cursor: pointer; }
+.sr-check--row { min-inline-size: 44px; justify-content: center; margin-inline: -6px; }
+.sr-list li.sr-list__picked { background: color-mix(in srgb, var(--neon) 7%, var(--bg-elev)); }
+.sr-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.sr-open__copy { flex: 1; min-width: 0; }
+.sr-open__copy strong { display: block; font-size: .88rem; overflow-wrap: anywhere; }
+.sr-open__copy small { display: block; margin-top: 5px; color: var(--text-dim); font-size: .73rem; overflow-wrap: anywhere; }
+.sr-open__eye { flex-shrink: 0; color: var(--neon-soft); }
+
+/* The viewer is portalled to <body>, so it cannot rely on the .staff-records scope: it uses the global tokens only. */
+/* above the app header (320) and its menu, below toasts (1000) */
+.sr-viewer { position: fixed; inset: 0; z-index: 400; display: flex; flex-direction: column; background: var(--bg); color: var(--text); padding-top: env(safe-area-inset-top); animation: sr-viewer-in .18s var(--ease) both; }
+@keyframes sr-viewer-in { from { opacity: 0; } }
+.sr-viewer__bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.sr-viewer__title { flex: 1; min-width: 0; text-align: start; }
+.sr-viewer__title h2 { margin: 0; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-viewer__title small { color: var(--text-dim); font-size: .74rem; }
+.sr-viewer__icon { display: inline-grid; place-items: center; inline-size: 44px; block-size: 44px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-elev); color: var(--text); cursor: pointer; text-decoration: none; }
+.sr-viewer__months { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); }
+.sr-viewer__months::-webkit-scrollbar { display: none; }
+.sr-viewer__months button { flex-shrink: 0; min-height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .8rem; cursor: pointer; }
+.sr-viewer__months button[aria-selected='true'] { background: color-mix(in srgb, var(--neon) 16%, var(--bg)); border-color: color-mix(in srgb, var(--neon) 60%, transparent); color: var(--text); font-weight: 700; }
+.sr-viewer__stage { position: relative; flex: 1; min-height: 0; display: grid; background: color-mix(in srgb, var(--bg-elev) 70%, #000); }
+.sr-viewer__stage iframe { inline-size: 100%; block-size: 100%; border: 0; background: #fff; }
+.sr-viewer__stage img { max-inline-size: 100%; max-block-size: 100%; margin: auto; object-fit: contain; }
+.sr-viewer__status { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; margin: 0; padding: 20px; text-align: center; color: var(--text-dim); pointer-events: none; }
+.sr-viewer__status a { pointer-events: auto; color: var(--neon-soft); }
+.sr-viewer__nav { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--bg); }
+.sr-viewer__nav .sr-action { inline-size: 100%; }
+@media (prefers-reduced-motion: reduce) { .sr-viewer { animation: none; } }
+@media (max-width: 520px) { .sr-bulk { padding: 10px 12px; } .sr-open { gap: 9px; } }
