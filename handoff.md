@@ -1,5 +1,7 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-10-15 (late): workshop viewer got a real full-screen / landscape mode — see `docs/WORKSHOP.md`; verified in a scratch copy at 844x390 and 390x844 (18 checks), not on a real iPhone
+
 ## Claude addendum, 2026-10-15: one person per shift does the checklists, days off + shift wishes (blocking across branches), the "missing or not working" report with a morning alert, the coffee workshop card — the three migrations were APPLIED to production by the owner (SQL editor) and the code is pushed to `main`
 
 **Asked by the owner (this session).** (1) With more than one employee on a shift the owner picks who does the checklists; nobody picked = the first checklist sent covers that checklist for the others, who can still send the shift's other checklist (a shift has two). (2) Employees request days off (for now any day, no cap); an approved day off makes the person unschedulable in EVERY branch. (3) Employees can ask not to work the morning or the evening of a day; the owner sees it while building the week (the person in a different colour), may still assign whoever they want, but an approved day off is shown as unavailable and blocked. (4) A report for the owner, with a daily morning alert, of what the checklists marked negative: grouped by what it is about (ice machine) with who reported it, in which shifts, at what time; reachable from its own category on the owner's dashboard. (5) A prominent-but-quiet card for `coffee_workshop.pptx` on "the main page".

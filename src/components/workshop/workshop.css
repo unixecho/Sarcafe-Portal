@@ -21,3 +21,25 @@
 .ws__dot[aria-current='true'] { border-color: var(--neon); color: var(--text); background: color-mix(in srgb, var(--neon) 14%, var(--bg-elev)); }
 .ws__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .ws__link { display: inline-flex; align-items: center; gap: 8px; min-block-size: 46px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .84rem; font-weight: 600; text-decoration: none; cursor: pointer; }
+.ws__link--primary { border-color: color-mix(in srgb, var(--neon) 55%, var(--line)); color: var(--text); background: color-mix(in srgb, var(--neon) 12%, var(--bg-elev)); }
+
+/* Full screen (WorkshopViewer.tsx): our own layer over the whole window, so it works on an iPhone too. The slide is as big as
+   the screen allows (contain), the controls fade after a few seconds, and a note asks for the phone to be turned sideways. */
+.ws-full { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: #000; color: #fff; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; block-size: 100vh; block-size: 100dvh; padding-inline: env(safe-area-inset-left, 0) env(safe-area-inset-right, 0); }
+.ws-full__slide { max-inline-size: 100%; max-block-size: 100%; inline-size: auto; block-size: auto; object-fit: contain; display: block; pointer-events: none; }
+.ws-full__top, .ws-full__nav, .ws-full__rotate { transition: opacity .25s ease; opacity: 0; pointer-events: none; }
+.ws-full--controls .ws-full__top, .ws-full--controls .ws-full__nav, .ws-full--controls .ws-full__rotate { opacity: 1; }
+.ws-full--controls .ws-full__top > *, .ws-full--controls .ws-full__nav { pointer-events: auto; }
+.ws-full__top { position: absolute; inset-block-start: max(10px, env(safe-area-inset-top, 0)); inset-inline: max(12px, env(safe-area-inset-left, 0)) max(12px, env(safe-area-inset-right, 0)); display: flex; align-items: center; gap: 12px; }
+.ws-full__btn { display: grid; place-items: center; inline-size: 48px; block-size: 48px; border-radius: 50%; border: 1px solid rgba(255,255,255,.28); background: rgba(0,0,0,.55); color: #fff; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.ws-full__btn:disabled { opacity: .3; }
+.ws-full__count { margin: 0; display: grid; gap: 1px; padding: 6px 14px; border-radius: 14px; background: rgba(0,0,0,.55); font-size: .8rem; min-inline-size: 0; }
+.ws-full__count strong { font-variant-numeric: tabular-nums; }
+.ws-full__count span { opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-full__nav { position: absolute; inset-block-start: 50%; transform: translateY(-50%); }
+.ws-full__nav--prev { inset-inline-start: max(12px, env(safe-area-inset-right, 0)); }
+.ws-full__nav--next { inset-inline-end: max(12px, env(safe-area-inset-left, 0)); }
+/* In portrait the slide is small: say so, and how to fix it. Gone as soon as the phone is on its side. */
+.ws-full__rotate { display: none; position: absolute; inset-inline: 16px; inset-block-end: max(18px, env(safe-area-inset-bottom, 0)); margin: 0; align-items: center; justify-content: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: rgba(0,0,0,.65); font-size: .88rem; text-align: center; }
+@media (orientation: portrait) { .ws-full__rotate { display: flex; } }
+@media (prefers-reduced-motion: reduce) { .ws-full__top, .ws-full__nav, .ws-full__rotate { transition: none; } }
