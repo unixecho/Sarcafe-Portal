@@ -5,6 +5,9 @@ pushes (Web Push, the same VAPID keys the customer order page uses) the things t
 
 ## What gets pushed
 
+New 2026-10-15 (all go through the same inbox -> outbox):
+`issues.digest` (08:00, owners and developers, per branch, only when something is missing or not working; opens `/owner/issues?branch=<slug>`), `timeoff.new` / `timeoff.cancelled` (managers: an employee asked for / withdrew a day off; open the requests tab on that week), `timeoff.decided` (the employee: approved or declined, with the owner's note; opens the requests-for-the-week tab), `checklist.lead` / `checklist.lead_other` (the owner picked who does a published shift's checklists). The owner's missing-checklist alert (`checklist.gap`) is now one per checklist, not per person.
+
 | Alert | Who | When | Source |
 | --- | --- | --- | --- |
 | Schedule published / changed | the people on it | when the manager publishes | `sched_publish_week` -> inbox |

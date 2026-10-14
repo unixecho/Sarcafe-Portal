@@ -1,0 +1,23 @@
+/* The coffee workshop viewer (WorkshopViewer.tsx). Quiet, one column, thumb-sized controls. */
+.ws { display: grid; gap: 14px; max-inline-size: 980px; margin-inline: auto; padding-block-end: 28px; outline: none; }
+.ws:focus-visible { outline: 2px solid var(--neon); outline-offset: 4px; border-radius: 18px; }
+.ws__intro h2 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; }
+.ws__intro p { margin: 4px 0 0; color: var(--text-dim); font-size: .86rem; line-height: 1.6; }
+.ws__stage { position: relative; inline-size: 100%; aspect-ratio: 16 / 9; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: #4a2c2a; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.ws__slide { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; object-fit: contain; display: block; }
+/* Zoomed: taller window, the slide twice as wide inside it, panned with a finger (or the scroll bars on a desktop). */
+.ws__stage--zoom { aspect-ratio: auto; block-size: min(72svh, 560px); overflow: auto; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
+.ws__stage--zoom .ws__slide { position: static; inline-size: 230%; block-size: auto; max-inline-size: none; }
+.ws__stage:fullscreen { border: 0; border-radius: 0; background: #000; display: grid; place-items: center; }
+.ws__stage:fullscreen .ws__slide { position: static; max-inline-size: 100vw; max-block-size: 100vh; inline-size: auto; block-size: auto; }
+.ws__bar { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 10px; }
+.ws__btn { display: grid; place-items: center; inline-size: 52px; block-size: 52px; border-radius: 16px; border: 1px solid var(--line-strong, var(--line)); background: var(--bg-elev); color: var(--text); cursor: pointer; }
+.ws__btn:disabled { opacity: .35; cursor: default; }
+.ws__count { margin: 0; display: grid; gap: 2px; text-align: center; min-inline-size: 0; }
+.ws__count strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+.ws__count span { color: var(--text-dim); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws__dots { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.ws__dot { inline-size: 40px; block-size: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .82rem; font-weight: 650; font-variant-numeric: tabular-nums; cursor: pointer; }
+.ws__dot[aria-current='true'] { border-color: var(--neon); color: var(--text); background: color-mix(in srgb, var(--neon) 14%, var(--bg-elev)); }
+.ws__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ws__link { display: inline-flex; align-items: center; gap: 8px; min-block-size: 46px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .84rem; font-weight: 600; text-decoration: none; cursor: pointer; }

@@ -51,6 +51,8 @@ async function callSched(service: Service, fn: string, args: Row): Promise<Row> 
     console.error(`schedule rpc ${fn} failed:`, error.code, String(error.message ?? '').slice(0, 200))
     // The deferred constraint trigger is the backstop for a double-booking written around the checks.
     if (/sched_overlap/.test(error.message ?? '')) throw refusal('conflict')
+    // An approved day off is a block in every branch, enforced the same way.
+    if (/sched_time_off/.test(error.message ?? '')) throw refusal('time_off')
     throw new ApiError(500, 'internal_error', INTERNAL)
   }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
@@ -128,7 +130,7 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
     case 'saveShift': {
       const branchId = await branchOfWeek(service, action.weekId)
       const actor = await requireScheduleManager(branchId)
-      return callSched(service, 'sched_save_shift', {
+      const saved = await callSched(service, 'sched_save_shift', {
         p_actor: actor.id,
         p_week_id: action.weekId,
         p_shift_id: action.shiftId ?? null,
@@ -143,6 +145,13 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
         p_assignees: action.assignees.map((a) => ({ staffId: a.staffId, roleId: a.roleId ?? null, ...(a.assignmentId ? { assignmentId: a.assignmentId } : {}) })),
         p_expected_updated: action.expectedUpdatedAt ?? null,
       })
+      // Who does the shift's checklists is picked among the people the save just left on the shift, so it goes second.
+      // A refusal here (the person is not on the shift) reaches the sheet as an error; the shift itself is already saved.
+      if (action.checklistLeadStaffId !== undefined) {
+        const shiftId = typeof saved.shiftId === 'string' ? saved.shiftId : action.shiftId
+        if (shiftId) await callSched(service, 'sched_set_checklist_lead', { p_actor: actor.id, p_shift: shiftId, p_staff: action.checklistLeadStaffId })
+      }
+      return saved
     }
 
     case 'deleteShift': {
@@ -304,6 +313,17 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       })
     }
 
+    case 'submitTimeOff': {
+      const staff = await requireScheduleViewer(action.branchId)
+      const start = weekStartOf(action.weekStart)
+      if (start !== action.weekStart) throw refusal('bad_date')
+      const end = addDays(start, 6)
+      for (const e of action.entries) {
+        if (e.date < start || e.date > end) throw refusal('bad_date')
+      }
+      return callSched(service, 'sched_submit_time_off', { p_actor: staff.id, p_week_start: start, p_entries: action.entries })
+    }
+
     case 'requestShift': {
       const branchId = await branchOfShift(service, action.shiftId)
       const actor = await requirePublishedScheduleViewer(branchId)
@@ -367,6 +387,18 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
         p_swap: action.swapId,
         p_approve: action.approve,
         p_note: action.note ?? null,
+      })
+    }
+
+    case 'decideTimeOff': {
+      const actor = await requireScheduleManager(action.branchId)
+      return callSched(service, 'sched_decide_time_off', {
+        p_actor: actor.id,
+        p_branch: action.branchId,
+        p_ids: action.ids,
+        p_approve: action.approve,
+        p_note: action.note ?? null,
+        p_force: action.force === true,
       })
     }
 

@@ -53,6 +53,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
     ? await service.from('shifts').select('id, shift_date, start_time, end_time').in('id', shiftIds)
     : { data: [] as { id: string; shift_date: string; start_time: string; end_time: string }[] }
   const byShift = new Map((shifts ?? []).map((shift) => [shift.id as string, shift]))
+  const covered = await coveredByFor(service, (rows ?? []).filter((row) => row.status === 'covered').map((row) => ({ shiftId: row.shift_id as string, kind: row.checklist_kind as string })))
   return (rows ?? [])
     .map((row): ChecklistAssignment | null => {
       const shift = byShift.get(row.shift_id as string)
@@ -72,6 +73,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
         templateVersion: row.template_version as number,
         template: row.template_snapshot as ChecklistDefinition,
         status: row.status as ChecklistAssignment['status'],
+        coveredBy: row.status === 'covered' ? covered.get(`${row.shift_id}|${row.checklist_kind}`) ?? null : undefined,
         dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }),
         answers: (row.answers ?? {}) as ChecklistAssignment['answers'],
         issueCount: (row.issue_count as number) ?? 0,
@@ -80,6 +82,40 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
     })
     .filter((row): row is ChecklistAssignment => row !== null)
     .sort((a, b) => a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime) || ({ opening: 0, handover: 1, closing: 2 }[a.kind] - { opening: 0, handover: 1, closing: 2 }[b.kind]))
+}
+
+/** The name a person goes by in a sentence (the owner screens use the same order). */
+export const personLabel = (row: { display_name?: string | null; first_name?: string | null; last_name?: string | null; handle?: string | null } | undefined) =>
+  row?.display_name || [row?.first_name, row?.last_name].filter(Boolean).join(' ') || row?.handle || 'עמית/ה'
+
+/** The sentence for a person who tries to fill in a checklist somebody else is responsible for. */
+export async function coveredMessage(service: Service, shiftId: string, kind: string): Promise<string> {
+  const by = (await coveredByFor(service, [{ shiftId, kind }])).get(`${shiftId}|${kind}`)
+  if (by?.reason === 'lead') return `${by.name} נבחר/ה למלא את הצ׳קליסטים של המשמרת הזו, אין צורך שתגישו.`
+  if (by) return `הצ׳קליסט הזה כבר נשלח על ידי ${by.name} באותה משמרת, אין צורך להגיש אותו שוב.`
+  return 'הצ׳קליסט הזה כבר מטופל על ידי מישהו אחר במשמרת, אין צורך להגיש אותו.'
+}
+
+/** For each covered (shift, kind): who sent it first, or who the owner picked instead. Keyed `<shiftId>|<kind>`. */
+export async function coveredByFor(service: Service, wanted: { shiftId: string; kind: string }[]): Promise<Map<string, NonNullable<ChecklistAssignment['coveredBy']>>> {
+  const out = new Map<string, NonNullable<ChecklistAssignment['coveredBy']>>()
+  if (wanted.length === 0) return out
+  const shiftIds = [...new Set(wanted.map((item) => item.shiftId))]
+  const [{ data: sent }, { data: leads }] = await Promise.all([
+    service.from('checklist_assignments').select('shift_id, checklist_kind, staff_id, submitted_at').in('shift_id', shiftIds).eq('status', 'submitted'),
+    service.from('shift_assignments').select('shift_id, staff_id').in('shift_id', shiftIds).eq('checklist_lead', true),
+  ])
+  const peopleIds = [...new Set([...(sent ?? []).map((row) => row.staff_id as string | null), ...(leads ?? []).map((row) => row.staff_id as string | null)].filter((id): id is string => Boolean(id)))]
+  const { data: people } = peopleIds.length ? await service.from('staff').select('id, display_name, first_name, last_name, handle').in('id', peopleIds) : { data: [] }
+  const nameOf = new Map((people ?? []).map((row) => [row.id as string, personLabel(row)]))
+  for (const item of wanted) {
+    const key = `${item.shiftId}|${item.kind}`
+    const first = (sent ?? []).find((row) => row.shift_id === item.shiftId && row.checklist_kind === item.kind)
+    const lead = (leads ?? []).find((row) => row.shift_id === item.shiftId)
+    if (first) out.set(key, { name: nameOf.get(first.staff_id as string) ?? 'עמית/ה', at: (first.submitted_at as string | null) ?? null, reason: 'submitted' })
+    else if (lead) out.set(key, { name: nameOf.get(lead.staff_id as string) ?? 'עמית/ה', at: null, reason: 'lead' })
+  }
+  return out
 }
 
 export function flattenDefinition(definition: ChecklistDefinition) {

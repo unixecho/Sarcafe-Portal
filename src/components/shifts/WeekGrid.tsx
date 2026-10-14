@@ -6,6 +6,7 @@ import { hoursFor, matchPreset } from '@/lib/shifts/presets'
 import { nameOf, indexByShift, pendingRequestsByShift, swapPendingAssignmentIds, shiftFacts } from '@/lib/shifts/view'
 import { formatDateLabel, formatShiftLabel, hasStarted, relativeDayLabel, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import { staffColor } from '@/lib/shifts/people'
+import { avoidText, fitFor } from '@/lib/shifts/time-off'
 import type { Assignment, Shift, ShiftsDB, Warning } from '@/lib/shifts/types'
 
 // The manager's week board. (The employee's own view is EmployeeSchedule.tsx.)
@@ -196,8 +197,15 @@ function ShiftCard({
         ) : (
           assignments.map((a) => {
             const row = a.staffId ? db.roster.find((r) => r.staffId === a.staffId) : undefined
+            // What this person asked for on this day, shown while the owner is still building the week (not after the shift began).
+            const fit = a.staffId && !past ? fitFor(db.timeOff, a.staffId, shift) : null
+            const flag = fit?.kind === 'day_off' ? 'dayoff' : fit?.kind === 'day_off_pending' ? 'pending' : fit?.kind === 'avoids' ? 'avoid' : undefined
+            const tag = fit?.kind === 'day_off' ? 'חופש מאושר' : fit?.kind === 'day_off_pending' ? 'ביקש/ה חופש' : fit?.kind === 'avoids' ? avoidText(fit.avoids) : undefined
             return (
               <Person
+                flag={flag}
+                tag={tag}
+                lead={a.checklistLead && assignments.length > 1}
                 key={a.id}
                 name={nameOf(db, a.staffId, a.staffName)}
                 role={a.roleId ? roleById.get(a.roleId) : null}

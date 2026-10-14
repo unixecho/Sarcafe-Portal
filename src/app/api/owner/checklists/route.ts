@@ -45,29 +45,36 @@ export const GET = apiRoute(async (request: NextRequest) => {
     service.from('checklist_templates').select('id, kind, name, version, definition, published_at').eq('branch_id', branch.id).eq('active', true).order('kind'),
     service
       .from('checklist_assignments')
-      .select('id, staff_id, shift_id, checklist_kind, status, issue_count, issues, submitted_at, manager_seen_at, manager_resolved_at, manager_note')
+      .select('id, staff_id, shift_id, shift_assignment_id, checklist_kind, status, issue_count, issues, submitted_at, manager_seen_at, manager_resolved_at, manager_note')
       .eq('branch_id', branch.id)
+      // A covered copy is a colleague's duplicate of a checklist somebody else sends: nothing for the owner to track.
+      .neq('status', 'covered')
       .order('created_at', { ascending: false })
       .limit(150),
   ])
   const staffIds = [...new Set((rows ?? []).map((row) => row.staff_id as string).filter(Boolean))]
   const shiftIds = [...new Set((rows ?? []).map((row) => row.shift_id as string))]
-  const [{ data: staff }, { data: shifts }, { data: rosterRows }] = await Promise.all([
+  const [{ data: staff }, { data: shifts }, { data: rosterRows }, { data: leadRows }] = await Promise.all([
     staffIds.length ? service.from('staff').select('id, display_name, first_name, last_name, handle, employee_no, employee_code').in('id', staffIds) : Promise.resolve({ data: [] }),
     shiftIds.length ? service.from('shifts').select('id, shift_date, start_time, end_time').in('id', shiftIds) : Promise.resolve({ data: [] }),
     // The scheduler's own roster for this branch, so a person has the same colour here as on the schedule.
     service.from('staff').select('id, branch_id, role, badge'),
+    // The person the owner picked to do a shift's checklists (when two or more work it).
+    shiftIds.length ? service.from('shift_assignments').select('id').in('shift_id', shiftIds).eq('checklist_lead', true) : Promise.resolve({ data: [] }),
   ])
+  const leadAssignmentIds = new Set((leadRows ?? []).map((row) => row.id as string))
   const roster = (rosterRows ?? [])
     .filter((row) => row.branch_id === null || row.branch_id === branch.id || isOp(row))
     .map((row) => ({ staffId: row.id as string }))
   const staffMap = new Map((staff ?? []).map((row) => [row.id as string, row]))
   const shiftMap = new Map((shifts ?? []).map((row) => [row.id as string, row]))
-  const assignments = (rows ?? []).map((row) => {
+  const mapped = (rows ?? []).map((row) => {
     const person = staffMap.get(row.staff_id as string)
     const shift = shiftMap.get(row.shift_id as string)
     return {
       id: row.id,
+      ids: [row.id as string],
+      lead: leadAssignmentIds.has(row.shift_assignment_id as string),
       staffId: row.staff_id,
       staffColor: staffColor(row.staff_id as string, roster) ?? null,
       shiftId: row.shift_id,
@@ -86,6 +93,22 @@ export const GET = apiRoute(async (request: NextRequest) => {
       resolvedAt: row.manager_resolved_at,
       managerNote: row.manager_note,
     }
+  })
+  // One checklist of one shift is ONE line, however many people could still send it. When one of them sent it, that
+  // is the line; when nobody has (no lead picked, two people on the shift), the people are named together, and
+  // dismissing it dismisses it for all of them.
+  const byChecklist = new Map<string, typeof mapped>()
+  for (const row of mapped) {
+    const key = `${row.shiftId}|${row.kind}`
+    byChecklist.set(key, [...(byChecklist.get(key) ?? []), row])
+  }
+  const assignments = [...byChecklist.values()].map((group) => {
+    const sent = group.find((row) => row.status === 'submitted')
+    if (sent) return sent
+    const sorted = [...group].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    if (sorted.length === 1) return sorted[0]!
+    const first = sorted[0]!
+    return { ...first, ids: sorted.map((row) => row.id as string), lead: sorted.some((row) => row.lead), staffName: sorted.map((row) => row.staffName).join(' · '), issueCount: 0 }
   })
   // Chronological, so the tracker can group by day; the 150-row cut above is by creation, not by date.
   assignments.sort((a, b) => a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime) || ({ opening: 0, handover: 1, closing: 2 }[a.kind as 'opening'] - { opening: 0, handover: 1, closing: 2 }[b.kind as 'opening']))
@@ -113,7 +136,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
   }
 
   if (body.action === 'dismiss' || body.action === 'restore') {
-    const { data: row } = await service.from('checklist_assignments').select('id, status').eq('id', body.assignmentId).maybeSingle()
+    const { data: row } = await service.from('checklist_assignments').select('id, status, shift_id, checklist_kind').eq('id', body.assignmentId).maybeSingle()
     if (!row) throw NotFound('הצ׳קליסט לא נמצא.')
     // A sent checklist is a record, not a request: there is nothing to dismiss, and its "handled" mark is a different thing.
     if (row.status === 'submitted') throw new ApiError(409, 'conflict', 'הצ׳קליסט כבר נשלח, אין מה לבטל.')
@@ -121,7 +144,8 @@ export const POST = apiRoute(async (request: NextRequest) => {
       body.action === 'dismiss'
         ? { manager_resolved_at: new Date().toISOString(), manager_resolved_by: owner.id, manager_note: body.note?.trim() || null }
         : { manager_resolved_at: null, manager_resolved_by: null, manager_note: null }
-    const { error } = await service.from('checklist_assignments').update(change).eq('id', body.assignmentId).neq('status', 'submitted')
+    // The same checklist of the same shift is one thing to the owner: every unsent copy of it follows.
+    const { error } = await service.from('checklist_assignments').update(change).eq('shift_id', row.shift_id as string).eq('checklist_kind', row.checklist_kind as string).neq('status', 'submitted')
     if (error) throw new ApiError(500, 'internal_error', 'לא הצלחנו לעדכן את הצ׳קליסט.')
     return NextResponse.json({ ok: true, dismissed: body.action === 'dismiss' })
   }

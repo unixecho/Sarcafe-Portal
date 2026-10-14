@@ -8,12 +8,17 @@ import type { Branch, BranchSlug } from '@/lib/branches'
 import { branchColor } from '@/lib/branches/color'
 import { advanceClock, checklistPhase, dayLabel, type ChecklistPhase, type WallClock } from '@/lib/checklists/window'
 import { KIND_LABELS, type ChecklistDefinition, type ChecklistKind } from '@/lib/checklists/types'
+import IssueReport from '@/components/checklists/IssueReport'
 import { messageOf } from '@/components/staff/types'
 import './checklists.css'
 
 type TemplateRow = { id: string; kind: ChecklistKind; name: string; version: number; definition: ChecklistDefinition; published_at: string }
 type AssignmentRow = {
   id: string
+  /** Every copy of this checklist that is still asked of someone (more than one only when nobody was picked and two people share the shift). */
+  ids: string[]
+  /** The owner picked this person to do the shift's checklists. */
+  lead: boolean
   staffId: string
   staffColor: string | null
   shiftId: string
@@ -23,7 +28,7 @@ type AssignmentRow = {
   startTime: string
   endTime: string
   kind: ChecklistKind
-  status: 'pending' | 'in_progress' | 'submitted'
+  status: 'pending' | 'in_progress' | 'submitted' | 'covered'
   /** The owner dismissed it before it was sent (see isDismissed in window.ts); managerNote is then the reason. */
   dismissed: boolean
   issueCount: number
@@ -38,13 +43,14 @@ type Tab = 'inbox' | 'coverage' | 'builder'
 
 // What the owner reads in the status chip. A future checklist that was never started is greyed out and
 // cannot be touched (the server refuses it too); a started one that is still open says so.
-const STATUS_TEXT: Record<ChecklistPhase, string> = { submitted: 'נשלח', dismissed: 'בוטל', upcoming: 'עתידי', open: 'פתוח להגשה', late: 'לא הוגש בזמן' }
+const STATUS_TEXT: Record<ChecklistPhase, string> = { submitted: 'נשלח', covered: 'מטופל ע״י עמית', dismissed: 'בוטל', upcoming: 'עתידי', open: 'פתוח להגשה', late: 'לא הוגש בזמן' }
 const initialOf = (name: string) => Array.from(name.trim())[0] ?? '·'
 
 // `focusId` is the checklist an alert named (/owner/checklists/<id>): the tracker opens on it and scrolls it into view.
 export default function OwnerChecklistWorkspace({ branches, initialBranch, focusId = null }: { branches: Branch[]; initialBranch: BranchSlug; focusId?: string | null }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
   const [tab, setTab] = useState<Tab>(focusId ? 'coverage' : 'inbox')
+  const [openIssues, setOpenIssues] = useState(0)
   const [dismissing, setDismissing] = useState<string | null>(null)
   const [reason, setReason] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -116,7 +122,6 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
     if (!draft || !selected || !branch) return
     localStorage.setItem(`sarcafe:checklist-draft:${branch}:${selected.kind}:${selected.version}`, JSON.stringify({ name: draftName, definition: draft }))
   }, [draft, draftName, selected?.id, branch])
-  const inbox = useMemo(() => (data?.assignments ?? []).filter((row) => row.status === 'submitted' && row.issueCount > 0 && !row.resolvedAt), [data])
   const clock = data ? advanceClock(data.serverNow, Date.now() - fetchedAt.current) : null
   const tracked = (() => {
     if (!data || !clock) return { rows: [] as (AssignmentRow & { phase: ChecklistPhase })[], days: [] as { date: string; rows: (AssignmentRow & { phase: ChecklistPhase })[] }[], late: 0 }
@@ -158,7 +163,9 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
   // The checklist an alert named: once the list has loaded, bring its row into the middle of the screen.
   useEffect(() => {
     if (!focusId || focused.current || tab !== 'coverage' || !data) return
-    const row = document.getElementById(`ck-row-${focusId}`)
+    // An alert names one copy of a checklist; the tracker shows one line per checklist, so find the line that holds it.
+    const line = data.assignments.find((candidate) => candidate.ids.includes(focusId))
+    const row = line ? document.getElementById(`ck-row-${line.id}`) : null
     if (!row) return
     focused.current = true
     row.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
@@ -271,7 +278,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
     <div className="ck-wrap">
       <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
       <section className="ck-hero">
-        <div className="sch-row"><div style={{ flex: 1 }}><p className="sch-sub" style={{ margin: 0 }}>שליטה מלאה בטפסים ובדיווחים</p><h1 style={{ margin: '4px 0' }}>צ׳קליסטים לעובדים</h1></div>{inbox.length > 0 && <span className="ck-status ck-status--pending"><AlertTriangle size={16} /> {inbox.length === 1 ? 'דיווח אחד לטיפול' : `${inbox.length} דיווחים לטיפול`}</span>}</div>
+        <div className="sch-row"><div style={{ flex: 1 }}><p className="sch-sub" style={{ margin: 0 }}>שליטה מלאה בטפסים ובדיווחים</p><h1 style={{ margin: '4px 0' }}>צ׳קליסטים לעובדים</h1></div>{openIssues > 0 && <button type="button" className="ck-status ck-status--pending press" onClick={() => setTab('inbox')}><AlertTriangle size={16} /> {openIssues === 1 ? 'דבר אחד לטיפול' : `${openIssues} דברים לטיפול`}</button>}</div>
         <p style={{ margin: '8px 0 0', color: 'var(--text-dim)' }}>כל טופס מחובר אוטומטית לשיבוץ בלוח המשמרות. שינוי תבנית יוצר גרסה חדשה ולא משנה דיווחים ישנים.</p>
       </section>
       <details className="ck-card ck-entry-card">
@@ -293,22 +300,15 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
         </div>
       </details>
       <div className="ck-tabs" role="tablist" aria-label="ניהול צ׳קליסטים">
-        <button role="tab" aria-selected={tab === 'inbox'} onClick={() => setTab('inbox')}>תיבת ליקויים {inbox.length ? `(${inbox.length})` : ''}</button>
+        <button role="tab" aria-selected={tab === 'inbox'} onClick={() => setTab('inbox')}>חוסרים ותקלות {openIssues ? `(${openIssues})` : ''}</button>
         <button role="tab" aria-selected={tab === 'coverage'} onClick={() => setTab('coverage')}>מעקב משמרות</button>
         <button role="tab" aria-selected={tab === 'builder'} onClick={() => setTab('builder')}>בניית טפסים</button>
       </div>
       {error && <div className="sch-error" role="alert">{error}<button className="sch-btn sch-btn--sm press" onClick={() => void load()}>ניסיון נוסף</button></div>}
       {loading && !data ? <div className="sk" style={{ height: 180 }} /> : null}
 
-      {tab === 'inbox' && data && <div className="ck-inbox">
-        {inbox.map((row) => <article key={row.id} className="ck-card ck-issue-row">
-          <div className="sch-row"><AlertTriangle size={20} color="var(--danger)" /><strong style={{ flex: 1 }}>{row.staffName} · {KIND_LABELS[row.kind]}</strong><span className="sch-sub">{row.submittedAt ? new Date(row.submittedAt).toLocaleString('he-IL') : ''}</span></div>
-          <div className="sch-sub">משמרת {row.shiftDate} · <span dir="ltr">{row.startTime}–{row.endTime}</span>{row.employeeNo ? ` · עובד ${row.employeeNo}` : ''}</div>
-          {row.issues.map((issue) => <div key={issue.itemId} className="ck-card" style={{ padding: 10, background: 'var(--bg)' }}><strong>{issue.label}</strong><span>{issue.reason}</span><span className="sch-sub">{issue.category}</span></div>)}
-          <div className="sch-row" style={{ flexWrap: 'wrap' }}>{!row.seenAt && <button className="sch-btn sch-btn--sm press" onClick={() => void act('seen', row.id)}><Eye size={16} /> סימון כנקרא</button>}<button className="sch-btn sch-btn--ok press" onClick={() => void act('resolve', row.id)}><CheckCircle2 size={16} /> טופל</button></div>
-        </article>)}
-        {inbox.length === 0 && <section className="ck-card" style={{ alignItems: 'center', textAlign: 'center', padding: 30 }}><CheckCircle2 size={38} color="var(--success, #48b978)" /><strong>אין ליקויים פתוחים</strong><span className="sch-sub">דיווח חדש על מלאי, ניקיון או ציוד יופיע כאן מיד לאחר השליחה.</span></section>}
-      </div>}
+      {/* Always mounted (hidden on other tabs) so the count in the tab and the header is known from the start. */}
+      <div hidden={tab !== 'inbox'}><IssueReport branch={branch} onCount={setOpenIssues} /></div>
 
       {tab === 'coverage' && data && clock && <div className="ck-wrap ck-track" dir="rtl">
         {tracked.late > 0 && <div className="sch-error"><AlertTriangle size={18} /> {tracked.late === 1 ? 'צ׳קליסט אחד לא הוגש בזמן.' : `${tracked.late} צ׳קליסטים לא הוגשו בזמן.`}</div>}
@@ -320,7 +320,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
             // Only a checklist that is due (open or late) can be dismissed; a future one stays untouchable, as asked.
             const canDismiss = row.phase === 'open' || row.phase === 'late'
             const confirming = dismissing === row.id
-            return <article key={row.id} id={`ck-row-${row.id}`} className={`ck-track-row ck-track-row--${row.phase}${row.id === focusId ? ' ck-track-row--focus' : ''}`} aria-disabled={future || undefined} inert={future || undefined} style={{ '--emp': row.staffColor ?? 'var(--line)' } as React.CSSProperties}>
+            return <article key={row.id} id={`ck-row-${row.id}`} className={`ck-track-row ck-track-row--${row.phase}${focusId && row.ids.includes(focusId) ? ' ck-track-row--focus' : ''}`} aria-disabled={future || undefined} inert={future || undefined} style={{ '--emp': row.staffColor ?? 'var(--line)' } as React.CSSProperties}>
               <span className="ck-person-dot" aria-hidden="true">{initialOf(row.staffName)}</span>
               <div className="ck-track-main">
                 <strong>{row.staffName}</strong>
@@ -328,6 +328,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch, focus
                   <span className="ck-branch-pill" style={{ '--branch': branchColor(data.branch.slug, branches) } as React.CSSProperties}><i aria-hidden="true" />{data.branch.name?.he ?? data.branch.slug}</span>
                   <span>{KIND_LABELS[row.kind]}</span>
                   <span dir="ltr">{row.startTime}–{row.endTime}</span>
+                  {row.lead && <span className="ck-lead-tag" title="נבחר/ה על ידי הנהלה למלא את הצ׳קליסטים של המשמרת">אחראי/ת צ׳קליסטים</span>}
                 </div>
               </div>
               <div className="ck-track-state">

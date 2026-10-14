@@ -21,11 +21,12 @@ import {
   serializeSettings,
   serializeShift,
   serializeSwap,
+  serializeTimeOff,
   serializeWeek,
 } from './serialize'
 import { DEFAULT_PRESETS, DEFAULT_ROLES, DEFAULT_SAFETY, DEFAULT_STATIONS } from './config'
 import { syncShiftsToPresets } from './preset-sync'
-import type { Assignment, PlanningShift, SaturdayBalance, Shift, ShiftsDB } from './types'
+import type { Assignment, PlanningShift, SaturdayBalance, Shift, ShiftsDB, TimeOffEntry } from './types'
 
 const AUDIT_LIMIT = 60
 const HISTORY_LIMIT = 150
@@ -74,10 +75,11 @@ export async function loadShiftsState(
     ? await loadLive(service, branchId, windowStarts)
     : await loadPublishedOnly(service, branchId, windowStarts)
 
-  const [availability, swaps, requests, notifications, audit, planningShifts, saturdayBalance] = await Promise.all([
+  const [availability, swaps, requests, timeOff, notifications, audit, planningShifts, saturdayBalance] = await Promise.all([
     branchScoped && settings.features.availability ? loadAvailability(service, branchId, windowStarts, viewer, isManager) : Promise.resolve([]),
     branchScoped && settings.features.swaps ? loadSwaps(service, branchId, viewer, isManager) : Promise.resolve([]),
     loadRequests(service, branchId, viewer, isManager),
+    loadTimeOff(service, windowStarts, viewer, isManager, roster.map((row) => row.staffId)),
     loadNotifications(service, branchId, viewer),
     isManager ? loadAudit(service, branchId) : Promise.resolve([]),
     branchScoped
@@ -96,6 +98,7 @@ export async function loadShiftsState(
     availability,
     swaps,
     requests,
+    timeOff,
     planningShifts,
     saturdayBalance,
     notifications: notifications.items,
@@ -261,6 +264,24 @@ async function loadRequests(service: Service, branchId: string, viewer: StaffRow
   if (!isManager) query = query.eq('staff_id', viewer.id)
   const { data } = await query
   return (data ?? []).map(serializeRequest)
+}
+
+/** Days off and shift wishes are a person's own, not a branch's: a manager sees them for everyone on this branch's
+ *  roster (a day off in any branch is a day off here), an employee only their own. A week of context before the window,
+ *  and the two weeks after it so the "next week" form and the board's colours have what they need. */
+async function loadTimeOff(service: Service, windowStarts: string[], viewer: StaffRow, isManager: boolean, rosterIds: string[]): Promise<TimeOffEntry[]> {
+  if (isManager && rosterIds.length === 0) return []
+  let query = service
+    .from('staff_time_off')
+    .select('*')
+    .gte('day', addDays(windowStarts[0]!, -7))
+    .lte('day', addDays(windowStarts[2]!, 13))
+    .in('status', ['pending', 'approved', 'noted', 'declined'])
+    .order('day')
+    .limit(2000)
+  query = isManager ? query.in('staff_id', rosterIds) : query.eq('staff_id', viewer.id)
+  const { data } = await query
+  return (data ?? []).map(serializeTimeOff)
 }
 
 async function loadNotifications(service: Service, branchId: string, viewer: StaffRow) {

@@ -87,6 +87,59 @@ const browserWrite = await (async () => {
 })()
 check('browser roles cannot write checklist evidence', browserWrite)
 
+// ---- One person does a shift's checklists (20261015090000) ------------------------------------------------------
+console.log('\nsingle responsible per shift')
+const eli = (await one(`insert into public.staff (first_name, badge, branch_id) values ('Eli', 'barista', $1) returning id`, [branch])).id
+const statusOf = async (id) => (await one(`select status from public.checklist_assignments where id=$1`, [id])).status
+const rowOf = async (shift, staff, kind) => (await one(`select id from public.checklist_assignments where shift_id=$1 and staff_id=$2 and checklist_kind=$3`, [shift, staff, kind]))?.id
+const submit = async (id) => db.query(`update public.checklist_assignments set status='submitted', submitted_at=now() where id=$1`, [id])
+const failsWith = async (fn, re) => { try { await fn(); return false } catch (error) { return re.test(String(error.message)) } }
+const republish = () => db.query(`update public.schedule_weeks set version=version+1 where id=$1`, [week])
+
+// A: nobody picked, two people on one shift -> both get forms, the first one sent wins
+const shiftA = (await one(`insert into public.shifts (branch_id, week_id, shift_date, start_time, end_time) values ($1,$2,'2030-01-08','07:00','13:00') returning id`, [branch, week])).id
+for (const [id, name] of [[worker.id, 'Dana'], [eli, 'Eli']]) await db.query(`insert into public.shift_assignments (branch_id, shift_id, staff_id, staff_name) values ($1,$2,$3,$4)`, [branch, shiftA, id, name])
+await republish()
+check('with nobody picked every person on the shift gets both forms', Number((await one(`select count(*) n from public.checklist_assignments where shift_id=$1 and status='pending'`, [shiftA])).n) === 4)
+await submit(await rowOf(shiftA, eli, 'opening'))
+check('the first one sent wins: the other copy of that checklist is covered', (await statusOf(await rowOf(shiftA, worker.id, 'opening'))) === 'covered')
+check('the other checklist of the shift stays open for both', (await statusOf(await rowOf(shiftA, worker.id, 'closing'))) === 'pending' && (await statusOf(await rowOf(shiftA, eli, 'closing'))) === 'pending')
+check('sending the same checklist twice is refused', await failsWith(async () => submit(await rowOf(shiftA, worker.id, 'opening')), /checklist_covered/))
+await submit(await rowOf(shiftA, worker.id, 'closing'))
+check('the second person can send the shift\'s other checklist', (await statusOf(await rowOf(shiftA, worker.id, 'closing'))) === 'submitted' && (await statusOf(await rowOf(shiftA, eli, 'closing'))) === 'covered')
+check('sent checklists are never changed by a later sync', (await statusOf(await rowOf(shiftA, eli, 'opening'))) === 'submitted' && ((await republish()), (await statusOf(await rowOf(shiftA, eli, 'opening')))) === 'submitted')
+
+// B: the owner picks one person -> only that person is expected to do the shift's checklists
+const shiftB = (await one(`insert into public.shifts (branch_id, week_id, shift_date, start_time, end_time) values ($1,$2,'2030-01-09','07:00','13:00') returning id`, [branch, week])).id
+for (const [id, name] of [[worker.id, 'Dana'], [eli, 'Eli']]) await db.query(`insert into public.shift_assignments (branch_id, shift_id, staff_id, staff_name) values ($1,$2,$3,$4)`, [branch, shiftB, id, name])
+await republish()
+const pickB = (await one(`select public.sched_set_checklist_lead($1,$2,$3) r`, [owner, shiftB, eli])).r
+check('the owner can pick who does the checklists', pickB.ok === true)
+check('the picked person keeps their forms', (await statusOf(await rowOf(shiftB, eli, 'opening'))) === 'pending' && (await statusOf(await rowOf(shiftB, eli, 'closing'))) === 'pending')
+check('everybody else on the shift is covered, not chased', (await statusOf(await rowOf(shiftB, worker.id, 'opening'))) === 'covered' && (await statusOf(await rowOf(shiftB, worker.id, 'closing'))) === 'covered')
+check('someone who is not the picked person cannot send it (database refuses)', await failsWith(async () => submit(await rowOf(shiftB, worker.id, 'opening')), /checklist_covered|checklist_not_lead/))
+check('picking someone who is not on the shift is refused', (await one(`select public.sched_set_checklist_lead($1,$2,$3) r`, [owner, shiftB, owner])).r.reason === 'not_on_shift')
+check('only a manager of the branch can pick', (await one(`select public.sched_set_checklist_lead($1,$2,$3) r`, [worker.id, shiftB, worker.id])).r.reason === 'forbidden')
+await submit(await rowOf(shiftB, eli, 'opening'))
+check('the picked person sends normally', (await statusOf(await rowOf(shiftB, eli, 'opening'))) === 'submitted')
+await db.query(`select public.sched_set_checklist_lead($1,$2,null)`, [owner, shiftB])
+check('clearing the pick reopens the covered copy of what is still unsent', (await statusOf(await rowOf(shiftB, worker.id, 'closing'))) === 'pending')
+check('...but not the copy of what was already sent', (await statusOf(await rowOf(shiftB, worker.id, 'opening'))) === 'covered')
+check('at most one person per shift can be picked (unique index)', await failsWith(async () => {
+  await db.query(`update public.shift_assignments set checklist_lead=true where shift_id=$1`, [shiftB])
+}, /shift_assignments_one_checklist_lead|duplicate key/))
+const moved = (await one(`select public.sched_set_checklist_lead($1,$2,$3) r`, [owner, shiftB, eli])).r
+check('picking again works', moved.ok === true && (await one(`select checklist_lead from public.shift_assignments where shift_id=$1 and staff_id=$2`, [shiftB, eli])).checklist_lead === true)
+const shiftC = (await one(`insert into public.shifts (branch_id, week_id, shift_date, start_time, end_time) values ($1,$2,'2030-01-10','07:00','13:00') returning id`, [branch, week])).id
+await db.query(`update public.shift_assignments set shift_id=$1 where shift_id=$2 and staff_id=$3`, [shiftC, shiftB, eli])
+check('moving an assignment to another shift drops the mark', (await one(`select checklist_lead from public.shift_assignments where shift_id=$1 and staff_id=$2`, [shiftC, eli])).checklist_lead === false)
+
+const resolutionRead = await (async () => {
+  try { await db.exec('set role authenticated; select * from public.checklist_issue_resolutions; reset role;'); return false }
+  catch { await db.exec('reset role'); return true }
+})()
+check('the issue-report resolutions table exists and is closed to browser roles', resolutionRead && (await one(`select count(*)::int n from public.checklist_issue_resolutions`)).n === 0)
+
 console.log(`\n${passed} passed, ${failed.length} failed`)
 await db.close()
 if (failed.length) process.exit(1)

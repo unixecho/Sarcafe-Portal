@@ -28,6 +28,7 @@ export const isDismissed = (row: { status: string; resolvedAt?: string | null })
 
 export type ChecklistPhase =
   | 'submitted' // done
+  | 'covered' // somebody else on the shift sends it (the owner picked them, or they sent it first): not asked of this person
   | 'dismissed' // an owner said it is not needed: no longer asked for, no alerts, cannot be filled in
   | 'upcoming' // the shift has not started: locked
   | 'open' // the shift is on (or just ended) and it can be filled in
@@ -99,6 +100,7 @@ export function checklistPhase(
   now: WallClock
 ): ChecklistPhase {
   if (input.status === 'submitted') return 'submitted'
+  if (input.status === 'covered') return 'covered'
   if (input.dismissed) return 'dismissed'
   if (isChecklistLocked(input, now)) return 'upcoming'
   const anchorStart = checklistAnchor(input.kind, input.shiftHasOpening) === 'start'

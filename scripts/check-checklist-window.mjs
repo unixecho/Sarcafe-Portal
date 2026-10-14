@@ -90,6 +90,8 @@ eq('closing is late from that minute (the alert goes out at the same minute)', W
 eq('closing is still open 10 min after the end (the old grace)', W.checklistPhase({ ...base, kind: 'closing' }, at('2026-10-13', '13:10')), 'open')
 eq('the leaving handover hangs on the end: shut until half an hour before it, then open', [W.checklistPhase({ ...base, kind: 'handover', shiftHasOpening: true }, at('2026-10-13', '12:00')), W.checklistPhase({ ...base, kind: 'handover', shiftHasOpening: true }, at('2026-10-13', '12:30'))], ['upcoming', 'open'])
 eq('the arriving handover hangs on the start', W.checklistPhase({ ...base, kind: 'handover', shiftHasOpening: false }, at('2026-10-13', '08:31')), 'late')
+eq('a copy somebody else sends is covered, whatever the clock says', [W.checklistPhase({ ...base, status: 'covered' }, at('2026-10-12', '12:00')), W.checklistPhase({ ...base, status: 'covered' }, at('2026-10-13', '23:00'))], ['covered', 'covered'])
+eq('submitted still wins over covered', W.checklistPhase({ ...base, status: 'submitted' }, at('2026-10-13', '23:00')), 'submitted')
 eq('submitted wins over everything, even a future shift', W.checklistPhase({ ...base, status: 'submitted' }, at('2026-10-12', '12:00')), 'submitted')
 eq('started on a future shift is still locked', W.checklistPhase({ ...base, status: 'in_progress' }, at('2026-10-12', '12:00')), 'upcoming')
 
@@ -109,7 +111,7 @@ check('developer previews never reach the API', read('src/components/checklists/
 
 section('employee list greys out the future')
 const runner = read('src/components/checklists/StaffChecklistWorkspace.tsx')
-check('locked cards are disabled', /disabled=\{closed \|\| locked\}/.test(runner) && /const closed = assignment\.status === 'submitted' \|\| dismissed/.test(runner))
+check('locked cards are disabled', /disabled=\{closed \|\| locked\}/.test(runner) && /const closed = assignment\.status === 'submitted' \|\| covered \|\| dismissed/.test(runner))
 check('locked cards say when they open', runner.includes('unlockText('))
 check('locked cards are greyed in CSS', /\.ck-card--locked[^{]*\{[^}]*grayscale/.test(read('src/components/checklists/checklists.css')))
 check('open() refuses a locked checklist', /if \(lockedAt\(assignment\)\) return setError/.test(runner))
@@ -185,7 +187,7 @@ section('dismissing a checklist nobody sent')
   check('dismissing asks first (an optional reason, then a confirm), restoring is one tap', trackerSrc.includes('setDismissing(row.id)') && trackerSrc.includes('אישור ביטול'))
   check('the tracker\'s late banner counts the phase, so a dismissed row is not in it', trackerSrc.includes("rows.filter((row) => row.phase === 'late').length"))
   check('the owner list tells the tracker which rows are dismissed', ownerApiSrc.includes('dismissed: isDismissed('))
-  check('the employee list tells the screen which rows are dismissed, and the home card ignores them', read('src/lib/checklists/server.ts').includes('dismissed: isDismissed(') && card.includes("const waiting = (item: ShiftChecklistBrief) => item.status !== 'submitted' && !item.dismissed"))
+  check('the employee list tells the screen which rows are dismissed, and the home card ignores them', read('src/lib/checklists/server.ts').includes('dismissed: isDismissed(') && card.includes("const waiting = (item: ShiftChecklistBrief) => item.status !== 'submitted' && item.status !== 'covered' && !item.dismissed"))
   check('dismissed cards are quiet in CSS (employee list and owner tracker)', /\.ck-card--dismissed/.test(read('src/components/checklists/checklists.css')) && /\.ck-track-row--dismissed/.test(read('src/components/checklists/checklists.css')) && /\.ck-status--dismissed/.test(read('src/components/checklists/checklists.css')))
 }
 

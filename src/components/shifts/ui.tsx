@@ -5,7 +5,7 @@
 // requests inbox and the staff list.
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, Ban, CheckCircle2, Clock, Hand, Info, XCircle } from 'lucide-react'
+import { AlertTriangle, Ban, CheckCircle2, ClipboardCheck, Clock, Hand, Info, XCircle } from 'lucide-react'
 import { initialsOf } from '@/lib/shifts/names'
 import type { RequestStatus, ShiftRole, SwapStatus } from '@/lib/shifts/types'
 
@@ -66,12 +66,32 @@ export function Avatar({ name, color, emoji, large }: { name: string; color?: st
   )
 }
 
-export function Person({ name, role, color, emoji, faded, note }: { name: string; role?: ShiftRole | null; color?: string; emoji?: string | null; faded?: boolean; note?: string }) {
+/** `flag` colours a person the owner should look twice at (never colour alone: `tag` says it in words):
+ *  'avoid' = they asked not to work this half of the day, 'pending' = a day off they asked for is waiting,
+ *  'dayoff' = an approved day off. `lead` marks the person who does the shift's checklists. */
+export type PersonFlag = 'avoid' | 'pending' | 'dayoff'
+
+export function Person({ name, role, color, emoji, faded, note, flag, tag, lead }: { name: string; role?: ShiftRole | null; color?: string; emoji?: string | null; faded?: boolean; note?: string; flag?: PersonFlag; tag?: string; lead?: boolean }) {
   return (
-    <span className={`sch-person${faded ? ' sch-person--faded' : ''}`} title={note}>
+    <span className={`sch-person${faded ? ' sch-person--faded' : ''}${flag ? ` sch-person--${flag}` : ''}`} title={note}>
       <Avatar name={name} color={color ?? role?.color} emoji={emoji} />
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
-      {role && <span className="sch-faint" style={{ fontSize: '0.74rem', fontWeight: 600 }}>· {role.name}</span>}
+      {tag || lead ? (
+        // A person with something to say about them (a wish, the checklists) gets it on its own line under the name, so a
+        // narrow day column never has to squeeze it next to the name.
+        <span className="sch-person__stack">
+          <span className="sch-person__line">
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+            {role && <span className="sch-faint" style={{ fontSize: '0.74rem', fontWeight: 600 }}>· {role.name}</span>}
+          </span>
+          {tag && <span className="sch-person__tag">{tag}</span>}
+          {lead && <span className="sch-person__lead" role="img" aria-label="ממלא/ת את הצ׳קליסטים של המשמרת" title="ממלא/ת את הצ׳קליסטים של המשמרת"><ClipboardCheck size={12} aria-hidden="true" /> צ׳קליסטים</span>}
+        </span>
+      ) : (
+        <>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+          {role && <span className="sch-faint" style={{ fontSize: '0.74rem', fontWeight: 600 }}>· {role.name}</span>}
+        </>
+      )}
     </span>
   )
 }

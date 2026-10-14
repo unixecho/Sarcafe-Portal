@@ -58,7 +58,7 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
 
   const warnings = useMemo(() => {
     if (!db) return []
-    return evaluate({ weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability })
+    return evaluate({ weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability, timeOff: db.timeOff, today: db.now.date })
   }, [db, weekStart])
 
   if (loading && !db) {
@@ -204,7 +204,7 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
             const skipped = Array.isArray(d.skipped) ? (d.skipped as { name: string; why: string }[]) : []
             const base = `הועתקו ${d.shifts ?? 0} משמרות עם ${d.people ?? 0} שיבוצים`
             return skipped.length > 0
-              ? `${base}. לא שובצו: ${skipped.map((s) => `${s.name} (${s.why === 'busy' ? 'כבר עובד/ת בשעות האלה' : 'לא פעיל/ה'})`).join(', ')}`
+              ? `${base}. לא שובצו: ${skipped.map((s) => `${s.name} (${s.why === 'busy' ? 'כבר עובד/ת בשעות האלה' : s.why === 'day_off' ? 'יום חופש מאושר' : 'לא פעיל/ה'})`).join(', ')}`
               : base
           },
         }

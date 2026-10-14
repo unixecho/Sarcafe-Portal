@@ -24,6 +24,10 @@ const CODE_LABELS: Record<string, string> = {
   unknown_role: 'תפקיד שנמחק מההגדרות',
   non_working_day: 'משמרת ביום סגור',
   availability_conflict: 'שובץ/ה ביום שסומן כלא זמין',
+  time_off_approved: 'משובץ/ת ביום חופש שאושר',
+  time_off_pending: 'משובץ/ת ביום שביקשו בו חופש',
+  time_off_avoid: 'משובץ/ת למשמרת שביקשו לא לעבוד בה',
+  checklist_lead_missing: 'לא נבחר/ה מי ממלא/ת את הצ׳קליסטים',
 }
 
 export default function WarningsPanel({ onJump }: { onJump?: (shiftId: string) => void }) {
@@ -31,7 +35,7 @@ export default function WarningsPanel({ onJump }: { onJump?: (shiftId: string) =
 
   const warnings = useMemo(() => {
     if (!db) return []
-    return evaluate({ weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability })
+    return evaluate({ weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability, timeOff: db.timeOff, today: db.now.date })
   }, [db, weekStart])
 
   if (!db) return null

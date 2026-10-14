@@ -186,6 +186,14 @@
 .app-row:active { background: var(--bg-elev-2); }
 .app-row--quiet .app-row__icon { color: var(--text-dim); background: var(--bg-elev-2); }
 .app-account { margin-block-start: 22px; }
+/* The coffee workshop card (WorkshopCard.tsx): a quiet row, a small picture of the first slide, no glow and no motion. */
+.app-workshop { display: flex; align-items: center; gap: 14px; margin-block: 0 24px; padding: 12px 14px 12px 16px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); color: var(--text); text-decoration: none; -webkit-tap-highlight-color: transparent; transition: background 160ms var(--ease); }
+.app-workshop:active { background: var(--bg-elev-2); }
+.app-workshop__cover { flex: 0 0 auto; inline-size: 104px; block-size: 58.5px; border-radius: 12px; object-fit: cover; border: 1px solid var(--line); background: #4a2c2a; }
+.app-workshop__copy { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.app-workshop__copy small { color: var(--neon-soft); font-size: .72rem; font-weight: 650; }
+.app-workshop__copy strong { font-size: .95rem; font-weight: 650; line-height: 1.4; }
+.app-workshop__copy > span { color: var(--text-dim); font-size: .76rem; line-height: 1.5; }
 .app-account .app-row { min-height: 74px; }
 .app-notifications { margin-block: 0 24px; }
 .app-notifications__head { display: flex; align-items: center; gap: 8px; }

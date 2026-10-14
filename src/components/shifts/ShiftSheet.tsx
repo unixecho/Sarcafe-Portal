@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ArrowLeftRight, BellRing, Check, ChevronDown, Plus, Trash2, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, BellRing, Check, ChevronDown, ClipboardCheck, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import SelectSheet from '@/components/SelectSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
@@ -31,6 +31,8 @@ type Form = {
   requestsOpen: boolean
   note: string
   people: Person[]
+  /** staffId of the person who does the shift's checklists ('' = nobody picked: the first to send covers the rest). */
+  checklistLead: string
 }
 
 function buildForm(db: ShiftsDB, shift: Shift | null, date: string): Form {
@@ -47,13 +49,14 @@ function buildForm(db: ShiftsDB, shift: Shift | null, date: string): Form {
       people: db.assignments
         .filter((a) => a.shiftId === shift.id)
         .map((a) => ({ key: a.id, staffId: a.staffId ?? '', roleId: a.roleId, assignmentId: a.id })),
+      checklistLead: db.assignments.find((a) => a.shiftId === shift.id && a.checklistLead)?.staffId ?? '',
     }
   }
   // A NEW shift starts from what Settings says (the next unused template for that day,
   // else the template list's first, else the day's opening hours) — never from a number
   // typed into the code.
   const d = defaultTimesFor(date, db.settings, db.shifts.filter((s) => s.date === date))
-  return { date, startTime: d.startTime, endTime: d.endTime, presetId: d.presetId, stationId: '', requirements: [], requestsOpen: false, note: '', people: [] }
+  return { date, startTime: d.startTime, endTime: d.endTime, presetId: d.presetId, stationId: '', requirements: [], requestsOpen: false, note: '', people: [], checklistLead: '' }
 }
 
 // Create / edit ONE shift — the same sheet for both, and ONE Save: times, who
@@ -184,7 +187,11 @@ export default function ShiftSheet({
     setForm((f) => (f ? { ...f, people: f.people.map((p) => (p.key === key ? { ...p, roleId: roleId || null } : p)) } : f))
   }
   function removePerson(key: string) {
-    setForm((f) => (f ? { ...f, people: f.people.filter((p) => p.key !== key) } : f))
+    setForm((f) => {
+      if (!f) return f
+      const gone = f.people.find((p) => p.key === key)
+      return { ...f, people: f.people.filter((p) => p.key !== key), checklistLead: gone && gone.staffId === f.checklistLead ? '' : f.checklistLead }
+    })
     setError(null)
   }
   function updateRequirement(roleId: string, min: number) {
@@ -232,6 +239,8 @@ export default function ShiftSheet({
         note: form.note.trim() || null,
         assignees: form.people.filter((p) => p.staffId).map((p) => ({ staffId: p.staffId, roleId: p.roleId, ...(p.assignmentId ? { assignmentId: p.assignmentId } : {}) })),
         expectedUpdatedAt: shift?.updatedAt ?? null,
+        // With two or more people the sheet shows who does the checklists, so what it shows is what gets saved.
+        ...(form.people.filter((p) => p.staffId).length >= 2 ? { checklistLeadStaffId: form.checklistLead || null } : {}),
       },
       {
         quiet: true,
@@ -455,6 +464,26 @@ export default function ShiftSheet({
               <UserPlus size={17} aria-hidden="true" /> הוספת עובד/ת
             </button>
           </div>
+
+          {/* ---- one person does the shift's checklists ---- */}
+          {form.people.filter((p) => p.staffId).length >= 2 && (
+            <div className="sch-block sch-lead">
+              <span className="sch-label" style={{ margin: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <ClipboardCheck size={15} aria-hidden="true" /> מי ממלא/ת את הצ׳קליסטים של המשמרת?
+              </span>
+              <p className="sch-sub">כשיש כמה עובדים במשמרת, רק אחד מהם צריך להגיש את הצ׳קליסטים. אם לא תבחרו, הראשון/ה שיגיש/ה סוגר/ת את הצ׳קליסט לכולם — ולכל אחד נשאר הצ׳קליסט השני של המשמרת.</p>
+              <div className="sch-lead__row" role="group" aria-label="מי ממלא/ת את הצ׳קליסטים">
+                <button type="button" className="sch-chip press" aria-pressed={form.checklistLead === ''} onClick={() => patch({ checklistLead: '' })}>
+                  לא נבחר/ה — הראשון/ה שמגיש/ה
+                </button>
+                {form.people.filter((p) => p.staffId).map((p) => (
+                  <button key={p.key} type="button" className="sch-chip press" aria-pressed={form.checklistLead === p.staffId} onClick={() => patch({ checklistLead: p.staffId })}>
+                    {nameOf(db, p.staffId, db.assignments.find((a) => a.id === p.assignmentId)?.staffName)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ---- requests to join, decided right here ---- */}
           {requests.length > 0 && (

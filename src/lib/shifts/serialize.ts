@@ -13,6 +13,7 @@ import type {
   ShiftRequest,
   ShiftSettings,
   SwapRequest,
+  TimeOffEntry,
 } from './types'
 
 export function serializeSettings(row: Record<string, unknown>): ShiftSettings {
@@ -110,6 +111,21 @@ export function serializeAssignment(row: Record<string, unknown>): Assignment {
     staffName: ((row.staff_name ?? row.staffName) as string | null) ?? null,
     roleId: ((row.role_id ?? row.roleId) as string | null) ?? null,
     status: (row.status as Assignment['status']) ?? 'assigned',
+    checklistLead: (row.checklist_lead ?? row.checklistLead) === true,
+  }
+}
+
+export function serializeTimeOff(row: Record<string, unknown>): TimeOffEntry {
+  return {
+    id: row.id as string,
+    staffId: row.staff_id as string,
+    date: row.day as string,
+    kind: row.kind as TimeOffEntry['kind'],
+    status: row.status as TimeOffEntry['status'],
+    note: (row.note as string | null) ?? null,
+    decisionNote: (row.decision_note as string | null) ?? null,
+    decidedAt: (row.decided_at as string | null) ?? null,
+    createdAt: row.created_at as string,
   }
 }
 

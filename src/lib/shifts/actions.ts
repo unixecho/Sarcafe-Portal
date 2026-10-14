@@ -10,7 +10,7 @@
 // Nothing here carries "who is acting": the server resolves that from the
 // session, never from the request body.
 
-import type { HM, ISODate, RoleRequirement } from './types'
+import type { HM, ISODate, RoleRequirement, TimeOffKind } from './types'
 
 /** One person on a shift, as the shift sheet's Save sends it. `assignmentId`
  *  present = an existing person being kept (their role may change); absent = a
@@ -35,6 +35,9 @@ export type ScheduleAction =
       assignees: SaveShiftAssignee[]
       /** The shift's updatedAt as the sheet loaded it — a stale save is refused. */
       expectedUpdatedAt?: string | null
+      /** Who does the shift's checklists, picked by the manager among the people on it (null = nobody: the first to send
+       *  covers the rest). Absent = leave as it is. Applied right after the save, from the person's final assignment. */
+      checklistLeadStaffId?: string | null
     }
   | { type: 'deleteShift'; shiftId: string }
   | { type: 'moveAssignment'; assignmentId: string; toShiftId: string }
@@ -52,6 +55,8 @@ export type ScheduleAction =
   | { type: 'saveDraft'; branchId: string; settings?: Record<string, unknown>; members?: { staffId: string; patch: Record<string, unknown> }[] }
   // ---- an employee ----
   | { type: 'submitAvailability'; branchId: string; weekStart: ISODate; entries: unknown[]; note?: string | null; status: 'draft' | 'submitted' }
+  /** The wanted state of one week of days off / shift wishes (see time-off.ts); a date not listed means "nothing". */
+  | { type: 'submitTimeOff'; branchId: string; weekStart: ISODate; entries: { date: ISODate; kinds: TimeOffKind[] }[] }
   | { type: 'requestShift'; shiftId: string; note?: string | null }
   | { type: 'cancelRequest'; requestId: string }
   | { type: 'requestSwap'; assignmentId: string; targetStaffId?: string | null; returnAssignmentId?: string | null; reason?: string | null }
@@ -62,6 +67,8 @@ export type ScheduleAction =
   // ---- a manager deciding ----
   | { type: 'decideRequest'; requestId: string; approve: boolean; note?: string | null; force?: boolean }
   | { type: 'decideSwap'; swapId: string; approve: boolean; note?: string | null }
+  /** Approve or decline days off (normally one person's days of a week). `force` approves a day the person is already scheduled on. */
+  | { type: 'decideTimeOff'; branchId: string; ids: string[]; approve: boolean; note?: string | null; force?: boolean }
   // ---- anyone ----
   | { type: 'markNotificationsRead'; ids?: string[] }
 

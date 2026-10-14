@@ -66,7 +66,7 @@ function emit(tsPath) {
 
 // Pure modules only. Server-only files (guard, state-query, dispatch-write) and
 // type-only files are deliberately NOT here — and the purity check below proves it.
-const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf']
+const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf', 'time-off']
 for (const n of PURE) emit(join(SHIFTS, `${n}.ts`))
 emit(join(SRC, 'lib', 'staff', 'access.ts'))
 
@@ -87,6 +87,7 @@ const HE = await load('lib/shifts/hours-edit.mjs')
 const Dr = await load('lib/shifts/draft.mjs')
 const PM = await load('lib/shifts/poster-model.mjs')
 const PDF = await load('lib/shifts/poster-pdf.mjs')
+const TO = await load('lib/shifts/time-off.mjs')
 
 // ---- Output ---------------------------------------------------------------------------------------------
 let pass = 0
@@ -478,6 +479,45 @@ eq('the page is A4-wide and as tall as the picture needs', /\/MediaBox \[0 0 (\d
 check('the title is stored as UTF-16 so Hebrew survives', /\/Title <FEFF05DC05D505D7/i.test(pdfText))
 
 // ============================================================================================================
+section('days off and shift wishes — what the owner sees while building the week')
+eq('a morning shift touches the morning only', [TO.shiftPeriods('07:00', '13:00'), TO.shiftPeriods('07:30', '13:00')], [['morning'], ['morning']])
+eq('an evening shift touches the evening only', [TO.shiftPeriods('13:00', '19:00'), TO.shiftPeriods('16:30', '18:30')], [['evening'], ['evening']])
+eq('a long shift or one that straddles 13:00 touches both', [TO.shiftPeriods('07:00', '19:00'), TO.shiftPeriods('12:30', '13:30')], [['morning', 'evening'], ['morning', 'evening']])
+eq('a shift past midnight is evening', TO.shiftPeriods('22:00', '02:00'), ['evening'])
+const off = (id, staffId, date, kind, status) => ({ id, staffId, date, kind, status, note: null, decisionNote: null, decidedAt: null, createdAt: '2030-01-01T00:00:00Z' })
+const wishes = [off('t1', 'dana', '2030-01-07', 'day_off', 'approved'), off('t2', 'dana', '2030-01-08', 'no_evening', 'noted'), off('t3', 'yossi', '2030-01-09', 'day_off', 'pending'), off('t4', 'yossi', '2030-01-07', 'day_off', 'declined'), off('t5', 'yossi', '2030-01-08', 'no_morning', 'cancelled')]
+eq('only live requests count: a declined or cancelled one is history', [TO.wishesOn(wishes, 'yossi', '2030-01-07'), TO.wishesOn(wishes, 'yossi', '2030-01-08')], [{ dayOff: null, avoid: [] }, { dayOff: null, avoid: [] }])
+eq('an approved day off, a pending one and a wish are told apart', [TO.wishesOn(wishes, 'dana', '2030-01-07').dayOff, TO.wishesOn(wishes, 'yossi', '2030-01-09').dayOff, TO.wishesOn(wishes, 'dana', '2030-01-08').avoid], ['approved', 'pending', ['evening']])
+eq('an approved day off blocks every shift that day', [TO.fitFor(wishes, 'dana', { date: '2030-01-07', startTime: '07:00', endTime: '13:00' }).kind, TO.fitFor(wishes, 'dana', { date: '2030-01-07', startTime: '13:00', endTime: '19:00' }).kind], ['day_off', 'day_off'])
+eq('"not the evening" colours only a shift that touches the evening', [TO.fitFor(wishes, 'dana', { date: '2030-01-08', startTime: '13:00', endTime: '19:00' }), TO.fitFor(wishes, 'dana', { date: '2030-01-08', startTime: '07:00', endTime: '12:00' }).kind], [{ kind: 'avoids', avoids: ['evening'] }, 'fine'])
+eq('a pending day off is a request, not a block', TO.fitFor(wishes, 'yossi', { date: '2030-01-09', startTime: '07:00', endTime: '13:00' }).kind, 'day_off_pending')
+eq('somebody else\'s wishes never reach a person', TO.fitFor(wishes, 'noa', { date: '2030-01-07', startTime: '07:00', endTime: '13:00' }).kind, 'fine')
+check('the words are the owner\'s: בלי בוקר / בלי ערב', TO.avoidText(['morning']) === 'בלי בוקר' && TO.avoidText(['evening']) === 'בלי ערב' && TO.avoidText(['morning', 'evening']).includes('בוקר') && TO.avoidText(['morning', 'evening']).includes('ערב'))
+
+const wInput = { ...input, timeOff: wishes }
+const approvedWarn = R.evaluate({ ...wInput, assignments: [as('a1', 's1', 'dana'), as('a2', 's2', 'yossi'), as('a3', 's3', 'yossi')] })
+check('someone scheduled on an approved day off is an ERROR on the board', approvedWarn.some((w) => w.code === 'time_off_approved' && w.severity === 'error' && w.staffId === 'dana' && w.shiftId === 's1'), show(approvedWarn))
+const avoidWarn = R.evaluate({ ...wInput, shifts: [...shifts, sh('s5', '2030-01-08', '13:00', '19:00')], assignments: [...input.assignments, as('a8', 's5', 'dana')] })
+check('someone scheduled on the half of the day they asked to avoid is a WARNING', avoidWarn.some((w) => w.code === 'time_off_avoid' && w.severity === 'warning' && w.staffId === 'dana'), show(avoidWarn))
+check('a pending day off is flagged too, as a warning', R.evaluate({ ...wInput, shifts: [...shifts, sh('s6', '2030-01-09', '07:00', '12:00')], assignments: [...input.assignments, as('a9', 's6', 'yossi')] }).some((w) => w.code === 'time_off_pending'))
+check('without time-off data the engine behaves as before', !R.evaluate(input).some((w) => w.code.startsWith('time_off')))
+check('the owner can silence a wish warning like any other rule', !R.evaluate({ ...wInput, settings: { ...baseSettings, ruleSeverity: { time_off_avoid: 'off' } }, shifts: [...shifts, sh('s5', '2030-01-08', '13:00', '19:00')], assignments: [...input.assignments, as('a8', 's5', 'dana')] }).some((w) => w.code === 'time_off_avoid'))
+const twoOnShift = (lead) => R.evaluate({ ...input, today: '2030-01-01', assignments: [as('a1', 's1', 'dana'), { ...as('b1', 's2', 'dana'), checklistLead: lead }, as('b2', 's2', 'yossi'), as('a3', 's3', 'yossi')] })
+check('two people on a shift and nobody picked for the checklists: the owner is asked to choose', twoOnShift(false).some((w) => w.code === 'checklist_lead_missing' && w.shiftId === 's2'))
+check('picking one of them removes the warning', !twoOnShift(true).some((w) => w.code === 'checklist_lead_missing'))
+check('one person on a shift never needs a pick', !R.evaluate({ ...input, today: '2030-01-01' }).some((w) => w.code === 'checklist_lead_missing'))
+check('a shift that is already over is not nagged about', !R.evaluate({ ...input, today: '2030-02-01', assignments: [as('a1', 's1', 'dana'), as('b1', 's2', 'dana'), as('b2', 's2', 'yossi'), as('a3', 's3', 'yossi')] }).some((w) => w.code === 'checklist_lead_missing'))
+check('approving a join request does not blame the approval for the missing pick', !R.requestImpact({ ...input, assignments: [...input.assignments] }, { shiftId: 's2', staffId: 'dana' }).some((w) => w.code === 'checklist_lead_missing'))
+
+const OFF_WEEK = '2030-01-06'
+check('submitTimeOff parses a week of wishes', S.parseAction({ type: 'submitTimeOff', branchId: U, weekStart: OFF_WEEK, entries: [{ date: '2030-01-07', kinds: ['day_off'] }, { date: '2030-01-08', kinds: ['no_morning', 'no_evening'] }] }).type === 'submitTimeOff')
+check('submitTimeOff refuses an unknown kind, an extra field and more than 7 days', throwsZod(() => S.parseAction({ type: 'submitTimeOff', branchId: U, weekStart: OFF_WEEK, entries: [{ date: '2030-01-07', kinds: ['sick'] }] })) && throwsZod(() => S.parseAction({ type: 'submitTimeOff', branchId: U, weekStart: OFF_WEEK, entries: [{ date: '2030-01-07', kinds: ['day_off'], status: 'approved' }] })) && throwsZod(() => S.parseAction({ type: 'submitTimeOff', branchId: U, weekStart: OFF_WEEK, entries: Array.from({ length: 8 }, (_, i) => ({ date: '2030-01-0' + (i + 1), kinds: [] })) })))
+check('an employee can never name a status or a decider', throwsZod(() => S.parseAction({ type: 'submitTimeOff', branchId: U, weekStart: OFF_WEEK, entries: [], decidedBy: U2 })))
+check('decideTimeOff takes ids, a verdict, a note and force only as a boolean', S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [U, U2], approve: true, note: 'בכיף', force: true }).type === 'decideTimeOff' && throwsZod(() => S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [], approve: true })) && throwsZod(() => S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [U], approve: true, force: 'yes' })))
+check('saveShift carries who does the checklists, and only as a person id', S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: U2 }).checklistLeadStaffId === U2 && S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: null }).checklistLeadStaffId === null && throwsZod(() => S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: 'dana' })))
+check('the refusals for a day off and for a pick outside the shift say what to do', Msg.scheduleMessage('time_off').includes('יום חופש') && Msg.scheduleMessage('not_on_shift').includes('צ׳קליסטים') && Msg.scheduleStatus('time_off') === 409)
+
+// ============================================================================================================
 section('purity — these modules know nothing about React, Next or the database')
 for (const n of PURE.filter((n) => !['serialize'].includes(n))) {
   const src = readFileSync(join(SHIFTS, `${n}.ts`), 'utf8')
@@ -624,6 +664,19 @@ for (const [date, st] of [['2020-01-01', '07:00'], ['2999-01-01', '07:00']]) {
   pastOk.push(sql === T.hasStarted({ date, startTime: st }, nowClock))
 }
 check('"has it started?": sched_is_past === hasStarted, in the branch\'s own timezone', pastOk.every(Boolean))
+
+// -- which half of the day a shift touches (the wishes "no morning / no evening" and the automatic fill read this)
+let periodOk = true
+let periodBad = ''
+for (const start of ['00:00', '06:30', '07:00', '07:30', '12:00', '12:59', '13:00', '13:01', '16:30', '19:00', '22:00', '23:30']) {
+  for (const end of ['02:00', '07:00', '12:00', '13:00', '14:00', '18:30', '19:00', '23:59', '00:00']) {
+    if (start === end) continue
+    const sql = (await q1(`select public.sched_shift_periods($1, $2) v`, [start, end])).v
+    const ts = TO.shiftPeriods(start, end)
+    if (JSON.stringify(sql) !== JSON.stringify(ts)) { periodOk = false; periodBad += `${start}-${end}: sql=${sql} ts=${ts}; ` }
+  }
+}
+check('wishes: sched_shift_periods === shiftPeriods for 100+ shift shapes', periodOk, periodBad)
 
 console.log(`\n${pass} passed, ${failures.length} failed`)
 if (failures.length) {

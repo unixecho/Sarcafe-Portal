@@ -215,7 +215,7 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 .ck-status--submitted { background: color-mix(in srgb, var(--success, #48b978) 14%, transparent); color: var(--success, #48b978); }
 .ck-status--open { background: color-mix(in srgb, var(--neon) 16%, transparent); color: var(--neon-soft); }
 .ck-status--late { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
-.ck-status--upcoming, .ck-status--locked, .ck-status--dismissed { background: color-mix(in srgb, var(--text-faint) 14%, transparent); color: var(--text-faint); }
+.ck-status--upcoming, .ck-status--locked, .ck-status--dismissed, .ck-status--covered { background: color-mix(in srgb, var(--text-faint) 14%, transparent); color: var(--text-faint); }
 
 /* A checklist whose shift has not started: greyed out and untouchable (the API refuses it as well). */
 .ck-card--locked, button.ck-card--locked:disabled { opacity: .5; filter: grayscale(1); cursor: not-allowed; }
@@ -244,6 +244,8 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 /* The branch is a SOLID tag in its own colour; the employee is a round avatar plus a coloured edge. Different shape, so the two colours are never mistaken for each other. */
 .ck-branch-pill { --branch: var(--neon); display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 6px; font-weight: 800; color: #17110e; background: var(--branch); }
 .ck-branch-pill i { display: none; }
+/* "This person was picked to do the shift's checklists": a quiet outline, so it reads as a fact about the person, not a status. */
+.ck-lead-tag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--neon) 55%, var(--line)); color: var(--neon); font-weight: 700; font-size: .72rem; }
 .ck-track-state { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .ck-track-row--upcoming { opacity: .42; filter: grayscale(1); pointer-events: none; user-select: none; }
 .ck-track-row--late { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
@@ -263,6 +265,19 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 }
 .ck-inbox { display: flex; flex-direction: column; gap: 10px; }
 .ck-issue-row { border-inline-start: 4px solid var(--danger); }
+/* The "missing or not working" report: one card per CHECK, however many people reported it. */
+.ck-issue-group { border-inline-start: 4px solid var(--danger); }
+.ck-issue-group--recovered { border-inline-start-color: var(--line-strong, var(--line)); opacity: .85; }
+.ck-issue-summary { margin: 0; font-weight: 800; color: var(--danger); }
+.ck-issue-group--recovered .ck-issue-summary { color: var(--text-dim); }
+.ck-issue-details > summary, .ck-issue-recovered > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; list-style: none; min-block-size: 40px; }
+.ck-issue-details > summary::-webkit-details-marker, .ck-issue-recovered > summary::-webkit-details-marker { display: none; }
+.ck-issue-details[open] > summary svg, .ck-issue-recovered[open] > summary svg { transform: rotate(180deg); }
+.ck-issue-reports { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ck-issue-report { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.ck-issue-report__who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: .84rem; color: var(--text-dim); }
+.ck-issue-report__who strong { color: var(--text); font-size: .92rem; }
+.ck-issue-reason { quotes: "״" "״"; color: var(--text); }
 .ck-builder-category { border: 1px solid var(--line); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; background: color-mix(in srgb, var(--bg-elev) 72%, transparent); }
 .ck-builder-category__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; }
 .ck-builder-item { border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); padding: 14px; display: flex; flex-direction: column; gap: 12px; }

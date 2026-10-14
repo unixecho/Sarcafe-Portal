@@ -30,6 +30,8 @@ const TEMPLATES: Record<string, Template[]> = {
   requests_closing: [{ kind: 'requests.closing', title: 'מחר נסגרות הבקשות לשבוע (בדיקה)', body: 'מחר, יום שלישי 13/10, נסגרת ההגשה לשבוע 18/10–24/10.', url: '/staff/schedule' }],
   checklist_late: [{ kind: 'checklist.late', title: 'הצ׳קליסט עוד לא הוגש (בדיקה)', body: 'סגירה · מאור. אפשר להגיש עכשיו.', url: '/staff/checklists' }],
   checklist_gap: [{ kind: 'checklist.gap', title: 'צ׳קליסט לא הוגש (בדיקה)', body: 'דנה · סגירה · מאור', url: '/owner/checklists' }],
+  issues_digest: [{ kind: 'issues.digest', title: 'דוח בוקר: 2 דברים לטיפול (בדיקה)', body: 'מאור\nמכונת הקרח והמלאי בה תקינים · דווח 3 פעמים · 2 עובדים\nיש חלב שקדים · דווח פעם אחת', url: '/owner/issues' }],
+  time_off_decided: [{ kind: 'timeoff.decided', title: 'יום החופש אושר (בדיקה)', body: '14/10', url: '/staff/schedule?tab=availability' }],
   open_shift: [{ kind: 'swap.open', title: 'דנה מוסר/ת משמרת (בדיקה)', body: 'יום ג׳ 07:30–13:00\nמי שפנוי/ה יכול/ה לקחת אותה בלשונית הבקשות.', url: '/staff/schedule' }],
   swap_request: [{ kind: 'swap.request', title: 'דנה מבקש/ת להחליף איתך משמרת (בדיקה)', body: 'יום ד׳ 13:00–19:00 מול יום ה׳ 07:30–13:00', url: '/staff/schedule' }],
   // More than three at once: the phone gets one summary instead of a burst.

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowLeftRight, CalendarDays, Check, ChevronDown, Inbox, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, CalendarDays, CalendarOff, Check, ChevronDown, Inbox, UserPlus, X } from 'lucide-react'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
@@ -9,9 +9,10 @@ import { Avatar, EmptyState, Notice, Person, Pill, RequestStatusPill, SwapStatus
 import { issuesOf } from '@/lib/shifts/messages'
 import { requestImpact, swapImpact } from '@/lib/shifts/rules'
 import { coverageOf } from '@/lib/shifts/coverage'
-import { addDays, formatDateLabel, formatShiftLabel, parseISODate, timeAgoHe, weekdayLabel, weekStartOf } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, formatShiftLabel, parseISODate, timeAgoHe, weekdayLabel, weekdayLongLabel, weekStartOf } from '@/lib/shifts/time'
 import { indexByShift, nameOf, requestLabel, sideLabel } from '@/lib/shifts/view'
-import type { ShiftRequest, SwapRequest, SwapSide } from '@/lib/shifts/types'
+import { isLiveTimeOff, KIND_LABEL } from '@/lib/shifts/time-off'
+import type { ShiftRequest, SwapRequest, SwapSide, TimeOffEntry } from '@/lib/shifts/types'
 
 // THE manager's inbox — everything that is waiting for a decision, in one place,
 // with what each decision would do spelled out BEFORE the button is pressed:
@@ -24,7 +25,7 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
   const { db, dispatch, weekStart, setWeekStart } = useShifts()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<(ConfirmRequest & { onYes: () => void }) | null>(null)
-  const [prompt, setPrompt] = useState<(PromptRequest & { kind: 'request' | 'swap'; id: string }) | null>(null)
+  const [prompt, setPrompt] = useState<(PromptRequest & { kind: 'request' | 'swap' | 'timeoff'; id: string; ids?: string[] }) | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
 
   const model = useMemo(() => {
@@ -38,27 +39,47 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
     ]
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, 25)
-    const activity = new Map<string, { requests: number; availability: number }>()
+    const activity = new Map<string, { requests: number; availability: number; timeOff: number }>()
     for (const request of db.requests.filter((candidate) => candidate.status === 'pending' && candidate.terms.date)) {
       const key = weekStartOf(request.terms.date!)
-      const value = activity.get(key) ?? { requests: 0, availability: 0 }
+      const value = activity.get(key) ?? { requests: 0, availability: 0, timeOff: 0 }
       value.requests += 1
       activity.set(key, value)
     }
     for (const submission of db.availability.filter((candidate) => candidate.status === 'submitted')) {
-      const value = activity.get(submission.weekStart) ?? { requests: 0, availability: 0 }
+      const value = activity.get(submission.weekStart) ?? { requests: 0, availability: 0, timeOff: 0 }
       value.availability += 1
       activity.set(submission.weekStart, value)
     }
+    // Days off waiting for a yes: per person (all their days of the shown scope in one card), oldest day first.
+    const waitingOff = db.timeOff
+      .filter((entry) => entry.kind === 'day_off' && entry.status === 'pending' && entry.date >= db.now.date && (!planning || (entry.date >= weekStart && entry.date <= addDays(weekStart, 6))))
+      .sort((a, b) => a.date.localeCompare(b.date))
+    for (const entry of db.timeOff.filter((candidate) => candidate.kind === 'day_off' && candidate.status === 'pending' && candidate.date >= db.now.date)) {
+      const key = weekStartOf(entry.date)
+      const value = activity.get(key) ?? { requests: 0, availability: 0, timeOff: 0 }
+      value.timeOff += 1
+      activity.set(key, value)
+    }
+    const offByPerson = new Map<string, TimeOffEntry[]>()
+    for (const entry of waitingOff) offByPerson.set(entry.staffId, [...(offByPerson.get(entry.staffId) ?? []), entry])
+    const timeOffGroups = [...offByPerson].map(([staffId, entries]) => ({ staffId, entries }))
+    // What everyone asked for in the shown week, so it is in front of the owner while the week is built.
+    const weekEnd = addDays(weekStart, 6)
+    const wishes = new Map<string, TimeOffEntry[]>()
+    for (const entry of db.timeOff.filter((candidate) => isLiveTimeOff(candidate) && candidate.date >= weekStart && candidate.date <= weekEnd)) {
+      wishes.set(entry.staffId, [...(wishes.get(entry.staffId) ?? []), entry])
+    }
+    const weekWishes = [...wishes].map(([staffId, entries]) => ({ staffId, entries: entries.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind)) }))
     const activityWeeks = [...activity].map(([start, counts]) => ({ start, ...counts })).sort((a, b) => a.start.localeCompare(b.start))
-    return { pendingRequests, awaitingMe, awaitingPeer, history, activityWeeks }
+    return { pendingRequests, awaitingMe, awaitingPeer, history, activityWeeks, timeOffGroups, weekWishes }
   }, [db, planning, weekStart])
 
   if (!db || !model) return null
-  const evalInput = { weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability }
+  const evalInput = { weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability, timeOff: db.timeOff, today: db.now.date }
   const byShift = indexByShift(db.assignments)
   const submittedAvailability = db.availability.filter((a) => a.status === 'submitted' && a.weekStart === weekStart)
-  const nothing = model.pendingRequests.length === 0 && model.awaitingMe.length === 0
+  const nothing = model.pendingRequests.length === 0 && model.awaitingMe.length === 0 && model.timeOffGroups.length === 0
 
   async function decideRequest(r: ShiftRequest, approve: boolean, note: string | null, force = false) {
     setBusyId(r.id)
@@ -82,6 +103,30 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
     }
     // A refusal that cannot be forced (double-booked, shift gone…) — say exactly why.
     setConfirm({ title: 'אי אפשר לאשר את הבקשה', body: res.message, confirmLabel: 'הבנתי', cancelLabel: 'סגירה', onYes: () => undefined })
+  }
+
+  // Days off: one decision for one person's days. A day they are already scheduled on asks first (the shifts stay until the owner changes them).
+  async function decideTimeOff(ids: string[], staffId: string, approve: boolean, note: string | null, force = false) {
+    setBusyId(ids.join(','))
+    const name = nameOf(db!, staffId)
+    const res = await dispatch(
+      { type: 'decideTimeOff', branchId: db!.branchId, ids, approve, note, force },
+      { quiet: true, success: approve ? `אושר: ${name} לא ישובץ/תשובץ בימים האלה באף סניף, וקיבל/ה הודעה` : `הבקשה של ${name} נדחתה, והוא/היא קיבל/ה הודעה` }
+    )
+    setBusyId(null)
+    if (res.ok) return
+    if (res.reason === 'needs_confirmation') {
+      const issues = issuesOf(res.details)
+      setConfirm({
+        title: 'כדאי לבדוק לפני האישור',
+        body: `${issues.map((i) => `• ${i.message}`).join('\n')}\n\nלאשר בכל זאת?`,
+        confirmLabel: 'אישור בכל זאת',
+        cancelLabel: 'חזרה',
+        onYes: () => void decideTimeOff(ids, staffId, true, note, true),
+      })
+      return
+    }
+    setConfirm({ title: 'אי אפשר לטפל בבקשה', body: res.message, confirmLabel: 'הבנתי', cancelLabel: 'סגירה', onYes: () => undefined })
   }
 
   async function decideSwap(s: SwapRequest, approve: boolean, note: string | null) {
@@ -110,11 +155,48 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
         <div className="sch-request-weeks__list">
           {model.activityWeeks.map((item) => <button key={item.start} type="button" className="sch-request-week press" aria-pressed={item.start === weekStart} onClick={() => setWeekStart(item.start)}>
             <strong>שבוע {formatDateLabel(item.start)}</strong>
-            <span>{item.requests ? `${item.requests} בקשות` : 'אין בקשות'} · {item.availability} הגשות זמינות</span>
+            <span>{item.requests ? `${item.requests} בקשות` : 'אין בקשות'} · {item.availability} הגשות זמינות{item.timeOff ? ` · ${item.timeOff} ימי חופש ממתינים` : ''}</span>
           </button>)}
         </div>
       </section>}
       {nothing && <EmptyState icon={<Inbox size={26} aria-hidden="true" />} title={planning ? 'כל הבקשות לשבוע הזה טופלו' : 'אין כרגע בקשות שמחכות לך'} hint={planning ? 'אפשר לשבץ ידנית ולהשלים את המקומות החסרים אחרי סגירת ההגשה.' : 'בקשות חדשות והחלפות שהעובדים הסכימו עליהן יופיעו כאן ובמרכז העדכונים.'} />}
+
+      {/* ---------------------------------------------------------------- days off waiting for a yes */}
+      {model.timeOffGroups.length > 0 && (
+        <section className="sch-wrap" aria-label="בקשות ימי חופש">
+          <div className="sch-row"><CalendarOff size={18} aria-hidden="true" /><h3 className="sch-h" style={{ flex: 1 }}>ימי חופש שמחכים לאישור ({model.timeOffGroups.reduce((sum, g) => sum + g.entries.length, 0)})</h3></div>
+          <p className="sch-sub">אחרי אישור לא אפשר לשבץ את העובד/ת ביום הזה באף סניף. דחייה משאירה אותם זמינים לשיבוץ.</p>
+          {model.timeOffGroups.map((group) => {
+            const name = nameOf(db, group.staffId)
+            const ids = group.entries.map((entry) => entry.id)
+            const busy = busyId === ids.join(',')
+            return (
+              <details key={group.staffId} className="sch-card sch-card--attention sch-request-disclosure" open aria-label={`בקשות יום חופש של ${name}`}>
+                <summary className="sch-request-summary"><Avatar name={name} /><span><strong>{name}</strong><small>{group.entries.length === 1 ? 'יום חופש אחד' : `${group.entries.length} ימי חופש`}</small></span><Pill tone="warn">ממתין</Pill><ChevronDown size={18} className="sch-disclosure-chevron" aria-hidden="true" /></summary>
+                <div className="sch-request-body">
+                  {group.entries.map((entry) => {
+                    const scheduled = db.assignments.some((a) => a.staffId === group.staffId && db.shifts.find((s) => s.id === a.shiftId)?.date === entry.date)
+                    return (
+                      <div key={entry.id} className="sch-row" style={{ flexWrap: 'wrap' }}>
+                        <strong style={{ flex: '1 1 120px' }}>{weekdayLongLabel(parseISODate(entry.date).getUTCDay())} <span className="ltr-isolate">{formatDateLabel(entry.date)}</span></strong>
+                        {scheduled && <Pill tone="warn">כבר משובץ/ת ביום הזה</Pill>}
+                        <button type="button" className="sch-btn sch-btn--ok sch-btn--sm press" disabled={busy} onClick={() => void decideTimeOff([entry.id], group.staffId, true, null)}><Check size={16} aria-hidden="true" /> אישור</button>
+                        <button type="button" className="sch-btn sch-btn--danger sch-btn--sm press" disabled={busy} onClick={() => setPrompt({ kind: 'timeoff', id: group.staffId, ids: [entry.id], title: `לדחות את יום החופש של ${name}?`, label: 'סיבה (אפשר להשאיר ריק)', submitLabel: 'דחיית הבקשה', allowEmpty: true })}><X size={16} aria-hidden="true" /> דחייה</button>
+                      </div>
+                    )
+                  })}
+                  {group.entries.length > 1 && (
+                    <div className="sch-row">
+                      <button type="button" className="sch-btn sch-btn--ok press" style={{ flex: 2 }} disabled={busy} onClick={() => void decideTimeOff(ids, group.staffId, true, null)}><Check size={18} aria-hidden="true" /> אישור כל הימים</button>
+                      <button type="button" className="sch-btn sch-btn--danger press" style={{ flex: 1 }} disabled={busy} onClick={() => setPrompt({ kind: 'timeoff', id: group.staffId, ids, title: `לדחות את כל הימים של ${name}?`, label: 'סיבה (אפשר להשאיר ריק)', submitLabel: 'דחיית הבקשות', allowEmpty: true })}><X size={18} aria-hidden="true" /> דחייה</button>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )
+          })}
+        </section>
+      )}
 
       {/* ---------------------------------------------------------------- waiting on the manager */}
       {(model.pendingRequests.length > 0 || model.awaitingMe.length > 0) && (
@@ -267,6 +349,26 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
         </section>
       )}
 
+      {/* ---------------------------------------------------------------- what people asked for this week */}
+      {model.weekWishes.length > 0 && (
+        <section className="sch-wrap" aria-label="מה העובדים ביקשו לשבוע הזה">
+          <h3 className="sch-h">מה העובדים ביקשו לשבוע {formatDateLabel(weekStart)}</h3>
+          <p className="sch-sub">ימי חופש ובקשות "בלי בוקר / בלי ערב". בלוח, מי שביקש/ה בלי משמרת מסוימת מסומן/ת בצבע אחר, ומי שיש לו/ה יום חופש מאושר לא ניתן לשיבוץ.</p>
+          {model.weekWishes.map(({ staffId, entries }) => (
+            <div key={staffId} className="sch-card">
+              <strong>{nameOf(db, staffId)}</strong>
+              <div className="sch-wrapflex">
+                {entries.map((entry) => (
+                  <Pill key={entry.id} tone={entry.kind === 'day_off' ? (entry.status === 'approved' ? 'danger' : 'warn') : 'warn'}>
+                    {weekdayLabel(parseISODate(entry.date).getUTCDay())} {formatDateLabel(entry.date)} · {KIND_LABEL[entry.kind]}{entry.kind === 'day_off' ? (entry.status === 'approved' ? ' (אושר)' : ' (ממתין)') : ''}
+                  </Pill>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
       {/* ---------------------------------------------------------------- availability */}
       {!planning && <section className="sch-wrap" aria-label="זמינות שהוגשה">
         <h3 className="sch-h">זמינות שהוגשה לשבוע {formatDateLabel(weekStart)}</h3>
@@ -334,7 +436,9 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
           const p = prompt
           setPrompt(null)
           if (!p) return
-          if (p.kind === 'request') {
+          if (p.kind === 'timeoff') {
+            if (p.ids) void decideTimeOff(p.ids, p.id, false, value || null)
+          } else if (p.kind === 'request') {
             const r = db.requests.find((x) => x.id === p.id)
             if (r) void decideRequest(r, false, value || null)
           } else {

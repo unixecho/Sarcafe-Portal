@@ -23,7 +23,7 @@ export async function loadStaffRecords(staffId: string, canReadPayslips: boolean
   const [person, weeks, checklists, orders, documents, branches] = await Promise.all([
     service.from('staff').select('id, first_name, last_name, display_name, employee_no, employee_code, email, active, avatar_emoji').eq('id', staffId).maybeSingle(),
     service.from('schedule_weeks').select('id, branch_id, published_snapshot').not('published_snapshot', 'is', null).order('week_start', { ascending: false }).limit(104),
-    service.from('checklist_assignments').select('id, checklist_kind, status, issue_count, submitted_at, created_at, issues').eq('staff_id', staffId).order('created_at', { ascending: false }).limit(100),
+    service.from('checklist_assignments').select('id, checklist_kind, status, issue_count, submitted_at, created_at, issues').eq('staff_id', staffId).neq('status', 'covered').order('created_at', { ascending: false }).limit(100),
     service.from('pos_orders').select('id, ticket_no, total_agorot, status, created_at').eq('created_by', staffId).order('created_at', { ascending: false }).limit(100),
     canReadPayslips ? service.from('staff_payslips').select('id, pay_month, file_name, content_type, byte_size, uploaded_at').eq('staff_id', staffId).order('pay_month', { ascending: false }).order('uploaded_at', { ascending: false }).limit(100) : Promise.resolve({ data: [], error: null }),
     service.from('branches').select('id, name, slug'),

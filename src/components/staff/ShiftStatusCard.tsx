@@ -23,7 +23,9 @@ const KINDS = [
 ] as const
 
 // Waiting = not sent and not dismissed by an owner.
-const waiting = (item: ShiftChecklistBrief) => item.status !== 'submitted' && !item.dismissed
+const waiting = (item: ShiftChecklistBrief) => item.status !== 'submitted' && item.status !== 'covered' && !item.dismissed
+/** "Dana sent it" / "Dana does the checklists": a colleague on the shift has this one, so it is not asked of this person. */
+const coveredText = (item: ShiftChecklistBrief) => (item.coveredBy?.reason === 'lead' ? `${item.coveredBy.name} ממלא/ת את הצ׳קליסטים` : `נשלח על ידי ${item.coveredBy?.name ?? 'עמית/ה'}`)
 const timesOf = (shift: ShiftBrief) => ({ date: shift.date, startTime: shift.startTime, endTime: shift.endTime })
 // Each checklist opens at its own moment: the start of the shift for opening / an arriving handover, half an hour before
 // the end for closing / a departing handover (the shift has an opening checklist).
@@ -104,6 +106,7 @@ function OnShift({ shift, now, scheduleHref }: { shift: ShiftBrief; now: WallClo
         <div className="app-shiftcard__actions">
           {shift.checklists.filter((item) => !item.dismissed).map((item) => {
             if (item.status === 'submitted') return <span key={item.id} className="app-shiftcard__done"><CheckCircle2 size={18} aria-hidden="true" />צ׳קליסט {item.kindLabel} נשלח</span>
+            if (item.status === 'covered') return <span key={item.id} className="app-shiftcard__done"><CheckCircle2 size={18} aria-hidden="true" />צ׳קליסט {item.kindLabel} · {coveredText(item)}</span>
             if (isChecklistLocked(lockFor(shift, item), now)) {
               return (
                 <button key={item.id} type="button" className="app-shiftcard__cta app-shiftcard__cta--locked" disabled aria-disabled="true">

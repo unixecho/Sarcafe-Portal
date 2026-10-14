@@ -27,6 +27,8 @@ let failTable = null
 let rejectInsert = false
 let calls = []
 let rows = {}
+// A database refusal on an UPDATE, with its message (the checklist triggers answer with their own text).
+let updateFailure = null
 class Query {
   constructor(table) { this.table = table; this.filters = []; this.single = false; this.mode = 'read'; trace.push(this) }
   select(_columns, opts) { this.head = opts?.head; return this }
@@ -43,7 +45,7 @@ class Query {
   then(resolve, reject) {
     let data = (rows[this.table] ?? []).filter((row) => this.filters.every((f) => f(row)))
     const count = data.length
-    const error = failTable === this.table || this.mode === 'insert' && rejectInsert ? { code: 'fixture_failure' } : null
+    const error = failTable === this.table || this.mode === 'insert' && rejectInsert ? { code: 'fixture_failure' } : this.mode === 'update' && updateFailure?.table === this.table ? { message: updateFailure.message } : null
     if (!error && this.mode === 'update') data.forEach((row) => Object.assign(row, this.value))
     if (!error && this.mode === 'insert') { rows[this.table] ??= []; rows[this.table].push(this.value) }
     if (this.cap) data = data.slice(0, this.cap)
@@ -83,7 +85,7 @@ const ctx = (id) => ({ params: Promise.resolve({ id }) })
 const request = (body, origin = 'http://localhost') => new NextRequest('http://localhost/api/staff/notifications', { method: 'POST', headers: { origin, host: 'localhost', 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const privateResponse = (response) => { eq(response.headers.get('cache-control'), 'private, no-store', 'Private success/error cannot be cached'); eq(response.headers.get('referrer-policy'), 'no-referrer', 'Private links omit referrer') }
 const reset = () => {
-  trace = []; calls = []; failTable = null; rejectInsert = false
+  trace = []; calls = []; failTable = null; rejectInsert = false; updateFailure = null
   rows = {
     staff: [{ id: STAFF, first_name: 'Fixture', active: true }],
     staff_payslips: [{ id: SLIP, staff_id: STAFF, object_path: 'own.pdf', file_name: 'payslip.pdf', pay_month: '2030-01-01', content_type: 'application/pdf', byte_size: 24 }, { id: PEER_SLIP, staff_id: PEER, object_path: 'peer.pdf', file_name: 'peer.pdf', pay_month: '2030-01-01', content_type: 'application/pdf', byte_size: 24 }],
@@ -228,6 +230,46 @@ eq(navigation.safePosReturn(`/pos?v=station&p=${SLIP}&unknown=secret`), `/pos?v=
   eq(response.status, 200, 'Once the shift has started the checklist can be submitted')
   eq(rows.checklist_assignments[1].status, 'submitted', 'The submitted checklist is stored')
 }
+// One person does a shift's checklists: a copy a colleague covers is refused, and a database refusal at the last moment is the same 409.
+{
+  const COVERED = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const OPEN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const template = { categories: [{ id: 'c', title: 'Fixture', items: [{ id: 'i', label: 'Machine', kind: 'status', issueType: 'equipment', required: true }] }] }
+  const checklistsApi = load('src/app/api/checklists/route.ts', {
+    ...overrides,
+    '@/lib/checklists/server': { ensureChecklistTemplates() {}, syncPublishedChecklists() {}, loadStaffChecklistAssignments: async () => [], coveredMessage: async (_service, shiftId, kind) => `covered:${shiftId}:${kind}`, flattenDefinition: (d) => d.categories.flatMap((c) => c.items.map((i) => ({ ...i, categoryId: c.id, categoryTitle: c.title }))) },
+    '@/lib/checklists/types': load('src/lib/checklists/types.ts'),
+    '@/lib/checklists/developer': load('src/lib/checklists/developer.ts'),
+    '@/lib/checklists/window': load('src/lib/checklists/window.ts'),
+    '@/lib/shifts/time': load('src/lib/shifts/time.ts'),
+  })
+  const post = (body) => new NextRequest('http://localhost/api/checklists', { method: 'POST', headers: { origin: 'http://localhost', host: 'localhost', 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const answers = { i: { result: 'ok', answeredAt: new Date().toISOString() } }
+  reset()
+  me = { id: STAFF, role: 'staff', badge: null, branch_id: null, active: true, email: null, via: 'employee_code', quick: true }
+  rows.branches[0].timezone = 'Asia/Jerusalem'
+  rows.shifts = [{ id: 'sh-past', branch_id: 'branch', shift_date: '2020-01-01', start_time: '07:00', end_time: '13:00' }]
+  rows.checklist_assignments = [
+    { id: COVERED, staff_id: STAFF, shift_id: 'sh-past', checklist_kind: 'opening', status: 'covered', template_snapshot: template, manager_resolved_at: null },
+    { id: OPEN, staff_id: STAFF, shift_id: 'sh-past', checklist_kind: 'closing', status: 'pending', template_snapshot: template, manager_resolved_at: null },
+  ]
+  response = await checklistsApi.POST(post({ action: 'save', assignmentId: COVERED, answers }))
+  eq([response.status, (await response.json()).error.code], [409, 'covered'], 'A copy a colleague covers cannot be saved')
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: COVERED, answers, attested: true }))
+  eq([response.status, rows.checklist_assignments[0].status], [409, 'covered'], 'A copy a colleague covers cannot be sent, and stays covered')
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: OPEN, answers, attested: true }))
+  eq([response.status, rows.checklist_assignments[1].status], [200, 'submitted'], 'The shift\'s other checklist is still theirs to send')
+  rows.checklist_assignments[1].status = 'pending'
+  updateFailure = { table: 'checklist_assignments', message: 'checklist_covered' }
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: OPEN, answers, attested: true }))
+  eq([response.status, (await response.json()).error.code], [409, 'covered'], 'Two people sending together: the loser gets a clean 409 from the database refusal, not a server error')
+  updateFailure = { table: 'checklist_assignments', message: 'checklist_not_lead' }
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: OPEN, answers, attested: true }))
+  eq([response.status, (await response.json()).error.code], [409, 'covered'], 'Someone who is not the picked person is refused the same way')
+  updateFailure = { table: 'checklist_assignments', message: 'something else' }
+  response = await checklistsApi.POST(post({ action: 'submit', assignmentId: OPEN, answers, attested: true }))
+  eq(response.status, 500, 'Any other database failure stays a server error')
+}
 // An owner can dismiss a checklist nobody sent, take it back, and a dismissed one is closed for the employee (real routes).
 {
   const WAITING = '88888888-8888-4888-8888-888888888888'
@@ -286,6 +328,17 @@ eq(navigation.safePosReturn(`/pos?v=station&p=${SLIP}&unknown=secret`), `/pos?v=
   me = owner
   response = await ownerApi.POST(post('owner/checklists', { action: 'restore', assignmentId: SENT }))
   eq(response.status, 409, 'A sent checklist cannot be "restored" either')
+  // Two people on one shift with nobody picked hold two copies of the same checklist: dismissing it dismisses both, and only it.
+  rows.checklist_assignments = [
+    { id: WAITING, staff_id: STAFF, shift_id: 'sh-past', checklist_kind: 'opening', status: 'pending', template_snapshot: template, manager_resolved_at: null },
+    { id: SENT, staff_id: PEER, shift_id: 'sh-past', checklist_kind: 'opening', status: 'in_progress', template_snapshot: template, manager_resolved_at: null },
+    { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', staff_id: STAFF, shift_id: 'sh-past', checklist_kind: 'closing', status: 'pending', template_snapshot: template, manager_resolved_at: null },
+  ]
+  me = owner
+  response = await ownerApi.POST(post('owner/checklists', { action: 'dismiss', assignmentId: WAITING }))
+  eq(rows.checklist_assignments.filter((row) => row.manager_resolved_at).map((row) => row.id), [WAITING, SENT], 'Dismissing a checklist dismisses every unsent copy of it and leaves the other checklist of the shift alone')
+  response = await ownerApi.POST(post('owner/checklists', { action: 'restore', assignmentId: SENT }))
+  eq(rows.checklist_assignments.filter((row) => row.manager_resolved_at).length, 0, 'Restoring brings every copy back')
 }
 // Closing opens half an hour before the shift ends, not when it starts (the real route, fixture database, real clock).
 {

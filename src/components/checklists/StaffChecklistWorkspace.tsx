@@ -20,7 +20,14 @@ type Payload = {
 }
 
 const statusLabel = (status: ChecklistAssignment['status']) =>
-  status === 'submitted' ? 'נשלח' : status === 'in_progress' ? 'התחלתם — אפשר להמשיך' : 'מחכה לביצוע'
+  status === 'submitted' ? 'נשלח' : status === 'covered' ? 'מטופל' : status === 'in_progress' ? 'התחלתם — אפשר להמשיך' : 'מחכה לביצוע'
+/** Who has a covered checklist, in a sentence: they sent it first, or the owner picked them to do the shift's checklists. */
+const coveredLine = (assignment: ChecklistAssignment) => {
+  const by = assignment.coveredBy
+  if (!by) return 'מישהו אחר במשמרת מטפל בצ׳קליסט הזה, אין צורך להגיש אותו.'
+  if (by.reason === 'lead') return `${by.name} נבחר/ה למלא את הצ׳קליסטים של המשמרת הזו, אין צורך שתגישו.`
+  return `נשלח על ידי ${by.name}${by.at ? ` ב־${new Date(by.at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}` : ''}. אין צורך להגיש אותו שוב.`
+}
 
 function answerIsComplete(item: ChecklistItem, answer?: ChecklistAnswer) {
   if (item.required === false && !answer) return true
@@ -79,7 +86,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch, openI
   const clock = data ? advanceClock(data.serverNow, Date.now() - fetchedAt.current) : null
   // Closing (and a departing handover) open half an hour before the shift ends; a shift "has an opening" when the person has one on it.
   const lockOf = (assignment: ChecklistAssignment): LockInput => ({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime, kind: assignment.kind, shiftHasOpening: (data?.assignments ?? []).some((other) => other.shiftId === assignment.shiftId && other.kind === 'opening') })
-  const lockedAt = (assignment: ChecklistAssignment) => Boolean(clock && !assignment.testMode && assignment.status !== 'submitted' && !assignment.dismissed && isChecklistLocked(lockOf(assignment), clock))
+  const lockedAt = (assignment: ChecklistAssignment) => Boolean(clock && !assignment.testMode && assignment.status !== 'submitted' && assignment.status !== 'covered' && !assignment.dismissed && isChecklistLocked(lockOf(assignment), clock))
   useEffect(() => {
     const link = deepLink.current
     if (!data || !link || (!link.open && !link.preview)) return
@@ -89,6 +96,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch, openI
       // Say why it did not open instead of leaving a bare list: an alert that opens nothing reads as broken.
       if (target.dismissed) return setNotice('הצ׳קליסט הזה בוטל על ידי המנהל/ת, אין צורך להגיש אותו.')
       if (target.status === 'submitted') return setNotice('הצ׳קליסט הזה כבר נשלח, תודה.')
+      if (target.status === 'covered') return setNotice(coveredLine(target))
       return open(target) // a locked one reports "opens at …" itself
     }
     const template = link.preview && data.developerMode ? data.previews.find((candidate) => candidate.kind === link.preview) : null
@@ -380,7 +388,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch, openI
   // What the person came to do comes first: due now (oldest first), then not yet open, then what is done or was
   // dismissed (newest first). The list is the last 30 checklists, so by date alone today's would sit under last month's.
   const all = data?.assignments ?? []
-  const isClosed = (assignment: ChecklistAssignment) => assignment.status === 'submitted' || Boolean(assignment.dismissed)
+  const isClosed = (assignment: ChecklistAssignment) => assignment.status === 'submitted' || assignment.status === 'covered' || Boolean(assignment.dismissed)
   const ordered = [
     ...all.filter((assignment) => !isClosed(assignment) && !lockedAt(assignment)),
     ...all.filter((assignment) => !isClosed(assignment) && lockedAt(assignment)),
@@ -409,11 +417,13 @@ export default function StaffChecklistWorkspace({ branches, initialBranch, openI
           {ordered.map((assignment) => {
             const locked = lockedAt(assignment)
             const dismissed = Boolean(assignment.dismissed)
-            const closed = assignment.status === 'submitted' || dismissed
+            const covered = assignment.status === 'covered'
+            const closed = assignment.status === 'submitted' || covered || dismissed
             return (
-            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}${locked ? ' ck-card--locked' : ''}${dismissed ? ' ck-card--dismissed' : ''}`} disabled={closed || locked} aria-disabled={closed || locked} onClick={() => open(assignment)}>
-              <div className="sch-row">{locked ? <Lock size={22} aria-hidden="true" /> : <ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" />}<strong style={{ flex: 1 }}>{assignment.kindLabel}</strong>{locked ? <span className="ck-status ck-status--locked">נעול</span> : dismissed ? <span className="ck-status ck-status--dismissed">בוטל</span> : <span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span>}</div>
+            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}${locked ? ' ck-card--locked' : ''}${dismissed || covered ? ' ck-card--dismissed' : ''}`} disabled={closed || locked} aria-disabled={closed || locked} onClick={() => open(assignment)}>
+              <div className="sch-row">{locked ? <Lock size={22} aria-hidden="true" /> : <ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" />}<strong style={{ flex: 1 }}>{assignment.kindLabel}</strong>{locked ? <span className="ck-status ck-status--locked">נעול</span> : dismissed ? <span className="ck-status ck-status--dismissed">בוטל</span> : covered ? <span className="ck-status ck-status--submitted">מטופל</span> : <span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span>}</div>
               {dismissed && <span className="sch-sub">המנהל/ת ביטל/ה את הצ׳קליסט הזה, אין צורך להגיש אותו.</span>}
+              {covered && <span className="sch-sub">{coveredLine(assignment)}</span>}
               {locked && clock && <span className="sch-sub">{lockedBecause(lockOf(assignment))} · {unlockText(lockOf(assignment), clock)}</span>}
               <span>{new Date(`${assignment.shiftDate}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} · <span dir="ltr">{assignment.startTime}–{assignment.endTime}</span></span>
               {assignment.status === 'submitted' && <span className="sch-sub">נשלח {assignment.submittedAt ? new Date(assignment.submittedAt).toLocaleString('he-IL') : ''}{assignment.issueCount ? ` · ${assignment.issueCount} ליקויים דווחו` : ' · ללא ליקויים'}</span>}

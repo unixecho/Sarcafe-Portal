@@ -43,7 +43,10 @@ export type ChecklistAssignment = {
   kindLabel: string
   templateVersion: number
   template: ChecklistDefinition
-  status: 'pending' | 'in_progress' | 'submitted'
+  status: 'pending' | 'in_progress' | 'submitted' | 'covered'
+  /** Only for 'covered': an unsent copy that someone else is responsible for or already sent (one person does a shift's
+   *  checklists: the owner picks, or the first to send wins). `reason` says which; `name` is that person. */
+  coveredBy?: { name: string; at: string | null; reason: 'submitted' | 'lead' } | null
   /** An owner dismissed it before it was sent: it is closed, not waiting (see isDismissed in window.ts). */
   dismissed?: boolean
   answers: Record<string, ChecklistAnswer>

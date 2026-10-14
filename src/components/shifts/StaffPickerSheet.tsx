@@ -9,6 +9,7 @@ import { clashesFor, pendingRequestsByShift } from '@/lib/shifts/view'
 import { formatShiftLabel, weekStartOf } from '@/lib/shifts/time'
 import { badgeLabel } from '@/lib/staff/badges'
 import { staffColor } from '@/lib/shifts/people'
+import { avoidText, fitFor } from '@/lib/shifts/time-off'
 
 type Target = { date: string; startTime: string; endTime: string; shiftId: string | null }
 
@@ -50,10 +51,11 @@ export default function StaffPickerSheet({
       .map((r) => {
         const clash = clashesFor(r.staffId, { date: target.date, startTime: target.startTime, endTime: target.endTime }, weekStart, db.shifts, db.assignments, target.shiftId)[0]
         const entry = availability.find((a) => a.staffId === r.staffId)?.entries.find((e) => e.date === target.date)
-        return { row: r, requested: requested.has(r.staffId), clash, unavailable: entry?.kind === 'unavailable', prefers: entry?.kind === 'prefer' }
+        const fit = fitFor(db.timeOff, r.staffId, { date: target.date, startTime: target.startTime, endTime: target.endTime })
+        return { row: r, requested: requested.has(r.staffId), clash, unavailable: entry?.kind === 'unavailable', prefers: entry?.kind === 'prefer', fit }
       })
       .sort((a, b) => {
-        const rank = (x: typeof a) => (x.clash ? 3 : x.requested ? 0 : x.unavailable ? 2 : 1)
+        const rank = (x: typeof a) => (x.fit.kind === 'day_off' ? 5 : x.clash ? 4 : x.fit.kind === 'day_off_pending' || x.fit.kind === 'avoids' ? 3 : x.requested ? 0 : x.unavailable ? 2 : 1)
         return rank(a) - rank(b) || a.row.displayName.localeCompare(b.row.displayName, 'he')
       })
   }, [db, target, excludeStaffIds])
@@ -101,9 +103,10 @@ export default function StaffPickerSheet({
             {rows.length === 0 ? 'אין עוד אנשי צוות זמינים לשיבוץ. אפשר להוסיף או להפעיל אנשי צוות בלשונית "צוות".' : 'לא נמצא אף אחד בשם הזה.'}
           </p>
         )}
-        {shown.map(({ row, requested, clash, unavailable, prefers }) => {
+        {shown.map(({ row, requested, clash, unavailable, prefers, fit }) => {
           const checked = picked.includes(row.staffId)
-          const blocked = !!clash
+          // An approved day off is a block in every branch (the database refuses it too); a clash is the same for double-booking.
+          const blocked = !!clash || fit.kind === 'day_off'
           return (
             <button
               key={row.staffId}
@@ -111,7 +114,7 @@ export default function StaffPickerSheet({
               role="checkbox"
               aria-checked={checked}
               disabled={blocked}
-              className="sch-pick press"
+              className={`sch-pick press${fit.kind === 'avoids' || fit.kind === 'day_off_pending' ? ' sch-pick--avoid' : ''}${fit.kind === 'day_off' ? ' sch-pick--dayoff' : ''}`}
               onClick={() => toggle(row.staffId)}
             >
               <Avatar name={row.displayName} color={staffColor(row.staffId, db.roster)} emoji={row.avatarEmoji} />
@@ -122,8 +125,16 @@ export default function StaffPickerSheet({
                   {requested && <Pill tone="info">ביקש/ה להצטרף</Pill>}
                   {prefers && <Pill tone="ok">מעדיף/ה את היום הזה</Pill>}
                   {unavailable && <Pill tone="warn">סימן/ה שלא זמין/ה ביום הזה</Pill>}
+                  {fit.kind === 'day_off' && <Pill tone="danger">יום חופש מאושר</Pill>}
+                  {fit.kind === 'day_off_pending' && <Pill tone="warn">ביקש/ה יום חופש · טרם נענה</Pill>}
+                  {fit.kind === 'avoids' && <Pill tone="warn">ביקש/ה {avoidText(fit.avoids)}</Pill>}
                   {!row.hasLogin && <Pill tone="neutral">ללא כניסה לאפליקציה</Pill>}
                 </span>
+                {fit.kind === 'day_off' && (
+                  <span className="sch-pick__hint" style={{ color: 'var(--danger)' }}>
+                    יום חופש מאושר — אי אפשר לשבץ אותו/ה בשום סניף ביום הזה
+                  </span>
+                )}
                 {clash && (
                   <span className="sch-pick__hint" style={{ color: 'var(--danger)' }}>
                     כבר משובץ/ת ב{formatShiftLabel(clash.date, clash.startTime, clash.endTime)} — אי אפשר בשתי משמרות חופפות

@@ -59,6 +59,8 @@ const SIMPLE: Record<string, string> = {
   has_history: 'יש לעובד/ת היסטוריה (משמרות, בקשות או הזמנות), ולכן אי אפשר למחוק. אפשר להשבית — ההיסטוריה תישמר.',
   needs_confirmation: 'יש דברים שכדאי לבדוק לפני האישור.',
   rate_limited: 'יותר מדי פעולות בבת אחת — חכו רגע ונסו שוב.',
+  time_off: 'לעובד/ת הזה יש יום חופש מאושר בתאריך הזה, ולכן אי אפשר לשבץ אותו/ה — באף סניף. אפשר לשבץ מישהו אחר, או לבטל את יום החופש בלשונית "בקשות".',
+  not_on_shift: 'מי שנבחר/ה למלא את הצ׳קליסטים צריך/ה להיות משובץ/ת במשמרת.',
 }
 
 /** The Hebrew sentence for a database refusal. */
@@ -125,6 +127,7 @@ export function scheduleStatus(reason: string): number {
     case 'shift_full':
     case 'already_assigned':
     case 'has_history':
+    case 'time_off':
       return 409
     default:
       return 400

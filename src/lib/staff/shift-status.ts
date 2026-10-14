@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { coveredByFor } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistKind } from '@/lib/checklists/types'
 import { clockAbs, isDismissed, shiftEndAbs, shiftStartAbs, type WallClock } from '@/lib/checklists/window'
 import { END_GRACE_MINUTES } from '@/lib/push/staff-rules'
@@ -12,7 +13,16 @@ import { wallClockNow } from '@/lib/shifts/time'
 // (END_GRACE_MINUTES, the same number the alerts use) has not run out: closing the place takes time after the shift
 // ends, and that is exactly when the closing checklist has to be reachable from the home screen.
 
-export type ShiftChecklistBrief = { id: string; kind: ChecklistKind; kindLabel: string; status: 'pending' | 'in_progress' | 'submitted'; /** an owner dismissed it: closed, not waiting */ dismissed: boolean }
+export type ShiftChecklistBrief = {
+  id: string
+  kind: ChecklistKind
+  kindLabel: string
+  status: 'pending' | 'in_progress' | 'submitted' | 'covered'
+  /** an owner dismissed it: closed, not waiting */
+  dismissed: boolean
+  /** 'covered': a colleague on the shift sends this one (they sent it first, or the owner picked them) */
+  coveredBy?: { name: string; reason: 'submitted' | 'lead' } | null
+}
 export type ShiftBrief = {
   id: string
   date: string
@@ -78,9 +88,11 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
     rows = await checklistsFor()
   }
 
-  const stillOpen = (row: { status: unknown; manager_resolved_at: unknown }) => row.status !== 'submitted' && !isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null })
+  const stillOpen = (row: { status: unknown; manager_resolved_at: unknown }) => row.status !== 'submitted' && row.status !== 'covered' && !isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null })
   const current = running ?? justEnded.find((c) => rows.some((row) => row.shift_id === c.row.id && stillOpen(row))) ?? null
 
+  const coveredRows = rows.filter((row) => row.status === 'covered').map((row) => ({ shiftId: row.shift_id as string, kind: row.checklist_kind as string }))
+  const covered = await coveredByFor(service, coveredRows)
   const brief = (c: Candidate | null): ShiftBrief | null => {
     if (!c) return null
     const branch = branchById.get(c.row.branch_id as string)
@@ -99,7 +111,7 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
       place,
       checklists: rows
         .filter((row) => row.shift_id === c.row.id)
-        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'], dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }) }))
+        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'], dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }), coveredBy: row.status === 'covered' ? (({ name, reason }) => ({ name, reason }))(covered.get(`${row.shift_id}|${row.checklist_kind}`) ?? { name: 'עמית/ה', reason: 'submitted' as const }) : undefined }))
         .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]),
     }
   }

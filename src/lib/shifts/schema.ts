@@ -89,6 +89,7 @@ export const actionSchema = z.discriminatedUnion('type', [
       note,
       assignees: z.array(assignee).max(60),
       expectedUpdatedAt: z.string().max(40).nullish(),
+      checklistLeadStaffId: uuid.nullish(),
     })
     .strict(),
   z.object({ type: z.literal('deleteShift'), shiftId: uuid }).strict(),
@@ -120,6 +121,14 @@ export const actionSchema = z.discriminatedUnion('type', [
       status: z.enum(['draft', 'submitted']),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('submitTimeOff'),
+      branchId: uuid,
+      weekStart: isoDate,
+      entries: z.array(z.object({ date: isoDate, kinds: z.array(z.enum(['day_off', 'no_morning', 'no_evening'])).max(3) }).strict()).max(7),
+    })
+    .strict(),
   z.object({ type: z.literal('requestShift'), shiftId: uuid, note }).strict(),
   z.object({ type: z.literal('cancelRequest'), requestId: uuid }).strict(),
   z
@@ -130,6 +139,7 @@ export const actionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cancelSwap'), swapId: uuid }).strict(),
   z.object({ type: z.literal('decideRequest'), requestId: uuid, approve: z.boolean(), note, force: z.boolean().optional() }).strict(),
   z.object({ type: z.literal('decideSwap'), swapId: uuid, approve: z.boolean(), note }).strict(),
+  z.object({ type: z.literal('decideTimeOff'), branchId: uuid, ids: z.array(uuid).min(1).max(31), approve: z.boolean(), note, force: z.boolean().optional() }).strict(),
   z.object({ type: z.literal('markNotificationsRead'), ids: z.array(uuid).max(100).optional() }).strict(),
 ])
 

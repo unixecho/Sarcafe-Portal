@@ -7,6 +7,7 @@ import DashboardSections, { type DashboardCategory } from '@/components/app/Dash
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
 import GoogleLinkPrompt from '@/components/staff/GoogleLinkPrompt'
+import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { loadShiftStatus } from '@/lib/staff/shift-status'
@@ -66,6 +67,8 @@ export default async function StaffIndexPage() {
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
       {unread === 0 && alerts}
+      {/* Findable but quiet: after what needs attention, before the tool list. */}
+      <WorkshopCard />
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account"><Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link><InstallAppButton /></div>
     </main>

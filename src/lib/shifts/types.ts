@@ -108,6 +108,9 @@ export type Assignment = {
   staffName: string | null
   roleId: string | null
   status: AssignmentStatus
+  /** The owner picked this person to do the shift's checklists (only one per shift; the manager's live board only, the
+   *  published copy employees read does not carry it). Nobody picked = the first to send a checklist covers the rest. */
+  checklistLead: boolean
 }
 
 export type AvailabilityKind = 'unavailable' | 'partial' | 'prefer'
@@ -120,6 +123,24 @@ export type AvailabilitySubmission = {
   entries: AvailabilityEntry[]
   note: string | null
   status: 'draft' | 'submitted'
+}
+
+// ---- Days off and shift wishes (one set per person, every branch) ------------------------------------------
+//   day_off     needs a decision; once approved the person cannot be scheduled anywhere that day
+//   no_morning / no_evening   a soft wish, noted without a decision (the owner may still schedule them)
+export type TimeOffKind = 'day_off' | 'no_morning' | 'no_evening'
+export type TimeOffStatus = 'pending' | 'approved' | 'declined' | 'cancelled' | 'noted'
+
+export type TimeOffEntry = {
+  id: string
+  staffId: string
+  date: ISODate
+  kind: TimeOffKind
+  status: TimeOffStatus
+  note: string | null
+  decisionNote: string | null
+  decidedAt: string | null
+  createdAt: string
 }
 
 // ---- Swaps ------------------------------------------------------------------
@@ -241,6 +262,8 @@ export type ShiftsDB = {
   availability: AvailabilitySubmission[]
   swaps: SwapRequest[]
   requests: ShiftRequest[]
+  /** Days off and shift wishes: a manager gets everyone in the roster, an employee only their own. */
+  timeOff: TimeOffEntry[]
   planningShifts: PlanningShift[]
   /** Manager-only count of scheduled Saturday opportunities in the preceding 12 weeks. */
   saturdayBalance: SaturdayBalance[]

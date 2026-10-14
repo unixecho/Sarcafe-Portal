@@ -784,6 +784,91 @@ check('the direction column only accepts give or take', (await throws(`update pu
 check('a browser session cannot ask for a shift', await asRole('authenticated', dana.authId, () => refused(`select public.sched_request_take('${dana.id}', '${aWed.id}', null)`)) === true)
 
 // ============================================================================
+section('days off and shift wishes — one rule across every branch (20261015091000)')
+const TW = '2031-03-02' // a Sunday
+const TW2 = '2031-03-09'
+check('the test weeks are Sundays', (await one(`select extract(dow from $1::date)::int a, extract(dow from $2::date)::int b`, [TW, TW2])).a === 0)
+const periods = async (a, b) => (await one(`select public.sched_shift_periods($1,$2) p`, [a, b])).p
+check('a morning shift is morning only', JSON.stringify(await periods('07:00', '13:00')) === '["morning"]' && JSON.stringify(await periods('07:30', '13:00')) === '["morning"]')
+check('an evening shift is evening only', JSON.stringify(await periods('13:00', '19:00')) === '["evening"]' && JSON.stringify(await periods('16:30', '18:30')) === '["evening"]')
+check('a long shift touches both halves', JSON.stringify(await periods('07:00', '19:00')) === '["morning","evening"]' && JSON.stringify(await periods('12:30', '13:30')) === '["morning","evening"]')
+check('a night shift past midnight is evening', JSON.stringify(await periods('22:00', '02:00')) === '["evening"]')
+
+const wTW = await weekOf(maor, TW)
+const wTW2 = await weekOf(maor, TW2)
+const submitOff = (who, week, entries) => rpc('sched_submit_time_off', { p_actor: who.id, p_week_start: week, p_entries: JSON.stringify(entries) })
+const offRows = (who, status) => q(`select day::text d, kind, status from public.staff_time_off where staff_id = $1 ${status ? `and status = '${status}'` : ''} order by day, kind`, [who.id])
+const danaWish = await submitOff(dana, TW, [{ date: day(0, TW), kinds: ['day_off'] }, { date: day(1, TW), kinds: ['no_evening'] }, { date: day(2, TW), kinds: ['day_off', 'no_morning'] }])
+check('an employee can ask for days off and for a half of a day, with no limit on how many', danaWish.ok === true && danaWish.added === 3, JSON.stringify(danaWish))
+const danaLive = await offRows(dana)
+check('a day off waits for a decision, a wish is just noted', danaLive.find((r) => r.kind === 'day_off' && r.d === day(0, TW))?.status === 'pending' && danaLive.find((r) => r.kind === 'no_evening')?.status === 'noted')
+check('a whole day off already covers the softer wish of the same day', !danaLive.some((r) => r.d === day(2, TW) && r.kind === 'no_morning'))
+const mgrNotes = await q(`select staff_id from public.schedule_notifications where kind = 'timeoff.new'`)
+check('the managers of their branch hear about the new day off, the employee does not', [owner.id, gm.id, delegate.id].every((id) => mgrNotes.some((n) => n.staff_id === id)) && !mgrNotes.some((n) => n.staff_id === dana.id))
+const again = await submitOff(dana, TW, [{ date: day(0, TW), kinds: ['day_off'] }, { date: day(1, TW), kinds: ['no_evening'] }, { date: day(2, TW), kinds: ['day_off'] }])
+check('sending the same wishes again changes and announces nothing', again.ok === true && again.added === 0 && again.removed === 0)
+check('a week that is not a Sunday, an unknown kind and a date outside the week are refused',
+  (await submitOff(dana, day(1, TW), [])).reason === 'bad_date' && (await submitOff(dana, TW, [{ date: day(0, TW), kinds: ['holiday'] }])).reason === 'bad_request'
+  && (await submitOff(dana, TW, [{ date: day(9, TW), kinds: ['day_off'] }])).reason === 'bad_date')
+check('days that already passed cannot be changed', (await submitOff(dana, WPAST, [{ date: day(2, WPAST), kinds: ['day_off'] }])).added === 0)
+check('only an active person can ask', (await submitOff(gone, TW, [{ date: day(4, TW), kinds: ['day_off'] }])).reason === 'forbidden')
+
+// a pending day off blocks nothing yet, but the automatic fill already leaves the person alone
+const sun = await save(owner, wTW, { p_date: day(0, TW), p_start: '07:00', p_end: '13:00' })
+const mon = await save(owner, wTW, { p_date: day(1, TW), p_start: '13:00', p_end: '19:00' })
+const monAm = await save(owner, wTW, { p_date: day(1, TW), p_start: '07:00', p_end: '12:00' })
+const safetyJson = JSON.stringify({ maxWeeklyHours: 42, minRestHours: 10, maxDailyHours: 10, maxConsecutiveDays: 6 })
+const eligible = async (who, shiftId, ws = TW) => (await one(`select public.sched_fill_eligible($1,$2,$3,$4::jsonb,null) ok`, [who.id, shiftId, ws, safetyJson])).ok
+check('a pending day off keeps the person out of automatic filling', await eligible(dana, sun.shiftId) === false)
+check('"not the evening" keeps them off the evening shift only', await eligible(dana, mon.shiftId) === false && await eligible(dana, monAm.shiftId) === true)
+check('but a pending day off is not yet a block: the owner can still schedule them', (await save(owner, wTW, { p_date: day(0, TW), p_shift_id: sun.shiftId, p_start: '07:00', p_end: '13:00', p_assignees: JSON.stringify([asg(dana.id)]), p_expected_updated: (await shiftRow(sun.shiftId)).updated_at })).ok === true)
+
+// deciding
+const idOf = async (who, d) => (await one(`select id from public.staff_time_off where staff_id=$1 and day=$2 and kind='day_off' and status in ('pending','approved')`, [who.id, d])).id
+check('an ordinary employee cannot decide', (await rpc('sched_decide_time_off', { p_actor: dana.id, p_branch: maor, p_ids: [await idOf(dana, day(2, TW))], p_approve: true, p_note: null })).reason === 'forbidden')
+const sunId = await idOf(dana, day(0, TW))
+const needs = await rpc('sched_decide_time_off', { p_actor: delegate.id, p_branch: maor, p_ids: [sunId], p_approve: true, p_note: null })
+check('approving a day the person is already scheduled on asks first and changes nothing', needs.reason === 'needs_confirmation' && needs.details.issues.length === 1 && (await offRows(dana, 'approved')).length === 0, JSON.stringify(needs))
+check('the other branch\'s board cannot decide for a person who is not in it', (await rpc('sched_decide_time_off', { p_actor: owner.id, p_branch: ghav, p_ids: [sunId], p_approve: true, p_note: null, p_force: true })).reason === 'wrong_branch')
+const forced = await rpc('sched_decide_time_off', { p_actor: delegate.id, p_branch: maor, p_ids: [sunId], p_approve: true, p_note: 'בכיף', p_force: true })
+check('a delegated manager can approve with confirmation', forced.ok === true && (await offRows(dana, 'approved')).length === 1)
+const lena = await addStaff({ email: 'lena@x.test', first: 'Lena', badge: 'barista', branch: maor })
+await submitOff(lena, TW, [{ date: day(6, TW), kinds: ['day_off'] }])
+await rpc('sched_decide_time_off', { p_actor: owner.id, p_branch: maor, p_ids: [await idOf(lena, day(6, TW))], p_approve: true, p_note: 'מאושר' })
+check('the employee is told, with the manager note', (await notesFor(lena)).some((n) => n.kind === 'timeoff.decided' && /אושר/.test(n.title) && /מאושר/.test(n.body ?? '')))
+check('a decided request cannot be decided again', (await rpc('sched_decide_time_off', { p_actor: gm.id, p_branch: maor, p_ids: [sunId], p_approve: false, p_note: null })).reason === 'not_pending')
+check('a shift that already held the person can still be edited (they were kept knowingly)', (await save(owner, wTW, { p_date: day(0, TW), p_shift_id: sun.shiftId, p_start: '07:00', p_end: '13:00', p_note: 'עדכון', p_assignees: JSON.stringify([asg(dana.id, 'barista', (await assignmentsOf(sun.shiftId))[0].id)]), p_expected_updated: (await shiftRow(sun.shiftId)).updated_at })).ok === true)
+
+// the block
+const sun2 = await save(owner, wTW, { p_date: day(0, TW), p_start: '14:00', p_end: '18:00' })
+let blocked = ''
+try { await save(owner, wTW, { p_date: day(0, TW), p_shift_id: sun2.shiftId, p_start: '14:00', p_end: '18:00', p_assignees: JSON.stringify([asg(dana.id)]), p_expected_updated: (await shiftRow(sun2.shiftId)).updated_at }) } catch (e) { blocked = String(e.message) }
+check('after approval the person cannot be put on any shift that day (the database refuses)', /sched_time_off/.test(blocked), blocked)
+check('...not even by writing the assignment around the functions', (await throws(`insert into public.shift_assignments (branch_id, shift_id, staff_id, staff_name) values ($1,$2,$3,'x')`, [maor, sun2.shiftId, dana.id], /sched_time_off/)) === true)
+const otherDay = await save(owner, wTW, { p_date: day(3, TW), p_start: '08:00', p_end: '12:00' })
+const lateDay = await save(owner, wTW, { p_date: day(4, TW), p_start: '15:00', p_end: '17:00', p_assignees: JSON.stringify([asg(dana.id)]) })
+check('...while other days stay open to them', (await save(owner, wTW, { p_date: day(3, TW), p_shift_id: otherDay.shiftId, p_start: '08:00', p_end: '12:00', p_assignees: JSON.stringify([asg(dana.id)]), p_expected_updated: (await shiftRow(otherDay.shiftId)).updated_at })).ok === true)
+check('...and dragging a shift onto their day off is refused too', (await throws(`update public.shifts set shift_date = $2 where id = $1`, [lateDay.shiftId, day(0, TW)], /sched_time_off/)) === true)
+const monId = await idOf(dana, day(2, TW))
+const declined = await rpc('sched_decide_time_off', { p_actor: owner.id, p_branch: maor, p_ids: [monId], p_approve: false, p_note: 'חסרים לנו' })
+const tueShift = await save(owner, wTW, { p_date: day(2, TW), p_start: '09:00', p_end: '12:00' })
+check('a declined day off blocks nothing and keeps the reason', declined.ok === true && (await one(`select decision_note from public.staff_time_off where id=$1`, [monId])).decision_note === 'חסרים לנו' && await eligible(dana, tueShift.shiftId) === true)
+
+// withdrawing an approved day off
+const withdrawn = await submitOff(dana, TW, [{ date: day(1, TW), kinds: ['no_evening'] }])
+check('an employee can withdraw an approved day off, and the managers are told', withdrawn.ok === true && withdrawn.removed >= 1 && (await q(`select 1 from public.schedule_notifications where kind='timeoff.cancelled' and staff_id=$1`, [owner.id])).length === 1)
+check('the day is open to scheduling again', (await save(owner, wTW, { p_date: day(0, TW), p_shift_id: sun2.shiftId, p_start: '14:00', p_end: '18:00', p_assignees: JSON.stringify([asg(dana.id)]), p_expected_updated: (await shiftRow(sun2.shiftId)).updated_at })).ok === true)
+
+// copying a week skips an approved day off instead of failing
+await save(owner, wTW, { p_date: day(5, TW), p_start: '09:00', p_end: '12:00', p_assignees: JSON.stringify([asg(yossi.id)]) })
+await submitOff(yossi, TW2, [{ date: day(5, TW2), kinds: ['day_off'] }])
+await rpc('sched_decide_time_off', { p_actor: owner.id, p_branch: maor, p_ids: [await idOf(yossi, day(5, TW2))], p_approve: true, p_note: null })
+const copied = await rpc('sched_copy_week', { p_actor: owner.id, p_branch: maor, p_from: TW, p_to: TW2 })
+check('copying a week leaves out someone on an approved day off and says why', copied.ok === true && copied.skipped.some((s) => s.why === 'day_off') && !(await q(`select 1 from public.shift_assignments a join public.shifts s on s.id=a.shift_id where s.week_id=$1 and a.staff_id=$2`, [wTW2, yossi.id])).length, JSON.stringify(copied))
+check('a browser cannot read or write days off', await asRole('authenticated', dana.authId, () => refused(`select * from public.staff_time_off`)) === true && await asRole('authenticated', dana.authId, () => refused(`insert into public.staff_time_off (staff_id, day, kind, status) values ('${dana.id}', '2031-04-06', 'day_off', 'approved')`)) === true)
+
+
+// ============================================================================
 section('cross-branch published schedules stay read/request-only')
 const crossStaff = await addStaff({ first: 'Cross branch', branch: ghav })
 const unlinkedCross = await addStaff({ first: 'Unlinked cross branch', branch: ghav, auth: false })

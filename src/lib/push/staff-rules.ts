@@ -26,6 +26,12 @@ export const OWNER_ESCALATION_MINUTES = 30
 /** After this long it is history, not a reminder. */
 export const REMINDER_WINDOW_MINUTES = 6 * 60
 
+// ---- The owner's morning report: what is missing or not working ----------------------------------
+/** The owners' daily "what is missing or not working" summary goes out at this local hour (only when something is open). */
+export const ISSUES_DIGEST_HOUR = 8
+/** A digest that missed its hour (the scheduler was down) is still sent this long after it, then skipped for the day. */
+export const ISSUES_DIGEST_WINDOW_MINUTES = 3 * 60
+
 // ---- "Requests for the week" ------------------------------------------------------------------
 /** Sunday and Monday reminders go out at this local hour. */
 export const REQUESTS_REMINDER_HOUR = 10
@@ -76,6 +82,12 @@ export function shiftReminderPhase(shift: { date: string; startTime: string; end
   return null
 }
 
+/** True from ISSUES_DIGEST_HOUR until the window ends, on the branch's own clock. */
+export function issuesDigestDue(now: WallClock): boolean {
+  const since = minutesOf(now.time) - ISSUES_DIGEST_HOUR * 60
+  return since >= 0 && since < ISSUES_DIGEST_WINDOW_MINUTES
+}
+
 /** What a checklist's due time hangs on. Opening is done at the start of the day. A handover is two-sided:
  *  the employee who also opens hands over at the END of their shift, the one who arrives to take over
  *  (no opening on that shift) does it soon after they START. Closing is the end of the shift. */
@@ -108,7 +120,7 @@ export function requestsReminder(now: WallClock): { phase: 'open' | 'closing'; t
 }
 
 /** Alerts that only ever go to the people who run the schedule (a decision is waiting for them). */
-const MANAGER_KINDS = new Set(['swap.awaiting', 'request.new', 'request.cancelled', 'availability.submitted'])
+const MANAGER_KINDS = new Set(['swap.awaiting', 'request.new', 'request.cancelled', 'availability.submitted', 'timeoff.new', 'timeoff.cancelled'])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** Where tapping an alert goes, on the phone and in the notification list alike: the thing the message is about.
@@ -122,6 +134,8 @@ export function pushPathFor(kind: string, link: Record<string, unknown> | null, 
   if (kind === 'checklist.gap') return '/owner/checklists'
   if (kind.startsWith('checklist.')) return '/staff/checklists'
   if (kind === 'requests.open' || kind === 'requests.closing') return '/staff/schedule?tab=availability'
+  // The owner's answer to a day off lands where the person asked for it (a manager's own copy of timeoff.new is handled below).
+  if (kind === 'timeoff.decided') return '/staff/schedule?tab=availability'
   const week = typeof link?.weekStart === 'string' && ISO_DATE.test(link.weekStart) ? link.weekStart : null
   const asManager = MANAGER_KINDS.has(kind) || (kind === 'swap.cancelled' && recipient?.manager === true)
   if (asManager) return `/owner/schedule?tab=requests${week ? `&week=${week}` : ''}`

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { apiRoute, ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '@/lib/http/errors'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { resolveStaffIdentity } from '@/lib/staff/session'
-import { ensureChecklistTemplates, flattenDefinition, loadStaffChecklistAssignments, syncPublishedChecklists } from '@/lib/checklists/server'
+import { coveredMessage, ensureChecklistTemplates, flattenDefinition, loadStaffChecklistAssignments, syncPublishedChecklists } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistAnswer, type ChecklistDefinition } from '@/lib/checklists/types'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { isChecklistLocked, isDismissed, lockedBecause, unlockText } from '@/lib/checklists/window'
@@ -102,6 +102,8 @@ export const POST = apiRoute(async (request: NextRequest) => {
   if (!row) throw NotFound('הצ׳קליסט לא נמצא.')
   if (row.staff_id !== staff.id) throw Forbidden('הצ׳קליסט שייך לעובד/ת אחר/ת.')
   if (row.status === 'submitted') throw new ApiError(409, 'conflict', 'הצ׳קליסט כבר נשלח.')
+  // One person does a shift's checklists: the owner picked someone else, or a colleague already sent this one.
+  if (row.status === 'covered') throw new ApiError(409, 'covered', await coveredMessage(service, row.shift_id as string, row.checklist_kind as string))
   // An owner dismissed it: it is closed, so a stale screen cannot save or send it afterwards.
   if (isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null })) throw new ApiError(409, 'dismissed', 'הצ׳קליסט בוטל על ידי המנהל/ת ואין צורך להגיש אותו.')
 
@@ -157,6 +159,10 @@ export const POST = apiRoute(async (request: NextRequest) => {
     .eq('id', row.id)
     .eq('staff_id', staff.id)
     .neq('status', 'submitted')
-  if (error) throw new ApiError(500, 'internal_error', 'השליחה לא הושלמה. נסו שוב.')
+  if (error) {
+    // The database is the last word: two people sending the same checklist together get one winner and one refusal.
+    if (/checklist_covered|checklist_not_lead/.test(error.message ?? '')) throw new ApiError(409, 'covered', await coveredMessage(service, row.shift_id as string, row.checklist_kind as string))
+    throw new ApiError(500, 'internal_error', 'השליחה לא הושלמה. נסו שוב.')
+  }
   return NextResponse.json({ ok: true, issueCount: issues.length })
 })

@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { Beaker, ClipboardCheck, ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt, ShoppingBag, ShieldCheck, Sparkles } from 'lucide-react'
+import { Beaker, ClipboardCheck, ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt, ShoppingBag, ShieldCheck, Sparkles, Wrench } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardLive from '@/components/DashboardLive'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
+import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
@@ -16,6 +17,7 @@ import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 import { isDeveloper } from '@/lib/checklists/developer'
+import { loadIssueReport } from '@/lib/checklists/issues-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +37,7 @@ export default async function OwnerDashboardPage() {
         <section className="app-hero"><h2>שלום, {me?.first_name || 'צוות Sarcafe'}</h2><p>הכניסה עם הקוד מאפשרת לעבוד בצ׳קליסטים ובקופת האירועים. אפשר להיכנס עם Google כדי לפתוח את כלי הניהול.</p></section>
         <StaffPushCard />
         <DashboardNotifications scheduleHref="/login?next=/staff/schedule" googleSignedIn={false} />
+        <WorkshopCard />
         <DashboardSections staff categories={[
           { title: 'במשמרת', entries: [{ href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה' }, { href: '/pos', icon: Receipt, label: 'קופת אירועים', description: 'הזמנות ועמדות הכנה' }] },
           { title: 'החשבון שלי', entries: [{ href: '/staff/profile', icon: Users, label: 'הפרופיל שלי', description: 'פרטי חשבון וקוד כניסה' }, { href: '/login?next=/owner/dashboard', icon: ShieldCheck, label: 'כניסה לניהול עם Google', description: 'צוות, סידור עבודה ודיווחים' }] },
@@ -55,15 +58,19 @@ export default async function OwnerDashboardPage() {
     ? await Promise.all([
         readDashboardStats(defaultBranch.id),
         readDashboardSignals(defaultBranch.id),
-        service.from('checklist_assignments').select('id', { count: 'exact', head: true }).eq('branch_id', defaultBranch.id).eq('status', 'submitted').gt('issue_count', 0).is('manager_resolved_at', null).then(({ count, error }) => error ? null : count ?? 0),
+        // How many different things are missing or not working right now (one per check, however many people reported it).
+        loadIssueReport(service, defaultBranch.id).then((report) => report.open.length).catch(() => null),
       ])
     : [{ hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } }, [], null]
 
   const categories: DashboardCategory[] = [
+    { title: 'חוסרים ותקלות', entries: [
+      { href: `/owner/issues${defaultBranch ? `?branch=${defaultBranch.slug}` : ''}`, icon: Wrench, label: 'מה חסר ומה לא עובד', description: 'מהצ׳קליסטים: כל בדיקה פעם אחת, ומי דיווח עליה', badge: checklistIssues && checklistIssues > 0 ? (checklistIssues === 1 ? 'דבר אחד לטיפול' : `${checklistIssues} דברים לטיפול`) : undefined },
+    ] },
     { title: 'צוות ומשמרות', entries: [
       { href: '/owner/staff', icon: Users, label: 'העובדים שלי', description: 'קליטה, היסטוריה ותלושי שכר' },
       { href: '/owner/schedule', icon: CalendarClock, label: 'סידור עבודה', description: 'בקשות, שיבוצים ואישור החלפות' },
-      { href: '/owner/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים ודיווחים', description: 'מעקב משמרות, ליקויים ועריכת טפסים', badge: checklistIssues && checklistIssues > 0 ? `${checklistIssues} דיווחים דורשים טיפול` : undefined },
+      { href: '/owner/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים', description: 'מעקב משמרות, חוסרים ועריכת טפסים' },
     ] },
     { title: 'שירות והזמנות', entries: [
       { href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' },
@@ -88,7 +95,8 @@ export default async function OwnerDashboardPage() {
       <StaffPushCard />
       <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" manager />
       <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
-      {checklistIssues === null && <p className="app-notifications__error" role="status">מצב הדיווחים אינו זמין כרגע. אפשר לפתוח את הצ׳קליסטים כדי לנסות שוב.</p>}
+      {checklistIssues === null && <p className="app-notifications__error" role="status">מצב החוסרים והתקלות אינו זמין כרגע. אפשר לפתוח אותו כדי לנסות שוב.</p>}
+      <WorkshopCard />
       <DashboardSections categories={categories} />
       <div className="app-group app-account"><InstallAppButton /></div>
       {isDeveloper(me) && <div className="app-group app-account"><Link href="/staff" className="app-row app-row--quiet"><span className="app-row__icon"><Users size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפאנל כמו שעובד רואה אותו</strong><small>כרטיס המשמרת וכפתור הצ׳קליסט</small></span></Link><Link href="/staff/dev" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>מצב מפתח</strong><small>בדיקת התראות, צ׳קליסטים ומשמרת בדיקה</small></span></Link></div>}

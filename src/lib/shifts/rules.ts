@@ -6,8 +6,9 @@
 // whole loaded window (ShiftsProvider's 3-week range) rather than just
 // one week's shifts.
 
-import type { Assignment, AvailabilitySubmission, ScheduleStaffRow, Shift, ShiftSettings, Warning } from './types'
+import type { Assignment, AvailabilitySubmission, ScheduleStaffRow, Shift, ShiftSettings, TimeOffEntry, Warning } from './types'
 import { daysBetween, durationMinutes, intervalOf } from './time'
+import { avoidText, fitFor } from './time-off'
 
 export type EvalInput = {
   weekStart: string
@@ -19,6 +20,10 @@ export type EvalInput = {
   shifts: Shift[]
   assignments: Assignment[]
   availability: AvailabilitySubmission[]
+  /** Days off and shift wishes. Absent = the checks that need them are skipped (callers that never loaded them). */
+  timeOff?: TimeOffEntry[]
+  /** The branch's today. With it, shifts that are already over raise no "nobody picked for the checklists" warning. */
+  today?: string
 }
 
 function severity(settings: ShiftSettings, code: string, fallback: 'error' | 'warning'): 'error' | 'warning' | null {
@@ -74,6 +79,13 @@ export function evaluate(input: EvalInput): Warning[] {
       push(out, settings, 'unassigned_shift', 'warning', 'משמרת ללא שיבוץ', { shiftId: shift.id })
     }
 
+    // Two or more people on a shift do ONE set of checklists: the owner picks who. Nobody picked is allowed (the first to
+    // send covers the rest), it is just a decision the owner is asked to make.
+    const onShift = shiftAssignments.filter((a) => a.staffId)
+    if (onShift.length >= 2 && !onShift.some((a) => a.checklistLead) && (!input.today || shift.date >= input.today)) {
+      push(out, settings, 'checklist_lead_missing', 'warning', 'לא נבחר/ה מי ממלא/ת את הצ׳קליסטים', { shiftId: shift.id })
+    }
+
     // Duplicate assignment: same staff+role assigned twice on one shift.
     const seen = new Set<string>()
     for (const a of shiftAssignments) {
@@ -91,6 +103,15 @@ export function evaluate(input: EvalInput): Warning[] {
 
       if (a.roleId && !roleIds.has(a.roleId)) {
         push(out, settings, 'unknown_role', 'warning', 'שיבוץ לתפקיד שאינו קיים יותר', { shiftId: shift.id, staffId: a.staffId })
+      }
+
+      // Days off and wishes. An approved day off is something the database refuses for anyone new, so this is what shows
+      // when someone was already on the shift when it was approved; the two softer ones are the owner's call.
+      if (input.timeOff) {
+        const fit = fitFor(input.timeOff, a.staffId, shift)
+        if (fit.kind === 'day_off') push(out, settings, 'time_off_approved', 'error', 'שובץ/ה ביום חופש שאושר', { shiftId: shift.id, staffId: a.staffId })
+        else if (fit.kind === 'day_off_pending') push(out, settings, 'time_off_pending', 'warning', 'ביקש/ה יום חופש וטרם נענה', { shiftId: shift.id, staffId: a.staffId })
+        else if (fit.kind === 'avoids') push(out, settings, 'time_off_avoid', 'warning', `ביקש/ה ${avoidText(fit.avoids)} ביום הזה`, { shiftId: shift.id, staffId: a.staffId })
       }
 
       if (settings.features.availability) {
@@ -198,7 +219,8 @@ const warningKey = (w: Warning) => `${w.code}|${w.staffId ?? ''}|${w.shiftId ?? 
 
 function newWarnings(before: Warning[], after: Warning[], staffIds: string[]): Warning[] {
   const had = new Set(before.map(warningKey))
-  return after.filter((w) => !had.has(warningKey(w)) && (!w.staffId || staffIds.includes(w.staffId)) && w.code !== 'unassigned_shift')
+  // "Nobody picked for the checklists" is about the shift, a decision the owner makes in the shift sheet: it is not a consequence of an approval.
+  return after.filter((w) => !had.has(warningKey(w)) && (!w.staffId || staffIds.includes(w.staffId)) && w.code !== 'unassigned_shift' && w.code !== 'checklist_lead_missing')
 }
 
 /** Warnings an approved swap would introduce for the two people involved. */
@@ -219,6 +241,6 @@ export function swapImpact(
 /** Warnings approving a request to join `shiftId` would introduce for that person. */
 export function requestImpact(input: EvalInput, request: { shiftId: string | null; staffId: string }): Warning[] {
   if (!request.shiftId) return []
-  const extra: Assignment = { id: `hypothetical:${request.staffId}`, shiftId: request.shiftId, staffId: request.staffId, staffName: null, roleId: null, status: 'assigned' }
+  const extra: Assignment = { id: `hypothetical:${request.staffId}`, shiftId: request.shiftId, staffId: request.staffId, staffName: null, roleId: null, status: 'assigned', checklistLead: false }
   return newWarnings(evaluate(input), evaluate({ ...input, assignments: [...input.assignments, extra] }), [request.staffId])
 }

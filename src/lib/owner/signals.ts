@@ -67,7 +67,7 @@ export async function readDashboardSignals(branchId: string): Promise<Signal[]> 
         rank: 45,
         icon: '🗓️',
         title: waiting === 1 ? 'בקשה אחת בלוח המשמרות מחכה לאישור שלך' : `${waiting} בקשות בלוח המשמרות מחכות לאישור שלך`,
-        detail: 'עובדים ביקשו להצטרף למשמרת או להחליף משמרת. עד שתחליטו — הלוח לא משתנה.',
+        detail: 'עובדים ביקשו להצטרף למשמרת, להחליף משמרת או לקבל יום חופש. עד שתחליטו — הלוח לא משתנה.',
         href: '/owner/schedule',
       })
     }
@@ -125,10 +125,17 @@ async function readNewFeedback(branchId: string): Promise<{ count: number; lates
 
 async function readScheduleRequests(branchId: string): Promise<number> {
   const service = createServiceRoleClient()
-  const [{ count: requests, error: e1 }, { count: swaps, error: e2 }] = await Promise.all([
+  const [{ count: requests, error: e1 }, { count: swaps, error: e2 }, { data: people, error: e3 }] = await Promise.all([
     service.from('shift_requests').select('id', { count: 'exact', head: true }).eq('branch_id', branchId).eq('status', 'pending'),
     service.from('shift_swaps').select('id', { count: 'exact', head: true }).eq('branch_id', branchId).eq('status', 'peer_accepted'),
+    // Days off belong to the person, not the branch: the ones waiting for this branch's owner are its people's (and floaters').
+    service.from('staff').select('id').eq('active', true).or(`branch_id.eq.${branchId},branch_id.is.null`),
   ])
-  if (e1 || e2) throw new Error('schedule requests read failed')
-  return (requests ?? 0) + (swaps ?? 0)
+  if (e1 || e2 || e3) throw new Error('schedule requests read failed')
+  const ids = (people ?? []).map((row) => row.id as string)
+  const { count: daysOff, error: e4 } = ids.length
+    ? await service.from('staff_time_off').select('id', { count: 'exact', head: true }).eq('kind', 'day_off').eq('status', 'pending').gte('day', new Date().toISOString().slice(0, 10)).in('staff_id', ids)
+    : { count: 0, error: null }
+  if (e4) throw new Error('schedule requests read failed')
+  return (requests ?? 0) + (swaps ?? 0) + (daysOff ?? 0)
 }

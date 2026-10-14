@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { InlineError, Notice } from '@/components/shifts/ui'
+import TimeOffPortal from '@/components/shifts/TimeOffPortal'
 import { addDays, formatDateLabel, formatShiftRange, hasStarted, requestDeadline, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import type { AvailabilityEntry, AvailabilityKind } from '@/lib/shifts/types'
 
-const KIND_LABELS: Record<Exclude<AvailabilityKind, 'partial'>, string> = { unavailable: 'לא זמין/ה', prefer: 'מעדיף/ה לעבוד' }
+const KIND_LABELS: Record<Exclude<AvailabilityKind, 'partial'>, string> = { unavailable: 'לא זמין/ה (הגשה ישנה)', prefer: 'מעדיף/ה לעבוד' }
 
 // "Which days can I NOT work?" — for the week after the one on the schedule tab.
 // Only exceptions are stored: a day with nothing marked means "available". The
@@ -105,7 +106,10 @@ export default function AvailabilityPortal() {
         <div className="sch-row"><Clock3 size={18} aria-hidden="true" /><strong>{closed ? 'הגשת הזמינות נסגרה' : `מגישים עד יום שלישי ${formatDateLabel(requestDeadline(target))}`}</strong></div>
         <p className="sch-sub">{closed ? 'המנהל/ת מכינים את הלוח. לשינוי זמינות מאוחר פנו אליהם. משמרת שפורסמה ונפתחה לבקשות עדיין אפשר לבקש.' : 'עד חצות, שעון ישראל. סמנו זמינות ובחרו משמרות מועדפות; המנהל/ת מחליטים על השיבוץ.'}</p>
       </div>
-      <p className="sch-sub">סמנו ימים שבהם <strong>אי אפשר</strong> לכם לעבוד, שעות חלקיות או העדפה. יום שלא סימנתם — אתם זמינים.</p>
+      <TimeOffPortal target={target} />
+
+      <div className="sch-row" style={{ marginTop: 6 }}><Clock3 size={18} aria-hidden="true" /><h3 className="sch-h">שעות חלקיות והעדפות</h3></div>
+      <p className="sch-sub">אפשר לסמן יום שבו אפשר לעבוד רק בשעות מסוימות, או יום שאתם מעדיפים לעבוד בו. יום שלא סימנתם — אתם זמינים. (לא רוצים לעבוד ביום מסוים? זה ב״ימי חופש״ למעלה.)</p>
 
       {existing?.status === 'submitted' && !dirty && (
         <p className="sch-pill sch-pill--ok" style={{ alignSelf: 'flex-start' }}>
@@ -122,7 +126,8 @@ export default function AvailabilityPortal() {
               <span style={{ flex: '1 1 110px', fontWeight: 700 }}>
                 {weekdayLongLabel(dow)} <span className="sch-faint ltr-isolate" style={{ fontSize: '0.8rem', fontWeight: 600 }}>{formatDateLabel(date)}</span>
               </span>
-              {(['unavailable', 'prefer', 'partial'] as const).map((k) => {
+              {/* "Unavailable" is now a day off (needs the owner's yes, see TimeOffPortal). An old submission that still has it shows, and can be cleared. */}
+              {(entry?.kind === 'unavailable' ? (['unavailable', 'prefer', 'partial'] as const) : (['prefer', 'partial'] as const)).map((k) => {
                 const active = entry?.kind === k
                 return (
                   <button key={k} type="button" className="sch-chip press" aria-pressed={active} disabled={availabilityLocked} onClick={() => setKind(date, active ? null : k)}>
