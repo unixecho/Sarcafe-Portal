@@ -6,7 +6,7 @@ import { resolveStaffIdentity } from '@/lib/staff/session'
 import { ensureChecklistTemplates, flattenDefinition, loadStaffChecklistAssignments, syncPublishedChecklists } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistAnswer, type ChecklistDefinition } from '@/lib/checklists/types'
 import { isDeveloper } from '@/lib/checklists/developer'
-import { isChecklistLocked, unlockText } from '@/lib/checklists/window'
+import { isChecklistLocked, isDismissed, lockedBecause, unlockText } from '@/lib/checklists/window'
 import { wallClockNow } from '@/lib/shifts/time'
 import { parseBody } from '@/lib/pos/server/guard'
 import { checkCredentialRateLimit, credentialFingerprint, clientIp } from '@/lib/rate-limit'
@@ -96,12 +96,14 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
   const { data: row } = await service
     .from('checklist_assignments')
-    .select('id, staff_id, status, template_snapshot, shift_id')
+    .select('id, staff_id, status, template_snapshot, shift_id, checklist_kind, manager_resolved_at')
     .eq('id', body.assignmentId)
     .maybeSingle()
   if (!row) throw NotFound('הצ׳קליסט לא נמצא.')
   if (row.staff_id !== staff.id) throw Forbidden('הצ׳קליסט שייך לעובד/ת אחר/ת.')
   if (row.status === 'submitted') throw new ApiError(409, 'conflict', 'הצ׳קליסט כבר נשלח.')
+  // An owner dismissed it: it is closed, so a stale screen cannot save or send it afterwards.
+  if (isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null })) throw new ApiError(409, 'dismissed', 'הצ׳קליסט בוטל על ידי המנהל/ת ואין צורך להגיש אותו.')
 
   // Not before the shift: a checklist cannot be started, saved or sent while its shift has not begun. The
   // developer's test forms never reach this route (they live in the browser), so there is no bypass here.
@@ -110,7 +112,11 @@ export const POST = apiRoute(async (request: NextRequest) => {
   const { data: shiftBranch } = await service.from('branches').select('timezone').eq('id', shift.branch_id).maybeSingle()
   const shiftTimes = { date: shift.shift_date as string, startTime: shift.start_time as string, endTime: shift.end_time as string }
   const wallNow = wallClockNow((shiftBranch?.timezone as string | null) || 'Asia/Jerusalem')
-  if (isChecklistLocked(shiftTimes, wallNow)) throw new ApiError(409, 'too_early', `הצ׳קליסט עדיין נעול — המשמרת עוד לא התחילה. ${unlockText(shiftTimes, wallNow)}.`)
+  // Which moment it opens depends on its kind: the start of the shift for opening / an arriving handover, half an hour
+  // before the end for closing / a departing handover. "Departing" = the shift also has an opening checklist.
+  const { data: openings } = await service.from('checklist_assignments').select('id').eq('shift_id', row.shift_id).eq('checklist_kind', 'opening').limit(1)
+  const lock = { ...shiftTimes, kind: (row.checklist_kind as string | null) ?? undefined, shiftHasOpening: (openings ?? []).length > 0 }
+  if (isChecklistLocked(lock, wallNow)) throw new ApiError(409, 'too_early', `הצ׳קליסט עדיין נעול — ${lockedBecause(lock)}. ${unlockText(lock, wallNow)}.`)
 
   if (body.action === 'save') {
     const { error } = await service

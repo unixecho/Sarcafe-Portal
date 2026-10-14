@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { parseBody, safeLogMessage } from '@/lib/pos/server/guard'
 import { issueEmployeeSession, revokeEmployeeSession } from '@/lib/staff/session'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
+import { isStaffChecklistPath } from '@/lib/checklists/links'
 
 // Employee number + six-digit PIN opens an opaque, floor-only staff session.
 // Google is optional for onboarding and required for scheduling and quick orders.
@@ -25,7 +26,8 @@ const body = z
   .object({
     employeeNo: z.union([z.string().regex(/^(?=.*[1-9])\d{1,5}$/), z.number().int().min(1).max(99999)]).transform(String),
     passcode: z.string().regex(/^\d{6}$/),
-    next: z.enum(['/pos', '/staff', '/staff/checklists', '/staff/schedule']).optional(),
+    // A fixed list of landing pages, or ONE checklist by its id (what an alert's link returns to after the code is typed).
+    next: z.union([z.enum(['/pos', '/staff', '/staff/checklists', '/staff/schedule']), z.string().refine(isStaffChecklistPath)]).optional(),
   })
   .strict()
 

@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 import { jwtSessionId } from '@/lib/pos/quick-jwt'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
+import { isOwnerChecklistPath, isStaffChecklistPath } from '@/lib/checklists/links'
 
 // Mirrors AyekaBar's src/middleware.ts, minus the loyalty-club gate and the
 // floor/shift-scheduling prefixes — Sarcafe has none of those systems.
@@ -146,9 +147,12 @@ export async function middleware(request: NextRequest) {
     }
     if (pathname.startsWith('/staff')) url.searchParams.set('next', pathname)
     if (pathname.startsWith('/staff/checklists')) {
-      url.searchParams.set('next', '/staff/checklists')
+      // The list, or ONE checklist (the link an alert and the home buttons use). The id is a path segment so it
+      // survives the sign-in; anything else under this prefix falls back to the list.
+      url.searchParams.set('next', isStaffChecklistPath(pathname) ? pathname : '/staff/checklists')
       url.searchParams.set('quick', '1')
     }
+    if (isOwnerChecklistPath(pathname)) url.searchParams.set('next', pathname)
     const redirected = NextResponse.redirect(url)
     if (pathname === '/pos') redirected.cookies.set(POS_RETURN_COOKIE, safePosReturn(`${pathname}${request.nextUrl.search}`) || '/pos', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 600 })
     return redirected

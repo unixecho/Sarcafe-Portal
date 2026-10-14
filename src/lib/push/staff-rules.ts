@@ -16,11 +16,13 @@ export const SHIFT_REMINDER_WINDOW_MINUTES = 4 * 60
 export const PRE_SHIFT_MINUTES = 15
 /** Opening checklists, and the handover an arriving employee does, are due this long after the shift starts. */
 export const OPENING_GRACE_MINUTES = 60
-/** Closing, and the handover a departing employee does, are due this long after the shift ends. */
-export const END_GRACE_MINUTES = 10
-/** Owners and developers hear about a missing checklist this long after it became due: at the same
- *  moment the employee is told (0), because the owner asked to be told when it is not done. */
-export const OWNER_ESCALATION_MINUTES = 0
+/** Closing, and the handover a departing employee does, are due this long after the shift ends: closing
+ *  the place takes real time, so the owner asked for an hour and a half before anyone is chased.
+ *  src/lib/checklists/window.ts (the owner tracker's "late") keeps the same number; check:staff-push fails if they differ. */
+export const END_GRACE_MINUTES = 90
+/** Owners and developers hear about a missing checklist this long after it became due, i.e. 30 minutes after the
+ *  employee was told and the grace had run out: the employee gets the first chance to fix it, the owner is the second line. */
+export const OWNER_ESCALATION_MINUTES = 30
 /** After this long it is history, not a reminder. */
 export const REMINDER_WINDOW_MINUTES = 6 * 60
 
@@ -105,11 +107,24 @@ export function requestsReminder(now: WallClock): { phase: 'open' | 'closing'; t
   return { phase: weekday === 0 ? 'open' : 'closing', targetWeek, closeDate: addIsoDays(targetWeek, -5) }
 }
 
-/** Where tapping the alert goes. A link.url the app wrote itself wins (only a plain same-origin path
- *  is honoured, so a stored value can never become an open redirect); otherwise the kind decides. */
-export function pushPathFor(kind: string, link: Record<string, unknown> | null): string {
+/** Alerts that only ever go to the people who run the schedule (a decision is waiting for them). */
+const MANAGER_KINDS = new Set(['swap.awaiting', 'request.new', 'request.cancelled', 'availability.submitted'])
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Where tapping an alert goes, on the phone and in the notification list alike: the thing the message is about.
+ *  A link.url the app wrote itself wins (only a plain same-origin path is honoured, so a stored value can never
+ *  become an open redirect), which is how a checklist alert names its exact checklist. Otherwise the kind decides,
+ *  with the scheduler's own `tab` / `weekStart` hints. `manager` says the person can open the manager's schedule
+ *  (an owner or general manager): the same swap alert goes to the employee's tab for one and the manager's for the other. */
+export function pushPathFor(kind: string, link: Record<string, unknown> | null, recipient?: { manager?: boolean }): string {
   const url = link?.url
   if (typeof url === 'string' && /^\/(?!\/)[A-Za-z0-9/_\-?=&%.]*$/.test(url)) return url
+  if (kind === 'checklist.gap') return '/owner/checklists'
   if (kind.startsWith('checklist.')) return '/staff/checklists'
-  return '/staff/schedule'
+  if (kind === 'requests.open' || kind === 'requests.closing') return '/staff/schedule?tab=availability'
+  const week = typeof link?.weekStart === 'string' && ISO_DATE.test(link.weekStart) ? link.weekStart : null
+  const asManager = MANAGER_KINDS.has(kind) || (kind === 'swap.cancelled' && recipient?.manager === true)
+  if (asManager) return `/owner/schedule?tab=requests${week ? `&week=${week}` : ''}`
+  if (kind.startsWith('swap.') || kind.startsWith('request.') || link?.tab === 'requests') return `/staff/schedule?tab=requests${week ? `&week=${week}` : ''}`
+  return week ? `/staff/schedule?week=${week}` : '/staff/schedule'
 }

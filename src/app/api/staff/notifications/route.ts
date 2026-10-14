@@ -12,7 +12,7 @@ export const GET = privateStaffRoute(async () => {
   if (!me) throw Unauthorized()
   const service = createServiceRoleClient()
   const [items, count] = await Promise.all([
-    service.from('schedule_notifications').select('id, title, body, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(40),
+    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(40),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
   ])
   if (items.error || count.error) throw new ApiError(503, 'unavailable', 'לא הצלחנו לטעון את העדכונים')

@@ -16,16 +16,20 @@ import 'server-only'
 //   shift.today      07:00 on the day of a shift
 //   checklist.soon   15 minutes before the shift starts, naming the checklists waiting for it
 //   checklist.late   the checklist is due (opening / arriving handover: 1 h after the shift starts;
-//                    closing / departing handover: 10 min after it ends) and not submitted
-//   checklist.gap    the same moment, to every owner and developer
+//                    closing / departing handover: 90 min after it ends), not submitted, not dismissed.
+//                    Opens that exact checklist (/staff/checklists/<id>)
+//   checklist.gap    30 minutes after that, to every owner and developer, if it is STILL open. Opens the owner's
+//                    tracker on that row (/owner/checklists/<id>), where it can be dismissed
 //   requests.open    when a schedule is published, and again on Sunday: requests for the week are open
 //   requests.closing Monday: they close tomorrow (Tuesday)
 
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { ownerChecklistPath, staffChecklistPath } from '@/lib/checklists/links'
 import { wallClockNow } from '@/lib/shifts/time'
 import type { WallClock } from '@/lib/shifts/types'
 import {
   addIsoDays,
+  dueAnchor,
   isPreShift,
   minutesPastDue,
   OWNER_ESCALATION_MINUTES,
@@ -39,6 +43,7 @@ type Row = Record<string, unknown>
 type NewRow = { branch_id: string; staff_id: string; kind: string; title: string; body: string; link: { url: string }; dedupe_key: string }
 
 const KIND_LABEL: Record<string, string> = { opening: 'פתיחה', handover: 'החלפת משמרת', closing: 'סגירה' }
+const KIND_ORDER: Record<string, number> = { opening: 0, handover: 1, closing: 2 }
 const dayMs = 24 * 60 * 60 * 1000
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10)
 /** "13/10" */
@@ -133,7 +138,7 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
   // week is generated, days ahead, so a window on the row's creation time silently dropped every checklist after day three.
   const { data } = await service
     .from('checklist_assignments')
-    .select('id, branch_id, shift_id, staff_id, checklist_kind, status')
+    .select('id, branch_id, shift_id, staff_id, checklist_kind, status, manager_resolved_at')
     .in('shift_id', shifts.map((s) => s.id as string))
     .not('staff_id', 'is', null)
     .limit(1000)
@@ -143,7 +148,8 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
     shiftId: a.shift_id as string,
     staffId: a.staff_id as string,
     kind: a.checklist_kind as string,
-    open: a.status === 'pending' || a.status === 'in_progress',
+    // Unsent AND not dismissed by an owner: a dismissed checklist is no longer asked for (see isDismissed in window.ts).
+    open: (a.status === 'pending' || a.status === 'in_progress') && !a.manager_resolved_at,
   }))
   if (all.length === 0) return none
 
@@ -154,14 +160,19 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
   const open = all.filter((a) => a.open)
 
   // 1) Heads-up, 15 minutes before the shift: one alert per person per shift naming what is waiting.
-  const waiting = new Map<string, { branchId: string; staffId: string; shiftId: string; start: string; kinds: string[] }>()
+  const waiting = new Map<string, { branchId: string; staffId: string; shiftId: string; start: string; first: Assignment; kinds: string[] }>()
   for (const a of open) {
     const shift = shiftById.get(a.shiftId)
     const clock = branchOf(a.branchId)?.clock
     if (!shift || !clock) continue
     if (!isPreShift({ date: shift.shift_date as string, startTime: shift.start_time as string }, clock)) continue
+    // Only what opens when the shift starts: closing (and a departing handover) opens half an hour before the END,
+    // so naming it in a heads-up at 12:45 for an 18:30 form would send the person looking for something locked.
+    if (dueAnchor(a.kind, shiftHasOpening.has(a.shiftId)) !== 'start') continue
     const key = `${a.shiftId}|${a.staffId}`
-    const entry = waiting.get(key) ?? { branchId: a.branchId, staffId: a.staffId, shiftId: a.shiftId, start: shift.start_time as string, kinds: [] }
+    const entry = waiting.get(key) ?? { branchId: a.branchId, staffId: a.staffId, shiftId: a.shiftId, start: shift.start_time as string, first: a, kinds: [] }
+    // The alert opens the first checklist of the shift (opening, then handover, then closing).
+    if ((KIND_ORDER[a.kind] ?? 9) < (KIND_ORDER[entry.first.kind] ?? 9)) entry.first = a
     entry.kinds.push(KIND_LABEL[a.kind] ?? 'צ׳קליסט')
     waiting.set(key, entry)
   }
@@ -171,7 +182,7 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
     kind: 'checklist.soon',
     title: 'המשמרת מתחילה בעוד כרבע שעה',
     body: `מחכה לך צ׳קליסט: ${w.kinds.join(' + ')}${suffix(w.branchId)} · ${w.start}`,
-    link: { url: '/staff/checklists' },
+    link: { url: staffChecklistPath(w.first.id) },
     dedupe_key: `checklist-soon:${w.shiftId}`,
   }))
   const soon = await insertReminders(service, soonRows)
@@ -198,7 +209,7 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
       kind: 'checklist.late',
       title: 'הצ׳קליסט עוד לא הוגש',
       body: `${KIND_LABEL[d.kind] ?? 'צ׳קליסט'}${suffix(d.branchId)}. אפשר להגיש עכשיו.`,
-      link: { url: '/staff/checklists' },
+      link: { url: staffChecklistPath(d.id) },
       dedupe_key: `checklist-late:${d.id}`,
     }))
   )
@@ -224,7 +235,7 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
           kind: 'checklist.gap',
           title: 'צ׳קליסט לא הוגש',
           body: `${nameOf.get(d.staffId)} · ${KIND_LABEL[d.kind] ?? 'צ׳קליסט'}${suffix(d.branchId)}`,
-          link: { url: '/owner/checklists' },
+          link: { url: ownerChecklistPath(d.id) },
           dedupe_key: `checklist-gap:${d.id}`,
         })
       }

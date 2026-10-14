@@ -7,6 +7,7 @@ import AuthHandoff, { GoogleG } from '@/components/AuthHandoff'
 import PublicBackdrop from '@/components/PublicBackdrop'
 import LogoMark from '@/components/LogoMark'
 import QuickLogin from '@/components/auth/QuickLogin'
+import { isStaffChecklistPath } from '@/lib/checklists/links'
 import { useT } from '@/lib/pos/useT'
 
 // Same open-redirect rule as app/auth/callback's safeNext(), tightened to plain path
@@ -139,7 +140,7 @@ export default function LoginPage() {
             </button>
             {quickOpen && (
               <div id="quick-login-panel">
-                <QuickLogin next={next === '/pos' ? '/pos' : next === '/staff/checklists' ? '/staff/checklists' : '/staff'} />
+                <QuickLogin next={next === '/pos' ? '/pos' : next === '/staff/checklists' ? '/staff/checklists' : isStaffChecklistPath(next) ? next : '/staff'} />
               </div>
             )}
           </div>

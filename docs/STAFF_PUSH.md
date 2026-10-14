@@ -15,9 +15,9 @@ pushes (Web Push, the same VAPID keys the customer order page uses) the things t
 | **Someone is giving a shift to everyone** | colleagues who could take it (same branch, schedulable, not already on that shift) | the moment the offer is made | trigger `shift_swaps_notify_open` (new) |
 | **You work tomorrow** | the person on a published shift | 19:00 the evening before (dropped after 4 h) | scheduled run, `staff-reminders.ts` |
 | **You work today** | the same | 07:00 on the day (dropped after 4 h or once the shift is over) | scheduled run |
-| **Checklist waiting, shift starts in 15 min** | the person assigned | 15 minutes before the shift starts; one alert per shift naming every checklist | scheduled run |
-| **Checklist not submitted** | the person assigned | when it falls due: opening and the *arriving* handover 60 min after the shift STARTS; closing and the *departing* handover 10 min after it ENDS (6 h window) | scheduled run |
-| **Checklist still missing** | every owner and developer, the assignee included (so an owner on shift can test it on themselves) | the same moment it falls due (`OWNER_ESCALATION_MINUTES = 0`) | scheduled run |
+| **Checklist waiting, shift starts in 15 min** | the person assigned | 15 minutes before the shift starts; one alert per shift naming the checklists that open AT the start (opening, an arriving handover). Closing and a departing handover open half an hour before the end, so they are not named | scheduled run |
+| **Checklist not submitted** | the person assigned, unless an owner dismissed it | when it falls due: opening and the *arriving* handover 60 min after the shift STARTS; closing and the *departing* handover 90 min after it ENDS (employees have to actually close; 6 h window). Opens THAT checklist (`/staff/checklists/<id>`) | scheduled run |
+| **Checklist still missing** | every owner and developer, the assignee included (so an owner on shift can test it on themselves), unless it was submitted or dismissed in the meantime | 30 minutes after the employee was told (`OWNER_ESCALATION_MINUTES = 30`). Opens the owner tracker on that row (`/owner/checklists/<id>`), where it can be dismissed | scheduled run |
 | **Requests for the week** | schedulable, Google-linked employees of the branch | when a schedule is published (requests for the week after it, open until that week's Tuesday); Sunday 10:00 "they are open"; Monday 10:00 "they close tomorrow (Tuesday)". Sunday/Monday skip anyone who already submitted for that week | `announceRequestsOpen` after a publish; scheduled run |
 
 Which handover is which: the first shift of a day gets opening + handover (the handover is the one it leaves
@@ -30,6 +30,16 @@ All times are the branch's local time (`branches.timezone`). Timing constants li
 days). Rows are created when the week is generated, days ahead, so after three days no checklist was seen and
 nobody was reminded (an evening shift's 19:10 reminders were never written). They are now found through the
 shifts in range (yesterday .. tomorrow), whatever the age of the row.
+
+**Where an alert goes (2026-10-14).** One resolver, `pushPathFor` in `staff-rules.ts`, decides for the phone push AND for the notification list on the home screens, so a tap on either lands in the same place: a checklist alert opens that exact checklist (the reminder writes the link); requests for the week open the availability tab (`/staff/schedule?tab=availability`); swaps, takes and request decisions open the employee's requests tab; what waits for a manager (`swap.awaiting`, `request.new`, `request.cancelled`, `availability.submitted`, and a cancelled swap for a manager) opens the manager's requests tab (`/owner/schedule?tab=requests`); a week hint is carried (`&week=`). A digest push goes where all its alerts go, otherwise to the home page. `check:staff-push` checks every kind and that every destination is a real page.
+
+**Delivery on record (2026-10-14).** The sender used to stamp an alert as handled and forget the push service's answer, so "I never got it" could not be answered. Each alert now carries what happened inside its `link` (`link.push`: how many phones were registered, how many the push service accepted, the status and text of the refusals; never an endpoint or a key). The developer panel (`/staff/dev`) lists the last eight with that answer. "Accepted" means Apple or Google took it; if it was accepted and never showed, the cause is on the phone (a Focus mode such as Sleep, or the app's notification settings). Read it in SQL: `select kind, created_at, link->'push' from schedule_notifications where staff_id = ... order by created_at desc`.
+
+**2026-10-13 grace extended.** A 13:00–19:00 closing checklist was chased at 19:10 (`END_GRACE_MINUTES = 10`); closing
+the place takes real time, so closing and the departing handover are now due 90 minutes after the shift ends (20:30 for
+that shift), and the owners and developers are told 30 minutes after that (they were first told at the same moment; changed the next day). Opening and the arriving handover keep their hour
+from the start. The owner tracker's "late" chip (`src/lib/checklists/window.ts`) had its own copy of the number and now
+turns late at the same minute the alert goes out; `check:staff-push` compares the two minute by minute.
 
 Everything that already wrote to the in-app inbox is pushed with no change at its call site: the inbox
 (`schedule_notifications`) is also the outbox.
@@ -54,8 +64,10 @@ Everything that already wrote to the in-app inbox is pushed with no change at it
    checklist reminders (each once, via `dedupe_key`) and then flushes. Reminders are written for employees with a
    number + code login too, not only Google-linked ones.
 5. **Tap.** `public/sw.js` shows the notification (tag `staff-<id>` replaces instead of stacking) and opens the page from
-   the payload: `/staff/schedule`, `/staff/checklists`, `/owner/checklists`. A stored link is honoured only if it is a
-   plain same-origin path.
+   the payload (see "Where an alert goes"). A stored link is honoured only if it is a plain same-origin path. The checklist
+   links are paths, not queries, on purpose: the sign-in redirect keeps only plain path characters, so a push tapped after the
+   session expired still returns to that checklist (middleware, login page, number + code sign-in and the home-screen launch
+   guard all allow exactly `/staff/checklists/<uuid>`).
 
 ## Scheduler (Supabase pg_cron + pg_net, live since 2026-10-12)
 

@@ -28,7 +28,7 @@ export default async function StaffIndexPage() {
   const scheduleHref = fullLogin ? '/staff/schedule' : '/login?next=/staff/schedule'
   const service = createServiceRoleClient()
   const [updates, count, shiftStatus] = await Promise.all([
-    service.from('schedule_notifications').select('id, title, body, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(20),
+    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(20),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
     loadShiftStatus(service, me.id),
   ])
@@ -52,16 +52,20 @@ export default async function StaffIndexPage() {
     ...(fullLogin && isOp(me) ? [{ href: '/owner/dashboard', icon: LayoutDashboard, label: 'לוח הבקרה לניהול', description: 'צוות, סידור, צ׳קליסטים ותפריט' }] : []),
   ] })
   const name = me.first_name || me.display_name || 'צוות Sarcafe'
+  const unread = count.count ?? 0
+  const alerts = <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={unread} initialError={!!updates.error || !!count.error} scheduleHref={scheduleHref} googleSignedIn={fullLogin} manager={fullLogin && hasAnyMenuEditAccess(me)} />
   const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
 
   return (
     <main id="main" tabIndex={-1} className="app-page">
       <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
-      <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{fullLogin ? 'המשמרות, המשימות והצוות שלך.' : 'צ׳קליסטים וקופת אירועים, מוכנים למשמרת שלך.'}</p></div><span className="app-date">{date}</span></div>
+      <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{date}</p></div></div>
       <ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} />
+      {/* Something waiting for the person comes before the set-up prompts; with nothing new the prompts go first. */}
+      {unread > 0 && alerts}
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
-      <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={count.count ?? 0} initialError={!!updates.error || !!count.error} scheduleHref={scheduleHref} />
+      {unread === 0 && alerts}
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account"><Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link><InstallAppButton /></div>
     </main>

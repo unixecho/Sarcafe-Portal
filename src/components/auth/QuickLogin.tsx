@@ -164,7 +164,8 @@ export function PasscodeEntry({ value, onChange, onComplete, disabled, invalid, 
   )
 }
 
-export default function QuickLogin({ next = '/staff' }: { next?: '/pos' | '/staff' | '/staff/checklists' | '/staff/schedule' }) {
+// `/staff/checklists/<id>` is one specific checklist (an alert's link): the sign-in returns to it.
+export default function QuickLogin({ next = '/staff' }: { next?: '/pos' | '/staff' | '/staff/checklists' | '/staff/schedule' | `/staff/checklists/${string}` }) {
   const t = useT()
   const router = useRouter()
   const numberId = useId()

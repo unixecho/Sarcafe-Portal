@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Beaker, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, Lock, MapPin, Radio } from 'lucide-react'
-import { advanceClock, clockAbs, dayLabel, isChecklistLocked, shiftEndAbs, shiftStartAbs, unlockText, type WallClock } from '@/lib/checklists/window'
+import { advanceClock, clockAbs, dayLabel, isChecklistLocked, shiftEndAbs, shiftStartAbs, unlockText, type LockInput, type WallClock } from '@/lib/checklists/window'
+import { staffChecklistPath } from '@/lib/checklists/links'
+import { END_GRACE_MINUTES } from '@/lib/push/staff-rules'
 import { formatCountdown } from '@/lib/shifts/time'
-import type { ShiftBrief, ShiftStatus } from '@/lib/staff/shift-status'
+import type { ShiftBrief, ShiftChecklistBrief, ShiftStatus } from '@/lib/staff/shift-status'
 import '@/components/app/app.css'
 
 // The shift-status container on the staff home. It knows what time it is from the SERVER's clock (the branch's
@@ -20,8 +22,12 @@ const KINDS = [
   { kind: 'closing', label: 'סגירת משמרת' },
 ] as const
 
-const openHref = (shift: ShiftBrief, checklistId: string) => `/staff/checklists?open=${checklistId}${shift.branchSlug ? `&branch=${encodeURIComponent(shift.branchSlug)}` : ''}`
+// Waiting = not sent and not dismissed by an owner.
+const waiting = (item: ShiftChecklistBrief) => item.status !== 'submitted' && !item.dismissed
 const timesOf = (shift: ShiftBrief) => ({ date: shift.date, startTime: shift.startTime, endTime: shift.endTime })
+// Each checklist opens at its own moment: the start of the shift for opening / an arriving handover, half an hour before
+// the end for closing / a departing handover (the shift has an opening checklist).
+const lockFor = (shift: ShiftBrief, item: ShiftChecklistBrief): LockInput => ({ ...timesOf(shift), kind: item.kind, shiftHasOpening: shift.checklists.some((other) => other.kind === 'opening') })
 
 export default function ShiftStatusCard({ status, scheduleHref, developer }: { status: ShiftStatus; scheduleHref: string; developer: boolean }) {
   const loadedAt = useRef(Date.now())
@@ -35,7 +41,10 @@ export default function ShiftStatusCard({ status, scheduleHref, developer }: { s
   const now: WallClock = advanceClock(status.serverNow, Date.now() - loadedAt.current)
   // The server picked "current"/"next" at render time; keep that honest as the minutes pass.
   const known = [status.current, status.next].filter((shift): shift is ShiftBrief => shift !== null)
-  const current = known.find((shift) => shiftStartAbs(timesOf(shift)) <= clockAbs(now) && clockAbs(now) < shiftEndAbs(timesOf(shift))) ?? null
+  const running = known.find((shift) => shiftStartAbs(timesOf(shift)) <= clockAbs(now) && clockAbs(now) < shiftEndAbs(timesOf(shift))) ?? null
+  // Closing the place takes time after the shift ends: it stays "current" while a checklist is waiting and the grace lasts.
+  const winding = known.find((shift) => shiftEndAbs(timesOf(shift)) <= clockAbs(now) && clockAbs(now) < shiftEndAbs(timesOf(shift)) + END_GRACE_MINUTES && shift.checklists.some(waiting)) ?? null
+  const current = running ?? winding
   const next = known.find((shift) => shift !== current && shiftStartAbs(timesOf(shift)) > clockAbs(now)) ?? null
 
   function toggleSim(on: boolean) {
@@ -77,24 +86,33 @@ export default function ShiftStatusCard({ status, scheduleHref, developer }: { s
 
 function OnShift({ shift, now, scheduleHref }: { shift: ShiftBrief; now: WallClock; scheduleHref: string }) {
   const left = shiftEndAbs(timesOf(shift)) - clockAbs(now)
-  const pending = shift.checklists.filter((item) => item.status !== 'submitted')
+  const ended = left <= 0
+  const pending = shift.checklists.filter(waiting)
+  const firstOpen = pending.find((item) => !isChecklistLocked(lockFor(shift, item), now))
   return (
     <section className="app-shiftcard app-shiftcard--live" aria-label="המשמרת שלי עכשיו">
       <Link href={scheduleHref} className="app-shiftcard__link press">
         <span className="app-shiftcard__icon"><Radio size={24} aria-hidden="true" /></span>
         <span className="app-shiftcard__copy">
-          <small><span className="app-shiftcard__pulse" aria-hidden="true" />במשמרת עכשיו · מסתיימת בעוד {formatCountdown(left)}</small>
+          <small>{ended ? 'המשמרת הסתיימה · נשאר להגיש צ׳קליסט' : <><span className="app-shiftcard__pulse" aria-hidden="true" />במשמרת עכשיו · מסתיימת בעוד {formatCountdown(left)}</>}</small>
           <strong><span dir="ltr">{shift.startTime}–{shift.endTime}</span></strong>
           <span className="app-shift-focus__zone"><MapPin size={15} aria-hidden="true" />{shift.place}</span>
         </span>
         <ChevronLeft size={19} aria-hidden="true" className="app-row__chevron" />
       </Link>
-      {shift.checklists.length > 0 && (
+      {shift.checklists.some((item) => !item.dismissed) && (
         <div className="app-shiftcard__actions">
-          {shift.checklists.map((item) => {
+          {shift.checklists.filter((item) => !item.dismissed).map((item) => {
             if (item.status === 'submitted') return <span key={item.id} className="app-shiftcard__done"><CheckCircle2 size={18} aria-hidden="true" />צ׳קליסט {item.kindLabel} נשלח</span>
+            if (isChecklistLocked(lockFor(shift, item), now)) {
+              return (
+                <button key={item.id} type="button" className="app-shiftcard__cta app-shiftcard__cta--locked" disabled aria-disabled="true">
+                  <Lock size={17} aria-hidden="true" />צ׳קליסט {item.kindLabel} · {unlockText(lockFor(shift, item), now)}
+                </button>
+              )
+            }
             return (
-              <Link key={item.id} href={openHref(shift, item.id)} className={`app-shiftcard__cta press${item.id === pending[0]?.id ? ' app-shiftcard__cta--primary' : ''}`}>
+              <Link key={item.id} href={staffChecklistPath(item.id)} className={`app-shiftcard__cta press${item.id === firstOpen?.id ? ' app-shiftcard__cta--primary' : ''}`}>
                 <ClipboardCheck size={18} aria-hidden="true" />{item.status === 'in_progress' ? 'המשך צ׳קליסט' : 'הגשת צ׳קליסט'} {item.kindLabel}
               </Link>
             )
@@ -109,7 +127,7 @@ function Upcoming({ shift, now, scheduleHref, developer, onSim }: { shift: Shift
   const times = timesOf(shift)
   const minutes = shiftStartAbs(times) - clockAbs(now)
   const soon = minutes <= 24 * 60
-  const pending = shift.checklists.filter((item) => item.status !== 'submitted')
+  const pending = shift.checklists.filter(waiting)
   return (
     <section className="app-shiftcard" aria-label="המשמרת הבאה שלי">
       <Link href={scheduleHref} className="app-shiftcard__link press">
@@ -125,7 +143,7 @@ function Upcoming({ shift, now, scheduleHref, developer, onSim }: { shift: Shift
         <div className="app-shiftcard__actions">
           {pending.map((item) => (
             <button key={item.id} type="button" className="app-shiftcard__cta app-shiftcard__cta--locked" disabled aria-disabled="true">
-              <Lock size={17} aria-hidden="true" />צ׳קליסט {item.kindLabel} · {isChecklistLocked(times, now) ? unlockText(times, now) : 'פתוח'}
+              <Lock size={17} aria-hidden="true" />צ׳קליסט {item.kindLabel} · {isChecklistLocked(lockFor(shift, item), now) ? unlockText(lockFor(shift, item), now) : 'פתוח'}
             </button>
           ))}
         </div>

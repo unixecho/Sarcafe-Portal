@@ -3,6 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { checklistName, defaultChecklistDefinition } from './defaults'
 import { KIND_LABELS, type ChecklistAssignment, type ChecklistDefinition, type ChecklistKind } from './types'
+import { isDismissed } from './window'
 
 type Service = SupabaseClient
 type BranchRow = { id: string; slug: string; name: { he?: string } | null }
@@ -41,7 +42,7 @@ export async function syncPublishedChecklists(service: Service, branchId: string
 export async function loadStaffChecklistAssignments(service: Service, branch: BranchRow, staffId: string): Promise<ChecklistAssignment[]> {
   const { data: rows, error } = await service
     .from('checklist_assignments')
-    .select('id, branch_id, shift_id, shift_assignment_id, checklist_kind, template_version, template_snapshot, status, answers, issue_count, submitted_at')
+    .select('id, branch_id, shift_id, shift_assignment_id, checklist_kind, template_version, template_snapshot, status, answers, issue_count, submitted_at, manager_resolved_at')
     .eq('branch_id', branch.id)
     .eq('staff_id', staffId)
     .order('created_at', { ascending: false })
@@ -53,7 +54,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
     : { data: [] as { id: string; shift_date: string; start_time: string; end_time: string }[] }
   const byShift = new Map((shifts ?? []).map((shift) => [shift.id as string, shift]))
   return (rows ?? [])
-    .map((row) => {
+    .map((row): ChecklistAssignment | null => {
       const shift = byShift.get(row.shift_id as string)
       if (!shift) return null
       const kind = row.checklist_kind as ChecklistKind
@@ -71,6 +72,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
         templateVersion: row.template_version as number,
         template: row.template_snapshot as ChecklistDefinition,
         status: row.status as ChecklistAssignment['status'],
+        dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }),
         answers: (row.answers ?? {}) as ChecklistAssignment['answers'],
         issueCount: (row.issue_count as number) ?? 0,
         submittedAt: (row.submitted_at as string | null) ?? null,

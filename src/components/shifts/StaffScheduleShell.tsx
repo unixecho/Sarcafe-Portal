@@ -5,8 +5,9 @@ import ShiftsProvider from '@/components/shifts/ShiftsProvider'
 import StaffWorkspace from '@/components/shifts/StaffWorkspace'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
+import type { ScheduleEntry } from '@/lib/shifts/entry'
 
-export default function StaffScheduleShell({ branches, initialBranch }: { branches: Branch[]; initialBranch: BranchSlug }) {
+export default function StaffScheduleShell({ branches, initialBranch, entry = {} }: { branches: Branch[]; initialBranch: BranchSlug; entry?: ScheduleEntry }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
 
   function selectBranch(next: BranchSlug) {
@@ -26,8 +27,8 @@ export default function StaffScheduleShell({ branches, initialBranch }: { branch
         </div>
       )}
       {branch && (
-        <ShiftsProvider key={branch} branchSlug={branch}>
-          <StaffWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} />
+        <ShiftsProvider key={branch} branchSlug={branch} initialWeekStart={entry.week}>
+          <StaffWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} initialTab={entry.tab} />
         </ShiftsProvider>
       )}
     </div>

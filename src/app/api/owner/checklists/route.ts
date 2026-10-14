@@ -4,6 +4,7 @@ import { apiRoute, ApiError, BadRequest, NotFound } from '@/lib/http/errors'
 import { requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureChecklistTemplates, syncPublishedChecklists } from '@/lib/checklists/server'
+import { isDismissed } from '@/lib/checklists/window'
 import { staffColor } from '@/lib/shifts/people'
 import { wallClockNow } from '@/lib/shifts/time'
 import { isOp } from '@/lib/staff/access'
@@ -25,6 +26,9 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('publish'), branchId: z.string().uuid(), kind: z.enum(['opening', 'handover', 'closing']), name: z.string().min(1).max(200), definition: definitionSchema }),
   z.object({ action: z.literal('seen'), assignmentId: z.string().uuid() }),
   z.object({ action: z.literal('resolve'), assignmentId: z.string().uuid(), note: z.string().max(1000).optional() }),
+  // An owner closes a checklist nobody sent ("not needed"), and can take it back. See isDismissed in window.ts.
+  z.object({ action: z.literal('dismiss'), assignmentId: z.string().uuid(), note: z.string().max(300).optional() }),
+  z.object({ action: z.literal('restore'), assignmentId: z.string().uuid() }),
 ])
 
 export const GET = apiRoute(async (request: NextRequest) => {
@@ -74,6 +78,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
       endTime: shift?.end_time ?? '',
       kind: row.checklist_kind,
       status: row.status,
+      dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }),
       issueCount: row.issue_count,
       issues: row.issues ?? [],
       submittedAt: row.submitted_at,
@@ -105,6 +110,20 @@ export const POST = apiRoute(async (request: NextRequest) => {
       throw new ApiError(400, 'bad_request', 'לא הצלחנו לפרסם את הטופס. בדקו שכל הקטגוריות והבדיקות מלאות.')
     }
     return NextResponse.json({ ok: true, id: data })
+  }
+
+  if (body.action === 'dismiss' || body.action === 'restore') {
+    const { data: row } = await service.from('checklist_assignments').select('id, status').eq('id', body.assignmentId).maybeSingle()
+    if (!row) throw NotFound('הצ׳קליסט לא נמצא.')
+    // A sent checklist is a record, not a request: there is nothing to dismiss, and its "handled" mark is a different thing.
+    if (row.status === 'submitted') throw new ApiError(409, 'conflict', 'הצ׳קליסט כבר נשלח, אין מה לבטל.')
+    const change =
+      body.action === 'dismiss'
+        ? { manager_resolved_at: new Date().toISOString(), manager_resolved_by: owner.id, manager_note: body.note?.trim() || null }
+        : { manager_resolved_at: null, manager_resolved_by: null, manager_note: null }
+    const { error } = await service.from('checklist_assignments').update(change).eq('id', body.assignmentId).neq('status', 'submitted')
+    if (error) throw new ApiError(500, 'internal_error', 'לא הצלחנו לעדכן את הצ׳קליסט.')
+    return NextResponse.json({ ok: true, dismissed: body.action === 'dismiss' })
   }
 
   const update =

@@ -14,6 +14,7 @@ import 'server-only'
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureVapidConfigured } from './send'
+import { hasAnyMenuEditAccess } from '@/lib/staff/access'
 import { pushPathFor } from './staff-rules'
 
 type Service = ReturnType<typeof createServiceRoleClient>
@@ -35,7 +36,35 @@ const clip = (text: string | null) => {
   return clean.length > BODY_LIMIT ? `${clean.slice(0, BODY_LIMIT - 1)}…` : clean
 }
 
+/** One summary push for several alerts: if they all point to the same place go there, if they are all owner
+ *  checklist alerts go to the tracker, otherwise the home page (whose list links each alert to its own place). */
+function digestPath(rows: InboxRow[], recipient: { manager: boolean }): string {
+  const paths = new Set(rows.map((r) => pushPathFor(r.kind, r.link, recipient)))
+  const [only] = [...paths]
+  if (paths.size === 1 && only) return only
+  if (rows.every((r) => r.kind === 'checklist.gap')) return '/owner/checklists'
+  return '/staff'
+}
+
 type SendOutcome = { ok: boolean; statusCode: number | null; detail: string }
+
+/** What happened to one alert when it was pushed, kept ON the alert (inside its `link`, which nothing reads for these
+ *  keys) so "I never got it" can be answered from the database: how many phones were registered, how many the push
+ *  service accepted, and what it said to the ones it refused. Accepted means Apple/Google took it; whether the phone
+ *  then showed it (Focus, notification settings) is not something a server can see. No endpoint or key is stored. */
+export type PushOutcome = { at: string; devices: number; accepted: number; refused: { status: number | null; detail: string }[] }
+
+async function recordOutcome(service: Service, rows: InboxRow[], results: SendOutcome[], devices: number): Promise<void> {
+  const outcome: PushOutcome = {
+    at: new Date().toISOString(),
+    devices,
+    accepted: results.filter((r) => r.ok).length,
+    refused: results.filter((r) => !r.ok).map((r) => ({ status: r.statusCode, detail: r.detail.slice(0, 80) })),
+  }
+  await Promise.all(
+    rows.map((row) => service.from('schedule_notifications').update({ link: { ...(row.link ?? {}), push: outcome } }).eq('id', row.id).then(() => undefined, () => undefined))
+  )
+}
 
 async function sendToOne(service: Service, row: SubscriptionRow, payload: Payload): Promise<SendOutcome> {
   try {
@@ -89,18 +118,30 @@ export async function flushStaffPush(): Promise<{ claimed: number; sent: number 
     const perPerson = new Map<string, InboxRow[]>()
     for (const row of claimed) perPerson.set(row.staff_id, [...(perPerson.get(row.staff_id) ?? []), row])
     const subscriptions = await loadSubscriptions(service, [...perPerson.keys()])
+    // Only people with a phone registered need a destination, and only they need to be looked up.
+    const reachable = [...perPerson.keys()].filter((staffId) => (subscriptions.get(staffId) ?? []).length > 0)
+    const managers = new Set<string>()
+    if (reachable.length > 0) {
+      const { data: people } = await service.from('staff').select('id, role, badge').in('id', reachable)
+      for (const person of people ?? []) if (hasAnyMenuEditAccess(person as { role?: string | null; badge?: string | null })) managers.add(person.id as string)
+    }
 
     let sent = 0
     for (const [staffId, rows] of perPerson) {
       const devices = subscriptions.get(staffId) ?? []
-      if (devices.length === 0) continue
-      const payloads: Payload[] =
+      if (devices.length === 0) {
+        await recordOutcome(service, rows, [], 0) // claimed with nobody to send to: on record, so it is not a mystery later
+        continue
+      }
+      const recipient = { manager: managers.has(staffId) }
+      const outbound: { payload: Payload; rows: InboxRow[] }[] =
         rows.length > MAX_INDIVIDUAL
-          ? [{ title: `${rows.length} עדכונים חדשים ב-Sarcafe`, body: rows.slice(0, 3).map((r) => r.title).join(' · '), url: '/staff', tag: `staff-digest-${staffId}` }]
-          : rows.map((r) => ({ title: r.title, body: clip(r.body), url: pushPathFor(r.kind, r.link), tag: `staff-${r.id}` }))
-      for (const payload of payloads) {
+          ? [{ payload: { title: `${rows.length} עדכונים חדשים ב-Sarcafe`, body: rows.slice(0, 3).map((r) => r.title).join(' · '), url: digestPath(rows, recipient), tag: `staff-digest-${staffId}` }, rows }]
+          : rows.map((r) => ({ payload: { title: r.title, body: clip(r.body), url: pushPathFor(r.kind, r.link, recipient), tag: `staff-${r.id}` }, rows: [r] }))
+      for (const { payload, rows: covered } of outbound) {
         const results = await Promise.all(devices.map((device) => sendToOne(service, device, payload)))
         sent += results.filter((r) => r.ok).length
+        await recordOutcome(service, covered, results, devices.length)
       }
     }
     return { claimed: claimed.length, sent }

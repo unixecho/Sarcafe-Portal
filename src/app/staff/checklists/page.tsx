@@ -1,26 +1,9 @@
-import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import OwnerHeader from '@/components/OwnerHeader'
-import StaffChecklistWorkspace from '@/components/checklists/StaffChecklistWorkspace'
-import { resolveStaffIdentity } from '@/lib/staff/session'
-import { getBranches } from '@/lib/branches/server'
-import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
+import StaffChecklistsPageBody from '@/components/checklists/StaffChecklistsPageBody'
 
 export const dynamic = 'force-dynamic'
 
 export default async function StaffChecklistsPage({ searchParams }: { searchParams: Promise<{ branch?: string | string[] }> }) {
-  const me = await resolveStaffIdentity()
-  if (!me) redirect('/login?next=/staff/checklists&quick=1')
-  const allBranches = await getBranches()
-  const visibleBranches = me.branch_id ? allBranches.filter((branch) => branch.id === me.branch_id) : allBranches
-  // A link from the home screen's shift card names the shift's own branch; otherwise the remembered one.
+  // The older "?open=<id>&branch=<slug>" links still work: the workspace reads ?open itself, the branch comes from here.
   const wanted = (await searchParams).branch
-  const requested = typeof wanted === 'string' ? wanted : undefined
-  const initialBranch = resolveCurrentBranchSlug(visibleBranches, requested && visibleBranches.some((branch) => branch.slug === requested) ? requested : (await cookies()).get(BRANCH_COOKIE)?.value)
-  return (
-    <main id="main" tabIndex={-1} style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px 40px' }}>
-      <OwnerHeader title="צ׳קליסט למשמרת" backHref="/staff" />
-      <StaffChecklistWorkspace branches={visibleBranches} initialBranch={initialBranch} />
-    </main>
-  )
+  return <StaffChecklistsPageBody requestedBranch={typeof wanted === 'string' ? wanted : undefined} />
 }

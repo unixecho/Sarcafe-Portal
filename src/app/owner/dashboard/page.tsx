@@ -34,7 +34,7 @@ export default async function OwnerDashboardPage() {
         <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
         <section className="app-hero"><h2>שלום, {me?.first_name || 'צוות Sarcafe'}</h2><p>הכניסה עם הקוד מאפשרת לעבוד בצ׳קליסטים ובקופת האירועים. אפשר להיכנס עם Google כדי לפתוח את כלי הניהול.</p></section>
         <StaffPushCard />
-        <DashboardNotifications scheduleHref="/login?next=/staff/schedule" />
+        <DashboardNotifications scheduleHref="/login?next=/staff/schedule" googleSignedIn={false} />
         <DashboardSections staff categories={[
           { title: 'במשמרת', entries: [{ href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה' }, { href: '/pos', icon: Receipt, label: 'קופת אירועים', description: 'הזמנות ועמדות הכנה' }] },
           { title: 'החשבון שלי', entries: [{ href: '/staff/profile', icon: Users, label: 'הפרופיל שלי', description: 'פרטי חשבון וקוד כניסה' }, { href: '/login?next=/owner/dashboard', icon: ShieldCheck, label: 'כניסה לניהול עם Google', description: 'צוות, סידור עבודה ודיווחים' }] },
@@ -48,7 +48,7 @@ export default async function OwnerDashboardPage() {
   const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
   const defaultBranch = branches.find((branch) => branch.slug === currentSlug) ?? branches[0] ?? null
   const [updates, updateCount] = await Promise.all([
-    service.from('schedule_notifications').select('id, title, body, created_at, read_at').eq('staff_id', me!.id).order('created_at', { ascending: false }).limit(20),
+    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me!.id).order('created_at', { ascending: false }).limit(20),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me!.id).is('read_at', null),
   ])
   const [stats, signals, checklistIssues] = defaultBranch
@@ -86,7 +86,7 @@ export default async function OwnerDashboardPage() {
       <OwnerHeader title="לוח הבקרה" homeHref="/owner/dashboard" />
       <div className="app-welcome"><div><h2>שלום, {me?.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div><span className="app-date">{date}</span></div>
       <StaffPushCard />
-      <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" />
+      <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" manager />
       <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
       {checklistIssues === null && <p className="app-notifications__error" role="status">מצב הדיווחים אינו זמין כרגע. אפשר לפתוח את הצ׳קליסטים כדי לנסות שוב.</p>}
       <DashboardSections categories={categories} />

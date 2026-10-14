@@ -44,6 +44,8 @@ export type ChecklistAssignment = {
   templateVersion: number
   template: ChecklistDefinition
   status: 'pending' | 'in_progress' | 'submitted'
+  /** An owner dismissed it before it was sent: it is closed, not waiting (see isDismissed in window.ts). */
+  dismissed?: boolean
   answers: Record<string, ChecklistAnswer>
   issueCount: number
   submittedAt: string | null

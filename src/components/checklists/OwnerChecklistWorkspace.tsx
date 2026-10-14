@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, Eye, FilePlus2, Plus, QrCode, RotateCcw, Send, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Ban, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, Eye, FilePlus2, Plus, QrCode, RotateCcw, Send, Trash2 } from 'lucide-react'
 import QRCode from 'qrcode'
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
@@ -24,6 +24,8 @@ type AssignmentRow = {
   endTime: string
   kind: ChecklistKind
   status: 'pending' | 'in_progress' | 'submitted'
+  /** The owner dismissed it before it was sent (see isDismissed in window.ts); managerNote is then the reason. */
+  dismissed: boolean
   issueCount: number
   issues: { itemId: string; label: string; category: string; type: string; reason: string }[]
   submittedAt: string | null
@@ -36,12 +38,17 @@ type Tab = 'inbox' | 'coverage' | 'builder'
 
 // What the owner reads in the status chip. A future checklist that was never started is greyed out and
 // cannot be touched (the server refuses it too); a started one that is still open says so.
-const STATUS_TEXT: Record<ChecklistPhase, string> = { submitted: 'נשלח', upcoming: 'עתידי', open: 'פתוח להגשה', late: 'לא הוגש בזמן' }
+const STATUS_TEXT: Record<ChecklistPhase, string> = { submitted: 'נשלח', dismissed: 'בוטל', upcoming: 'עתידי', open: 'פתוח להגשה', late: 'לא הוגש בזמן' }
 const initialOf = (name: string) => Array.from(name.trim())[0] ?? '·'
 
-export default function OwnerChecklistWorkspace({ branches, initialBranch }: { branches: Branch[]; initialBranch: BranchSlug }) {
+// `focusId` is the checklist an alert named (/owner/checklists/<id>): the tracker opens on it and scrolls it into view.
+export default function OwnerChecklistWorkspace({ branches, initialBranch, focusId = null }: { branches: Branch[]; initialBranch: BranchSlug; focusId?: string | null }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
-  const [tab, setTab] = useState<Tab>('inbox')
+  const [tab, setTab] = useState<Tab>(focusId ? 'coverage' : 'inbox')
+  const [dismissing, setDismissing] = useState<string | null>(null)
+  const [reason, setReason] = useState('')
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const focused = useRef(false)
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -116,7 +123,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
     const hasOpening = new Set(data.assignments.filter((row) => row.kind === 'opening').map((row) => row.shiftId))
     const rows = data.assignments
       .filter((row) => row.shiftDate)
-      .map((row) => ({ ...row, phase: checklistPhase({ date: row.shiftDate, startTime: row.startTime, endTime: row.endTime, kind: row.kind, status: row.status, shiftHasOpening: hasOpening.has(row.shiftId) }, clock) }))
+      .map((row) => ({ ...row, phase: checklistPhase({ date: row.shiftDate, startTime: row.startTime, endTime: row.endTime, kind: row.kind, status: row.status, dismissed: row.dismissed, shiftHasOpening: hasOpening.has(row.shiftId) }, clock) }))
     // Today and what is coming first (nearest first), then what already happened (latest first).
     const ahead = rows.filter((row) => row.shiftDate >= clock.date)
     const behind = rows.filter((row) => row.shiftDate < clock.date)
@@ -133,15 +140,29 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
   })()
   const builderDirty = Boolean(selected && draft && (draftName !== selected.name || JSON.stringify(draft) !== JSON.stringify(selected.definition)))
 
-  async function act(action: 'seen' | 'resolve', assignmentId: string, note?: string) {
+  async function act(action: 'seen' | 'resolve' | 'dismiss' | 'restore', assignmentId: string, note?: string) {
+    setBusyId(assignmentId)
     try {
       const res = await fetch('/api/owner/checklists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, assignmentId, ...(note ? { note } : {}) }) })
       if (!res.ok) throw new Error(messageOf(await res.json().catch(() => null), 'לא הצלחנו לעדכן.'))
+      setDismissing(null)
+      setReason('')
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'לא הצלחנו לעדכן.')
+    } finally {
+      setBusyId(null)
     }
   }
+
+  // The checklist an alert named: once the list has loaded, bring its row into the middle of the screen.
+  useEffect(() => {
+    if (!focusId || focused.current || tab !== 'coverage' || !data) return
+    const row = document.getElementById(`ck-row-${focusId}`)
+    if (!row) return
+    focused.current = true
+    row.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }, [data, tab, focusId])
 
   function changeCategory(index: number, patch: Partial<ChecklistDefinition['categories'][number]>) {
     setDraft((current) => current ? { categories: current.categories.map((category, i) => i === index ? { ...category, ...patch } : category) } : current)
@@ -250,7 +271,7 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
     <div className="ck-wrap">
       <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
       <section className="ck-hero">
-        <div className="sch-row"><div style={{ flex: 1 }}><p className="sch-sub" style={{ margin: 0 }}>שליטה מלאה בטפסים ובדיווחים</p><h1 style={{ margin: '4px 0' }}>צ׳קליסטים לעובדים</h1></div>{inbox.length > 0 && <span className="ck-status ck-status--pending"><AlertTriangle size={16} /> {inbox.length} דיווחים לטיפול</span>}</div>
+        <div className="sch-row"><div style={{ flex: 1 }}><p className="sch-sub" style={{ margin: 0 }}>שליטה מלאה בטפסים ובדיווחים</p><h1 style={{ margin: '4px 0' }}>צ׳קליסטים לעובדים</h1></div>{inbox.length > 0 && <span className="ck-status ck-status--pending"><AlertTriangle size={16} /> {inbox.length === 1 ? 'דיווח אחד לטיפול' : `${inbox.length} דיווחים לטיפול`}</span>}</div>
         <p style={{ margin: '8px 0 0', color: 'var(--text-dim)' }}>כל טופס מחובר אוטומטית לשיבוץ בלוח המשמרות. שינוי תבנית יוצר גרסה חדשה ולא משנה דיווחים ישנים.</p>
       </section>
       <details className="ck-card ck-entry-card">
@@ -290,13 +311,16 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
       </div>}
 
       {tab === 'coverage' && data && clock && <div className="ck-wrap ck-track" dir="rtl">
-        {tracked.late > 0 && <div className="sch-error"><AlertTriangle size={18} /> {tracked.late} צ׳קליסטים לא הוגשו בזמן.</div>}
+        {tracked.late > 0 && <div className="sch-error"><AlertTriangle size={18} /> {tracked.late === 1 ? 'צ׳קליסט אחד לא הוגש בזמן.' : `${tracked.late} צ׳קליסטים לא הוגשו בזמן.`}</div>}
         {tracked.days.map((day) => <section key={day.date} className="ck-track-day" aria-label={dayLabel(day.date)}>
           <div className={`ck-spacer${day.date === clock.date ? ' ck-spacer--today' : ''}`} role="separator"><span>{dayLabel(day.date)}{day.date === clock.date ? ' · היום' : ''}</span></div>
           {day.rows.map((row) => {
             const future = row.phase === 'upcoming'
             const started = row.status === 'in_progress' && row.phase !== 'submitted'
-            return <article key={row.id} className={`ck-track-row ck-track-row--${row.phase}`} aria-disabled={future || undefined} inert={future || undefined} style={{ '--emp': row.staffColor ?? 'var(--line)' } as React.CSSProperties}>
+            // Only a checklist that is due (open or late) can be dismissed; a future one stays untouchable, as asked.
+            const canDismiss = row.phase === 'open' || row.phase === 'late'
+            const confirming = dismissing === row.id
+            return <article key={row.id} id={`ck-row-${row.id}`} className={`ck-track-row ck-track-row--${row.phase}${row.id === focusId ? ' ck-track-row--focus' : ''}`} aria-disabled={future || undefined} inert={future || undefined} style={{ '--emp': row.staffColor ?? 'var(--line)' } as React.CSSProperties}>
               <span className="ck-person-dot" aria-hidden="true">{initialOf(row.staffName)}</span>
               <div className="ck-track-main">
                 <strong>{row.staffName}</strong>
@@ -310,6 +334,18 @@ export default function OwnerChecklistWorkspace({ branches, initialBranch }: { b
                 <span className={`ck-status ck-status--${row.phase}`}>{started && row.phase !== 'late' ? 'בתהליך' : STATUS_TEXT[row.phase]}</span>
                 {row.issueCount > 0 && <span className="ck-status ck-status--pending">{row.issueCount} ליקויים</span>}
               </div>
+              {row.phase === 'dismissed' && <div className="ck-track-note">בוטל על ידי הנהלה, העובד/ת לא צריכ/ה להגיש{row.managerNote ? ` · ${row.managerNote}` : ''}.</div>}
+              {(canDismiss || row.phase === 'dismissed') && <div className="ck-track-actions">
+                {row.phase === 'dismissed'
+                  ? <button type="button" className="sch-btn sch-btn--sm press" disabled={busyId === row.id} onClick={() => void act('restore', row.id)}><RotateCcw size={16} aria-hidden="true" /> החזרת הצ׳קליסט</button>
+                  : confirming
+                    ? <>
+                        <input className="sch-input" value={reason} maxLength={300} placeholder="סיבה (לא חובה)" aria-label="סיבת הביטול" onChange={(event) => setReason(event.target.value)} />
+                        <button type="button" className="sch-btn sch-btn--sm sch-btn--ok press" disabled={busyId === row.id} onClick={() => void act('dismiss', row.id, reason.trim() || undefined)}><Ban size={16} aria-hidden="true" /> {busyId === row.id ? 'מבטל…' : 'אישור ביטול'}</button>
+                        <button type="button" className="sch-btn sch-btn--sm sch-btn--ghost press" onClick={() => { setDismissing(null); setReason('') }}>חזרה</button>
+                      </>
+                    : <button type="button" className="sch-btn sch-btn--sm press" onClick={() => { setDismissing(row.id); setReason('') }}><Ban size={16} aria-hidden="true" /> ביטול הצ׳קליסט</button>}
+              </div>}
             </article>
           })}
         </section>)}

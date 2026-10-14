@@ -23,9 +23,10 @@ type Tab = 'schedule' | 'mine' | 'availability'
 //   זמינות      the days I cannot work next week
 // The schedule reads published snapshots; a separate minimal planning menu
 // offers shift choices before publication without draft assignments or notes.
-export default function StaffWorkspace({ branchName }: { branchName: string }) {
+export default function StaffWorkspace({ branchName, initialTab }: { branchName: string; initialTab?: string }) {
   const { db, loading, error, weekStart, setWeekStart, goToToday, refresh } = useShifts()
-  const [tab, setTab] = useState<Tab>('schedule')
+  // A link from an alert opens the tab it is about: ?tab=requests (my requests) or ?tab=availability (requests for the week).
+  const [tab, setTab] = useState<Tab>(initialTab === 'requests' ? 'mine' : initialTab === 'availability' ? 'availability' : 'schedule')
   const [view, setView] = useState<'mine' | 'everyone'>('mine')
   const [shiftId, setShiftId] = useState<string | null>(null)
   const [notesOpen, setNotesOpen] = useState(false)

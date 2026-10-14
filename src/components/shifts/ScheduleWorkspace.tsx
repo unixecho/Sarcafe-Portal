@@ -30,21 +30,22 @@ type SheetState = { shiftId: string | null; date: string; weekId: string }
 
 // The settings draft wraps the whole workspace, not just the settings tab: switching tabs must not lose
 // what has been edited, and the "unsaved changes" bar belongs on every tab.
-export default function ScheduleWorkspace({ branchName, shareBranches }: { branchName: string; shareBranches?: ShareBranch[] }) {
+export default function ScheduleWorkspace({ branchName, shareBranches, initialTab }: { branchName: string; shareBranches?: ShareBranch[]; initialTab?: string }) {
   const { db } = useShifts()
-  if (!db) return <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} />
+  if (!db) return <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} initialTab={initialTab} />
   return (
     <SettingsDraftProvider>
-      <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} />
+      <ScheduleWorkspaceBody branchName={branchName} shareBranches={shareBranches} initialTab={initialTab} />
       <SettingsSaveBar />
     </SettingsDraftProvider>
   )
 }
 
-function ScheduleWorkspaceBody({ branchName, shareBranches }: { branchName: string; shareBranches?: ShareBranch[] }) {
+function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { branchName: string; shareBranches?: ShareBranch[]; initialTab?: string }) {
   const { branchSlug, db, loading, error, weekStart, setWeekStart, goToToday, dispatch, refresh } = useShifts()
   const settingsDirty = useSettingsDirty()
-  const [tab, setTab] = useState<Tab>('week')
+  // A link from an alert opens the tab it is about (?tab=requests): the decisions waiting for a manager.
+  const [tab, setTab] = useState<Tab>(initialTab === 'requests' ? 'requests' : 'week')
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const lastSheet = useRef<SheetState | null>(null)
   if (sheet) lastSheet.current = sheet

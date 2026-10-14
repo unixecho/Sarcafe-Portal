@@ -253,6 +253,12 @@
 .app-dev__status dt { color: var(--text-faint); font-size: .72rem; }
 .app-dev__status dd { margin: 0; color: var(--text-dim); word-break: break-word; }
 .app-dev__status small { color: var(--text-faint); }
+.app-dev__recent { display: grid; gap: 8px; padding: 12px 14px; border-radius: 16px; background: var(--bg); font-size: .8rem; line-height: 1.55; }
+.app-dev__recent h3 { margin: 0; font-size: .78rem; color: var(--text-dim); }
+.app-dev__recent ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.app-dev__recent li { display: grid; gap: 1px; }
+.app-dev__recent li > strong { font-size: .8rem; }
+.app-dev__recent li > small { color: var(--text-faint); }
 .app-dev__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .app-dev__button { display: grid; gap: 3px; align-content: start; min-height: 64px; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 15px; background: var(--bg-elev-2); color: var(--text); text-align: start; cursor: pointer; font: inherit; }
 .app-dev__button strong { font-size: .84rem; }

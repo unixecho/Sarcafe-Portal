@@ -8,6 +8,7 @@ import { canManageSchedule } from '@/lib/shifts/access'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import type { Branch } from '@/lib/branches'
+import { scheduleEntry } from '@/lib/shifts/entry'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,8 @@ export const dynamic = 'force-dynamic'
 // via that branch's shift_settings.schedule_managers[]. A staff member who
 // manages nothing is redirected to /staff/schedule, not /no-access — they
 // ARE real staff, just not a scheduler.
-export default async function OwnerSchedulePage() {
+export default async function OwnerSchedulePage({ searchParams }: { searchParams: Promise<{ tab?: string | string[]; week?: string | string[] }> }) {
+  const entry = scheduleEntry(await searchParams)
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
@@ -60,7 +62,7 @@ export default async function OwnerSchedulePage() {
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 1760, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" backHref={backHref} />
-      <ScheduleWorkspaceShell branches={manageableBranches} initialBranch={initialBranch} />
+      <ScheduleWorkspaceShell branches={manageableBranches} initialBranch={initialBranch} entry={entry} />
     </main>
   )
 }

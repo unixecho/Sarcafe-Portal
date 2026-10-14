@@ -10,7 +10,8 @@ import '@/components/app/app.css'
 // pushes it through the production road, so "it arrived on my phone" means the real pipeline works.
 
 type Cron = { available?: boolean; scheduled?: boolean; schedule?: string | null; active?: boolean | null; lastRunAt?: string | null; lastRunStatus?: string | null; lastHttpStatus?: number | null; lastHttpAt?: string | null; lastHttpError?: string | null }
-type Status = { vapidConfigured: boolean; devices: { userAgent: string; createdAt: string; lastSeenAt: string }[]; waiting: number; cron: Cron }
+type Recent = { kind: string; createdAt: string; pushedAt: string | null; push: { devices: number; accepted: number; refused: { status: number | null; detail: string }[] } | null }
+type Status = { vapidConfigured: boolean; devices: { userAgent: string; createdAt: string; lastSeenAt: string }[]; waiting: number; recent: Recent[]; cron: Cron }
 type SendResult = { inserted: number; claimed: number; sent: number; devices: number }
 
 const TEMPLATES: { id: string; label: string; hint: string }[] = [
@@ -104,6 +105,20 @@ export default function DevPushPanel() {
             </dd>
           </div>
         </dl>
+      )}
+      {status && status.recent.length > 0 && (
+        <div className="app-dev__recent">
+          <h3>ההתראות האחרונות שלי ומה אמר שירות ההתראות</h3>
+          <ul>
+            {status.recent.map((item) => (
+              <li key={`${item.kind}-${item.createdAt}`}>
+                <strong>{item.kind}</strong> <time dir="ltr">{new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(item.createdAt))}</time>
+                <small>{!item.pushedAt ? 'עוד לא נשלחה' : !item.push ? 'נשלחה (אין פירוט, לפני שהתחלנו לתעד)' : item.push.devices === 0 ? 'לא היה מכשיר רשום' : `התקבלה ב־${item.push.accepted} מתוך ${item.push.devices} מכשירים${item.push.refused.length ? ` · סירוב: ${item.push.refused.map((r) => `${r.status ?? '?'} ${r.detail}`).join(', ')}` : ''}`}</small>
+              </li>
+            ))}
+          </ul>
+          <p className="app-push__note">„התקבלה“ אומר שאפל או גוגל אישרו את ההתראה. אם היא התקבלה ולא הופיעה, הסיבה במכשיר: מצב ריכוז, או הגדרות ההתראות של האפליקציה.</p>
+        </div>
       )}
 
       <div className="app-dev__grid">

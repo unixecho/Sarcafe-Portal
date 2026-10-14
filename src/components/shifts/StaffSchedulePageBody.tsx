@@ -5,6 +5,7 @@ import StaffScheduleShell from '@/components/shifts/StaffScheduleShell'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
+import type { ScheduleEntry } from '@/lib/shifts/entry'
 
 // Every Google-linked employee can browse the frozen schedules of permanent
 // branches. Event schedules remain visible only to staff assigned to that event.
@@ -14,7 +15,7 @@ import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 // is a path segment because a signed-out visitor is sent through /login?next=… and
 // that value cannot carry a query. An unknown or not-visible branch falls back to the
 // person's usual one instead of failing.
-export default async function StaffSchedulePageBody({ branchSlug }: { branchSlug?: string }) {
+export default async function StaffSchedulePageBody({ branchSlug, entry = {} }: { branchSlug?: string; entry?: ScheduleEntry }) {
   const here = branchSlug && /^[A-Za-z0-9_-]+$/.test(branchSlug) ? `/staff/schedule/${branchSlug}` : '/staff/schedule'
   const me = await resolveStaffIdentity()
   if (!me || me.quick || me.via !== 'google') redirect(`/login?next=${here}`)
@@ -29,7 +30,7 @@ export default async function StaffSchedulePageBody({ branchSlug }: { branchSlug
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 1560, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" backHref="/staff" />
-      <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} />
+      <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} entry={entry} />
     </main>
   )
 }

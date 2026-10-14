@@ -43,15 +43,23 @@ const TEMPLATES: Record<string, Template[]> = {
 export const DEV_TEMPLATE_IDS = Object.keys(TEMPLATES) as [string, ...string[]]
 
 export async function devPushStatus(service: Service, me: Me) {
-  const [devices, unsent, cron] = await Promise.all([
+  const [devices, unsent, cron, recent] = await Promise.all([
     service.from('staff_push_subscriptions').select('user_agent, created_at, last_seen_at').eq('staff_id', me.id).order('created_at', { ascending: false }),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).is('push_sent_at', null),
     service.rpc('staff_push_cron_status'),
+    // The last alerts written for this developer and what the push service said about each (see PushOutcome in staff.ts).
+    service.from('schedule_notifications').select('kind, created_at, push_sent_at, link').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(8),
   ])
   return {
     vapidConfigured: ensureVapidConfigured(),
     devices: (devices.data ?? []).map((d) => ({ userAgent: (d.user_agent as string | null) ?? '', createdAt: d.created_at as string, lastSeenAt: d.last_seen_at as string })),
     waiting: unsent.count ?? 0,
+    recent: (recent.data ?? []).map((row) => ({
+      kind: row.kind as string,
+      createdAt: row.created_at as string,
+      pushedAt: (row.push_sent_at as string | null) ?? null,
+      push: ((row.link as { push?: unknown } | null)?.push ?? null) as { devices: number; accepted: number; refused: { status: number | null; detail: string }[] } | null,
+    })),
     cron: cron.error ? { available: false } : (cron.data as Record<string, unknown>),
   }
 }

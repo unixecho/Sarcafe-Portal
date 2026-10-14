@@ -6,7 +6,7 @@ import { AlertTriangle, Beaker, CheckCircle2, ChevronLeft, ClipboardCheck, Lock,
 import BranchSwitcher from '@/components/BranchSwitcher'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import { flattenChecklistDefinition, type ChecklistAnswer, type ChecklistAssignment, type ChecklistItem, type ChecklistPreviewTemplate } from '@/lib/checklists/types'
-import { advanceClock, isChecklistLocked, unlockText, type WallClock } from '@/lib/checklists/window'
+import { advanceClock, isChecklistLocked, lockedBecause, unlockText, type LockInput, type WallClock } from '@/lib/checklists/window'
 import { messageOf } from '@/components/staff/types'
 import './checklists.css'
 
@@ -29,7 +29,7 @@ function answerIsComplete(item: ChecklistItem, answer?: ChecklistAnswer) {
   return answer.result !== 'issue' || Boolean(answer.reason?.trim())
 }
 
-export default function StaffChecklistWorkspace({ branches, initialBranch }: { branches: Branch[]; initialBranch: BranchSlug }) {
+export default function StaffChecklistWorkspace({ branches, initialBranch, openId = null }: { branches: Branch[]; initialBranch: BranchSlug; openId?: string | null }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
   const [data, setData] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,14 +44,15 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   const [currentCode, setCurrentCode] = useState('')
   const [newCode, setNewCode] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
-  // A deep link from the home screen ("?open=<assignment>" or, for a developer, "?preview=<kind>") is
-  // honoured once, after the list has loaded.
+  // A deep link is honoured once, after the list has loaded: /staff/checklists/<assignment> (what an alert and the
+  // home screen's buttons use; the page hands the id in as `openId`), the older "?open=<assignment>", or, for a
+  // developer, "?preview=<kind>".
   const deepLink = useRef<{ open: string | null; preview: string | null } | null>(null)
   const fetchedAt = useRef(Date.now())
   const [, setTick] = useState(0)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    deepLink.current = { open: params.get('open'), preview: params.get('preview') }
+    deepLink.current = { open: openId ?? params.get('open'), preview: params.get('preview') }
     // Re-evaluate the lock every 20 s so a checklist unlocks on its own when the shift begins.
     const timer = window.setInterval(() => setTick((value) => value + 1), 20_000)
     return () => window.clearInterval(timer)
@@ -76,13 +77,20 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   useEffect(() => void load(), [branch])
 
   const clock = data ? advanceClock(data.serverNow, Date.now() - fetchedAt.current) : null
-  const lockedAt = (assignment: ChecklistAssignment) => Boolean(clock && !assignment.testMode && assignment.status !== 'submitted' && isChecklistLocked({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock))
+  // Closing (and a departing handover) open half an hour before the shift ends; a shift "has an opening" when the person has one on it.
+  const lockOf = (assignment: ChecklistAssignment): LockInput => ({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime, kind: assignment.kind, shiftHasOpening: (data?.assignments ?? []).some((other) => other.shiftId === assignment.shiftId && other.kind === 'opening') })
+  const lockedAt = (assignment: ChecklistAssignment) => Boolean(clock && !assignment.testMode && assignment.status !== 'submitted' && !assignment.dismissed && isChecklistLocked(lockOf(assignment), clock))
   useEffect(() => {
     const link = deepLink.current
     if (!data || !link || (!link.open && !link.preview)) return
     deepLink.current = { open: null, preview: null }
     const target = link.open ? data.assignments.find((assignment) => assignment.id === link.open) : null
-    if (target && target.status !== 'submitted' && !lockedAt(target)) return open(target)
+    if (target) {
+      // Say why it did not open instead of leaving a bare list: an alert that opens nothing reads as broken.
+      if (target.dismissed) return setNotice('הצ׳קליסט הזה בוטל על ידי המנהל/ת, אין צורך להגיש אותו.')
+      if (target.status === 'submitted') return setNotice('הצ׳קליסט הזה כבר נשלח, תודה.')
+      return open(target) // a locked one reports "opens at …" itself
+    }
     const template = link.preview && data.developerMode ? data.previews.find((candidate) => candidate.kind === link.preview) : null
     if (template) openPreview(template)
   }, [data])
@@ -95,7 +103,7 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
   const issues = items.filter((item) => answers[item.id]?.result === 'issue')
 
   function open(assignment: ChecklistAssignment) {
-    if (lockedAt(assignment)) return setError(`הצ׳קליסט עדיין נעול — המשמרת עוד לא התחילה. ${clock ? unlockText({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock) : ''}`)
+    if (lockedAt(assignment)) return setError(`הצ׳קליסט עדיין נעול — ${lockedBecause(lockOf(assignment))}. ${clock ? unlockText(lockOf(assignment), clock) : ''}`)
     setActiveId(assignment.id)
     setAnswers(assignment.answers ?? {})
     const firstIncomplete = assignment.template.categories.findIndex((category) =>
@@ -369,13 +377,22 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
     )
   }
 
+  // What the person came to do comes first: due now (oldest first), then not yet open, then what is done or was
+  // dismissed (newest first). The list is the last 30 checklists, so by date alone today's would sit under last month's.
+  const all = data?.assignments ?? []
+  const isClosed = (assignment: ChecklistAssignment) => assignment.status === 'submitted' || Boolean(assignment.dismissed)
+  const ordered = [
+    ...all.filter((assignment) => !isClosed(assignment) && !lockedAt(assignment)),
+    ...all.filter((assignment) => !isClosed(assignment) && lockedAt(assignment)),
+    ...all.filter(isClosed).reverse(),
+  ]
+
   return (
     <div className="ck-wrap">
       {branches.length > 1 && <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />}
       <section className="ck-hero">
         <p className="sch-sub" style={{ margin: 0 }}>שלום {data?.profile.label || ''}</p>
-        <h1 style={{ margin: '5px 0 8px' }}>הצ׳קליסטים של המשמרות שלכם</h1>
-        <p style={{ margin: 0, color: 'var(--text-dim)' }}>המערכת מחברת כל טופס למשמרת שאליה שובצתם ושומרת כל שלב אוטומטית.</p>
+        <h1 style={{ margin: '5px 0 0' }}>הצ׳קליסטים של המשמרות שלכם</h1>
       </section>
       {notice && <div className="ck-notice" role="status"><CheckCircle2 size={18} aria-hidden="true" />{notice}</div>}
       {data?.developerMode && data.previews.length > 0 && (
@@ -386,6 +403,27 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
           </div>
         </section>
       )}
+      {error && <div className="sch-error" role="alert">{error}<button className="sch-btn sch-btn--sm press" onClick={() => void load()}>ניסיון נוסף</button></div>}
+      {loading && !data ? <div className="sk" style={{ height: 160 }} /> : (
+        <div className="ck-grid">
+          {ordered.map((assignment) => {
+            const locked = lockedAt(assignment)
+            const dismissed = Boolean(assignment.dismissed)
+            const closed = assignment.status === 'submitted' || dismissed
+            return (
+            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}${locked ? ' ck-card--locked' : ''}${dismissed ? ' ck-card--dismissed' : ''}`} disabled={closed || locked} aria-disabled={closed || locked} onClick={() => open(assignment)}>
+              <div className="sch-row">{locked ? <Lock size={22} aria-hidden="true" /> : <ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" />}<strong style={{ flex: 1 }}>{assignment.kindLabel}</strong>{locked ? <span className="ck-status ck-status--locked">נעול</span> : dismissed ? <span className="ck-status ck-status--dismissed">בוטל</span> : <span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span>}</div>
+              {dismissed && <span className="sch-sub">המנהל/ת ביטל/ה את הצ׳קליסט הזה, אין צורך להגיש אותו.</span>}
+              {locked && clock && <span className="sch-sub">{lockedBecause(lockOf(assignment))} · {unlockText(lockOf(assignment), clock)}</span>}
+              <span>{new Date(`${assignment.shiftDate}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} · <span dir="ltr">{assignment.startTime}–{assignment.endTime}</span></span>
+              {assignment.status === 'submitted' && <span className="sch-sub">נשלח {assignment.submittedAt ? new Date(assignment.submittedAt).toLocaleString('he-IL') : ''}{assignment.issueCount ? ` · ${assignment.issueCount} ליקויים דווחו` : ' · ללא ליקויים'}</span>}
+            </button>
+            )
+          })}
+        </div>
+      )}
+      {!loading && data?.assignments.filter((assignment) => !assignment.testMode).length === 0 && <section className="ck-card" style={{ alignItems: 'center', textAlign: 'center', padding: 28 }}><ClipboardCheck size={36} color="var(--text-faint)" /><strong>אין כרגע צ׳קליסט שמחכה לכם</strong><span className="sch-sub">לאחר פרסום השיבוץ, הטופס המתאים יופיע כאן לפי המשמרת.</span></section>}
+      {/* Account housekeeping comes after the checklists: on a phone the checklists are what the person opened this page for. */}
       {data?.profile.via === 'employee_code' && !data.profile.hasGoogle && (
         <section className="ck-card">
           <div className="sch-row"><ShieldCheck size={20} aria-hidden="true" /><strong>קישור Google נדרש לגישה מלאה</strong></div>
@@ -404,23 +442,6 @@ export default function StaffChecklistWorkspace({ branches, initialBranch }: { b
           </div>}
         </section>
       )}
-      {error && <div className="sch-error" role="alert">{error}<button className="sch-btn sch-btn--sm press" onClick={() => void load()}>ניסיון נוסף</button></div>}
-      {loading && !data ? <div className="sk" style={{ height: 160 }} /> : (
-        <div className="ck-grid">
-          {(data?.assignments ?? []).map((assignment) => {
-            const locked = lockedAt(assignment)
-            return (
-            <button key={assignment.id} type="button" className={`ck-card press${assignment.issueCount ? ' ck-card--issue' : ''}${locked ? ' ck-card--locked' : ''}`} disabled={assignment.status === 'submitted' || locked} aria-disabled={assignment.status === 'submitted' || locked} onClick={() => open(assignment)}>
-              <div className="sch-row">{locked ? <Lock size={22} aria-hidden="true" /> : <ClipboardCheck size={22} aria-hidden="true" color="var(--neon)" />}<strong style={{ flex: 1 }}>{assignment.kindLabel}</strong>{locked ? <span className="ck-status ck-status--locked">נעול</span> : <span className={`ck-status ck-status--${assignment.status === 'submitted' ? 'submitted' : 'pending'}`}>{statusLabel(assignment.status)}</span>}</div>
-              {locked && clock && <span className="sch-sub">המשמרת עוד לא התחילה · {unlockText({ date: assignment.shiftDate, startTime: assignment.startTime, endTime: assignment.endTime }, clock)}</span>}
-              <span>{new Date(`${assignment.shiftDate}T12:00:00`).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} · <span dir="ltr">{assignment.startTime}–{assignment.endTime}</span></span>
-              {assignment.status === 'submitted' && <span className="sch-sub">נשלח {assignment.submittedAt ? new Date(assignment.submittedAt).toLocaleString('he-IL') : ''}{assignment.issueCount ? ` · ${assignment.issueCount} ליקויים דווחו` : ' · ללא ליקויים'}</span>}
-            </button>
-            )
-          })}
-        </div>
-      )}
-      {!loading && data?.assignments.filter((assignment) => !assignment.testMode).length === 0 && <section className="ck-card" style={{ alignItems: 'center', textAlign: 'center', padding: 28 }}><ClipboardCheck size={36} color="var(--text-faint)" /><strong>אין כרגע צ׳קליסט שמחכה לכם</strong><span className="sch-sub">לאחר פרסום השיבוץ, הטופס המתאים יופיע כאן לפי המשמרת.</span></section>}
     </div>
   )
 }

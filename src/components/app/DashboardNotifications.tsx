@@ -3,12 +3,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Bell, BellRing, CheckCheck } from 'lucide-react'
+import { pushPathFor } from '@/lib/push/staff-rules'
 
-export type DashboardNotification = { id: string; title: string; body: string | null; created_at: string; read_at: string | null }
+// A range such as 13:00–19:00 or 18/10–24/10 inside Hebrew text is flipped by the bidi rules (it would read 19:00–13:00).
+// The rest of the app isolates ranges left-to-right; the alert text does the same.
+const RANGE = /(\d{1,2}[:/]\d{1,2}[–-]\d{1,2}[:/]\d{1,2})/
+function Text({ text }: { text: string }) {
+  return <>{text.split(RANGE).map((part, index) => (index % 2 === 1 ? <span key={index} dir="ltr" style={{ whiteSpace: 'nowrap' }}>{part}</span> : part))}</>
+}
 
-type Props = { initialNotifications?: DashboardNotification[]; initialUnread?: number; initialError?: boolean; scheduleHref?: string }
+export type DashboardNotification = { id: string; kind?: string; title: string; body: string | null; link?: Record<string, unknown> | null; created_at: string; read_at: string | null }
 
-export default function DashboardNotifications({ initialNotifications = [], initialUnread = 0, initialError = false, scheduleHref = '/staff/schedule' }: Props) {
+// `googleSignedIn`: the schedule needs a Google sign-in, so a number + code employee is sent through the door instead.
+// `manager`: can open the manager's schedule (an owner or general manager), which decides where a swap alert goes.
+type Props = { initialNotifications?: DashboardNotification[]; initialUnread?: number; initialError?: boolean; scheduleHref?: string; googleSignedIn?: boolean; manager?: boolean }
+
+export default function DashboardNotifications({ initialNotifications = [], initialUnread = 0, initialError = false, scheduleHref = '/staff/schedule', googleSignedIn = true, manager = false }: Props) {
   const [notifications, setNotifications] = useState(initialNotifications)
   const [unread, setUnread] = useState(initialUnread)
   const [error, setError] = useState(initialError)
@@ -46,6 +56,12 @@ export default function DashboardNotifications({ initialNotifications = [], init
     finally { setSaving(false) }
   }
 
+  // Each alert opens what it is about: the exact checklist, the requests tab, the availability tab… (the same
+  // resolver the phone push uses, so a tap on the push and a tap on this list land in the same place).
+  const hrefFor = (item: DashboardNotification) => {
+    const path = pushPathFor(item.kind ?? '', item.link ?? null, { manager })
+    return !googleSignedIn && (path.startsWith('/staff/schedule') || path.startsWith('/owner/')) ? '/login?next=/staff/schedule' : path
+  }
   const shown = notifications.slice(0, 5)
   const unreadIds = shown.filter((item) => !item.read_at).map((item) => item.id)
   return (
@@ -58,8 +74,8 @@ export default function DashboardNotifications({ initialNotifications = [], init
         {error && <p className="app-notifications__error" role="alert">לא הצלחנו לרענן את העדכונים. <button className="app-notifications__action" onClick={() => void load()}>ניסיון נוסף</button></p>}
         {shown.map((item) => (
           <article key={item.id} className={`app-notice${item.read_at ? '' : ' app-notice--unread'}`}>
-            <Link href={scheduleHref} onClick={() => { if (!item.read_at) void markRead([item.id]) }}>
-              <strong>{item.title}</strong>{item.body && <p>{item.body}</p>}
+            <Link href={hrefFor(item)} onClick={() => { if (!item.read_at) void markRead([item.id]) }}>
+              <strong><Text text={item.title} /></strong>{item.body && <p><Text text={item.body} /></p>}
               <time dateTime={item.created_at}>{new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(item.created_at))}</time>
             </Link>
           </article>

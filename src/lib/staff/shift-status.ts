@@ -2,13 +2,17 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { KIND_LABELS, type ChecklistKind } from '@/lib/checklists/types'
-import { clockAbs, shiftEndAbs, shiftStartAbs, type WallClock } from '@/lib/checklists/window'
+import { clockAbs, isDismissed, shiftEndAbs, shiftStartAbs, type WallClock } from '@/lib/checklists/window'
+import { END_GRACE_MINUTES } from '@/lib/push/staff-rules'
 import { wallClockNow } from '@/lib/shifts/time'
 
 // What the staff home's shift-status card needs: the shift the person is working right now (if any), the next
 // one, and the checklists that belong to each. Published weeks only — a draft shift is not "yours" yet.
+// A shift that has just ended still counts as current while it has a checklist waiting and the end-of-shift grace
+// (END_GRACE_MINUTES, the same number the alerts use) has not run out: closing the place takes time after the shift
+// ends, and that is exactly when the closing checklist has to be reachable from the home screen.
 
-export type ShiftChecklistBrief = { id: string; kind: ChecklistKind; kindLabel: string; status: 'pending' | 'in_progress' | 'submitted' }
+export type ShiftChecklistBrief = { id: string; kind: ChecklistKind; kindLabel: string; status: 'pending' | 'in_progress' | 'submitted'; /** an owner dismissed it: closed, not waiting */ dismissed: boolean }
 export type ShiftBrief = {
   id: string
   date: string
@@ -55,13 +59,14 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
   const live: Candidate[] = (shifts ?? [])
     .filter((row) => published.has(row.week_id as string))
     .map((row) => ({ row, times: { date: row.shift_date as string, startTime: row.start_time as string, endTime: row.end_time as string }, now: clockOf(row.branch_id as string) }))
-  const current = live.find((c) => shiftStartAbs(c.times) <= clockAbs(c.now) && clockAbs(c.now) < shiftEndAbs(c.times)) ?? null
+  const running = live.find((c) => shiftStartAbs(c.times) <= clockAbs(c.now) && clockAbs(c.now) < shiftEndAbs(c.times)) ?? null
+  const justEnded = live.filter((c) => shiftEndAbs(c.times) <= clockAbs(c.now) && clockAbs(c.now) < shiftEndAbs(c.times) + END_GRACE_MINUTES).reverse()
   const next = live.find((c) => shiftStartAbs(c.times) > clockAbs(c.now)) ?? null
 
-  const wanted = [current, next].filter((c): c is Candidate => c !== null)
+  const wanted = [running, ...justEnded, next].filter((c): c is Candidate => c !== null)
   const checklistsFor = async () => {
     const { data } = wanted.length
-      ? await service.from('checklist_assignments').select('id, shift_id, checklist_kind, status').eq('staff_id', staffId).in('shift_id', wanted.map((c) => c.row.id as string))
+      ? await service.from('checklist_assignments').select('id, shift_id, checklist_kind, status, manager_resolved_at').eq('staff_id', staffId).in('shift_id', wanted.map((c) => c.row.id as string))
       : { data: [] }
     return data ?? []
   }
@@ -72,6 +77,9 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
     await Promise.all([...new Set(missing.map((c) => c.row.week_id as string))].map((weekId) => Promise.resolve(service.rpc('sync_checklist_assignments', { p_week_id: weekId })).catch(() => undefined)))
     rows = await checklistsFor()
   }
+
+  const stillOpen = (row: { status: unknown; manager_resolved_at: unknown }) => row.status !== 'submitted' && !isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null })
+  const current = running ?? justEnded.find((c) => rows.some((row) => row.shift_id === c.row.id && stillOpen(row))) ?? null
 
   const brief = (c: Candidate | null): ShiftBrief | null => {
     if (!c) return null
@@ -91,7 +99,7 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
       place,
       checklists: rows
         .filter((row) => row.shift_id === c.row.id)
-        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'] }))
+        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'], dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }) }))
         .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]),
     }
   }
