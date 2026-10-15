@@ -1,5 +1,12 @@
 # Sarcafe — cross-agent handoff
 
+
+## Claude addendum, 2026-10-15 (a11y-widget v1.2.0): the launcher keeps clear of page controls, and the widget can be turned off — pushed to main; checked in a stand-in page and by typecheck/check:intro, not yet on the real site
+
+**Done.** `a11y-widget` bumped v1.1.0 -> v1.2.0 (package.json + lockfile) and `PublicA11yWidget.tsx` now passes a module-level config with `avoid: ['.menu-back']`. New in the widget (see its CHANGELOG): the launcher moves to the nearest free corner when a fixed/sticky control (the cart FAB, the back arrow, the globe) is in its way; the panel has a remembered "Turn off the accessibility widget" control; once off, a modal explains the way back after the page animations finish, the globe (LanguageSwitch) menu gets an "Enable accessibility widget" item, and a hint reads "Enable accessibility widget here" beside the globe on every load. The globe is found by its aria-label / `#main > div > button[aria-haspopup="menu"]` — LanguageSwitch.tsx and CartFab.tsx are unchanged.
+
+**Not verified.** Real phone/tablet, the real menu page, screen reader. **Exact next step:** owner tests on phone/tablet (checklist in the session reply); if the globe item or hint is missing, check the globe selector first.
+
 ## Claude addendum, 2026-10-15 (late): workshop viewer got a real full-screen / landscape mode — see `docs/WORKSHOP.md`; verified in a scratch copy at 844x390 and 390x844 (18 checks), not on a real iPhone
 
 ## Claude addendum, 2026-10-15: one person per shift does the checklists, days off + shift wishes (blocking across branches), the "missing or not working" report with a morning alert, the coffee workshop card — the three migrations were APPLIED to production by the owner (SQL editor) and the code is pushed to `main`
