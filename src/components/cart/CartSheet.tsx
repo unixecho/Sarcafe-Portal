@@ -233,7 +233,7 @@ const clearBtnStyle: CSSProperties = {
   borderRadius: 14,
   border: '1px solid rgba(255,107,107,0.3)',
   background: 'transparent',
-  color: '#ff6b6b',
+  color: 'var(--danger)',
   fontSize: '0.85rem',
   fontWeight: 600,
   cursor: 'pointer',

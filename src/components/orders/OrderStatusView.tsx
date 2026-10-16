@@ -150,7 +150,7 @@ export default function OrderStatusView({
 
       {cancelled ? (
         <div style={{ ...cardStyle, borderColor: 'rgba(255,107,107,0.35)', textAlign: 'center' }}>
-          <p style={{ margin: 0, fontWeight: 800, color: '#ff6b6b' }}>ההזמנה בוטלה</p>
+          <p style={{ margin: 0, fontWeight: 800, color: 'var(--danger)' }}>ההזמנה בוטלה</p>
           {order.cancelReason && <p style={{ margin: '6px 0 0', fontSize: '0.85rem', color: 'var(--text-dim)' }}>{order.cancelReason}</p>}
         </div>
       ) : order.status === 'completed' ? (

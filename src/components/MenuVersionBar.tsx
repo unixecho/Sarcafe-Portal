@@ -181,7 +181,7 @@ export default function MenuVersionBar({ branchSlug, draft, variants, activeVari
                     danger: true,
                   })
                 }
-                style={{ ...iconButtonStyle, color: '#ff6b6b' }}
+                style={{ ...iconButtonStyle, color: 'var(--danger)' }}
               >
                 <Trash2 size={14} aria-hidden="true" /> מחיקה
               </button>

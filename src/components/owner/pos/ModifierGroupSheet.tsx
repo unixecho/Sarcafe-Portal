@@ -624,7 +624,7 @@ const dangerButtonStyle: React.CSSProperties = {
   borderRadius: 14,
   border: '1px solid rgba(255,107,107,0.3)',
   background: 'transparent',
-  color: '#ff6b6b',
+  color: 'var(--danger)',
   fontWeight: 600,
   fontSize: '0.82rem',
   cursor: 'pointer',

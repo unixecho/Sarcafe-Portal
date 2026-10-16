@@ -103,7 +103,7 @@ export default function LoginPage() {
           </button>
 
           {error && !handoffOpen && (
-            <p role="alert" style={{ margin: 0, color: '#ff6b6b', fontSize: '0.85rem' }}>
+            <p role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: '0.85rem' }}>
               {error}
             </p>
           )}

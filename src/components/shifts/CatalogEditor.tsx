@@ -164,7 +164,7 @@ const deleteBtnStyle: CSSProperties = {
   borderRadius: 8,
   border: '1px solid var(--line-strong)',
   background: 'var(--bg-elev-2)',
-  color: '#ff6b6b',
+  color: 'var(--danger)',
   display: 'grid',
   placeItems: 'center',
   cursor: 'pointer',

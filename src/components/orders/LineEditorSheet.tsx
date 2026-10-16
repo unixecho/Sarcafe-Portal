@@ -94,7 +94,7 @@ export default function LineEditorSheet({
       <h2 id={titleId} style={{ margin: '0 0 4px', fontSize: '1.05rem', fontWeight: 800 }}>
         {item.he || 'פריט'}
       </h2>
-      {soldOut && <p style={{ margin: '4px 0 0', color: '#ff6b6b', fontSize: '0.82rem', fontWeight: 700 }}>אזל המלאי — לא ניתן להוסיף</p>}
+      {soldOut && <p style={{ margin: '4px 0 0', color: 'var(--danger)', fontSize: '0.82rem', fontWeight: 700 }}>אזל המלאי — לא ניתן להוסיף</p>}
 
       <div className="sheet-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 10 }}>
         {hasTypes && availableTypes.length > 0 && (

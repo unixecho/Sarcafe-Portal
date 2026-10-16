@@ -244,7 +244,7 @@ export default function AuthHandoff({ open, onClose, lang = 'he', redirectPath =
           </div>
 
           {error && (
-            <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.85rem', marginBottom: 12 }}>
+            <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: 12 }}>
               {error}
             </p>
           )}

@@ -17,7 +17,7 @@ const STATUS_COLOR: Record<OrderStatus, string> = {
   preparing: 'var(--line-interactive)',
   ready: 'var(--neon-2)',
   completed: 'var(--text-faint)',
-  cancelled: '#ff6b6b',
+  cancelled: 'var(--danger)',
 }
 
 const NEXT_ACTION_LABEL: Partial<Record<OrderStatus, string>> = {
@@ -86,7 +86,7 @@ export default function OrderCard({
 
       {order.notes && <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--text-dim)' }}>הערה: {order.notes}</p>}
       {order.status === 'cancelled' && order.cancelReason && (
-        <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#ff6b6b' }}>סיבת ביטול: {order.cancelReason}</p>
+        <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--danger)' }}>סיבת ביטול: {order.cancelReason}</p>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
@@ -190,7 +190,7 @@ const cancelBtnStyle: CSSProperties = {
   borderRadius: '50%',
   border: '1px solid rgba(255,107,107,0.35)',
   background: 'transparent',
-  color: '#ff6b6b',
+  color: 'var(--danger)',
   display: 'grid',
   placeItems: 'center',
   cursor: 'pointer',

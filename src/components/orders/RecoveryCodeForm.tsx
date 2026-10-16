@@ -61,7 +61,7 @@ export default function RecoveryCodeForm() {
         style={inputStyle}
       />
       {error && (
-        <p role="alert" style={{ margin: 0, color: '#ff6b6b', fontSize: '0.82rem', textAlign: 'center' }}>
+        <p role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: '0.82rem', textAlign: 'center' }}>
           {error}
         </p>
       )}

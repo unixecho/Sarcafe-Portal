@@ -23,7 +23,7 @@
 .native-app[data-staff-theme='neon'] {
   background: radial-gradient(120% 50% at 100% 0%, rgba(255, 122, 69, 0.16), rgba(255, 122, 69, 0) 62%), radial-gradient(90% 40% at 0% 100%, rgba(87, 217, 192, 0.06), rgba(87, 217, 192, 0) 60%), var(--bg);
 }
-[data-staff-theme='neon'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) {
+[data-staff-theme='neon'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card, .dashboard-branch-hub) {
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 42%), var(--bg-elev);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
@@ -72,7 +72,7 @@
     radial-gradient(circle at 86% 15%, rgba(255, 190, 140, 0.38) 0 26px, rgba(255, 190, 140, 0) 34px),
     var(--bg);
 }
-[data-staff-theme='glass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) {
+[data-staff-theme='glass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card, .dashboard-branch-hub) {
   border-radius: 28px; border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.07);
   -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
@@ -127,7 +127,7 @@
   background-image: radial-gradient(110% 36% at 50% 0%, rgba(255, 122, 69, 0.14), rgba(255, 122, 69, 0) 70%), linear-gradient(rgba(253, 246, 236, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(253, 246, 236, 0.04) 1px, transparent 1px);
   background-size: auto, 26px 26px, 26px 26px;
 }
-[data-staff-theme='pass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border-radius: 14px; border-color: var(--line-strong); background: rgba(20, 13, 10, 0.86); box-shadow: none; }
+[data-staff-theme='pass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card, .dashboard-branch-hub) { border-radius: 14px; border-color: var(--line-strong); background: rgba(20, 13, 10, 0.86); box-shadow: none; }
 [data-staff-theme='pass'] .app-group:has(> .app-row--soon) { border-style: dashed; border-color: rgba(253, 246, 236, 0.26); background: transparent; }
 [data-staff-theme='pass'] .app-row__icon, [data-staff-theme='pass'] .app-push__icon { border-radius: 9px; }
 [data-staff-theme='pass'] .app-row__soon { border-radius: 6px; border-style: solid; }
@@ -135,9 +135,9 @@
 [data-staff-theme='pass'] .app-header__icon { border-radius: 10px; background: transparent; }
 [data-staff-theme='pass'] .app-header .app-header__signout { border-radius: 10px !important; background: transparent !important; }
 [data-staff-theme='pass'] .app-header__home { border-color: var(--neon); background: rgba(255, 122, 69, 0.1); box-shadow: 0 0 16px rgba(255, 122, 69, 0.3); }
-[data-staff-theme='pass'] .app-header__title { font-family: var(--pass-mono); font-size: 0.95rem; letter-spacing: 0.1em; }
+[data-staff-theme='pass'] .app-header__title { font-family: var(--pass-mono); font-size: 0.95rem; letter-spacing: 0.02em; }
 [data-staff-theme='pass'] .app-welcome h2 { font-size: clamp(2rem, 9vw, 2.4rem); font-weight: 700; letter-spacing: -0.04em; }
-[data-staff-theme='pass'] .app-welcome p { font-family: var(--pass-mono); font-size: 0.74rem; letter-spacing: 0.1em; color: var(--neon-soft); }
+[data-staff-theme='pass'] .app-welcome p { font-size: 0.86rem; font-weight: 600; color: var(--neon-soft); }
 [data-staff-theme='pass'] .app-notifications__count { font-family: var(--pass-mono); border-radius: 6px; }
 [data-staff-theme='pass'] .app-notice time { font-family: var(--pass-mono); }
 /* the shift is a boarding pass: route line, a perforation, numbered checklists, a barcode, the schedule at the bottom */
@@ -175,10 +175,11 @@
   --ok: #0b7a45; --warn: #8a5a00; --danger: #b42318;
   --ok-bg: #dcf1e4; --warn-bg: #f9ebc8; --danger-bg: #fadcd6;
   --glow: 3px 4px 0 rgba(38, 21, 13, 0.9); --paper: rgba(38, 21, 13, 0.04);
+  --glass: rgba(255, 249, 238, 0.8); --glass-strong: rgba(255, 249, 238, 0.94);
 }
 .native-app[data-staff-theme='crema'] { background: var(--bg); }
 .native-app[data-staff-theme='crema']::after { content: ''; position: fixed; z-index: 400; top: 0; inset-inline: 0; height: env(safe-area-inset-top, 0px); background: #26150d; pointer-events: none; }
-[data-staff-theme='crema'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border: 2px solid #26150d; border-radius: 24px; background: var(--bg-elev); box-shadow: 4px 5px 0 #26150d; }
+[data-staff-theme='crema'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card, .dashboard-branch-hub) { border: 2px solid #26150d; border-radius: 24px; background: var(--bg-elev); box-shadow: 4px 5px 0 #26150d; }
 [data-staff-theme='crema'] .app-group:has(> .app-row--soon) { border: 0; box-shadow: none; background: transparent; }
 [data-staff-theme='crema'] .app-notice + .app-notice, [data-staff-theme='crema'] .app-row + .app-row::before { border-color: rgba(38, 21, 13, 0.18); }
 [data-staff-theme='crema'] .app-header { border: 2px solid #26150d; border-radius: 26px; background: var(--bg-elev); box-shadow: 3px 4px 0 #26150d; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -224,11 +225,12 @@
   --line: rgba(58, 33, 27, 0.11); --line-strong: rgba(58, 33, 27, 0.2); --line-interactive: rgba(58, 33, 27, 0.56);
   --ok: #1f7a48; --warn: #8a5a00; --danger: #b42318;
   --ok-bg: #e0f3e6; --warn-bg: #fbefd0; --danger-bg: #fbe0dc;
-  --glow: 0 6px 18px rgba(242, 122, 156, 0.35); --paper: rgba(58, 33, 27, 0.04);
+  --glow: 0 6px 18px rgba(228, 95, 135, 0.35); --paper: rgba(58, 33, 27, 0.04);
+  --glass: rgba(255, 247, 243, 0.8); --glass-strong: rgba(255, 247, 243, 0.94);
 }
 .native-app[data-staff-theme='latte'] { background: radial-gradient(90% 40% at 100% 0%, rgba(242, 122, 156, 0.2), rgba(242, 122, 156, 0) 70%), radial-gradient(80% 36% at 0% 100%, rgba(255, 196, 160, 0.3), rgba(255, 196, 160, 0) 70%), var(--bg); }
 .native-app[data-staff-theme='latte']::after { content: ''; position: fixed; z-index: 400; top: 0; inset-inline: 0; height: env(safe-area-inset-top, 0px); background: #3a211b; pointer-events: none; }
-[data-staff-theme='latte'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border: 1.5px solid rgba(242, 122, 156, 0.38); border-radius: 30px; background: var(--bg-elev); box-shadow: 0 10px 28px rgba(224, 80, 124, 0.14); }
+[data-staff-theme='latte'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card, .dashboard-branch-hub) { border: 1.5px solid rgba(242, 122, 156, 0.38); border-radius: 30px; background: var(--bg-elev); box-shadow: 0 10px 28px rgba(224, 80, 124, 0.14); }
 [data-staff-theme='latte'] .app-group:has(> .app-row--soon) { border: 0; box-shadow: none; background: transparent; }
 [data-staff-theme='latte'] .app-header { border: 1.5px solid rgba(242, 122, 156, 0.45); border-radius: 999px; background: color-mix(in srgb, var(--bg-elev) 92%, transparent); box-shadow: 0 10px 26px rgba(224, 80, 124, 0.18); }
 [data-staff-theme='latte'] .app-header__icon { border-radius: 50%; background: #fff; border-color: rgba(242, 122, 156, 0.4); }
@@ -269,6 +271,23 @@
 [data-staff-theme='latte'] .lens-tab[aria-selected='true'], [data-staff-theme='latte'] .bm-tab[aria-selected='true'], [data-staff-theme='latte'] .bm-slide[aria-current='page'] { background: var(--neon); }
 [data-staff-theme='latte'] .ck-progress > span, [data-staff-theme='latte'] .bm-progress span { background: var(--neon); }
 
+/* ---- the light looks: screens that were drawn dark on purpose. A hero or a toast stays a dark island (with the default dark tokens inside),
+   and the few pastel-on-dark status colours get dark versions. Everything else already follows the tokens. ---- */
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) :is(.ew-hero, .sch-toast) {
+  --bg: #221712; --bg-elev: #2e1f18; --bg-elev-2: #38261d;
+  --neon: #ff7a45; --neon-soft: #ffab7a; --neon-2: #57d9c0; --on-neon: #110b08;
+  --text: #fdf6ec; --text-dim: #c8bbad; --text-faint: #b3a699;
+  --ok: #6ee7a0; --warn: #ffc857; --danger: #ff6b6b;
+  --line: rgba(253, 246, 236, 0.09); --line-strong: rgba(253, 246, 236, 0.15); --line-interactive: rgba(253, 246, 236, 0.42);
+  color: var(--text);
+}
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .ew-hero { box-shadow: 0 14px 32px rgba(38, 21, 13, 0.28); }
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-pill--swap { color: #5b3fb0; }
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-availability-day--available, :is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-availability-day--prefer { color: #14663a; }
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-availability-day--unavailable { color: #a1281c; }
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-availability-day--partial { color: #7a4b00; }
+:is([data-staff-theme='crema'], [data-staff-theme='latte']) .sch-availability-note { color: #4c3a96; }
+
 /* ---- two small tiles for "coming soon" (neon, crema, latte): a bento pair instead of a list ---- */
 :is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-group:has(> .app-row--soon) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
 :is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-row--soon { flex-direction: column; align-items: flex-start; min-height: 0; padding: 16px; gap: 10px; border: 1px solid var(--line); border-radius: 22px; background: var(--bg-elev); }
@@ -308,3 +327,29 @@
 .tp[data-staff-theme='latte'] .tp__pill { background: #fff7f3; color: #1d6b43; }
 .tp[data-staff-theme='latte'] .tp__bar { background: rgba(255, 255, 255, 0.75); }
 .tp[data-staff-theme='latte'] .tp__cta { border-radius: 999px; }
+
+/* ---- the change itself (theme-transition.ts): a circle grows from the tapped card and reveals the new look, a ring rides its edge, the
+   look's own shapes burst out, the cards settle in. All motion is here, and only for people who have not asked for less. ---- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes theme-reveal {
+    from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); }
+    to { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  }
+  html[data-theme-vt]::view-transition-old(root), html[data-theme-vt]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  html[data-theme-vt]::view-transition-old(root) { z-index: 1; }
+  html[data-theme-vt]::view-transition-new(root) { z-index: 2; animation: theme-reveal 760ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  /* the ring and the burst are their own layer, drawn above both pictures and shown the moment they exist */
+  html[data-theme-vt]::view-transition-group(theme-fx) { animation: none; z-index: 9; }
+  html[data-theme-vt]::view-transition-old(theme-fx) { display: none; }
+  html[data-theme-vt]::view-transition-new(theme-fx) { animation: none; }
+  /* browsers without view transitions: every colour glides */
+  html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after {
+    transition: background-color 700ms ease, color 700ms ease, border-color 700ms ease, box-shadow 700ms ease, fill 700ms ease, stroke 700ms ease !important;
+  }
+  /* the picker: a card lifts when pressed, the chosen one settles with a pop */
+  .sp__item { transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 200ms ease, box-shadow 260ms ease, background-color 400ms ease, color 400ms ease; }
+  .sp__item:active { transform: scale(0.97); }
+  .sp__item[aria-checked='true'] { transform: scale(1.012); }
+  @keyframes sp-pop { 0% { transform: scale(0) rotate(-40deg); } 60% { transform: scale(1.3) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+  .sp__check { animation: sp-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+}

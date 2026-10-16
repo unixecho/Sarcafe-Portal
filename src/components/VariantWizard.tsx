@@ -324,7 +324,7 @@ export default function VariantWizard({ open, onClose, branchSlug, draft, onCrea
             </div>
 
             {error && (
-              <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.8rem', margin: '8px 0 0' }}>
+              <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.8rem', margin: '8px 0 0' }}>
                 {error}
               </p>
             )}

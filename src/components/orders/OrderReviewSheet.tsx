@@ -84,7 +84,7 @@ export default function OrderReviewSheet({
       </div>
 
       {error && (
-        <p role="alert" style={{ margin: '10px 0 0', color: '#ff6b6b', fontSize: '0.85rem' }}>
+        <p role="alert" style={{ margin: '10px 0 0', color: 'var(--danger)', fontSize: '0.85rem' }}>
           {error}
         </p>
       )}

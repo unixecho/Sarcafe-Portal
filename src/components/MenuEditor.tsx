@@ -534,7 +534,7 @@ export default function MenuEditor({ branchSlug, branchLabel }: { branchSlug: st
           role="status"
           style={{
             fontSize: '0.8rem',
-            color: status === 'error' ? '#ff6b6b' : dirty ? 'var(--neon-soft)' : 'var(--text-faint)',
+            color: status === 'error' ? 'var(--danger)' : dirty ? 'var(--neon-soft)' : 'var(--text-faint)',
           }}
         >
           {status === 'saving' ? 'שומר…' : status !== 'idle' ? statusMessage : dirty ? 'יש שינויים שלא נשמרו' : 'נשמר'}

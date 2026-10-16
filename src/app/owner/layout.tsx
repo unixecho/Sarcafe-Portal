@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import StaffInstallIntro from '@/components/staff/StaffInstallIntro'
-import AppMotion from '@/components/app/AppMotion'
+import ThemedApp from '@/components/app/ThemedApp'
+import { resolveStaffIdentity } from '@/lib/staff/session'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata: Metadata = {
@@ -9,6 +10,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'Sarcafe צוות', statusBarStyle: 'black-translucent' },
 }
 
-export default function OwnerLayout({ children }: { children: React.ReactNode }) {
-  return <AppMotion className={GeistSans.variable}><StaffInstallIntro />{children}</AppMotion>
+// The owner and manager pages wear the same look the person chose for the staff app (src/lib/staff/theme.ts): one choice, the whole panel.
+export default async function OwnerLayout({ children }: { children: React.ReactNode }) {
+  const me = await resolveStaffIdentity().catch(() => null)
+  return <ThemedApp staffId={me?.id} className={GeistSans.variable}><StaffInstallIntro />{children}</ThemedApp>
 }

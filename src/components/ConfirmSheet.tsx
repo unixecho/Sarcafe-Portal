@@ -94,7 +94,7 @@ export default function ConfirmSheet({ request, onConfirm, onCancel }: ConfirmSh
                 fontWeight: 700,
                 fontSize: '0.95rem',
                 cursor: 'pointer',
-                color: shown.danger ? '#ff6b6b' : 'var(--bg)',
+                color: shown.danger ? 'var(--danger)' : 'var(--bg)',
                 background: shown.danger ? 'transparent' : 'var(--neon)',
               }}
             >

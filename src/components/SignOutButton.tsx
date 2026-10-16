@@ -62,7 +62,7 @@ export default function SignOutButton({ className, label }: { className?: string
         <LogOut size={label ? 17 : 16} strokeWidth={2} aria-hidden="true" />{label}
       </button>
       {error && (
-        <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: 6 }}>
+        <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: 6 }}>
           {error}
         </p>
       )}

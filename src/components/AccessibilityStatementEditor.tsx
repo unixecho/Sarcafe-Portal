@@ -78,7 +78,7 @@ export default function AccessibilityStatementEditor({ initial }: { initial: Acc
         >
           {status === 'saving' ? 'שומר…' : 'שמירה'}
         </button>
-        <span role="status" style={{ fontSize: '0.82rem', color: status === 'error' ? '#ff6b6b' : 'var(--text-faint)' }}>
+        <span role="status" style={{ fontSize: '0.82rem', color: status === 'error' ? 'var(--danger)' : 'var(--text-faint)' }}>
           {status === 'saved' ? 'נשמר ✓' : status === 'error' ? 'שגיאה בשמירה' : ''}
         </span>
         <a

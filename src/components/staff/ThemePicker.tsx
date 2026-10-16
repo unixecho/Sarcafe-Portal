@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { Check } from 'lucide-react'
 import { haptic } from '@/lib/haptics'
 import { THEMES, type StaffTheme } from '@/lib/staff/theme'
-import { THEME_EVENT } from '@/components/staff/ThemeScope'
+import { transitionTheme } from '@/lib/staff/theme-transition'
 import '@/components/app/staff-themes.css'
 import '@/components/staff/style-picker.css'
 
@@ -38,9 +38,12 @@ export default function ThemePicker({ value, onSelect, label = 'סגנון הא�
     document.head.appendChild(link)
   }, [])
 
-  function choose(id: StaffTheme) {
-    haptic('select')
-    window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: id }))
+  // The look changes from where the person tapped: a circle grows from the card, a ring rides its edge, the look's own shapes burst out
+  // and the cards of the page settle in (theme-transition.ts). Less motion asked for: it just changes.
+  function choose(id: StaffTheme, card: HTMLElement) {
+    haptic('impact')
+    const box = card.getBoundingClientRect()
+    transitionTheme(id, { x: box.left + box.width / 2, y: box.top + box.height / 2 })
     onSelect(id)
   }
 
@@ -49,7 +52,7 @@ export default function ThemePicker({ value, onSelect, label = 'סגנון הא�
       {THEMES.map((item) => {
         const on = value === item.id
         return (
-          <button key={item.id} type="button" role="radio" aria-checked={on} className="sp__item press" onClick={() => choose(item.id)}>
+          <button key={item.id} type="button" role="radio" aria-checked={on} className="sp__item press" onClick={(event) => choose(item.id, event.currentTarget)}>
             <span className="sp__thumb"><Miniature id={item.id} /></span>
             <span className="sp__copy">
               <span className="sp__name">{item.name}<span className="sp__mode">{item.mode === 'light' ? 'בהיר' : 'כהה'}</span>{on && <span className="sp__check"><Check size={14} strokeWidth={3} aria-hidden="true" /></span>}</span>

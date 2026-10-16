@@ -162,7 +162,7 @@ export default function TempMenuSheet({ open, onClose, initialUntil, initialExpi
                 borderRadius: 14,
                 border: '1px solid var(--line-strong)',
                 background: 'var(--bg-elev)',
-                color: '#ff6b6b',
+                color: 'var(--danger)',
                 fontWeight: 600,
                 cursor: 'pointer',
               }}

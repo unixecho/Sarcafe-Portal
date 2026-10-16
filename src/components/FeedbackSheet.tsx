@@ -278,7 +278,7 @@ const sentBody: CSSProperties = { margin: '0 0 8px', fontSize: '0.9rem', color: 
 const legend: CSSProperties = { padding: 0, marginBottom: 8, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-dim)' }
 const label: CSSProperties = { display: 'block', marginBottom: 6, fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-dim)' }
 const hint: CSSProperties = { margin: '6px 2px 0', fontSize: '0.73rem', color: 'var(--text-faint)', lineHeight: 1.5 }
-const errorText: CSSProperties = { margin: 0, color: '#ff6b6b', fontSize: '0.82rem', lineHeight: 1.5 }
+const errorText: CSSProperties = { margin: 0, color: 'var(--danger)', fontSize: '0.82rem', lineHeight: 1.5 }
 const choice: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

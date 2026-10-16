@@ -53,14 +53,14 @@ const T = {
 const PAGE = 30
 
 const CATEGORY_META: Record<FeedbackCategory, { label: string; emoji: string; color: string }> = {
-  business: { label: T.business, emoji: '☕', color: '#ff8a5c' },
-  technical: { label: T.technical, emoji: '🛠️', color: '#57d9c0' },
+  business: { label: T.business, emoji: '☕', color: 'var(--neon-soft)' },
+  technical: { label: T.technical, emoji: '🛠️', color: 'var(--neon-2)' },
 }
 
 const STATUS_META: Record<FeedbackStatus, { label: string; color: string }> = {
-  new: { label: T.new, color: '#ffb240' },
-  read: { label: T.read, color: '#a8a5b0' },
-  resolved: { label: T.resolved, color: '#4ade80' },
+  new: { label: T.new, color: 'var(--warn)' },
+  read: { label: T.read, color: 'var(--text-dim)' },
+  resolved: { label: T.resolved, color: 'var(--ok)' },
 }
 
 function when(iso: string): string {
@@ -257,7 +257,7 @@ export default function FeedbackInbox({ branches, initialBranch }: { branches: B
       </div>
 
       {err && (
-        <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.82rem', margin: 0, lineHeight: 1.5 }}>
+        <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.82rem', margin: 0, lineHeight: 1.5 }}>
           {err}
         </p>
       )}
@@ -368,7 +368,7 @@ function FeedbackCard({
             className="press"
             disabled={busy}
             onClick={() => onSetStatus('resolved')}
-            style={{ ...actionBtn, color: '#4ade80', borderColor: 'rgba(74,222,128,0.35)' }}
+            style={{ ...actionBtn, color: 'var(--ok)', borderColor: 'rgba(74,222,128,0.35)' }}
           >
             {T.markResolved}
           </button>

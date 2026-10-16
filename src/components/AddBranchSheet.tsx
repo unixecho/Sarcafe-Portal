@@ -224,7 +224,7 @@ export default function AddBranchSheet({ open, onClose, onCreated, permanentOnly
             style={inputStyle}
           />
           {slug && !validSlug && (
-            <span style={{ fontSize: '0.74rem', color: '#ff8a5c' }}>אותיות אנגליות, מספרים ומקף בלבד.</span>
+            <span style={{ fontSize: '0.74rem', color: 'var(--neon-soft)' }}>אותיות אנגליות, מספרים ומקף בלבד.</span>
           )}
         </label>
 
@@ -250,7 +250,7 @@ export default function AddBranchSheet({ open, onClose, onCreated, permanentOnly
         )}
 
         {error && (
-          <p role="alert" style={{ margin: 0, color: '#ff6b6b', fontSize: '0.82rem' }}>
+          <p role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: '0.82rem' }}>
             {error}
           </p>
         )}

@@ -60,7 +60,7 @@ export default function NoAccessPage() {
               background: 'rgba(255,107,107,0.14)',
               display: 'grid',
               placeItems: 'center',
-              color: '#ff6b6b',
+              color: 'var(--danger)',
             }}
           >
             <ShieldAlert size={24} strokeWidth={2} />

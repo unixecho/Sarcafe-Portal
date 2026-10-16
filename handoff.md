@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-10-17 (latest): the looks travel through the whole panel, a professional change animation — pushed to `main`
+
+**Asked by the owner.** (1) Make switching looks look professional: colours and everything change with animation and effects. (2) The looks must reach `/crew` and the owner dashboard, "throughout the panel". (3) Push to main; if the Supabase write is not allowed, bring up the tool permission.
+
+**Done** (`docs/STAFF_THEMES.md`). `ThemedApp` wraps `/staff`, `/owner` and `/crew` (new `src/app/crew/layout.tsx`, owner layout now async). `theme-transition.ts`: view-transition circle reveal from the tapped card, a ring on its edge, a burst per look (sparks, bokeh, ticket confetti, coffee beans, hearts), staggered settle of the page's cards, a colour-glide fallback, instant when less motion is asked for. Light looks repaired on screens drawn dark (employee schedule hero and toast are dark islands; availability and swap pastels darkened); 27 components' `#ff6b6b` became `var(--danger)`; pass look no longer letter-spaces Hebrew; owner dashboard has the "מראה האפליקציה" row; `--glass` tokens for the light looks (the `/crew` card). `check:staff-themes` 170.
+
+**Verification.** `tsc` clean; all the usual checks pass (see the commit). In headless Edge (real view transitions) against a scratch dev server: the real transition neon → latte (frames show the circle and hearts; ends with the attribute on `<html>` and the wrapper, flag, variables and effects layer all cleaned up, no page errors), reduced motion (instant, no layer), the no-view-transition fallback (glide class + ring + 19 particles, all gone after 2.3 s), `/crew` in all five looks from the device cookie. Synthetic-data renders of the owner dashboard, employee file, payslips, manager week board and employee schedule in all five looks. **Not verified:** a real session (saving, wizard step, owner pages with real data: menu editor, branch manager, owner POS, checklists tracker in the light looks), a real iPhone (view-transition support needs iOS 18; older iPhones get the glide; status-bar band; the clip-path reveal's smoothness; `:has()` bento), the POS (not themed on purpose).
+
 ## Claude addendum, 2026-10-17 (later): five looks for the staff app, chosen per person at account creation — committed locally, NOT pushed, migration `20261017120000` NOT applied
 
 **Asked by the owner.** The staff dashboard "screams 2016"; after four design directions (canvas: https://claude.ai/artifact/Jj8LJYUKcJ1dcFu5T2XS4v) the owner asked to build all four, let each user choose upon account creation, and add a fifth that is girly and coffee-like.

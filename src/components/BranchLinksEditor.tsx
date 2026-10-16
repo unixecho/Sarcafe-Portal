@@ -76,7 +76,7 @@ export default function BranchLinksEditor({ branchId, initialLinks }: { branchId
       {notice && (
         <p
           role={notice.type === 'error' ? 'alert' : 'status'}
-          style={{ margin: 0, fontSize: '0.8rem', color: notice.type === 'error' ? '#ff6b6b' : 'var(--neon-2)' }}
+          style={{ margin: 0, fontSize: '0.8rem', color: notice.type === 'error' ? 'var(--danger)' : 'var(--neon-2)' }}
         >
           {notice.text}
         </p>

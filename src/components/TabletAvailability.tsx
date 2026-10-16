@@ -328,7 +328,7 @@ export default function TabletAvailability({ branchSlug, isOwner }: { branchSlug
             borderRadius: 'var(--radius-lg)',
             background: 'rgba(255,138,92,0.12)',
             border: '1px solid rgba(255,138,92,0.35)',
-            color: '#ff8a5c',
+            color: 'var(--neon-soft)',
             fontSize: '0.88rem',
             fontWeight: 600,
           }}
@@ -925,7 +925,7 @@ function QuantityStepper({ value, disabled, onChange }: { value: number | undefi
           fontSize: '1.1rem',
           fontWeight: 700,
           fontVariantNumeric: 'tabular-nums',
-          color: value === undefined ? 'var(--text-faint)' : n === 0 ? '#ff6b6b' : 'var(--text)',
+          color: value === undefined ? 'var(--text-faint)' : n === 0 ? 'var(--danger)' : 'var(--text)',
         }}
       >
         {value ?? '—'}

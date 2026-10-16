@@ -344,7 +344,7 @@ function CatalogItemRow({
       <span style={{ flex: 1, textAlign: 'start' }}>{item.he || 'פריט'}</span>
 
       {soldOut ? (
-        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ff6b6b' }}>אזל</span>
+        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger)' }}>אזל</span>
       ) : (
         <>
           {!quickAddEligible && item.price != null && item.price !== '' && (
