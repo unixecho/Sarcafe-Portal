@@ -5,11 +5,11 @@ import { ApiError } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { resolveStaffIdentity } from '@/lib/staff/session'
-import { credentialRoute, GOOGLE_LINK_COOKIE, limitInvitation, newToken, ONBOARDING_HEADERS, setLinkCookie, tokenHash } from '@/lib/staff/invitations'
+import { credentialRoute, GOOGLE_LINK_COOKIE, limitInvitation, newToken, ONBOARDING_HEADERS, setBackCookie, setLinkCookie, tokenHash } from '@/lib/staff/invitations'
 
 const schema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('prepare'), passcode: z.string().regex(/^\d{6}$/) }).strict(),
-  z.object({ action: z.literal('start') }).strict(),
+  z.object({ action: z.literal('start'), back: z.literal('onboarding').optional() }).strict(),
 ])
 
 export const POST = credentialRoute(async (request: NextRequest) => {
@@ -38,5 +38,8 @@ export const POST = credentialRoute(async (request: NextRequest) => {
     redirectTo: `${origin}/auth/callback?link=${tokenHash(proof)}`, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' },
   } })
   if (oauthError || !oauth.url) throw new ApiError(503, 'unavailable', 'לא הצלחנו לפתוח Google. נסו שוב.')
-  return NextResponse.json({ url: oauth.url }, { headers: ONBOARDING_HEADERS })
+  const response = NextResponse.json({ url: oauth.url }, { headers: ONBOARDING_HEADERS })
+  // The wizard asks to be returned to: remembered in an HttpOnly cookie (Google's return URL stays exactly as it was).
+  if (body.back === 'onboarding') setBackCookie(response)
+  return response
 })

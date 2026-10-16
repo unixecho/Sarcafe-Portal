@@ -309,3 +309,39 @@
 @media (prefers-reduced-motion: reduce) { .app-shiftcard__pulse { animation: none; } }
 
 .app-install__home { margin: 0 0 12px; color: var(--text-dim); font-size: .9rem; line-height: 1.7; }
+
+/* ---- Dashboards, 2026-10-16: the two cards an owner opens most, and the developer's lens tabs ---- */
+.app-attention { display: grid; grid-template-columns: 1fr; gap: 10px; margin-block: 0 24px; }
+@media (min-width: 640px) { .app-attention { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.app-attention__card { display: flex; align-items: center; gap: 13px; min-height: 84px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); color: var(--text); text-decoration: none; -webkit-tap-highlight-color: transparent; transition: background 160ms var(--ease), border-color 160ms var(--ease); }
+.app-attention__card:active { background: var(--bg-elev-2); }
+.app-attention__card--warn { border-color: color-mix(in srgb, var(--warn, #fbbf24) 55%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--warn, #fbbf24) 12%, transparent), transparent 60%), var(--bg-elev); }
+.app-attention__icon { flex: 0 0 46px; height: 46px; display: grid; place-items: center; border-radius: 15px; color: var(--neon-soft); background: color-mix(in srgb, var(--neon) 11%, var(--bg-elev-2)); }
+.app-attention__card--warn .app-attention__icon { color: var(--warn, #fbbf24); background: color-mix(in srgb, var(--warn, #fbbf24) 14%, var(--bg-elev-2)); }
+.app-attention__copy { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.app-attention__copy strong { font-size: .95rem; font-weight: 700; line-height: 1.4; }
+.app-attention__copy small { font-size: .78rem; color: var(--text-dim); line-height: 1.5; }
+@media (hover: hover) and (pointer: fine) { .app-attention__card:hover { background: var(--bg-elev-2); } }
+
+.lens-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 17px; background: var(--bg-elev); border: 1px solid var(--line); position: sticky; top: 8px; z-index: 20; margin-block: 0 18px; }
+.lens-tab { flex: 1; min-height: 46px; padding: 8px 6px; border: 0; border-radius: 13px; background: transparent; color: var(--text-dim); font: inherit; font-size: .86rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .25s var(--ease), color .25s var(--ease); }
+.lens-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); }
+.lens-panel { display: flex; flex-direction: column; outline: none; }
+.dev-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; margin-block: 0 18px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); }
+.dev-card h2 { margin: 0; font-size: .98rem; font-weight: 700; }
+.dev-card > p { margin: 0; font-size: .78rem; color: var(--text-faint); line-height: 1.55; }
+.dev-health { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dev-health li { display: flex; gap: 10px; align-items: flex-start; }
+.dev-health__dot { width: 9px; height: 9px; border-radius: 999px; margin-top: 7px; flex: 0 0 auto; background: var(--text-faint); }
+.dev-health__dot--ok { background: #4ade80; }
+.dev-health__dot--warn { background: #fbbf24; }
+.dev-health__dot--bad { background: #ff6b6b; }
+.dev-health strong { display: block; font-size: .86rem; }
+.dev-health small { display: block; font-size: .76rem; color: var(--text-dim); line-height: 1.5; overflow-wrap: anywhere; }
+.dev-legend { display: grid; gap: 8px; }
+.dev-legend span { display: flex; align-items: baseline; gap: 8px; font-size: .8rem; color: var(--text-dim); }
+.dev-legend b { color: var(--text); white-space: nowrap; }
+
+.lens-greeting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-block: 2px 12px; }
+.lens-greeting strong { font-size: 1.2rem; font-weight: 800; }
+.lens-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 11px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--neon) 40%, var(--line)); background: color-mix(in srgb, var(--neon) 10%, transparent); color: var(--neon-soft); font-size: .76rem; font-weight: 700; }

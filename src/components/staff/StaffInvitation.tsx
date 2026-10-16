@@ -1,29 +1,55 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Copy, Link2, RefreshCw, X } from 'lucide-react'
+import { Check, Copy, Link2, MessageSquare, RefreshCw, Share2, X } from 'lucide-react'
 import { InlineError } from '@/components/shifts/ui'
 import { messageOf } from '@/components/staff/types'
+import { expiryLabel, shareLinks, shareText } from '@/lib/staff/onboarding-wizard'
+import { haptic } from '@/lib/haptics'
 
 export type GeneratedInvitation = { url: string; expiresAt: string }
 
-export function InvitationLink({ invitation }: { invitation: GeneratedInvitation }) {
-  const [copied, setCopied] = useState(false)
+export function InvitationLink({ invitation, firstName = null }: { invitation: GeneratedInvitation; firstName?: string | null }) {
+  const [copied, setCopied] = useState<false | 'link' | 'message'>(false)
   const [error, setError] = useState<string | null>(null)
+  const [canShare, setCanShare] = useState(false)
   useEffect(() => { setCopied(false); setError(null) }, [invitation.url])
+  useEffect(() => { setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function') }, [])
+  const text = shareText(firstName, invitation.url)
+  const links = shareLinks(text)
   return <div className="sch-block" style={{ gap: 12 }}>
-    <p className="sch-sub" style={{ color: 'var(--text)', margin: 0 }}>שלחו את הקישור לעובד/ת. הוא מאפשר לבחור קוד אישי ולקשר חשבון Google.</p>
+    <p className="sch-sub" style={{ color: 'var(--text)', margin: 0 }}>שלחו את הקישור{firstName ? ` ל${firstName}` : ' לעובד/ת'}. בלחיצה עליו בוחרים קוד אישי, מקשרים חשבון Google (אפשר גם אחר כך) ורואים סיור קצר באפליקציה.</p>
     <label>
       <span className="sch-label">קישור אישי להגדרת החשבון</span>
       <input className="sch-input" dir="ltr" readOnly value={invitation.url} aria-label="קישור הזמנה אישי" onFocus={(event) => event.currentTarget.select()} style={{ fontSize: '.8rem' }} />
     </label>
-    <button type="button" className="sch-btn sch-btn--primary press" onClick={async () => {
-      try { await navigator.clipboard.writeText(invitation.url); setCopied(true); setError(null) }
+    {/* The way the link is meant to travel: the phone's own share sheet (WhatsApp and the rest), always offered. On a browser
+        without one, the whole message is copied instead, so the button is never a dead end. */}
+    <button type="button" className="sch-btn sch-btn--primary press" style={{ minHeight: 52 }} onClick={async () => {
+      haptic('select')
+      setError(null)
+      if (canShare) {
+        // `text` already ends with the link: passing the link as well made WhatsApp print it twice.
+        try { await navigator.share({ title: 'הצטרפות לצוות Sarcafe', text }) } catch { /* cancelled */ }
+        return
+      }
+      try { await navigator.clipboard.writeText(text); setCopied('message'); setError(null) }
       catch { setError('לא הצלחנו להעתיק. אפשר לבחור ולהעתיק את הקישור מהשדה למעלה.') }
-    }}><span aria-hidden="true">{copied ? <Check size={18} /> : <Copy size={18} />}</span>{copied ? 'הקישור הועתק' : 'העתקת הקישור'}</button>
-    <p className="sch-sub" style={{ margin: 0 }}>שימוש חד פעמי · בתוקף עד {new Date(invitation.expiresAt).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}. שמרו אותו לפני הסגירה.</p>
+    }}><span aria-hidden="true">{copied === 'message' ? <Check size={18} /> : <Share2 size={18} />}</span>{copied === 'message' ? 'ההודעה הועתקה, אפשר להדביק' : 'שיתוף'}</button>
+    <div className="sch-wrapflex">
+      <button type="button" className="sch-btn press" style={{ flex: 1 }} onClick={async () => {
+        try { await navigator.clipboard.writeText(invitation.url); setCopied('link'); setError(null) }
+        catch { setError('לא הצלחנו להעתיק. אפשר לבחור ולהעתיק את הקישור מהשדה למעלה.') }
+      }}><span aria-hidden="true">{copied === 'link' ? <Check size={17} /> : <Copy size={17} />}</span>{copied === 'link' ? 'הקישור הועתק' : 'העתקת הקישור'}</button>
+      <a className="sch-btn press" href={links.sms} style={{ flex: 1, textDecoration: 'none' }} onClick={() => haptic('select')}><MessageSquare size={17} aria-hidden="true" />שליחה בהודעה</a>
+    </div>
+    <ul className="sch-sub" style={{ margin: 0, paddingInlineStart: 18, display: 'grid', gap: 4 }}>
+      <li>הקישור פעיל עד {expiryLabel(invitation.expiresAt)} ונשרף אחרי שימוש אחד.</li>
+      <li>הקישור מוצג רק עכשיו. אם הוא אבד, צרו קישור חדש והקודם יפסיק לעבוד.</li>
+      <li>הוא מחבר רק את הכרטיס הזה, ולא נותן הרשאות ניהול.</li>
+    </ul>
     {error && <InlineError>{error}</InlineError>}
-    <span className="sr-only" role="status">{copied ? 'הקישור הועתק' : ''}</span>
+    <span className="sr-only" role="status">{copied === 'link' ? 'הקישור הועתק' : copied === 'message' ? 'ההודעה הועתקה' : ''}</span>
   </div>
 }
 

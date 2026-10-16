@@ -181,7 +181,7 @@ check('turning off an ORDER alert never kills the browser subscription staff ale
 const ownerDash = read('src/app/owner/dashboard/page.tsx')
 check(
   'the card is on the staff home, both owner dashboard views and the onboarding wizard',
-  /<StaffPushCard/.test(read('src/app/staff/page.tsx')) && (ownerDash.match(/<StaffPushCard/g) ?? []).length === 2 && /<StaffPushCard variant="wizard"/.test(read('src/components/staff/StaffOnboarding.tsx'))
+  /<StaffPushCard/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && (ownerDash.match(/<StaffPushCard/g) ?? []).length === 1 && /<StaffPushCard/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /<StaffPushCard variant="wizard"/.test(read('src/components/staff/StaffTour.tsx')) && /<SetupGate/.test(read('src/components/staff/StaffOnboarding.tsx'))
 )
 const dispatch = read('src/app/api/shifts/dispatch/route.ts')
 check('request-driven writes push what they just notified', /after\(async \(\) => \{[\s\S]*await flushStaffPush\(\)/.test(dispatch))
@@ -195,7 +195,7 @@ check('the checklist alerts name their exact checklist: the employee\'s and the 
 check('a checklist an owner dismissed is not asked for again: the reminder writer skips it before every alert', /manager_resolved_at/.test(rem) && /&& !a\.manager_resolved_at/.test(rem))
 const push = read('src/lib/push/staff.ts')
 check('the phone push resolves its destination per recipient (manager or not), and a digest goes where all its alerts go', /pushPathFor\(r\.kind, r\.link, recipient\)/.test(push) && /function digestPath/.test(push) && /hasAnyMenuEditAccess/.test(push))
-check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(item\.kind \?\? '', item\.link \?\? null, \{ manager \}\)/.test(read('src/components/app/DashboardNotifications.tsx')) && /kind, title, body, link/.test(read('src/app/staff/page.tsx')) && /kind, title, body, link/.test(read('src/app/owner/dashboard/page.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
+check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(item\.kind \?\? '', item\.link \?\? null, \{ manager \}\)/.test(read('src/components/app/DashboardNotifications.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
 {
   // A checklist link has to survive sign-in: login's `next` only keeps plain path characters (a query would be dropped).
   const L = await load('src/lib/checklists/links.ts', 'links.mjs')
@@ -220,6 +220,16 @@ check('developer test rows are stamped read and go through the real inbox + flus
 const sched = read('supabase/migrations/20261012130000_staff_push_scheduler.sql')
 check('scheduler migration: runs every 2 minutes under a fixed job name, secret from Vault, guarded for databases without the extensions', /cron\.schedule\('staff-push', '\*\/2 \* \* \* \*'/.test(sched) && /vault\.create_secret/.test(sched) && /pg_available_extensions/.test(sched) && !/Bearer [0-9a-f]{20,}/.test(sched))
 check('migration: RLS on, no browser grants', /enable row level security/.test(mig) && /revoke all on public\.staff_push_subscriptions from public, anon, authenticated/.test(mig))
+
+section('who an alert is for: the developer account says so, nobody else does (2026-10-16)')
+check('owner/manager kinds are owner alerts, schedule and checklist reminders are employee alerts, dev.* is developer', R.alertAudience('checklist.gap') === 'owner' && R.alertAudience('issues.digest') === 'owner' && R.alertAudience('timeoff.new') === 'owner' && R.alertAudience('timeoff.wish') === 'owner' && R.alertAudience('availability.note') === 'owner' && R.alertAudience('shift.today') === 'employee' && R.alertAudience('checklist.late') === 'employee' && R.alertAudience('timeoff.decided') === 'employee' && R.alertAudience('dev.health') === 'developer')
+check('the developer sees the audience in front of the title', R.alertTitle('issues.digest', 'חוסרים ופערים: 2 דברים לטיפול', { developer: true }) === 'בעלים · חוסרים ופערים: 2 דברים לטיפול' && R.alertTitle('dev.health', 'בדיקה', { developer: true }) === 'מפתח · בדיקה')
+check('...but an employee alert has no prefix, even for the developer', R.alertTitle('shift.today', 'היום יש לך משמרת', { developer: true }) === 'היום יש לך משמרת')
+check('an owner or an employee gets the title exactly as written', R.alertTitle('issues.digest', 'x', { developer: false }) === 'x' && R.alertTitle('checklist.gap', 'x', null) === 'x' && R.alertTitle('checklist.gap', 'x', undefined) === 'x')
+check('it never doubles up', R.alertTitle('checklist.gap', 'בעלים · צ׳קליסט', { developer: true }) === 'בעלים · צ׳קליסט')
+check('the new constraint alerts open the managers requests tab', ['timeoff.wish', 'availability.note'].every((k) => R.pushPathFor(k, { tab: 'requests', weekStart: '2030-01-06' }) === '/owner/schedule?tab=requests&week=2030-01-06'))
+const flush = read('src/lib/push/staff.ts')
+check('the phone push, the inbox API and both home pages all apply it', /alertTitle\(r\.kind, r\.title, named\)/.test(flush) && /isDeveloper\(person/.test(flush) && /alertTitle\(/.test(read('src/app/api/staff/notifications/route.ts')) && /alertTitle\(/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /alertTitle\(/.test(read('src/components/dashboard/OwnerDashboardView.tsx')))
 
 console.log(`\n${pass} passed, ${failures.length} failed`)
 if (failures.length) process.exit(1)

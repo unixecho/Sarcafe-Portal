@@ -13,8 +13,8 @@ export default function OwnerIssuesWorkspace({ branches, initialBranch }: { bran
     <div className="ck-wrap">
       <BranchSwitcher branches={branches} value={branch} onChange={setBranch} />
       <section className="ck-hero">
-        <p className="sch-sub" style={{ margin: 0 }}>מה חסר או לא עובד</p>
-        <h1 style={{ margin: '4px 0' }}>חוסרים ותקלות{open ? ` (${open})` : ''}</h1>
+        <p className="sch-sub" style={{ margin: 0 }}>מה חסר, מה לא עובד ומה לא הוגש</p>
+        <h1 style={{ margin: '4px 0' }}>חוסרים ופערים{open ? ` (${open})` : ''}</h1>
       </section>
       <IssueReport branch={branch} onCount={setOpen} />
     </div>

@@ -38,7 +38,7 @@ export default function AddStaffSheet({
   onClose: () => void
   branches: BranchOption[]
   defaultBranchId: string
-  onCreated: (label: string) => void
+  onCreated: (label: string, id: string) => void
 }) {
   const t = useT()
   const ids = useId()
@@ -78,9 +78,9 @@ export default function AddStaffSheet({
   }
   function close() {
     if (busy) return
-    const label = created?.label
+    const made = created
     reset()
-    if (label) onCreated(label)
+    if (made) onCreated(made.label, made.id)
     else onClose()
   }
 
@@ -152,7 +152,7 @@ export default function AddStaffSheet({
 
         {created ? <div className="sheet-scroll" style={{ gap: 16 }}>
           <Notice tone="info">{created.label} נוסף/ה לצוות. העובד/ת יבחר/תבחר את הקוד האישי ויקשר/תקשר Google דרך הקישור.</Notice>
-          {invitation ? <InvitationLink invitation={invitation} /> : <>
+          {invitation ? <InvitationLink invitation={invitation} firstName={created.label.split(' ')[0] ?? null} /> : <>
             <InlineError>העובד/ת נוצר/ה, אבל לא הצלחנו ליצור את הקישור. ניתן לנסות שוב בלי ליצור עובד/ת נוסף/ת.</InlineError>
             <button type="button" className="sch-btn sch-btn--primary press" disabled={busy} onClick={async () => {
               setBusy(true); setError(null)

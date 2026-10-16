@@ -162,6 +162,19 @@ export default function StaffEditSheet({
     }
   }
 
+  const [exempt, setExempt] = useState(false)
+  const [exemptBusy, setExemptBusy] = useState(false)
+  useEffect(() => { setExempt(r?.push_gate_exempt === true) }, [r?.id, r?.push_gate_exempt])
+  async function toggleExempt(next: boolean) {
+    if (!r || exemptBusy) return
+    setExemptBusy(true)
+    setExempt(next)
+    const res = await patch({ pushGateExempt: next })
+    setExemptBusy(false)
+    if (!res.ok) { setExempt(!next); return setError(res.message) }
+    onChanged(next ? `${name} יכול/ה להיכנס עכשיו בלי התראות ✓` : `${name} יצטרך/תצטרך להפעיל התראות כדי להיכנס ✓`)
+  }
+
   async function saveIdentity() {
     if (!r) return
     if (nameEmpty) return setError('יש להזין שם — לפחות שם פרטי.')
@@ -371,6 +384,29 @@ export default function StaffEditSheet({
                 )
               })}
               <p className="sch-sub">תפקיד ברירת מחדל ומגבלת שעות שבועית נמצאים באזור ההגדרות בלוח המשמרות.</p>
+            </section>
+          )}
+
+          {/* ============================================================ notifications: the one exception */}
+          {r.active && !(r.role === 'owner' || r.badge === 'owner' || r.badge === 'developer' || r.badge === 'general_manager' || r.badge === 'manager') && (
+            <section className="sch-card" aria-labelledby={`${ids}-push`}>
+              <h3 id={`${ids}-push`} className="sch-h">התראות</h3>
+              <p className="sch-sub">עובדים נכנסים לדפי הצוות רק אחרי שהתקינו את האפליקציה במסך הבית והפעילו התראות. אם הטלפון של {name} פשוט לא יכול לקבל התראות, אפשר לאשר לו/לה להיכנס בלי. זה חריג: כדאי לכבות כשיש טלפון חדש.</p>
+              <div className="sch-row">
+                <span style={{ flex: 1, fontWeight: 600 }}>מותר להיכנס בלי התראות</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={exempt}
+                  aria-label="מותר להיכנס בלי התראות"
+                  className="press"
+                  disabled={exemptBusy}
+                  onClick={() => void toggleExempt(!exempt)}
+                  style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', minHeight: 44, minWidth: 52 }}
+                >
+                  <Switch on={exempt} />
+                </button>
+              </div>
             </section>
           )}
 

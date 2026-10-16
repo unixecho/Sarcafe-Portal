@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import OwnerHeader from '@/components/OwnerHeader'
 import HubLive from '@/components/owner/pos/HubLive'
 import { getBranches } from '@/lib/branches/server'
+import { loadEventTree } from '@/lib/branches/manager'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { canManagePos, resolvePosIdentity } from '@/lib/pos/server/guard'
 import { readDashboard } from '@/lib/pos/server/signals'
@@ -22,7 +23,10 @@ export default async function OwnerPosHubPage() {
   if (!staff) redirect('/no-access')
 
   const all = await getBranches({ includeEvents: true })
-  const branches = all.filter((b) => canManagePos(staff, b.id))
+  // The POS is a subsystem of a coffee truck: an event is listed with its truck ("מאור · פסטיבל").
+  const tree = await loadEventTree(createServiceRoleClient()).catch(() => ({ trucks: [], events: [] }))
+  const truckName = (id: string) => tree.trucks.find((truck) => truck.id === tree.events.find((event) => event.id === id)?.parentId)?.name ?? null
+  const branches = all.filter((b) => canManagePos(staff, b.id)).map((b) => (b.kind === 'event' && truckName(b.id) ? { ...b, name: { ...b.name, he: `${truckName(b.id)} · ${b.name.he}` } } : b))
   if (branches.length === 0) redirect('/no-access')
 
   const cookieStore = await cookies()

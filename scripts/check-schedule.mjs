@@ -66,7 +66,7 @@ function emit(tsPath) {
 
 // Pure modules only. Server-only files (guard, state-query, dispatch-write) and
 // type-only files are deliberately NOT here — and the purity check below proves it.
-const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf', 'time-off']
+const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf', 'time-off', 'constraints']
 for (const n of PURE) emit(join(SHIFTS, `${n}.ts`))
 emit(join(SRC, 'lib', 'staff', 'access.ts'))
 
@@ -88,6 +88,7 @@ const Dr = await load('lib/shifts/draft.mjs')
 const PM = await load('lib/shifts/poster-model.mjs')
 const PDF = await load('lib/shifts/poster-pdf.mjs')
 const TO = await load('lib/shifts/time-off.mjs')
+const CN = await load('lib/shifts/constraints.mjs')
 
 // ---- Output ---------------------------------------------------------------------------------------------
 let pass = 0
@@ -477,6 +478,34 @@ check('the cross-reference table points at every object', await (async () => {
 check('the JPEG is embedded untouched, with its true length', Buffer.from(pdf).includes(Buffer.from(fakeJpeg)) && /\/Length 11 >>/.test(pdfText) && /\/Filter \/DCTDecode/.test(pdfText))
 eq('the page is A4-wide and as tall as the picture needs', /\/MediaBox \[0 0 (\d+) (\d+)\]/.exec(pdfText).slice(1).map(Number), [595, 1190])
 check('the title is stored as UTF-16 so Hebrew survives', /\/Title <FEFF05DC05D505D7/i.test(pdfText))
+
+// ============================================================================================================
+section('constraints (אילוצים): the two limits the manager sets')
+eq('days off default to 2 when the branch has no key (or garbage)', [CN.maxDaysOffOf({}), CN.maxDaysOffOf(null), CN.maxDaysOffOf({ maxDaysOff: 'x' }), CN.maxDaysOffOf({ maxDaysOff: 9 }), CN.maxDaysOffOf({ maxDaysOff: 1.5 })], [2, 2, 2, 2, 2])
+eq('days off take 0..7 from the branch', [CN.maxDaysOffOf({ maxDaysOff: 0 }), CN.maxDaysOffOf({ maxDaysOff: 7 }), CN.maxDaysOffOf({ maxDaysOff: 3 })], [0, 7, 3])
+eq('morning/evening blocks have NO limit today (missing, null or garbage)', [CN.maxShiftBlocksOf({}), CN.maxShiftBlocksOf({ maxShiftBlocks: null }), CN.maxShiftBlocksOf({ maxShiftBlocks: -1 }), CN.maxShiftBlocksOf({ maxShiftBlocks: 99 })], [null, null, null, null])
+eq('...and a number 0..14 is a limit', [CN.maxShiftBlocksOf({ maxShiftBlocks: 0 }), CN.maxShiftBlocksOf({ maxShiftBlocks: 3 })], [0, 3])
+eq('a whole day off counts once and covers both halves; each blocked half counts once', CN.countWanted({ '2030-01-06': ['day_off'], '2030-01-07': ['no_morning', 'no_evening'], '2030-01-08': ['no_evening'], '2030-01-09': ['day_off', 'no_morning'] }), { daysOff: 2, blocks: 3 })
+const lim = { maxDaysOff: 2, maxShiftBlocks: null }
+eq('a third day off is refused', CN.breaks({ daysOff: 3, blocks: 0 }, { daysOff: 2, blocks: 0 }, lim), 'too_many_days_off')
+eq('two days off are fine', CN.breaks({ daysOff: 2, blocks: 0 }, { daysOff: 0, blocks: 0 }, lim), null)
+eq('with no block limit any number of blocks is fine', CN.breaks({ daysOff: 0, blocks: 12 }, { daysOff: 0, blocks: 0 }, lim), null)
+eq('a block limit refuses the one that goes over', CN.breaks({ daysOff: 0, blocks: 3 }, { daysOff: 0, blocks: 2 }, { maxDaysOff: 2, maxShiftBlocks: 2 }), 'too_many_shift_blocks')
+eq('a week already over a lowered limit may be kept or reduced, never grown', [CN.breaks({ daysOff: 3, blocks: 0 }, { daysOff: 3, blocks: 0 }, lim), CN.breaks({ daysOff: 2, blocks: 0 }, { daysOff: 3, blocks: 0 }, lim), CN.breaks({ daysOff: 4, blocks: 0 }, { daysOff: 3, blocks: 0 }, lim)], [null, null, 'too_many_days_off'])
+eq('a limit of 0 days off refuses the first', CN.breaks({ daysOff: 1, blocks: 0 }, { daysOff: 0, blocks: 0 }, { maxDaysOff: 0, maxShiftBlocks: null }), 'too_many_days_off')
+const full = { '2030-01-06': ['day_off'], '2030-01-07': ['day_off'] }
+eq('the form asks first: no third day off, but the others stay editable and blocks are open', [CN.canAdd(full, '2030-01-08', 'day_off', lim), CN.canAdd(full, '2030-01-08', 'no_morning', lim), CN.canAdd(full, '2030-01-06', 'day_off', lim)], [false, true, true])
+eq('turning a blocked half into a whole day off is also a day-off count', CN.canAdd({ ...full, '2030-01-08': ['no_evening'] }, '2030-01-08', 'day_off', lim), false)
+eq('a day takes ONE choice: tapping another replaces it, tapping the chosen one clears it', [CN.chooseKind([], 'no_morning'), CN.chooseKind(['no_morning'], 'no_evening'), CN.chooseKind(['no_evening'], 'day_off'), CN.chooseKind(['day_off'], 'no_morning'), CN.chooseKind(['no_morning'], 'no_morning')], [['no_morning'], ['no_evening'], ['day_off'], ['no_morning'], []])
+eq('replacing a morning block with the evening never costs a second block', CN.canAdd({ '2030-01-06': ['no_morning'] }, '2030-01-06', 'no_evening', { maxDaysOff: 2, maxShiftBlocks: 1 }), true)
+eq('replacing a day off with a block frees a day off and takes one block', [CN.canAdd({ '2030-01-06': ['day_off'] }, '2030-01-06', 'no_morning', { maxDaysOff: 1, maxShiftBlocks: 0 }), CN.canAdd({ '2030-01-06': ['day_off'] }, '2030-01-06', 'no_morning', { maxDaysOff: 1, maxShiftBlocks: 1 })], [false, true])
+eq('a day with two choices is refused, unless the week already held exactly that', [CN.multiChoiceDay({ '2030-01-06': ['no_morning', 'no_evening'] }, {}), CN.multiChoiceDay({ '2030-01-06': ['no_morning', 'no_evening'] }, { '2030-01-06': ['no_evening', 'no_morning'] }), CN.multiChoiceDay({ '2030-01-06': ['no_morning', 'no_evening'] }, { '2030-01-06': ['no_morning'] }), CN.multiChoiceDay({ '2030-01-06': ['day_off'], '2030-01-07': ['no_evening'] }, {})], ['2030-01-06', null, '2030-01-06', null])
+eq('the refusal has words and answers 400', [Msg.scheduleMessage('one_choice_per_day').includes('אחד'), Msg.scheduleStatus('one_choice_per_day')], [true, 400])
+eq('what is left, never negative', [CN.leftOf({ daysOff: 1, blocks: 0 }, lim), CN.leftOf({ daysOff: 5, blocks: 2 }, { maxDaysOff: 2, maxShiftBlocks: 1 })], [{ daysOff: 1, blocks: null }, { daysOff: 0, blocks: 0 }])
+eq('the counter words', [CN.daysOffLeftText(2), CN.daysOffLeftText(1), CN.daysOffLeftText(0), CN.blocksLeftText(null), CN.blocksLeftText(3)], ['נשארו לכם 2 ימי חופש', 'נשאר לכם יום חופש אחד', 'ניצלתם את כל ימי החופש של השבוע', '', 'אפשר לחסום עוד 3 משמרות'])
+eq('the manager line', [CN.usageLabel({ daysOff: 1, blocks: 0 }, lim), CN.usageLabel({ daysOff: 2, blocks: 3 }, { maxDaysOff: 2, maxShiftBlocks: 4 })], ['ימי חופש 1/2', 'ימי חופש 2/2 · משמרות חסומות 3/4'])
+eq('the settings schema accepts the two keys (and refuses a bad one)', [S.settingsPatchSchema.safeParse({ features: { availability: true, swaps: true, maxDaysOff: 2, maxShiftBlocks: null } }).success, S.settingsPatchSchema.safeParse({ features: { availability: true, swaps: true, maxShiftBlocks: 99 } }).success], [true, false])
+eq('the two new refusals have words and answer 409', [Msg.scheduleMessage('too_many_days_off').length > 20, Msg.scheduleMessage('too_many_shift_blocks').length > 20, Msg.scheduleStatus('too_many_days_off'), Msg.scheduleStatus('too_many_shift_blocks')], [true, true, 409, 409])
 
 // ============================================================================================================
 section('days off and shift wishes — what the owner sees while building the week')

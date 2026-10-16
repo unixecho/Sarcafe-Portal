@@ -21,6 +21,10 @@ export type StaffRow = {
   /** null = the person has not yet confirmed (or chosen) their own nickname. */
   handle_set_at?: string | null
   colour?: string | null
+  /** The person's avatar emoji: chosen at random when the owner creates them, theirs to change. */
+  avatar_emoji?: string | null
+  /** The owner let this employee use the staff pages without notifications (a phone that cannot do them). */
+  push_gate_exempt?: boolean
   /** Quick-login employee number, and whether a passcode exists -- never the passcode. */
   employee_no?: string | null
   has_passcode?: boolean

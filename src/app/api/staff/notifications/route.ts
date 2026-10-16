@@ -5,6 +5,8 @@ import { resolveStaffIdentity } from '@/lib/staff/session'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { parseBody } from '@/lib/pos/server/guard'
 import { privateStaffRoute } from '@/lib/staff/records'
+import { isDeveloper } from '@/lib/checklists/developer'
+import { alertTitle } from '@/lib/push/staff-rules'
 
 const headers = { 'Cache-Control': 'private, no-store' }
 export const GET = privateStaffRoute(async () => {
@@ -16,7 +18,9 @@ export const GET = privateStaffRoute(async () => {
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
   ])
   if (items.error || count.error) throw new ApiError(503, 'unavailable', 'לא הצלחנו לטעון את העדכונים')
-  return NextResponse.json({ notifications: items.data ?? [], unread: count.count ?? 0 }, { headers })
+  const named = { developer: isDeveloper(me) }
+  const notifications = (items.data ?? []).map((row) => ({ ...row, title: alertTitle(row.kind as string, row.title as string, named) }))
+  return NextResponse.json({ notifications, unread: count.count ?? 0 }, { headers })
 })
 export const POST = privateStaffRoute(async (request: NextRequest) => {
   const me = await resolveStaffIdentity()

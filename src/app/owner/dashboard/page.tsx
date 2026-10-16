@@ -1,26 +1,20 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import Link from 'next/link'
-import { Beaker, ClipboardCheck, ClipboardList, Users, Accessibility, History, Tablet, Link2, Star, MessageCircle, CalendarClock, Receipt, ShoppingBag, ShieldCheck, Sparkles, Wrench } from 'lucide-react'
+import { ClipboardCheck, Users, ShieldCheck, Receipt } from 'lucide-react'
 import OwnerHeader from '@/components/OwnerHeader'
-import InstallAppButton from '@/components/app/InstallAppButton'
-import DashboardLive from '@/components/DashboardLive'
-import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
+import DashboardSections from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
-import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
+import DashboardNotifications from '@/components/app/DashboardNotifications'
+import OwnerDashboardView from '@/components/dashboard/OwnerDashboardView'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
-import { readDashboardStats } from '@/lib/owner/dashboard-stats'
-import { readDashboardSignals } from '@/lib/owner/signals'
-import { getBranches } from '@/lib/branches/server'
-import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 import { isDeveloper } from '@/lib/checklists/developer'
-import { loadIssueReport } from '@/lib/checklists/issues-server'
 
 export const dynamic = 'force-dynamic'
 
+// The owner's dashboard. The body is components/dashboard/OwnerDashboardView.tsx, which the developer's dashboard also
+// shows as its "manager" view; a developer who opens this page is sent to that one (/staff/dev?view=manager).
 export default async function OwnerDashboardPage() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,61 +39,12 @@ export default async function OwnerDashboardPage() {
       </main>
     )
   }
+  if (isDeveloper(me)) redirect('/staff/dev?view=manager')
 
-  const branches = await getBranches({ includeEvents: true })
-  const cookieStore = await cookies()
-  const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
-  const defaultBranch = branches.find((branch) => branch.slug === currentSlug) ?? branches[0] ?? null
-  const [updates, updateCount] = await Promise.all([
-    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me!.id).order('created_at', { ascending: false }).limit(20),
-    service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me!.id).is('read_at', null),
-  ])
-  const [stats, signals, checklistIssues] = defaultBranch
-    ? await Promise.all([
-        readDashboardStats(defaultBranch.id),
-        readDashboardSignals(defaultBranch.id),
-        // How many different things are missing or not working right now (one per check, however many people reported it).
-        loadIssueReport(service, defaultBranch.id).then((report) => report.open.length).catch(() => null),
-      ])
-    : [{ hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } }, [], null]
-
-  const categories: DashboardCategory[] = [
-    { title: 'חוסרים ותקלות', entries: [
-      { href: `/owner/issues${defaultBranch ? `?branch=${defaultBranch.slug}` : ''}`, icon: Wrench, label: 'מה חסר ומה לא עובד', description: 'מהצ׳קליסטים: כל בדיקה פעם אחת, ומי דיווח עליה', badge: checklistIssues && checklistIssues > 0 ? (checklistIssues === 1 ? 'דבר אחד לטיפול' : `${checklistIssues} דברים לטיפול`) : undefined },
-    ] },
-    { title: 'צוות ומשמרות', entries: [
-      { href: '/owner/staff', icon: Users, label: 'העובדים שלי', description: 'קליטה, היסטוריה ותלושי שכר' },
-      { href: '/owner/schedule', icon: CalendarClock, label: 'סידור עבודה', description: 'בקשות, שיבוצים ואישור החלפות' },
-      { href: '/owner/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים', description: 'מעקב משמרות, חוסרים ועריכת טפסים' },
-    ] },
-    { title: 'שירות והזמנות', entries: [
-      { href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' },
-      { href: '/owner/pos', icon: Receipt, label: 'ניהול קופת אירועים', description: 'עמדות, הזמנות ופעילות באירוע' },
-      { href: '/owner/tablet', icon: Tablet, label: 'זמינות פריטים', description: 'עדכון המלאי במהלך השירות' },
-    ] },
-    { title: 'תפריט וניהול העסק', entries: [
-      { href: '/owner/editor', icon: ClipboardList, label: 'התפריט שלי', description: 'פריטים, מחירים ופרסום שינויים' },
-      { href: '/owner/reviews', icon: Star, label: 'ביקורות', description: 'חוויות שהלקוחות משתפים' },
-      { href: '/owner/feedback', icon: MessageCircle, label: 'משוב מלקוחות', description: 'הודעות והצעות לשיפור' },
-      { href: '/owner/links', icon: Link2, label: 'קישורים ושיתוף', description: 'הפורטל, תפריטים וקודי QR' },
-      { href: '/owner/audit', icon: History, label: 'יומן פעילות', description: 'שינויים שבוצעו במערכת' },
-      { href: '/owner/intro', icon: Sparkles, label: 'מסך פתיחה', description: 'הדלקה וכיבוי, והשורות שמופיעות' },
-      { href: '/owner/accessibility', icon: Accessibility, label: 'נגישות', description: 'הצהרת הנגישות של העסק' },
-    ] },
-  ]
-  const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   return (
     <main id="main" tabIndex={-1} className="app-page">
       <OwnerHeader title="לוח הבקרה" homeHref="/owner/dashboard" />
-      <div className="app-welcome"><div><h2>שלום, {me?.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div><span className="app-date">{date}</span></div>
-      <StaffPushCard />
-      <DashboardNotifications initialNotifications={(updates.data ?? []) as DashboardNotification[]} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" manager />
-      <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
-      {checklistIssues === null && <p className="app-notifications__error" role="status">מצב החוסרים והתקלות אינו זמין כרגע. אפשר לפתוח אותו כדי לנסות שוב.</p>}
-      <WorkshopCard />
-      <DashboardSections categories={categories} />
-      <div className="app-group app-account"><InstallAppButton /></div>
-      {isDeveloper(me) && <div className="app-group app-account"><Link href="/staff" className="app-row app-row--quiet"><span className="app-row__icon"><Users size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפאנל כמו שעובד רואה אותו</strong><small>כרטיס המשמרת וכפתור הצ׳קליסט</small></span></Link><Link href="/staff/dev" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>מצב מפתח</strong><small>בדיקת התראות, צ׳קליסטים ומשמרת בדיקה</small></span></Link></div>}
+      <OwnerDashboardView me={{ id: me!.id as string, role: me!.role as string | null, badge: me!.badge as string | null, branch_id: me!.branch_id as string | null, email: me!.email as string | null, first_name: me!.first_name as string | null }} />
     </main>
   )
 }

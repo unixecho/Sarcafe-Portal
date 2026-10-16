@@ -134,6 +134,66 @@ const shiftC = (await one(`insert into public.shifts (branch_id, week_id, shift_
 await db.query(`update public.shift_assignments set shift_id=$1 where shift_id=$2 and staff_id=$3`, [shiftC, shiftB, eli])
 check('moving an assignment to another shift drops the mark', (await one(`select checklist_lead from public.shift_assignments where shift_id=$1 and staff_id=$2`, [shiftC, eli])).checklist_lead === false)
 
+// ---- The owner switches a checklist off for one branch (20261016090000) --------------------------------------------
+console.log('\nper-branch checklist switches')
+const closingPending = async () => Number((await one(`select count(*) n from public.checklist_assignments where branch_id=$1 and checklist_kind='closing' and status='pending' and manager_resolved_at is null`, [branch])).n)
+const closingSent = async () => Number((await one(`select count(*) n from public.checklist_assignments where branch_id=$1 and checklist_kind='closing' and status='submitted'`, [branch])).n)
+const openingPending = async () => Number((await one(`select count(*) n from public.checklist_assignments where branch_id=$1 and checklist_kind='opening' and status='pending' and manager_resolved_at is null`, [branch])).n)
+const beforeClosing = await closingPending()
+const beforeOpening = await openingPending()
+const sentBefore = await closingSent()
+check('there are unsent closing forms to switch off', beforeClosing > 0 && beforeOpening > 0)
+check('an employee cannot switch a checklist off', (await one(`select public.checklist_set_branch_kind($1,$2,'closing',false) r`, [worker.id, branch])).r.reason === 'forbidden')
+check('an unknown kind is refused', (await one(`select public.checklist_set_branch_kind($1,$2,'lunch',false) r`, [owner, branch])).r.reason === 'bad_request')
+const off = (await one(`select public.checklist_set_branch_kind($1,$2,'closing',false) r`, [owner, branch])).r
+check('the owner switches closing off for the branch', off.ok === true && off.enabled === false && off.removed > 0, JSON.stringify(off))
+check('unstarted closing forms are gone, the other kinds stay, sent evidence stays', (await closingPending()) === 0 && (await openingPending()) === beforeOpening && (await closingSent()) === sentBefore)
+await republish()
+check('a schedule change does not bring the switched-off kind back', (await closingPending()) === 0)
+const newShift = (await one(`insert into public.shifts (branch_id, week_id, shift_date, start_time, end_time) values ($1,$2,'2030-01-11','07:00','13:00') returning id`, [branch, week])).id
+await db.query(`insert into public.shift_assignments (branch_id, shift_id, staff_id, staff_name) values ($1,$2,$3,'Dana')`, [branch, newShift, worker.id])
+await republish()
+check('a new shift gets its other forms but no closing form', (await rowOf(newShift, worker.id, 'opening')) && !(await rowOf(newShift, worker.id, 'closing')))
+check('the switch is recorded with who and when', (await one(`select enabled, updated_by from public.checklist_branch_settings where branch_id=$1 and kind='closing'`, [branch])).updated_by === owner)
+const on = (await one(`select public.checklist_set_branch_kind($1,$2,'closing',true) r`, [owner, branch])).r
+check('switching it on again brings the forms back for the days that have not started', on.ok === true && (await closingPending()) > 0 && !!(await rowOf(newShift, worker.id, 'closing')))
+check('browser roles cannot read or write the switches', await (async () => {
+  try { await db.exec('set role authenticated; select * from public.checklist_branch_settings; reset role;'); return false }
+  catch { await db.exec('reset role'); return true }
+})())
+
+// ---- Onboarding progress, the notifications exemption and events that belong to a truck (20261016140000) -------------
+console.log('\nonboarding progress, exemption, event parent')
+const newbie = await one(`select onboarding_done_at, push_gate_exempt from public.staff where id=$1`, [worker.id])
+check('a person created after the migration starts "not onboarded" and not exempt', newbie.onboarding_done_at === null && newbie.push_gate_exempt === false)
+const eventMigration = readdirSync(migrations).find((name) => name.endsWith('_onboarding_progress_event_parent.sql'))
+await db.exec(readFileSync(migrations + eventMigration, 'utf8'))
+check('running it again does not mark anyone done (the backfill happens only when the column is created)', (await one(`select onboarding_done_at from public.staff where id=$1`, [worker.id])).onboarding_done_at === null)
+const truck = (await one(`select id from public.branches where slug='givat-haviva'`)).id
+const ev1 = (await one(`insert into public.branches (slug, name, kind, parent_branch_id) values ('ev-one', '{"he":"אירוע"}', 'event', $1) returning id`, [truck])).id
+check('an event can belong to a truck', (await one(`select parent_branch_id from public.branches where id=$1`, [ev1])).parent_branch_id === truck)
+check('a truck cannot have a parent', await failsWith(async () => db.query(`update public.branches set parent_branch_id=$1 where id=$2`, [truck, branch]), /branch_parent_only_events/))
+const ev2 = (await one(`insert into public.branches (slug, name, kind) values ('ev-two', '{"he":"אירוע ב"}', 'event') returning id`)).id
+check('an event cannot be the parent of an event', await failsWith(async () => db.query(`update public.branches set parent_branch_id=$1 where id=$2`, [ev1, ev2]), /branch_parent_not_a_truck/))
+check('nothing is its own parent', await failsWith(async () => db.query(`update public.branches set parent_branch_id=id where id=$1`, [ev2]), /branch_parent_only_events|branch_parent_self|branch_parent_not_a_truck/))
+check('an employee cannot assign an event', (await one(`select public.branch_set_parent($1,$2,$3) r`, [worker.id, ev2, truck])).r.reason === 'forbidden')
+const assigned = (await one(`select public.branch_set_parent($1,$2,$3) r`, [owner, ev2, truck])).r
+check('the owner assigns an event to a truck', assigned.ok === true && (await one(`select parent_branch_id from public.branches where id=$1`, [ev2])).parent_branch_id === truck)
+check('only an event can be assigned, only to a truck', (await one(`select public.branch_set_parent($1,$2,$3) r`, [owner, truck, branch])).r.reason === 'not_found' && (await one(`select public.branch_set_parent($1,$2,$3) r`, [owner, ev2, ev1])).r.reason === 'bad_target')
+const detached = (await one(`select public.branch_set_parent($1,$2,null) r`, [owner, ev2])).r
+check('the owner can detach it again', detached.ok === true && (await one(`select parent_branch_id from public.branches where id=$1`, [ev2])).parent_branch_id === null)
+check('deleting a truck leaves its events (parent set to null), nothing cascades', await (async () => {
+  const t2 = (await one(`insert into public.branches (slug, name) values ('truck-temp', '{"he":"זמני"}') returning id`)).id
+  const e3 = (await one(`insert into public.branches (slug, name, kind, parent_branch_id) values ('ev-three', '{"he":"אירוע ג"}', 'event', $1) returning id`, [t2])).id
+  await db.query(`delete from public.branches where id=$1`, [t2])
+  const row = await one(`select parent_branch_id from public.branches where id=$1`, [e3])
+  return !!row && row.parent_branch_id === null
+})())
+check('browser roles cannot call the assign function', await (async () => {
+  try { await db.exec(`set role authenticated; select public.branch_set_parent('${owner}', '${ev2}', null); reset role;`); return false }
+  catch { await db.exec('reset role'); return true }
+})())
+
 const resolutionRead = await (async () => {
   try { await db.exec('set role authenticated; select * from public.checklist_issue_resolutions; reset role;'); return false }
   catch { await db.exec('reset role'); return true }

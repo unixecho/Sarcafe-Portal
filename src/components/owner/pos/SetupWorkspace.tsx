@@ -73,12 +73,15 @@ export default function SetupWorkspace({
   initialSlug,
   initial,
   canCreateEvent,
+  defaultParentSlug,
 }: {
   events: EventLite[]
   sources: EventSource[]
   initialSlug: string
   initial: SetupState | null
   canCreateEvent: boolean
+  /** The coffee truck a new event belongs to (the POS is a subsystem of a branch): the one being worked on. */
+  defaultParentSlug?: string
 }) {
   const t = useT()
   const [lang] = usePosLang()
@@ -288,6 +291,7 @@ export default function SetupWorkspace({
       slug: newSlug,
       name: { he: name },
       kind: 'event',
+      ...(defaultParentSlug ? { parentSlug: defaultParentSlug } : {}),
       ...(cloneSlug ? { cloneFromSlug: cloneSlug } : {}),
     })
     if (!r.ok) return errorText(t, r.code)

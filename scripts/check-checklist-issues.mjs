@@ -27,6 +27,10 @@ const load = async (file, name) => {
 }
 const I = await load('src/lib/checklists/issues.ts', 'issues.mjs')
 const R = await load('src/lib/push/staff-rules.ts', 'rules.mjs')
+const W = await load('src/lib/checklists/window.ts', 'window.mjs')
+// gaps.ts imports ./window: transpile it with that import pointed at the copy next to it
+writeFileSync(join(dir, 'gaps.mjs'), ts.transpileModule(read('src/lib/checklists/gaps.ts'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/from '\.\/window'/, "from './window.mjs'"))
+const G = await import(pathToFileURL(join(dir, 'gaps.mjs')).href)
 
 // A submitted checklist: who, when, what was reported and what was answered "fine".
 let n = 0
@@ -72,26 +76,45 @@ check('the cash check keeps the counted amount and the target', (() => {
   return g.reports[0].value === 380 && g.reports[0].target === 400
 })())
 
+section('gaps: checklists nobody sent (the other half of חוסרים ופערים)')
+let g = 0
+const gapRow = (over = {}) => ({ id: `g${++g}`, shiftId: 's1', kind: 'closing', status: 'pending', resolvedAt: null, staffName: 'Dana', shiftDate: '2030-01-07', startTime: '13:00', endTime: '19:00', ...over })
+const at = (date, time) => ({ date, time })
+eq('a closing checklist is a gap from 90 minutes after the shift ends (20:30), the same minute the alert goes out', [G.buildGaps([gapRow()], at('2030-01-07', '20:29')).length, G.buildGaps([gapRow()], at('2030-01-07', '20:30')).length], [0, 1])
+eq('an opening checklist is a gap 60 minutes after the shift starts', [G.buildGaps([gapRow({ kind: 'opening' })], at('2030-01-07', '13:59')).length, G.buildGaps([gapRow({ kind: 'opening' })], at('2030-01-07', '14:00')).length], [0, 1])
+eq('a sent checklist is never a gap, nor are the unsent copies of it', G.buildGaps([gapRow({ status: 'submitted', staffName: 'Eli' }), gapRow({ id: 'x', status: 'covered' })], at('2030-01-09', '09:00')), [])
+eq('a covered copy closes the gap for the others on the shift', G.buildGaps([gapRow({ status: 'covered' }), gapRow({ id: 'y', staffName: 'Eli' })], at('2030-01-09', '09:00')), [])
+eq('an owner-dismissed checklist is not a gap', G.buildGaps([gapRow({ resolvedAt: '2030-01-08T08:00:00Z' })], at('2030-01-09', '09:00')), [])
+const two = G.buildGaps([gapRow({ staffName: 'Eli' }), gapRow({ id: 'z', staffName: 'Dana' })], at('2030-01-09', '09:00'))
+check('two people on one unsent checklist are ONE line, named together, closed together', two.length === 1 && JSON.stringify(two[0].staffNames) === JSON.stringify(['Dana', 'Eli']) && two[0].ids.length === 2)
+check('an unfinished one says it was started', G.buildGaps([gapRow({ status: 'in_progress' })], at('2030-01-09', '09:00'))[0].started === true && two[0].started === false)
+check('a locked (future) checklist is not a gap', G.buildGaps([gapRow({ shiftDate: '2030-01-12' })], at('2030-01-09', '09:00')).length === 0)
+eq('newest shift first, opening before closing within a shift', G.buildGaps([gapRow({ shiftId: 'a', shiftDate: '2030-01-05' }), gapRow({ shiftId: 'b', shiftDate: '2030-01-07', kind: 'closing' }), gapRow({ shiftId: 'b', shiftDate: '2030-01-07', kind: 'opening' })], at('2030-01-09', '09:00')).map((x) => `${x.shiftDate}:${x.kind}`), ['2030-01-07:opening', '2030-01-07:closing', '2030-01-05:closing'])
+eq('the total counts both halves, and the title is plain Hebrew', [G.shortageCount({ open: [1, 2], gaps: [1] }), G.shortageTitle(1), G.shortageTitle(3)], [3, 'חוסרים ופערים: דבר אחד לטיפול', 'חוסרים ופערים: 3 דברים לטיפול'])
+
 section('the morning alert')
 check('the digest goes out at 08:00 and for three hours after (the scheduler may have been down)', R.ISSUES_DIGEST_HOUR === 8 && R.issuesDigestDue({ date: '2030-01-07', time: '08:00' }) && R.issuesDigestDue({ date: '2030-01-07', time: '10:59' }))
 check('not before 08:00 and not from 11:00', !R.issuesDigestDue({ date: '2030-01-07', time: '07:59' }) && !R.issuesDigestDue({ date: '2030-01-07', time: '11:00' }))
 const reminders = read('src/lib/push/staff-reminders.ts')
 check('it is written once per owner per branch per day (the dedupe key carries the branch and the date)', /issues-digest:\$\{branchId\}:\$\{branch\.clock\.date\}/.test(reminders))
-check('it is written only when something is open', /report\.open\.length === 0\) continue/.test(reminders))
-check('it goes to every owner and developer, in the branch\'s own morning', /issuesDigestDue\(branch\.clock\)/.test(reminders) && /role\.eq\.owner,badge\.eq\.owner,badge\.eq\.developer/.test(reminders))
+check('it is written only when something is open (a missing item OR an unsent checklist)', /const count = shortageCount\(report\)/.test(reminders) && /if \(count === 0\) continue/.test(reminders))
+check('it goes to every owner and developer AND the branch\'s general manager, in the branch\'s own morning', /issuesDigestDue\(branch\.clock\)/.test(reminders) && /role\.eq\.owner,badge\.eq\.owner,badge\.eq\.developer/.test(reminders) && /eq\('badge', 'general_manager'\)/.test(reminders) && /m\.branch_id === null \|\| m\.branch_id === branchId/.test(reminders))
 check('it opens that branch\'s report', /\/owner\/issues\$\{branch\.slug/.test(reminders))
 check('its kind and path are routed (a stored plain path wins)', R.pushPathFor('issues.digest', { url: '/owner/issues?branch=givat-haviva' }) === '/owner/issues?branch=givat-haviva')
 check('the scheduled run calls it with everything else', /issuesDigest\(service, clocks\)/.test(reminders))
 
 section('where the owner finds it')
-const dashboard = read('src/app/owner/dashboard/page.tsx')
-check('the dashboard has its own category, first, with the count of open things', /title: 'חוסרים ותקלות'/.test(dashboard) && dashboard.indexOf("title: 'חוסרים ותקלות'") < dashboard.indexOf("title: 'צוות ומשמרות'") && /loadIssueReport\(service, defaultBranch\.id\)/.test(dashboard))
+const dashboard = read('src/components/dashboard/OwnerDashboardView.tsx')
+check('the dashboard has its own card, before every category, with the count of everything open (items + gaps)', /<strong>חוסרים ופערים<\/strong>/.test(dashboard) && dashboard.indexOf('<strong>חוסרים ופערים</strong>') < dashboard.indexOf('<DashboardSections') && /loadShortageReport\(service, defaultBranch\.id\)/.test(dashboard) && /shortageCount\(/.test(dashboard))
 check('the page and the checklists tab show the same report', read('src/components/checklists/OwnerIssuesWorkspace.tsx').includes('<IssueReport') && read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('<IssueReport'))
 check('the old "one card per checklist with its sum of NO answers" inbox is gone from the tracker', !read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('ck-issue-row') && !read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('const inbox'))
 const middleware = read('src/middleware.ts')
-check('the page is owner-only at the door as well as in the page and the API', /OP_ONLY_PREFIXES = \[[^\]]*'\/owner\/issues'/.test(middleware) && /requireOwner\(\)/.test(read('src/app/api/owner/issues/route.ts')) && /isOp\(me\)/.test(read('src/app/owner/issues/page.tsx')))
+check('the page is for the owner and the branch\'s general manager at the door, in the page and in the API (per branch)', /MENU_EDITOR_PREFIXES = \[[^\]]*'\/owner\/issues'/.test(middleware) && !/OP_ONLY_PREFIXES = \[[^\]]*'\/owner\/issues'/.test(middleware) && /requireMenuEditor\(/.test(read('src/app/api/owner/issues/route.ts')) && !/requireOwner\(\)/.test(read('src/app/api/owner/issues/route.ts')) && /hasAnyMenuEditAccess\(me\)/.test(read('src/app/owner/issues/page.tsx')) && /canEditMenu\(me, branch\.id\)/.test(read('src/app/owner/issues/page.tsx')))
 const api = read('src/app/api/owner/issues/route.ts')
-check('marking handled is an insert (history is kept), by the owner, for a branch that exists', /from\('checklist_issue_resolutions'\)\.insert\(/.test(api) && /resolved_by: owner\.id/.test(api) && /\.eq\('id', body\.branchId\)/.test(api))
+check('marking handled is an insert (history is kept), by the person who did it, for a branch that exists', /from\('checklist_issue_resolutions'\)\.insert\(/.test(api) && /resolved_by: actor\.id/.test(api) && /\.eq\('id', body\.branchId\)/.test(api))
+check('closing a gap closes every unsent copy of that checklist of that shift, never a sent one', /action: z\.literal\('closeGap'\)/.test(api) && /\.neq\('status', 'submitted'\)/.test(api) && /\.eq\('shift_id', body\.shiftId\)/.test(api) && /\.eq\('checklist_kind', body\.kind\)/.test(api))
+const ui = read('src/components/checklists/IssueReport.tsx')
+check('the list is one collapsible list that keeps itself current and reacts at once', /aria-expanded=\{open\}/.test(ui) && /REFRESH_MS = 60_000/.test(ui) && /visibilitychange/.test(ui) && /setData\(snapshot\)/.test(ui) && /פתיחת הכול/.test(ui))
 const loader = read('src/lib/checklists/issues-server.ts')
 check('only SUBMITTED checklists count, from the last 45 days, newest marks win', /eq\('status', 'submitted'\)/.test(loader) && /ISSUE_REPORT_DAYS = 45/.test(loader) && /Newest mark per check wins/.test(loader))
 

@@ -5,8 +5,9 @@ import { GoogleG } from '@/components/AuthHandoff'
 import { InlineError } from '@/components/shifts/ui'
 import { messageOf } from '@/components/staff/types'
 
-/** A fresh onboarding proof skips PIN re-entry. Existing staff prove their PIN first. */
-export default function GoogleLinkButton({ prepared = false }: { prepared?: boolean }) {
+/** A fresh onboarding proof skips PIN re-entry. Existing staff prove their PIN first. `back="onboarding"` brings the person
+ *  back to the onboarding wizard after Google (instead of the profile), to carry on with their details. */
+export default function GoogleLinkButton({ prepared = false, back }: { prepared?: boolean; back?: 'onboarding' }) {
   const id = useId()
   const [needsPin, setNeedsPin] = useState(!prepared)
   const [passcode, setPasscode] = useState('')
@@ -25,7 +26,7 @@ export default function GoogleLinkButton({ prepared = false }: { prepared?: bool
     setBusy(true); setError(null)
     try {
       if (needsPin) { await request({ action: 'prepare', passcode }); setPasscode(''); setNeedsPin(false) }
-      const payload = await request({ action: 'start' })
+      const payload = await request(back ? { action: 'start', back } : { action: 'start' })
       window.location.assign(payload.url)
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'בעיית חיבור. נסו שוב.'); setBusy(false) }
   }

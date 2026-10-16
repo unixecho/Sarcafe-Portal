@@ -44,7 +44,11 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export async function registerOrderServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   try {
-    return await navigator.serviceWorker.register('/sw.js')
+    const registration = await navigator.serviceWorker.register('/sw.js')
+    // pushManager.subscribe() needs an ACTIVE worker; on a first visit the worker is still installing, so wait for it, but never
+    // forever: a worker that cannot start must not hang the screen that is waiting for it (the caller just gets no subscription).
+    await Promise.race([navigator.serviceWorker.ready, new Promise((resolve) => setTimeout(resolve, 8000))])
+    return registration
   } catch (err) {
     console.error('Service worker registration failed:', err)
     return null
@@ -204,4 +208,75 @@ export async function sendStaffPushTest(): Promise<StaffPushTest | null> {
   const res = await staffPushRequest({ action: 'test' })
   if (!res?.ok) return null
   return (await res.json()) as StaffPushTest
+}
+
+// ---------------------------------------------------------------------------------------------
+// The notifications GATE (lib/staff/gate-rules.ts): enabling and re-checking, for a person who is signed in (the session
+// registrar) OR who only holds an invite link (the invite registrar, used by the onboarding wizard before the code exists).
+// ---------------------------------------------------------------------------------------------
+
+export type PushRegistrar = {
+  /** File this phone's subscription under the person. true only when the server confirmed it. */
+  register(subscription: PushSubscriptionJSON): Promise<boolean>
+  /** true = the server has it, false = the server says it does not, null = it could not be asked (offline, error, no session). */
+  check(endpoint: string): Promise<boolean | null>
+}
+
+export const sessionPushRegistrar: PushRegistrar = {
+  async register(subscription) {
+    const res = await staffPushRequest({ action: 'subscribe', subscription })
+    return res?.ok === true
+  },
+  async check(endpoint) {
+    const res = await staffPushRequest({ action: 'status', endpoint })
+    if (!res || !res.ok) return null
+    try { return ((await res.json()) as { subscribed?: boolean }).subscribed === true } catch { return null }
+  },
+}
+
+/** Before the personal code exists the invite link is the identity: the server maps the link to the person. */
+export function invitePushRegistrar(token: string): PushRegistrar {
+  const call = async (payload: Record<string, unknown>) => {
+    try { return await fetch('/api/staff/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, token }) }) } catch { return null }
+  }
+  return {
+    async register(subscription) { return (await call({ action: 'push', subscription }))?.ok === true },
+    async check(endpoint) {
+      const res = await call({ action: 'push_status', endpoint })
+      if (!res || !res.ok) return null
+      try { return ((await res.json()) as { subscribed?: boolean }).subscribed === true } catch { return null }
+    },
+  }
+}
+
+/** Asks for permission (call from a tap) and files the subscription. 'error' = the phone said yes but this could not be completed. */
+export async function enablePush(registrar: PushRegistrar): Promise<'ok' | 'denied' | 'unsupported' | 'error'> {
+  try {
+    if (!isPushSupported()) return 'unsupported'
+    const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
+    if (permission === 'denied') return 'denied'
+    if (permission !== 'granted') return 'error'
+    const subscription = await getBrowserSubscription()
+    if (!subscription) return 'error'
+    return (await registrar.register(subscription.toJSON())) ? 'ok' : 'error'
+  } catch (err) {
+    console.error('enablePush failed:', err)
+    return 'error'
+  }
+}
+
+/** With permission already granted: make sure a subscription exists here and the server has it. Never prompts, never throws.
+ *  'unknown' (the server could not be asked) is NOT a failure: the gate must not lock anyone out because of a network. */
+export async function reconcilePush(registrar: PushRegistrar): Promise<'yes' | 'no' | 'unknown'> {
+  try {
+    if (!isPushSupported() || Notification.permission !== 'granted') return 'no'
+    const subscription = await getBrowserSubscription()
+    if (!subscription) return 'no'
+    const filed = await registrar.check(subscription.endpoint)
+    if (filed === true) return 'yes'
+    if (filed === null) return 'unknown'
+    return (await registrar.register(subscription.toJSON())) ? 'yes' : 'unknown'
+  } catch {
+    return 'unknown'
+  }
 }

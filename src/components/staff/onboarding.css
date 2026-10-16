@@ -27,3 +27,45 @@
 .onboard__install p { margin: 0; font-size: .8rem; line-height: 1.75; }
 @keyframes onboard-enter { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .onboard__content { animation: none; } }
+
+/* ---- The wizard walk, 2026-10-16 (aligned with the Ayeka Bar wizard) ---- */
+.ob-progress { list-style: none; display: flex; gap: 6px; margin: 0; padding: 0; justify-content: center; }
+.ob-progress li { width: 9px; height: 9px; border-radius: 999px; background: var(--line-strong, var(--line)); transition: width .3s var(--ease), background .3s var(--ease); }
+.ob-progress .ob-progress__done { background: var(--neon, var(--accent)); opacity: .55; }
+.ob-progress .ob-progress__now { width: 24px; background: var(--neon, var(--accent)); }
+.ob-step { display: flex; flex-direction: column; gap: 16px; }
+.ob-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ob-steps li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, var(--bg-elev)); font-size: .92rem; font-weight: 600; }
+.ob-steps li span { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--neon, var(--accent)) 16%, transparent); color: var(--neon-soft, var(--accent)); font-weight: 800; font-size: .82rem; }
+.ob-kicker { margin: 0; text-align: center; font-size: .82rem; font-weight: 700; color: var(--neon-soft, var(--accent)); }
+.ob-lead { margin: 0; color: var(--text-dim, var(--text-muted)); font-size: .95rem; line-height: 1.65; }
+.ob-tour, .ob-details { display: flex; flex-direction: column; gap: 14px; text-align: start; }
+.ob-tour h1, .ob-details h1 { font-size: clamp(1.35rem, 5.5vw, 1.8rem); outline: none; }
+.ob-slide { display: flex; flex-direction: column; gap: 10px; }
+.ob-points { list-style: none; margin: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, var(--bg-elev)); font-size: .88rem; color: var(--text-dim, var(--text-muted)); line-height: 1.6; }
+.ob-points li { display: flex; gap: 8px; }
+.ob-points li > span:first-child { color: var(--neon-soft, var(--accent)); }
+.ob-mini { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+.ob-mini__shift { padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--line-strong, var(--line)); background: var(--bg-elev, var(--surface)); font-size: .72rem; color: var(--text-faint, var(--text-muted)); }
+.ob-mini__rows { display: grid; gap: 6px; }
+.ob-mini__row { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 8px 11px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-elev, var(--surface)); font-size: .8rem; font-weight: 700; color: var(--text-faint, var(--text-muted)); opacity: .55; transition: opacity .3s var(--ease), border-color .3s var(--ease), background .3s var(--ease); }
+.ob-mini__row span { flex: 1; min-width: 0; }
+.ob-mini__row--on { opacity: 1; color: var(--text); border-color: var(--neon, var(--accent)); background: color-mix(in srgb, var(--neon, var(--accent)) 11%, var(--bg-elev, var(--surface))); }
+.ob-dots { display: flex; justify-content: center; gap: 6px; }
+.ob-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--line-strong, var(--line)); transition: width .3s var(--ease), background .3s var(--ease); }
+.ob-dot--done { background: var(--neon, var(--accent)); }
+.ob-dot--now { width: 18px; }
+.ob-actions { display: flex; gap: 10px; }
+.ob-actions .sch-btn { min-height: 48px; text-decoration: none; justify-content: center; }
+.ob-skip { align-self: center; min-height: 44px; padding: 10px 16px; display: flex; align-items: center; color: var(--text-faint, var(--text-muted)); font-size: .85rem; text-decoration: none; }
+.ob-preview { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, var(--bg-elev)); }
+.ob-preview__avatar { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 16px; background: color-mix(in srgb, var(--neon, var(--accent)) 14%, transparent); font-size: 1.5rem; }
+.ob-details .onboard__group input { text-align: start; letter-spacing: normal; font-size: 1rem; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); background: var(--bg); }
+.ob-details .onboard__group label { gap: 8px; }
+.ob-emojis { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ob-emojis legend { padding: 0; margin-bottom: 8px; font-size: .88rem; font-weight: 700; }
+.ob-emojis > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.ob-emoji { min-height: 48px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface, var(--bg-elev)); font-size: 1.4rem; cursor: pointer; }
+.ob-emoji--on { border-color: var(--neon, var(--accent)); background: color-mix(in srgb, var(--neon, var(--accent)) 16%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--neon, var(--accent)) 35%, transparent); }
+@media (prefers-reduced-motion: reduce) { .ob-progress li, .ob-mini__row, .ob-dot { transition: none; } }
+.ob-paste { min-height: 84px; font-size: .85rem; resize: vertical; border: 1px solid var(--line); background: var(--bg); padding: 10px; border-radius: 10px; text-align: start; letter-spacing: normal; }

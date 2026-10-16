@@ -3,6 +3,10 @@
 Employees and managers install Sarcafe on their home screen and switch on alerts. The server then
 pushes (Web Push, the same VAPID keys the customer order page uses) the things that matter at work.
 
+## The gate: notifications are required for employees (2026-10-16)
+
+An employee cannot use the staff pages, or finish linking their account, without notifications on; management can carry on without them ("continue without alerts"). The rules, the modes (hard / soft / off), the invite-link registration for a phone that has no code yet, and every recovery path are in `docs/STAFF_ONBOARDING.md` ("Round 3"). Short version for this document: the gate asks the DEVICE every 30 s and on focus (`gateStep` in `src/lib/staff/gate-rules.ts`), a server that cannot be reached counts as unknown rather than off, and the owner can exempt one person (`staff.push_gate_exempt`) whose phone cannot do push.
+
 ## What gets pushed
 
 New 2026-10-15 (all go through the same inbox -> outbox):

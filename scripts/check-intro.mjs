@@ -344,7 +344,7 @@ section("the owner's switch: the gate, the API, the page, the tile")
   check('the page reads the switch and shows the real lengths from the real timeline', /getIntroEnabled\(\)/.test(page) && /planTimeline\(/.test(page))
   check('the page lists every line, in play order', /INTRO_LINES\.map\(/.test(page))
 
-  const dash = read('src/app/owner/dashboard/page.tsx')
+  const dash = read('src/components/dashboard/OwnerDashboardView.tsx')
   check('the dashboard has a tile for it', /href: '\/owner\/intro'/.test(dash) && /מסך פתיחה/.test(dash))
 
   const card = read('src/components/IntroCard.tsx')

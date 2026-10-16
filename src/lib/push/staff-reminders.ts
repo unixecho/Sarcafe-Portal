@@ -27,7 +27,10 @@ import 'server-only'
 
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ownerChecklistPath, staffChecklistPath } from '@/lib/checklists/links'
-import { loadIssueReport } from '@/lib/checklists/issues-server'
+import { loadShortageReport } from '@/lib/checklists/issues-server'
+import { shortageCount, shortageTitle } from '@/lib/checklists/gaps'
+import { KIND_LABELS } from '@/lib/checklists/types'
+import { dayLabel } from '@/lib/checklists/window'
 import { wallClockNow } from '@/lib/shifts/time'
 import type { WallClock } from '@/lib/shifts/types'
 import {
@@ -263,14 +266,17 @@ async function checklistReminders(service: Service, clocks: Map<string, BranchCl
 const digestChecked = new Map<string, number>()
 const DIGEST_RECHECK_MS = 10 * 60 * 1000
 
-/** "What is missing or not working": one alert per owner per branch per day, in the morning, only when something is
- *  open (see issues.ts for what counts). It lists the worst few and opens the full report. Never throws. */
+/** חוסרים ופערים, the daily morning report: one alert per person per branch per day, in the morning, only when something
+ *  is open (see issues.ts and gaps.ts for what counts). It goes to every owner and developer, and to the general manager
+ *  of the branch (the people who can open the list). It lists the worst few and opens the full report. Never throws. */
 async function issuesDigest(service: Service, clocks: Map<string, BranchClock>): Promise<number> {
   const due = [...clocks].filter(([, branch]) => branch.kind === 'permanent' && issuesDigestDue(branch.clock))
   if (due.length === 0) return 0
   const { data: ownerRows } = await service.from('staff').select('id').eq('active', true).or('role.eq.owner,badge.eq.owner,badge.eq.developer')
   const owners = ((ownerRows ?? []) as Row[]).map((o) => o.id as string)
-  if (owners.length === 0) return 0
+  const { data: managerRows } = await service.from('staff').select('id, branch_id').eq('active', true).eq('badge', 'general_manager')
+  const managers = (managerRows ?? []) as Row[]
+  if (owners.length === 0 && managers.length === 0) return 0
   let written = 0
   for (const [branchId, branch] of due) {
     const key = `issues-digest:${branchId}:${branch.clock.date}`
@@ -279,18 +285,23 @@ async function issuesDigest(service: Service, clocks: Map<string, BranchClock>):
     const { data: done } = await service.from('schedule_notifications').select('id').eq('dedupe_key', key).limit(1)
     if ((done ?? []).length > 0) continue
     digestChecked.set(key, Date.now())
-    const report = await loadIssueReport(service, branchId)
-    if (report.open.length === 0) continue
-    const lines = report.open.slice(0, 4).map((g) => `${g.label} · דווח ${g.reports.length === 1 ? 'פעם אחת' : `${g.reports.length} פעמים`}${g.people > 1 ? ` · ${g.people} עובדים` : ''}`)
-    const rest = report.open.length - lines.length
-    const count = report.open.length
+    const report = await loadShortageReport(service, branchId)
+    const count = shortageCount(report)
+    if (count === 0) continue
+    const lines = [
+      ...report.gaps.slice(0, 2).map((g) => `${KIND_LABELS[g.kind]} לא הוגש · ${dayLabel(g.shiftDate)} · ${g.staffNames.join(' · ')}`),
+      ...report.open.slice(0, 4).map((g) => `${g.label} · דווח ${g.reports.length === 1 ? 'פעם אחת' : `${g.reports.length} פעמים`}${g.people > 1 ? ` · ${g.people} עובדים` : ''}`),
+    ].slice(0, 4)
+    const rest = count - lines.length
+    // Owners and developers, and the general manager of this branch (or of every branch).
+    const recipients = [...new Set([...owners, ...managers.filter((m) => m.branch_id === null || m.branch_id === branchId).map((m) => m.id as string)])]
     written += await insertReminders(
       service,
-      owners.map((staffId) => ({
+      recipients.map((staffId) => ({
         branch_id: branchId,
         staff_id: staffId,
         kind: 'issues.digest',
-        title: count === 1 ? 'דוח בוקר: דבר אחד לטיפול' : `דוח בוקר: ${count} דברים לטיפול`,
+        title: shortageTitle(count),
         body: `${branch.name ? `${branch.name}\n` : ''}${lines.join('\n')}${rest > 0 ? `\nועוד ${rest}` : ''}`,
         link: { url: `/owner/issues${branch.slug ? `?branch=${branch.slug}` : ''}` },
         dedupe_key: key,

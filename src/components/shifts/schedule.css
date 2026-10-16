@@ -869,6 +869,14 @@ button.sch-shift {
 .sch-staffrow--off {
   opacity: 0.62;
 }
+/* The person just created: a ring and a glow that fade out when the class is removed (about 3.4 s after the scroll). Colour is
+   never the only signal: the toast above also says who was added. */
+.sch-staffrow { scroll-margin-block: 90px; transition: box-shadow .7s var(--ease), background .7s var(--ease); }
+.sch-staffrow--flash {
+  background: color-mix(in srgb, var(--neon) 11%, var(--bg-elev));
+  box-shadow: 0 0 0 2px var(--neon), 0 0 26px color-mix(in srgb, var(--neon) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) { .sch-staffrow { transition: none; } }
 .sch-staffrow--management {
   border-color: color-mix(in srgb, var(--neon) 35%, var(--line-strong));
   box-shadow: inset 3px 0 color-mix(in srgb, var(--neon) 60%, transparent), inset 0 1px rgba(255,255,255,.035), 0 10px 24px rgba(0,0,0,.16);
@@ -1718,3 +1726,17 @@ details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
     margin: 6mm;
   }
 }
+
+/* ---- Constraints (אילוצים), 2026-10-16 ---- */
+.sch-constraint-limits { display: flex; flex-direction: column; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.sch-limit-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+.sch-limit-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line-interactive); background: var(--bg-elev); font-size: 0.8rem; font-weight: 700; color: var(--text); }
+.sch-limit-chip small { font-weight: 600; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.sch-limit-chip--used { border-color: var(--warn, #fbbf24); color: var(--warn, #fbbf24); }
+.sch-constraint-day { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
+.sch-constraint-day__name { font-weight: 700; }
+.sch-constraint-day__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sch-chip--wide { padding: 0 12px; font-size: 0.82rem; flex: 1 1 140px; justify-content: center; }
+.sch-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.sch-usage { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.sch-usage--over { color: var(--warn, #fbbf24); }

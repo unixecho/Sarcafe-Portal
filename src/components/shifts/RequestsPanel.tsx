@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowLeftRight, CalendarDays, CalendarOff, Check, ChevronDown, Inbox, UserPlus, X } from 'lucide-react'
+import { ArrowLeftRight, CalendarDays, CalendarOff, Check, ChevronDown, Inbox, MessageSquareText, UserPlus, X } from 'lucide-react'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
@@ -12,7 +12,15 @@ import { coverageOf } from '@/lib/shifts/coverage'
 import { addDays, formatDateLabel, formatShiftLabel, parseISODate, timeAgoHe, weekdayLabel, weekdayLongLabel, weekStartOf } from '@/lib/shifts/time'
 import { indexByShift, nameOf, requestLabel, sideLabel } from '@/lib/shifts/view'
 import { isLiveTimeOff, KIND_LABEL } from '@/lib/shifts/time-off'
+import { countWanted, limitsOf, overLimit, usageLabel } from '@/lib/shifts/constraints'
 import type { ShiftRequest, SwapRequest, SwapSide, TimeOffEntry } from '@/lib/shifts/types'
+
+/** One person's live wishes of the shown week as { date: kinds[] }, for the usage counters. */
+function wantedOf(entries: TimeOffEntry[]): Record<string, TimeOffEntry['kind'][]> {
+  const out: Record<string, TimeOffEntry['kind'][]> = {}
+  for (const entry of entries) (out[entry.date] ??= []).push(entry.kind)
+  return out
+}
 
 // THE manager's inbox — everything that is waiting for a decision, in one place,
 // with what each decision would do spelled out BEFORE the button is pressed:
@@ -76,6 +84,7 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
   }, [db, planning, weekStart])
 
   if (!db || !model) return null
+  const limits = limitsOf(db.settings.features)
   const evalInput = { weekStart, settings: db.settings, roster: db.roster, shifts: db.shifts, assignments: db.assignments, availability: db.availability, timeOff: db.timeOff, today: db.now.date }
   const byShift = indexByShift(db.assignments)
   const submittedAvailability = db.availability.filter((a) => a.status === 'submitted' && a.weekStart === weekStart)
@@ -352,11 +361,17 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
       {/* ---------------------------------------------------------------- what people asked for this week */}
       {model.weekWishes.length > 0 && (
         <section className="sch-wrap" aria-label="מה העובדים ביקשו לשבוע הזה">
-          <h3 className="sch-h">מה העובדים ביקשו לשבוע {formatDateLabel(weekStart)}</h3>
-          <p className="sch-sub">ימי חופש ובקשות "בלי בוקר / בלי ערב". בלוח, מי שביקש/ה בלי משמרת מסוימת מסומן/ת בצבע אחר, ומי שיש לו/ה יום חופש מאושר לא ניתן לשיבוץ.</p>
-          {model.weekWishes.map(({ staffId, entries }) => (
+          <h3 className="sch-h">אילוצים לשבוע {formatDateLabel(weekStart)}</h3>
+          <p className="sch-sub">ימי חופש, ו״לא יכול/ה משמרת בוקר / ערב״. בלוח, מי שביקש/ה לא לעבוד משמרת מסוימת מסומן/ת בצבע אחר, ומי שיש לו/ה יום חופש מאושר לא ניתן לשיבוץ.</p>
+          {model.weekWishes.map(({ staffId, entries }) => {
+            const counts = countWanted(wantedOf(entries))
+            const note = db.availability.find((a) => a.staffId === staffId && a.weekStart === weekStart && a.note)?.note ?? null
+            return (
             <div key={staffId} className="sch-card">
-              <strong>{nameOf(db, staffId)}</strong>
+              <div className="sch-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <strong>{nameOf(db, staffId)}</strong>
+                <span className={`sch-usage${overLimit(counts, limits) ? ' sch-usage--over' : ''}`}>{usageLabel(counts, limits)}</span>
+              </div>
               <div className="sch-wrapflex">
                 {entries.map((entry) => (
                   <Pill key={entry.id} tone={entry.kind === 'day_off' ? (entry.status === 'approved' ? 'danger' : 'warn') : 'warn'}>
@@ -364,8 +379,10 @@ export default function RequestsPanel({ planning = false }: { planning?: boolean
                   </Pill>
                 ))}
               </div>
+              {note && <p className="sch-availability-note"><MessageSquareText size={15} aria-hidden="true" /><span>{note}</span></p>}
             </div>
-          ))}
+            )
+          })}
         </section>
       )}
 

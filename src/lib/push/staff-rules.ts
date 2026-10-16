@@ -120,8 +120,27 @@ export function requestsReminder(now: WallClock): { phase: 'open' | 'closing'; t
 }
 
 /** Alerts that only ever go to the people who run the schedule (a decision is waiting for them). */
-const MANAGER_KINDS = new Set(['swap.awaiting', 'request.new', 'request.cancelled', 'availability.submitted', 'timeoff.new', 'timeoff.cancelled'])
+const MANAGER_KINDS = new Set(['swap.awaiting', 'request.new', 'request.cancelled', 'availability.submitted', 'availability.note', 'timeoff.new', 'timeoff.wish', 'timeoff.cancelled'])
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Who an alert is FOR. The developer account is employee, manager, owner and developer at once, so on that account the
+ *  same bell holds all four kinds of alert; the title says which (owner, 2026-10-16: "if I get a notification meant for dev
+ *  or owner, mention it ... for owner and employee don't add prefixes"). Only the developer's own copy gets a prefix:
+ *  an owner or an employee reads the title as written. */
+export type AlertAudience = 'developer' | 'owner' | 'employee'
+/** Management alerts: the checklist escalation and the morning report, and everything that waits for a manager's decision. */
+const OWNER_KINDS = new Set(['checklist.gap', 'issues.digest', ...MANAGER_KINDS])
+export function alertAudience(kind: string): AlertAudience {
+  if (kind.startsWith('dev.')) return 'developer'
+  return OWNER_KINDS.has(kind) ? 'owner' : 'employee'
+}
+export const AUDIENCE_PREFIX: Record<AlertAudience, string> = { developer: 'מפתח · ', owner: 'בעלים · ', employee: '' }
+/** The title a person should read. `recipient.developer` is true only for the developer account. Idempotent. */
+export function alertTitle(kind: string, title: string, recipient: { developer?: boolean } | null | undefined): string {
+  if (!recipient?.developer) return title
+  const prefix = AUDIENCE_PREFIX[alertAudience(kind)]
+  return prefix && !title.startsWith(prefix) ? `${prefix}${title}` : title
+}
 
 /** Where tapping an alert goes, on the phone and in the notification list alike: the thing the message is about.
  *  A link.url the app wrote itself wins (only a plain same-origin path is honoured, so a stored value can never

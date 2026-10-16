@@ -70,6 +70,8 @@ const overrides = {
   '@/lib/staff/access': access,
   '@/lib/checklists/links': load('src/lib/checklists/links.ts'),
   '@/lib/staff/zip': load('src/lib/staff/zip.ts'),
+  '@/lib/checklists/developer': load('src/lib/checklists/developer.ts'),
+  '@/lib/push/staff-rules': load('src/lib/push/staff-rules.ts'),
   '@/lib/rate-limit': { checkRateLimit: async () => true, checkCredentialRateLimit: async () => true },
 }
 const guard = load('src/lib/pos/server/guard.ts', overrides)

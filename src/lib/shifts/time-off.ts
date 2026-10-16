@@ -61,7 +61,7 @@ export function fitFor(entries: readonly TimeOffEntry[], staffId: string, shift:
 }
 
 export const PERIOD_LABEL: Record<ShiftPeriod, string> = { morning: 'בוקר', evening: 'ערב' }
-export const KIND_LABEL: Record<TimeOffKind, string> = { day_off: 'יום חופש', no_morning: 'בלי משמרת בוקר', no_evening: 'בלי משמרת ערב' }
+export const KIND_LABEL: Record<TimeOffKind, string> = { day_off: 'יום חופש', no_morning: 'לא יכול/ה משמרת בוקר', no_evening: 'לא יכול/ה משמרת ערב' }
 
 /** "בלי בוקר" / "בלי ערב" / "בלי בוקר וערב": the short wish, for chips and pills. */
 export const avoidText = (avoids: readonly ShiftPeriod[]) => `בלי ${avoids.map((period) => PERIOD_LABEL[period]).join(' וגם ')}`

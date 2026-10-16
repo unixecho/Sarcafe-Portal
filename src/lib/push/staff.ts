@@ -15,7 +15,8 @@ import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureVapidConfigured } from './send'
 import { hasAnyMenuEditAccess } from '@/lib/staff/access'
-import { pushPathFor } from './staff-rules'
+import { isDeveloper } from '@/lib/checklists/developer'
+import { alertTitle, pushPathFor } from './staff-rules'
 
 type Service = ReturnType<typeof createServiceRoleClient>
 
@@ -121,9 +122,14 @@ export async function flushStaffPush(): Promise<{ claimed: number; sent: number 
     // Only people with a phone registered need a destination, and only they need to be looked up.
     const reachable = [...perPerson.keys()].filter((staffId) => (subscriptions.get(staffId) ?? []).length > 0)
     const managers = new Set<string>()
+    const developers = new Set<string>()
     if (reachable.length > 0) {
-      const { data: people } = await service.from('staff').select('id, role, badge').in('id', reachable)
-      for (const person of people ?? []) if (hasAnyMenuEditAccess(person as { role?: string | null; badge?: string | null })) managers.add(person.id as string)
+      const { data: people } = await service.from('staff').select('id, role, badge, email').in('id', reachable)
+      for (const person of people ?? []) {
+        if (hasAnyMenuEditAccess(person as { role?: string | null; badge?: string | null })) managers.add(person.id as string)
+        // The developer's alerts say who they are for (owner / developer); nobody else's do.
+        if (isDeveloper(person as { badge?: string | null; email?: string | null })) developers.add(person.id as string)
+      }
     }
 
     let sent = 0
@@ -134,10 +140,11 @@ export async function flushStaffPush(): Promise<{ claimed: number; sent: number 
         continue
       }
       const recipient = { manager: managers.has(staffId) }
+      const named = { developer: developers.has(staffId) }
       const outbound: { payload: Payload; rows: InboxRow[] }[] =
         rows.length > MAX_INDIVIDUAL
-          ? [{ payload: { title: `${rows.length} עדכונים חדשים ב-Sarcafe`, body: rows.slice(0, 3).map((r) => r.title).join(' · '), url: digestPath(rows, recipient), tag: `staff-digest-${staffId}` }, rows }]
-          : rows.map((r) => ({ payload: { title: r.title, body: clip(r.body), url: pushPathFor(r.kind, r.link, recipient), tag: `staff-${r.id}` }, rows: [r] }))
+          ? [{ payload: { title: `${rows.length} עדכונים חדשים ב-Sarcafe`, body: rows.slice(0, 3).map((r) => alertTitle(r.kind, r.title, named)).join(' · '), url: digestPath(rows, recipient), tag: `staff-digest-${staffId}` }, rows }]
+          : rows.map((r) => ({ payload: { title: alertTitle(r.kind, r.title, named), body: clip(r.body), url: pushPathFor(r.kind, r.link, recipient), tag: `staff-${r.id}` }, rows: [r] }))
       for (const { payload, rows: covered } of outbound) {
         const results = await Promise.all(devices.map((device) => sendToOne(service, device, payload)))
         sent += results.filter((r) => r.ok).length

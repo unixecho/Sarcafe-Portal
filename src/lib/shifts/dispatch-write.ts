@@ -23,6 +23,8 @@ import type { ScheduleAction } from './actions'
 import type { SettingsPatch } from './schema'
 import { DEFAULT_PRESETS } from './config'
 import { syncShiftsToPresets } from './preset-sync'
+import { breaks, countWanted, limitsOf, multiChoiceDay } from './constraints'
+import type { TimeOffKind } from './types'
 
 type Service = ReturnType<typeof createServiceRoleClient>
 type Row = Record<string, unknown>
@@ -321,6 +323,20 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       for (const e of action.entries) {
         if (e.date < start || e.date > end) throw refusal('bad_date')
       }
+      // The manager's limits (days off, "cannot do the morning/evening") are checked against the week the person
+      // WANTS after this save; a week already over a limit may be kept or reduced, never increased (constraints.ts).
+      const [{ data: cfg }, { data: live }] = await Promise.all([
+        service.from('shift_settings').select('features').eq('branch_id', action.branchId).maybeSingle(),
+        service.from('staff_time_off').select('day, kind').eq('staff_id', staff.id).gte('day', start).lte('day', end).in('status', ['pending', 'approved', 'noted']),
+      ])
+      const before: Record<string, TimeOffKind[]> = {}
+      for (const row of (live ?? []) as { day: string; kind: TimeOffKind }[]) (before[row.day] ??= []).push(row.kind)
+      const after: Record<string, TimeOffKind[]> = {}
+      for (const e of action.entries) if (e.kinds.length > 0) after[e.date] = e.kinds
+      // One choice per day: either one shift or the whole day. A legacy day that already holds two may stay as it is.
+      if (multiChoiceDay(after, before) !== null) throw refusal('one_choice_per_day')
+      const broken = breaks(countWanted(after), countWanted(before), limitsOf(cfg?.features as { maxDaysOff?: unknown; maxShiftBlocks?: unknown } | null))
+      if (broken) throw refusal(broken)
       return callSched(service, 'sched_submit_time_off', { p_actor: staff.id, p_week_start: start, p_entries: action.entries })
     }
 

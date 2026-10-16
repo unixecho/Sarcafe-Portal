@@ -31,11 +31,13 @@ const MENU_EDITOR_PREFIXES = [
   '/owner/links',
   '/owner/reviews',
   '/owner/pos',
+  // חוסרים ופערים: the owner, or the general manager of the branch (the digest goes to them too).
+  '/owner/issues',
 ]
 // /owner/feedback is owner-only, not menu-edit-scoped — unsolicited public
 // correspondence, sometimes with a contact address attached, and being
 // trusted with the menu has never implied being handed that.
-const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/issues', '/owner/accessibility', '/owner/feedback', '/owner/intro']
+const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/branches', '/owner/accessibility', '/owner/feedback', '/owner/intro']
 // /owner/schedule and /staff/* are gated by isStaff() only — a delegated
 // schedule manager can be any active staff member (badge might just be
 // "barista"), so neither the editor nor the op-only check applies here.

@@ -53,7 +53,7 @@ export const settingsPatchSchema = z
       })
       .strict(),
     ruleSeverity: z.record(z.string().max(40), z.enum(['error', 'warning', 'off'])),
-    features: z.object({ availability: z.boolean(), swaps: z.boolean() }).strict(),
+    features: z.object({ availability: z.boolean(), swaps: z.boolean(), maxDaysOff: z.number().int().min(0).max(7).optional(), maxShiftBlocks: z.number().int().min(0).max(14).nullable().optional() }).strict(),
     scheduleManagers: z.array(uuid).max(30),
   })
   .partial()

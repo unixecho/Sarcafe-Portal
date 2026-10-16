@@ -8,6 +8,7 @@ import { useShifts } from '@/components/shifts/ShiftsProvider'
 import { useSettingsDraft } from '@/components/shifts/SettingsDraft'
 import { PresetCatalog, RoleCatalog, StationCatalog } from '@/components/shifts/CatalogEditor'
 import RosterPanel from '@/components/shifts/RosterPanel'
+import ConstraintLimits from '@/components/shifts/ConstraintLimits'
 import { hoursStatusLabel } from '@/lib/branches'
 import { SAFETY_BOUNDS } from '@/lib/shifts/config'
 import { effectiveWeek, openStatus, settingsFromWeek, usualHours, type DayHours, type HoursWeek } from '@/lib/shifts/hours-edit'
@@ -73,6 +74,7 @@ export default function ManagerPanel() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <FeatureRow label="הגשת זמינות עצמית" on={settings.features.availability} onToggle={(v) => patch({ features: { ...settings.features, availability: v } })} />
           <FeatureRow label="בקשות החלפת משמרות" on={settings.features.swaps} onToggle={(v) => patch({ features: { ...settings.features, swaps: v } })} />
+          {settings.features.availability && <ConstraintLimits />}
         </div>
       </section>
 

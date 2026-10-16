@@ -4,7 +4,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { isOp, isStaff } from '@/lib/staff/access'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { revokeEmployeeSession } from '@/lib/staff/session'
-import { clearLinkCookie, GOOGLE_LINK_COOKIE, ONBOARDING_HEADERS, tokenHash } from '@/lib/staff/invitations'
+import { clearBackCookie, clearLinkCookie, GOOGLE_LINK_COOKIE, LINK_BACK_COOKIE, ONBOARDING_HEADERS, tokenHash } from '@/lib/staff/invitations'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
 
 function safeNext(raw: string | null): string | null {
@@ -25,10 +25,13 @@ export async function GET(request: NextRequest) {
     await revokeEmployeeSession(response)
     return response
   }
+  // The onboarding wizard asks for its own return (a cookie it set when it started Google): success and failure both go back to it.
+  const backToWizard = linking && (await cookies()).get(LINK_BACK_COOKIE)?.value === 'onboarding'
   const failLink = async (reason = 'link_failed') => {
     await supabase.auth.signOut({ scope: 'local' })
-    const response = redirect(`/staff/profile?setup=google&error=${reason}`)
+    const response = redirect(backToWizard ? `/staff/onboarding?error=${reason}` : `/staff/profile?setup=google&error=${reason}`)
     clearLinkCookie(response)
+    clearBackCookie(response)
     return response
   }
   if (!code) return linking ? failLink() : redirect('/login?error=auth')
@@ -45,8 +48,9 @@ export async function GET(request: NextRequest) {
     const { data, error: linkError } = await createServiceRoleClient().rpc('staff_finish_google_link', { p_token_hash: tokenHash(proof), p_auth_user: user.id })
     const result = data as { ok?: boolean; reason?: string } | null
     if (linkError || !result?.ok) return failLink(result?.reason === 'account_conflict' || result?.reason === 'already_linked' ? 'account_conflict' : 'link_failed')
-    const response = await completedRedirect('/staff/profile?linked=1')
+    const response = await completedRedirect(backToWizard ? '/staff/onboarding?linked=1' : '/staff/profile?linked=1')
     clearLinkCookie(response)
+    clearBackCookie(response)
     return response
   }
 

@@ -11,6 +11,8 @@ type AddBranchSheetProps = {
   open: boolean
   onClose: () => void
   onCreated: (branch: Branch) => void
+  /** The branch manager adds a coffee truck only: an event is made inside its truck (the POS is a subsystem of a branch). */
+  permanentOnly?: boolean
 }
 
 /**
@@ -25,7 +27,7 @@ type AddBranchSheetProps = {
  * can start from a copy of an existing branch's PUBLISHED menu so nobody
  * retypes a menu for a Saturday stall.
  */
-export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSheetProps) {
+export default function AddBranchSheet({ open, onClose, onCreated, permanentOnly = false }: AddBranchSheetProps) {
   const titleId = useId()
   const [nameHe, setNameHe] = useState('')
   const [nameEn, setNameEn] = useState('')
@@ -168,7 +170,7 @@ export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSh
           </>
         ) : (
           <>
-        <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {!permanentOnly && <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <legend style={{ fontSize: '0.82rem', color: 'var(--text-dim)', padding: 0, marginBottom: 6 }}>
             {t('owner.menu.branch.kind')}
           </legend>
@@ -183,7 +185,7 @@ export default function AddBranchSheet({ open, onClose, onCreated }: AddBranchSh
               </span>
             </label>
           ))}
-        </fieldset>
+        </fieldset>}
 
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>

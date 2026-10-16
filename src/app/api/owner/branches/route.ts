@@ -24,6 +24,9 @@ const createSchema = z.object({
   // Start an event from a real menu: the slug of an existing branch whose PUBLISHED
   // menu is copied into the new one (as both its draft and its published copy).
   cloneFromSlug: z.string().regex(SLUG_PATTERN).optional(),
+  // An event is the POS subsystem of a coffee truck: the truck it belongs to (a permanent branch). Optional: an event can be
+  // created unassigned and claimed later from the branch manager.
+  parentSlug: z.string().regex(SLUG_PATTERN).optional(),
 })
 
 export const POST = apiRoute(async (request: Request) => {
@@ -38,6 +41,15 @@ export const POST = apiRoute(async (request: Request) => {
     .eq('slug', body.slug)
     .maybeSingle()
   if (existing) throw BadRequest('That location name is already taken — try a different one.')
+
+  // The truck an event belongs to, checked BEFORE anything is created (a bad parent must not leave a half-made event behind).
+  let parentId: string | null = null
+  if (body.parentSlug) {
+    if (body.kind !== 'event') throw BadRequest('רק אירוע שייך לסניף.')
+    const { data: parent } = await service.from('branches').select('id').eq('slug', body.parentSlug).eq('kind', 'permanent').eq('active', true).maybeSingle()
+    if (!parent) throw NotFound('הסניף שאליו האירוע שייך לא נמצא.')
+    parentId = parent.id as string
+  }
 
   // Read the source BEFORE creating anything: a missing source must not leave a
   // half-made location behind.
@@ -63,7 +75,7 @@ export const POST = apiRoute(async (request: Request) => {
   const row = data[0] as { branch_id: string; menu_id: string }
 
   if (body.kind !== 'permanent') {
-    const { error: kindError } = await service.from('branches').update({ kind: body.kind }).eq('id', row.branch_id)
+    const { error: kindError } = await service.from('branches').update({ kind: body.kind, ...(parentId ? { parent_branch_id: parentId } : {}) }).eq('id', row.branch_id)
     // An event that silently stayed 'permanent' would show up on the public site.
     if (kindError) {
       throw new ApiError(500, 'internal_error', 'The location was created but could not be marked as an event. Open it and try again.', {

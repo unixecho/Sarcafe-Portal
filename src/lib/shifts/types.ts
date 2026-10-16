@@ -24,7 +24,10 @@ export type SafetyRules = {
   maxConsecutiveDays: number
 }
 
-export type FeatureFlags = { availability: boolean; swaps: boolean }
+/** `maxDaysOff` / `maxShiftBlocks` (2026-10-16): how many days off, and how many "cannot do the morning / evening" wishes,
+ *  an employee may send for one week. Optional because branches written before they existed have no such keys — read them
+ *  through `limitsOf()` (lib/shifts/constraints.ts), never directly. `maxShiftBlocks: null` = no limit. */
+export type FeatureFlags = { availability: boolean; swaps: boolean; maxDaysOff?: number; maxShiftBlocks?: number | null }
 
 export type RuleSeverity = 'error' | 'warning' | 'off'
 

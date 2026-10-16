@@ -61,6 +61,9 @@ const SIMPLE: Record<string, string> = {
   rate_limited: 'יותר מדי פעולות בבת אחת — חכו רגע ונסו שוב.',
   time_off: 'לעובד/ת הזה יש יום חופש מאושר בתאריך הזה, ולכן אי אפשר לשבץ אותו/ה — באף סניף. אפשר לשבץ מישהו אחר, או לבטל את יום החופש בלשונית "בקשות".',
   not_on_shift: 'מי שנבחר/ה למלא את הצ׳קליסטים צריך/ה להיות משובץ/ת במשמרת.',
+  one_choice_per_day: 'לכל יום אפשר לבחור אחד: לא יכול/ה משמרת בוקר, לא יכול/ה משמרת ערב, או יום חופש כל היום.',
+  too_many_days_off: 'אפשר לבקש עד המספר שהמנהל/ת קבעו של ימי חופש בשבוע. בטלו יום חופש אחר כדי להוסיף את זה.',
+  too_many_shift_blocks: 'הגעתם למספר החסימות (משמרת בוקר או ערב שאי אפשר) שהמנהל/ת קבעו לשבוע. בטלו חסימה אחרת כדי להוסיף את זו.',
 }
 
 /** The Hebrew sentence for a database refusal. */
@@ -128,6 +131,8 @@ export function scheduleStatus(reason: string): number {
     case 'already_assigned':
     case 'has_history':
     case 'time_off':
+    case 'too_many_days_off':
+    case 'too_many_shift_blocks':
       return 409
     default:
       return 400

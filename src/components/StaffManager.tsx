@@ -50,6 +50,9 @@ export default function StaffManager({
   const [query, setQuery] = useState('')
   const [filterSlug, setFilterSlug] = useState<string>(initialBranchSlug)
   const [adding, setAdding] = useState(false)
+  // The person just created: the roster scrolls to them and lights their row for a few seconds (the Ayeka Bar roster does the
+  // same). The sheet is at the top and the roster can be long, so without this the new row would be off-screen.
+  const [flashId, setFlashId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const flash = (kind: ToastState['kind'], text: string) => setToast({ id: Date.now() + Math.random(), kind, text })
@@ -95,6 +98,17 @@ export default function StaffManager({
       .sort((a, b) => Number(b.active) - Number(a.active) || a.label.localeCompare(b.label, 'he'))
   }, [staff, filter, filterBranchId, query])
 
+  // After a creation: scroll the new row to the middle and ring it for ~3.4 s (no smooth scroll for reduced motion).
+  useEffect(() => {
+    if (!flashId || !staff) return
+    const el = document.getElementById(`staff-row-${flashId}`)
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' })
+    const timer = window.setTimeout(() => setFlashId(null), 3400)
+    return () => window.clearTimeout(timer)
+  }, [flashId, staff])
+
   const counts = useMemo(() => ({ active: (staff ?? []).filter((r) => r.active).length, inactive: (staff ?? []).filter((r) => !r.active).length }), [staff])
   const editing = staff?.find((r) => r.id === editingId) ?? null
   const managementRows = visible?.filter((row) => row.role === 'owner' || MANAGEMENT_BADGES.includes(row.badge as Badge)) ?? []
@@ -104,8 +118,8 @@ export default function StaffManager({
     const branch = row.branch_id ? (branches.find((b) => b.id === row.branch_id)?.name.he ?? '') : branches.length > 1 ? 'כל הסניפים' : ''
     const title = badgeLabel(row.badge) || (row.role === 'owner' ? 'בעלים' : 'צוות')
     return (
-      <button key={row.id} type="button" className={`sch-staffrow press${management ? ' sch-staffrow--management' : ''}${row.active ? '' : ' sch-staffrow--off'}`} onClick={() => setEditingId(row.id)} aria-label={`${row.label} — עריכה`}>
-        <Avatar name={row.label} color={colours.get(row.id)} large />
+      <button key={row.id} id={`staff-row-${row.id}`} type="button" className={`sch-staffrow press${management ? ' sch-staffrow--management' : ''}${row.active ? '' : ' sch-staffrow--off'}${flashId === row.id ? ' sch-staffrow--flash' : ''}`} onClick={() => setEditingId(row.id)} aria-label={`${row.label} — עריכה`}>
+        <Avatar name={row.label} color={colours.get(row.id)} emoji={row.avatar_emoji} large />
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span style={{ fontWeight: 800, fontSize: '1rem' }}>{row.label}</span>
           <span className="sch-sub">{[title, branch].filter(Boolean).join(' · ')}</span>
@@ -339,11 +353,14 @@ export default function StaffManager({
         onClose={() => setAdding(false)}
         branches={branches}
         defaultBranchId={filterBranchId ?? ''}
-        onCreated={(label) => {
+        onCreated={(label, id) => {
           setAdding(false)
           flash('ok', `${label} נוסף/ה לצוות ✓ אפשר לשבץ אותו/ה בלוח המשמרות עכשיו.`)
+          // Make sure the new row can be seen: active people, nobody searched for, and a branch filter that includes them.
           setFilter('active')
-          void load()
+          setQuery('')
+          setFilterSlug('')
+          void load().then(() => setFlashId(id))
         }}
       />
 

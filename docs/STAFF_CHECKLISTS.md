@@ -1,5 +1,10 @@
 # Staff checklists
 
+## Per-branch switches, and חוסרים ופערים — 2026-10-16
+
+The owner can switch opening / handover / closing off (and on) for ONE branch from the branch manager (`docs/BRANCH_MANAGER.md`): table `checklist_branch_settings`, `checklist_expected()` honours it, `checklist_set_branch_kind()` does the clean-up atomically (migration `20261016090000`, NOT applied to production, see handoff). The "missing or not working" report below now also lists **unsent checklists** (late, not sent, not covered, not dismissed: `src/lib/checklists/gaps.ts`) in the same collapsible list, can be opened by the branch's general manager, and its 08:00 alert (`issues.digest`) goes to owners, developers and the branch's general manager with the title `חוסרים ופערים: N דברים לטיפול`.
+
+
 ## One person does a shift's checklists, and the "missing or not working" report — 2026-10-15
 
 **Asked by the owner.** (1) When more than one employee is on a shift the owner picks ONE person to do the checklists, because two copies are redundant. If nobody is picked the first checklist sent is enough and locks the others out of sending the one that was sent. A shift has two checklists (opening + handover, handover + closing, or opening + closing), so the others can still send the other one, but only one person per checklist. (2) Instead of many checklists with the sum of their NO answers, a report for the owner, with a daily morning alert, of what is negative: if the ice machine does not work for days and several people report it, one line "ice machine not working" with the list of who reported it, in which shifts and at what time. (3) A category for it on the owner's dashboard for quick access.

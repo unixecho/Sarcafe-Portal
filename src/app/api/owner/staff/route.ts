@@ -9,6 +9,7 @@ import { handleProblem, normalizePhone } from '@/lib/pos/validate'
 import { refusal } from '@/lib/shifts/dispatch-write'
 import { staffDisplayName } from '@/lib/shifts/names'
 import { createStaffInvitation, credentialRoute, ONBOARDING_HEADERS } from '@/lib/staff/invitations'
+import { suggestEmoji } from '@/lib/staff/profile'
 
 // Owner-only throughout — staff management is exactly the kind of
 // privileged action that must never be reachable by a general_manager's
@@ -68,7 +69,7 @@ async function assertHandleFree(service: ReturnType<typeof createServiceRoleClie
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 const COLUMNS =
-  'id, email, first_name, last_name, display_name, phone, role, badge, branch_id, active, invited_at, claimed_at, handle, handle_set_at, colour, employee_no, employee_code, pin_hash, auth_user_id'
+  'id, email, first_name, last_name, display_name, phone, role, badge, branch_id, active, invited_at, claimed_at, handle, handle_set_at, colour, avatar_emoji, push_gate_exempt, employee_no, employee_code, pin_hash, auth_user_id'
 
 export const GET = apiRoute(async () => {
   await requireOwner()
@@ -158,9 +159,15 @@ export const POST = credentialRoute(async (request: NextRequest) => {
     if (clash) throw new ApiError(409, 'conflict', `כבר יש ${fullName} בצוות. ליצור עוד אחד/ת בכל זאת?`, { reason: 'duplicate_name', name: fullName })
   }
 
+  // Like the Ayeka Bar roster: a new person starts with a random emoji, the least used among the active team, so two people
+  // on one shift rarely look alike. They can change it in the onboarding wizard or their profile.
+  const { data: usedEmojis } = await service.from('staff').select('avatar_emoji').eq('active', true)
+  const avatarEmoji = suggestEmoji((usedEmojis ?? []).map((row) => (row as { avatar_emoji: string | null }).avatar_emoji))
+
   const { data: staff, error } = await service
     .from('staff')
     .insert({
+      avatar_emoji: avatarEmoji,
       email: body.email,
       first_name: body.firstName,
       last_name: body.lastName,
@@ -209,7 +216,7 @@ export const POST = credentialRoute(async (request: NextRequest) => {
     catch { console.error('staff create: invitation creation failed; owner may retry for existing record') }
   }
   // Do not serialize the database row: credential hashes and Auth identifiers are server-only.
-  return NextResponse.json({ staff: { id: staff.id, label, employee_no: staff.employee_code ?? String(staff.employee_no) }, invitation }, { status: 201, headers: ONBOARDING_HEADERS })
+  return NextResponse.json({ staff: { id: staff.id, label, employee_no: staff.employee_code ?? String(staff.employee_no), avatar_emoji: avatarEmoji }, invitation }, { status: 201, headers: ONBOARDING_HEADERS })
 })
 
 const patchSchema = z.object({
@@ -229,6 +236,8 @@ const patchSchema = z.object({
   handle: z.string().optional(),
   // A hex colour, or null to clear it (the person then gets the automatic one).
   colour: z.string().nullable().optional(),
+  // The recovery for a phone that cannot do notifications at all: this employee may use the staff pages without them.
+  pushGateExempt: z.boolean().optional(),
 })
 
 type Existing = {
@@ -278,6 +287,10 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   const updates: Record<string, unknown> = {}
   const changed: string[] = []
   if (body.colour !== undefined) updates.colour = body.colour
+  if (body.pushGateExempt !== undefined) {
+    updates.push_gate_exempt = body.pushGateExempt
+    changed.push(body.pushGateExempt ? 'כניסה בלי התראות' : 'חובת התראות')
+  }
 
   if (body.firstName !== undefined) {
     updates.first_name = body.firstName || null

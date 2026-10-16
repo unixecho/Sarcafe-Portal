@@ -1,0 +1,86 @@
+/* The branch manager (2026-10-16). Built on the existing app tokens; RTL by default. */
+.bm { display: flex; flex-direction: column; gap: 14px; }
+.bm-hero { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg-elev); flex-wrap: wrap; }
+.bm-hero__icon { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: rgba(255, 138, 92, 0.14); color: var(--neon); }
+.bm-hero__copy { flex: 1; min-width: 160px; }
+.bm-hero__copy h2 { margin: 0; font-size: 1.15rem; font-weight: 800; }
+.bm-hero__copy p { margin: 3px 0 0; font-size: 0.82rem; color: var(--text-dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bm-hero__alert { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border-radius: 999px; background: rgba(251, 191, 36, 0.14); border: 1px solid var(--warn, #fbbf24); color: var(--warn, #fbbf24); font-size: 0.8rem; font-weight: 800; text-decoration: none; }
+.bm-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--text-faint); display: inline-block; }
+.bm-dot--on { background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18); }
+
+.bm-tabs { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); overflow-x: auto; scrollbar-width: none; position: sticky; top: 8px; z-index: 20; }
+.bm-tabs::-webkit-scrollbar { display: none; }
+.bm-tab { flex: 1 0 auto; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--text-dim); font: inherit; font-size: 0.86rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; transition: background .2s var(--ease), color .2s var(--ease); }
+.bm-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); }
+.bm-tab__badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--danger, #ff6b6b); color: #fff; font-size: 0.7rem; display: inline-grid; place-items: center; }
+.bm-panel { display: flex; flex-direction: column; gap: 14px; outline: none; }
+
+.bm-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg-elev); }
+.bm-card h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+.bm-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bm-pill { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line-interactive); background: var(--bg); font-size: 0.74rem; font-weight: 800; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bm-pill--ok { color: #4ade80; border-color: rgba(74, 222, 128, 0.5); }
+.bm-progress { height: 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.bm-progress span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--neon), var(--neon-soft)); transition: width .5s var(--ease); }
+
+.bm-ready { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bm-ready__row { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.bm-ready__mark { flex: none; color: var(--text-faint); display: grid; place-items: center; }
+.bm-ready__mark--ok { color: #4ade80; }
+.bm-ready__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bm-ready__copy strong { font-size: 0.92rem; }
+.bm-ready__copy small { color: var(--text-dim); font-size: 0.76rem; line-height: 1.4; }
+.bm-ready__state { font-size: 0.74rem; font-weight: 800; color: var(--text-faint); }
+.bm-ready__chev { color: var(--text-faint); flex: none; }
+
+.bm-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bm-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px; min-height: 92px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); color: inherit; font: inherit; text-align: start; text-decoration: none; cursor: pointer; }
+.bm-stat svg { color: var(--neon); }
+.bm-stat strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.bm-stat span { font-size: 0.78rem; color: var(--text-dim); }
+
+.bm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bm-ck { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg); transition: opacity .2s var(--ease), border-color .2s var(--ease); }
+.bm-ck--off { opacity: 0.78; border-style: dashed; }
+.bm-ck__row { display: flex; align-items: flex-start; gap: 12px; }
+.bm-ck__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bm-ck__copy strong { font-size: 0.98rem; }
+.bm-ck__copy small { color: var(--text-dim); font-size: 0.78rem; line-height: 1.5; }
+.bm-ck__copy .bm-ck__meta { color: var(--text-faint); }
+.bm-switch { flex: none; display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 56px; min-height: 52px; padding: 4px; border: 0; background: transparent; color: var(--text-dim); font: inherit; font-size: 0.72rem; font-weight: 800; cursor: pointer; }
+.bm-switch:disabled { opacity: 0.6; cursor: progress; }
+.bm-note { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 0.8rem; line-height: 1.5; }
+.bm-note--ok { background: rgba(74, 222, 128, 0.1); color: #4ade80; }
+.bm-note--error { background: rgba(255, 107, 107, 0.1); color: #ff6b6b; }
+
+.bm-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-interactive); border-radius: 12px; background: var(--bg); color: var(--text); font-size: 0.86rem; font-weight: 700; text-decoration: none; align-self: flex-start; }
+.bm-link svg:last-child { color: var(--text-faint); margin-inline-start: auto; }
+.bm-link--sm { min-height: 40px; font-size: 0.8rem; }
+
+.bm-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bm-people li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.bm-people__avatar { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: rgba(255, 138, 92, 0.14); color: var(--neon); font-weight: 800; }
+.bm-people__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bm-people__copy small { color: var(--text-dim); font-size: 0.74rem; }
+.bm-empty { color: var(--text-dim); gap: 8px; justify-content: center; }
+
+/* The branch picker page */
+.bm-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 760px) { .bm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bm-branch { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg-elev); color: inherit; text-decoration: none; }
+.bm-branch__top { display: flex; align-items: center; gap: 10px; }
+.bm-branch__top strong { flex: 1; font-size: 1.05rem; }
+.bm-branch__meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-branch__go { display: inline-flex; align-items: center; gap: 6px; color: var(--neon-soft); font-size: 0.84rem; font-weight: 800; }
+.bm-add { min-height: 64px; border-style: dashed; justify-content: center; align-items: center; flex-direction: row; gap: 10px; font-weight: 800; cursor: pointer; font: inherit; }
+
+@media (prefers-reduced-motion: reduce) { .bm-progress span, .bm-tab, .bm-ck { transition: none; } }
+
+/* The slider between branches (2026-10-16) */
+.bm-slider { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.bm-slider::-webkit-scrollbar { display: none; }
+.bm-slide { flex: 0 0 auto; scroll-snap-align: start; display: inline-flex; align-items: center; gap: 7px; min-height: 46px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-interactive); background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .88rem; font-weight: 800; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease); }
+.bm-slide[aria-current='page'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); border-color: transparent; }
+.bm-slide--add { border-style: dashed; color: var(--neon-soft); }
+@media (prefers-reduced-motion: reduce) { .bm-slide { transition: none; } }

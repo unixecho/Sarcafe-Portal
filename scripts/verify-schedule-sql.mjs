@@ -1043,6 +1043,38 @@ check('the old auth.uid()-based entry points are gone (no way around the new rul
   (await one(`select count(*)::int n from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('publish_schedule_week','unpublish_schedule_week','clear_schedule_week','copy_schedule_week','set_schedule_member','request_shift_swap','accept_shift_swap','decide_shift_swap','cancel_shift_swap')`)).n === 0)
 
 // ============================================================================
+section('the owner hears about every constraint and every note (20261016090000)')
+// The planning migration was just run again above (it replaces sched_submit_availability); this one is the newest, so it goes last, twice (it must be re-runnable).
+await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_branch_manager_checklists_constraints.sql')), 'utf8'))
+await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_branch_manager_checklists_constraints.sql')), 'utf8'))
+check('the constraints migration may be run again', true)
+const WISH = '2031-04-06' // a Sunday
+const wishNotes = async (kind) => q(`select staff_id, title, body from public.schedule_notifications where kind = $1 order by created_at`, [kind])
+const noWishYet = (await wishNotes('timeoff.wish')).length
+const lenaWishes = await submitOff(lena, WISH, [{ date: day(1, WISH), kinds: ['no_morning'] }, { date: day(2, WISH), kinds: ['no_evening'] }])
+const wishAlerts = await wishNotes('timeoff.wish')
+check('wishes alone (no day off) are sent to the managers', lenaWishes.ok === true && lenaWishes.added === 2 && wishAlerts.length - noWishYet >= 3 && [owner.id, gm.id, delegate.id].every((id) => wishAlerts.some((n) => n.staff_id === id)))
+check('...in ONE alert that lists each kind with its days, and the employee is not told', /לא יכול\/ה בבוקר/.test(wishAlerts.at(-1).body) && /לא יכול\/ה בערב/.test(wishAlerts.at(-1).body) && !wishAlerts.some((n) => n.staff_id === lena.id))
+const mixed = await submitOff(lena, WISH, [{ date: day(1, WISH), kinds: ['no_morning'] }, { date: day(2, WISH), kinds: ['no_evening'] }, { date: day(4, WISH), kinds: ['day_off'] }])
+const mixedAlert = (await wishNotes('timeoff.new')).at(-1)
+check('a day off in the same send turns it into the "needs an answer" alert, with the day off first', mixed.added === 1 && /יום חופש:/.test(mixedAlert.body) && !/לא יכול\/ה/.test(mixedAlert.body))
+const resendWish = (await wishNotes('timeoff.wish')).length
+await submitOff(lena, WISH, [{ date: day(1, WISH), kinds: ['no_morning'] }, { date: day(2, WISH), kinds: ['no_evening'] }, { date: day(4, WISH), kinds: ['day_off'] }])
+check('sending the same things again alerts nobody', (await wishNotes('timeoff.wish')).length === resendWish)
+
+const noteAlerts = async () => q(`select staff_id, title, body from public.schedule_notifications where kind = 'availability.note' order by created_at`)
+const sendNote = (note, entries = []) => rpc('sched_submit_availability', { p_actor: lena.id, p_branch: maor, p_week_start: WISH, p_entries: JSON.stringify(entries), p_note: note, p_status: 'submitted' })
+const sentNote = await sendNote('לא יכולה אחרי 17:00 ביום ג׳')
+const firstNotes = await noteAlerts()
+check('a note added to the week reaches the managers with its text', sentNote.ok === true && [owner.id, gm.id, delegate.id].every((id) => firstNotes.some((n) => n.staff_id === id && n.body === 'לא יכולה אחרי 17:00 ביום ג׳')) && /הוסיף\/ה הערה/.test(firstNotes[0].title))
+await sendNote('לא יכולה אחרי 17:00 ביום ג׳')
+check('sending the same note again alerts nobody', (await noteAlerts()).length === firstNotes.length)
+await sendNote('לא יכולה אחרי 16:00 ביום ג׳')
+check('changing the note alerts again', (await noteAlerts()).length === firstNotes.length * 2)
+await sendNote(null)
+check('removing the note is not an alert of its own', (await noteAlerts()).length === firstNotes.length * 2)
+
+// ============================================================================
 section('the app and the database agree on names')
 const walkSrc = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkSrc(`${d}${e.name}/`) : /\.tsx?$/.test(e.name) ? [`${d}${e.name}`] : []))
 const called = new Set()

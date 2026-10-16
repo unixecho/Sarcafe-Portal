@@ -1,0 +1,76 @@
+import Link from 'next/link'
+import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import InstallAppButton from '@/components/app/InstallAppButton'
+import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
+import StaffPushCard from '@/components/staff/StaffPushCard'
+import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
+import GoogleLinkPrompt from '@/components/staff/GoogleLinkPrompt'
+import WorkshopCard from '@/components/workshop/WorkshopCard'
+import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
+import { loadShiftStatus } from '@/lib/staff/shift-status'
+import { createServiceRoleClient } from '@/lib/supabase/server'
+import { hasAnyMenuEditAccess } from '@/lib/staff/access'
+import { isDeveloper } from '@/lib/checklists/developer'
+import { alertTitle } from '@/lib/push/staff-rules'
+import type { StaffIdentity } from '@/lib/staff/session'
+
+// The employee's dashboard BODY — everything under the header. Two pages show it: the employee home (/staff) and the
+// developer's single dashboard (/staff/dev) as its "employee" view, so the developer sees exactly what staff see.
+//
+// Order, by what the person needs first: the shift (and its checklist button) → anything waiting for them (alerts) → the
+// one-time set-up prompts → the workshop → the tools for the shift → their profile.
+export default async function EmployeeDashboardView({ me }: { me: StaffIdentity }) {
+  const fullLogin = me.via === 'google' && !me.quick
+  const developer = isDeveloper(me)
+  const scheduleHref = fullLogin ? '/staff/schedule' : '/login?next=/staff/schedule'
+  const service = createServiceRoleClient()
+  const [updates, count, shiftStatus] = await Promise.all([
+    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(20),
+    service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
+    loadShiftStatus(service, me.id),
+  ])
+  const categories: DashboardCategory[] = [
+    { title: 'המשמרת שלי', entries: [
+      { href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה — הכל במקום אחד' },
+      { href: scheduleHref, icon: CalendarClock, label: 'משמרות ואילוצים', description: fullLogin ? 'הסידור שפורסם, אילוצים והחלפת משמרת' : 'כניסה עם Google לצפייה בסידור ולשליחת אילוצים' },
+    ] },
+    { title: 'במהלך השירות', entries: [
+      ...(fullLogin ? [{ href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' }] : []),
+      { href: '/pos', icon: Receipt, label: 'קופת אירועים ועמדות', description: 'הזמנות האירוע והעמדה שבה עובדים' },
+    ] },
+  ]
+  if (fullLogin && hasAnyMenuEditAccess(me)) categories.push({ title: 'ניהול במשמרת', entries: [
+    { href: '/owner/schedule', icon: CalendarClock, label: 'ניהול סידור העבודה', description: 'שיבוצים, אילוצים ואישור החלפות בסניף שלך' },
+    { href: '/owner/issues', icon: ClipboardCheck, label: 'חוסרים ופערים', description: 'מה חסר, מה לא עובד ומה לא הוגש בסניף שלך' },
+    { href: '/owner/editor', icon: ShoppingBag, label: 'ניהול התפריט', description: 'עריכת התפריט והזמינות בסניף שלך' },
+    { href: '/owner/pos', icon: Receipt, label: 'ניהול קופת אירועים', description: 'כלי ניהול לאירועים שבאחריותך' },
+  ] })
+  const name = me.first_name || me.display_name || 'צוות Sarcafe'
+  const unread = count.count ?? 0
+  const notifications = ((updates.data ?? []) as DashboardNotification[]).map((row) => ({ ...row, title: alertTitle(row.kind ?? '', row.title, { developer }) }))
+  const alerts = <DashboardNotifications initialNotifications={notifications} initialUnread={unread} initialError={!!updates.error || !!count.error} scheduleHref={scheduleHref} googleSignedIn={fullLogin} manager={fullLogin && hasAnyMenuEditAccess(me)} />
+  const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
+
+  return (
+    <>
+      <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{date}</p></div></div>
+      <ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} />
+      {/* Something waiting for the person comes before the set-up prompts; with nothing new the prompts go first. */}
+      {unread > 0 && alerts}
+      {!me.auth_user_id && <GoogleLinkPrompt />}
+      <StaffPushCard />
+      {unread === 0 && alerts}
+      <WorkshopCard />
+      <DashboardSections categories={categories} staff />
+      <div className="app-group app-account">
+        <Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
+        <InstallAppButton />
+      </div>
+      {developer && (
+        <div className="app-group app-account">
+          <Link href="/staff/dev" className="app-row app-row--quiet"><span className="app-row__icon"><Beaker size={21} aria-hidden="true" /></span><span className="app-row__copy"><strong>מצב מפתח</strong><small>בדיקות, בריאות המערכת וכלי מפתח</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
+        </div>
+      )}
+    </>
+  )
+}

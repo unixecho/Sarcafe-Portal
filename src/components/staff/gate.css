@@ -1,0 +1,23 @@
+/* The notifications gate (2026-10-16): a full-screen, one-step-at-a-time screen on the existing app tokens. RTL by default. */
+.gate-wrap { min-height: 100dvh; width: 100%; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 18px max(28px, env(safe-area-inset-bottom)); background: var(--bg); }
+.gate { width: min(100%, 460px); display: flex; flex-direction: column; gap: 14px; text-align: start; }
+.gate > :first-child { align-self: center; }
+.gate h1 { margin: 6px 0 0; font-size: clamp(1.45rem, 6vw, 1.9rem); line-height: 1.2; letter-spacing: -.03em; font-weight: 750; text-align: center; outline: none; }
+.gate-muted { margin: 0; color: var(--text-dim, var(--text-muted)); font-size: .94rem; line-height: 1.65; }
+.gate-note { margin: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-interactive); background: var(--bg-elev); font-size: .86rem; line-height: 1.6; }
+.gate-box { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); font-size: .9rem; line-height: 1.6; }
+.gate-box p { margin: 0; }
+.gate-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.gate-step { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg-elev); opacity: .6; transition: opacity .25s var(--ease), border-color .25s var(--ease); }
+.gate-step.now { opacity: 1; border-color: color-mix(in srgb, var(--neon) 55%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--neon) 10%, transparent), transparent 60%), var(--bg-elev); }
+.gate-step.done { opacity: .85; }
+.gate-step-n { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--neon) 16%, transparent); color: var(--neon-soft); font-weight: 800; font-size: .82rem; }
+.gate-step.done .gate-step-n { background: rgba(74, 222, 128, .16); color: #4ade80; }
+.gate-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gate-step-body b { font-size: .98rem; }
+.gate-step-body p { margin: 0; font-size: .86rem; line-height: 1.6; color: var(--text-dim, var(--text-muted)); }
+.gate-step-body ol { list-style: decimal; margin: 4px 0 0; padding-inline-start: 20px; display: grid; gap: 6px; font-size: .86rem; line-height: 1.55; }
+.gate-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.gate-actions .sch-btn { min-height: 52px; justify-content: center; }
+.gate-signout { align-self: center; min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .gate-step { transition: none; } }

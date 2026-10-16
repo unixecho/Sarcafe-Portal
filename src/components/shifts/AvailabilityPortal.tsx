@@ -1,44 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
+import { useState } from 'react'
+import { CalendarPlus, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
-import { InlineError, Notice } from '@/components/shifts/ui'
+import { InlineError } from '@/components/shifts/ui'
 import TimeOffPortal from '@/components/shifts/TimeOffPortal'
 import { addDays, formatDateLabel, formatShiftRange, hasStarted, requestDeadline, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
-import type { AvailabilityEntry, AvailabilityKind } from '@/lib/shifts/types'
 
-const KIND_LABELS: Record<Exclude<AvailabilityKind, 'partial'>, string> = { unavailable: 'לא זמין/ה (הגשה ישנה)', prefer: 'מעדיף/ה לעבוד' }
-
-// "Which days can I NOT work?" — for the week after the one on the schedule tab.
-// Only exceptions are stored: a day with nothing marked means "available". The
-// manager sees what is submitted, and the scheduler warns before putting someone
-// on a day they said they cannot do. Saving and submitting both say so, in words.
+// "מה לא מתאים לי בשבוע הבא?" — the constraints (אילוצים) for the week after the one on the schedule tab, plus the
+// shifts the manager opened for requests. The constraints themselves are TimeOffPortal: per day "cannot do the morning",
+// "cannot do the evening" or "a whole day off", the manager's limits, a note, one send button. Before 2026-10-16 this
+// screen also offered "only some hours" and "I would like to work", which employees no longer see; a submission that
+// still carries them is shown to the manager as before (PlanningPanel) and left untouched when a note is sent.
 export default function AvailabilityPortal() {
   const { db, dispatch, weekStart, setWeekStart } = useShifts()
   const target = addDays(weekStart, 7)
-  const existing = db?.availability.find((a) => a.weekStart === target && a.staffId === db.viewerStaffId)
-
-  const [entries, setEntries] = useState<AvailabilityEntry[]>(existing?.entries ?? [])
-  const [note, setNote] = useState(existing?.note ?? '')
-  const [saving, setSaving] = useState<'draft' | 'submitted' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [requestBusy, setRequestBusy] = useState<string | null>(null)
 
-  useEffect(() => {
-    setEntries(existing?.entries ?? [])
-    setNote(existing?.note ?? '')
-    setError(null)
-    // Re-syncs only when the target week changes, deliberately not on every `existing`
-    // identity change (a background refresh would otherwise stomp an unsaved edit).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target])
-
   if (!db || !db.settings.features.availability) return null
-  const isPast = addDays(target, 6) < db.now.date
   const closed = !requestsOpen(target, db.now)
-  const availabilityLocked = isPast || closed
-  const dates = weekDates(target)
   const targetWeek = db.weeks.find((week) => week.weekStart === target)
   const shiftRequestsLocked = targetWeek?.status !== 'published' && closed
   const requestChoices = [...(targetWeek?.status === 'published' ? db.shifts : db.planningShifts)]
@@ -50,39 +31,13 @@ export default function AvailabilityPortal() {
       !hasStarted(shift, db.now) &&
       !db.assignments.some((assignment) => assignment.shiftId === shift.id && assignment.staffId === db.viewerStaffId)
   )
-  const dirty = JSON.stringify(entries) !== JSON.stringify(existing?.entries ?? []) || note !== (existing?.note ?? '')
-
-  function setKind(date: string, kind: AvailabilityKind | null) {
-    setEntries((prev) => {
-      const rest = prev.filter((e) => e.date !== date)
-      return kind ? [...rest, { date, kind, ...(kind === 'partial' ? { from: db!.settings.openTime, to: db!.settings.closeTime } : {}) }] : rest
-    })
-  }
-
-  function setTime(date: string, field: 'from' | 'to', value: string) {
-    setEntries((prev) => prev.map((e) => e.date === date ? { ...e, [field]: value } : e))
-  }
 
   async function request(shiftId: string) {
     setRequestBusy(shiftId)
     setError(null)
-    const res = await dispatch({ type: 'requestShift', shiftId, note: note.trim() || null }, { quiet: true, success: 'הבקשה נשלחה למנהל/ת. השיבוץ ייקבע לאחר האישור ופרסום הלוח.' })
+    const res = await dispatch({ type: 'requestShift', shiftId, note: null }, { quiet: true, success: 'הבקשה נשלחה למנהל/ת. השיבוץ ייקבע לאחר האישור ופרסום הלוח.' })
     if (!res.ok) setError(res.message)
     setRequestBusy(null)
-  }
-
-  async function submit(status: 'draft' | 'submitted') {
-    setSaving(status)
-    setError(null)
-    const res = await dispatch(
-      { type: 'submitAvailability', branchId: db!.branchId, weekStart: target, entries, note: note.trim() || null, status },
-      {
-        quiet: true,
-        success: status === 'submitted' ? 'הזמינות הוגשה ✓ המנהל/ת יראו אותה, והיא תילקח בחשבון בשיבוץ.' : 'נשמר כטיוטה ✓ (עוד לא הוגש למנהל/ת)',
-      }
-    )
-    setSaving(null)
-    if (!res.ok) setError(res.message)
   }
 
   return (
@@ -95,7 +50,7 @@ export default function AvailabilityPortal() {
           <strong className="ltr-isolate">
             {formatDateLabel(target)} – {formatDateLabel(weekDates(target)[6]!)}
           </strong>
-          <span>הבקשות שלכם לשבוע הזה</span>
+          <span>האילוצים שלכם לשבוע הזה</span>
         </div>
         <button type="button" className="sch-iconbtn press" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="שבוע הבא">
           <ChevronLeft size={20} aria-hidden="true" />
@@ -103,62 +58,12 @@ export default function AvailabilityPortal() {
       </div>
 
       <div className={`sch-card ${closed ? '' : 'sch-card--attention'}`}>
-        <div className="sch-row"><Clock3 size={18} aria-hidden="true" /><strong>{closed ? 'הגשת הזמינות נסגרה' : `מגישים עד יום שלישי ${formatDateLabel(requestDeadline(target))}`}</strong></div>
-        <p className="sch-sub">{closed ? 'המנהל/ת מכינים את הלוח. לשינוי זמינות מאוחר פנו אליהם. משמרת שפורסמה ונפתחה לבקשות עדיין אפשר לבקש.' : 'עד חצות, שעון ישראל. סמנו זמינות ובחרו משמרות מועדפות; המנהל/ת מחליטים על השיבוץ.'}</p>
+        <div className="sch-row"><Clock3 size={18} aria-hidden="true" /><strong>{closed ? 'הגשת האילוצים נסגרה' : `מגישים עד יום שלישי ${formatDateLabel(requestDeadline(target))}`}</strong></div>
+        <p className="sch-sub">{closed ? 'המנהל/ת מכינים את הסידור. לשינוי מאוחר פנו אליהם. משמרת שפורסמה ונפתחה לבקשות עדיין אפשר לבקש.' : 'עד חצות, שעון ישראל. סמנו מה לא מתאים לכם; המנהל/ת מחליטים על השיבוץ.'}</p>
       </div>
       <TimeOffPortal target={target} />
 
-      <div className="sch-row" style={{ marginTop: 6 }}><Clock3 size={18} aria-hidden="true" /><h3 className="sch-h">שעות חלקיות והעדפות</h3></div>
-      <p className="sch-sub">אפשר לסמן יום שבו אפשר לעבוד רק בשעות מסוימות, או יום שאתם מעדיפים לעבוד בו. יום שלא סימנתם — אתם זמינים. (לא רוצים לעבוד ביום מסוים? זה ב״ימי חופש״ למעלה.)</p>
-
-      {existing?.status === 'submitted' && !dirty && (
-        <p className="sch-pill sch-pill--ok" style={{ alignSelf: 'flex-start' }}>
-          <CheckCircle2 size={14} aria-hidden="true" /> הוגש למנהל/ת
-        </p>
-      )}
-      {isPast && <Notice tone="info">השבוע הזה כבר עבר — אי אפשר לשנות בו זמינות.</Notice>}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {dates.map((date, dow) => {
-          const entry = entries.find((e) => e.date === date)
-          return (
-            <div key={date} className="sch-card" style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', padding: '10px 12px' }}>
-              <span style={{ flex: '1 1 110px', fontWeight: 700 }}>
-                {weekdayLongLabel(dow)} <span className="sch-faint ltr-isolate" style={{ fontSize: '0.8rem', fontWeight: 600 }}>{formatDateLabel(date)}</span>
-              </span>
-              {/* "Unavailable" is now a day off (needs the owner's yes, see TimeOffPortal). An old submission that still has it shows, and can be cleared. */}
-              {(entry?.kind === 'unavailable' ? (['unavailable', 'prefer', 'partial'] as const) : (['prefer', 'partial'] as const)).map((k) => {
-                const active = entry?.kind === k
-                return (
-                  <button key={k} type="button" className="sch-chip press" aria-pressed={active} disabled={availabilityLocked} onClick={() => setKind(date, active ? null : k)}>
-                    {k === 'partial' ? 'שעות מסוימות' : KIND_LABELS[k]}
-                  </button>
-                )
-              })}
-              {entry?.kind === 'partial' && <div className="sch-row" style={{ width: '100%' }}>
-                <label style={{ flex: 1 }}><span className="sch-label">משעה</span><input type="time" className="sch-input ltr-isolate" value={entry.from ?? ''} disabled={availabilityLocked} onChange={(e) => setTime(date, 'from', e.target.value)} /></label>
-                <label style={{ flex: 1 }}><span className="sch-label">עד שעה</span><input type="time" className="sch-input ltr-isolate" value={entry.to ?? ''} disabled={availabilityLocked} onChange={(e) => setTime(date, 'to', e.target.value)} /></label>
-              </div>}
-            </div>
-          )
-        })}
-      </div>
-
-      <label>
-        <span className="sch-label">הערה למנהל/ת (לא חובה)</span>
-        <input className="sch-input" value={note} maxLength={300} disabled={availabilityLocked} onChange={(e) => setNote(e.target.value)} placeholder="משהו שחשוב למנהל/ת לדעת" />
-      </label>
-
       {error && <InlineError>{error}</InlineError>}
-
-      <div className="sch-row">
-        <button type="button" className="sch-btn press" style={{ flex: 1 }} disabled={!!saving || availabilityLocked || !dirty} onClick={() => submit('draft')}>
-          {saving === 'draft' ? 'שומר…' : 'שמירת טיוטה'}
-        </button>
-        <button type="button" className="sch-btn sch-btn--primary press" style={{ flex: 2 }} disabled={!!saving || availabilityLocked || (!dirty && existing?.status === 'submitted')} onClick={() => submit('submitted')}>
-          {saving === 'submitted' ? 'שולח…' : existing?.status === 'submitted' ? 'הגשה מחדש' : 'הגשה למנהל/ת'}
-        </button>
-      </div>
 
       <section className="sch-wrap" aria-label="בקשות למשמרות">
         <div className="sch-row"><CalendarPlus size={19} aria-hidden="true" /><h3 className="sch-h">משמרות שתרצו לעבוד בהן</h3></div>

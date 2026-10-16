@@ -3,6 +3,7 @@ import PageTransitions from '@/components/PageTransitions'
 import StandaloneLaunchGuard from '@/components/StandaloneLaunchGuard'
 import IntroGate from '@/components/intro/IntroGate'
 import PublicA11yWidget from '@/components/PublicA11yWidget'
+import SkipLink from '@/components/SkipLink'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -46,10 +47,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             nothing can get in front of it in the tab order. Its target is
             the <main id="main" tabIndex={-1}> that every route renders;
             the tabIndex is what makes this MOVE focus rather than merely
-            scroll, without which the link is decorative. */}
-        <a href="#main" className="skip-link">
-          דילוג לתוכן הראשי
-        </a>
+            scroll, without which the link is decorative. Customer pages only
+            (lib/a11y-scope.ts): the dashboards do not render it. */}
+        <SkipLink />
         <PageTransitions />
         <StandaloneLaunchGuard />
         {/* Everything except fixed/portalled chrome lives inside this
