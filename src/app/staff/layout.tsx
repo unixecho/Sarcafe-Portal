@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import StaffInstallIntro from '@/components/staff/StaffInstallIntro'
 import NotificationsGate from '@/components/staff/NotificationsGate'
 import AppMotion from '@/components/app/AppMotion'
+import ThemeScope from '@/components/staff/ThemeScope'
+import { loadStaffTheme } from '@/lib/staff/theme-server'
+import '@/components/app/staff-themes.css'
 import { GeistSans } from 'geist/font/sans'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { loadGateState } from '@/lib/staff/gate-state'
@@ -21,12 +24,16 @@ export const metadata: Metadata = {
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const me = await resolveStaffIdentity().catch(() => null)
   const state = me ? await loadGateState(me.id) : null
+  // The person's chosen look (neon until they choose): src/lib/staff/theme.ts, drawn by components/app/staff-themes.css.
+  const { theme } = await loadStaffTheme(me?.id)
   // A six-digit-code sign-in (the QR code on the cart) is floor work only and is never stopped by the app set-up: its page
   // offers the Home Screen shortcut, and the schedule behind it needs the app sign-in, which the gate does guard.
   const codeSession = !!me && !(me.via === 'google' && !me.quick)
   const mode = codeSession ? 'off' : gateModeFor(me ? { role: me.role, badge: isDeveloper(me) ? 'developer' : me.badge, pushGateExempt: state?.exempt } : null)
   return (
-    <AppMotion className={GeistSans.variable}>
+    <AppMotion className={GeistSans.variable} theme={theme}>
+      <ThemeScope theme={theme} />
+      {theme === 'pass' && <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" precedence="default" />}
       <NotificationsGate mode={mode}>
         <StaffInstallIntro />
         {children}

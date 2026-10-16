@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { Beaker, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, Lock, MapPin, Radio } from 'lucide-react'
 import { advanceClock, clockAbs, dayLabel, isChecklistLocked, shiftEndAbs, shiftStartAbs, unlockText, type LockInput, type WallClock } from '@/lib/checklists/window'
@@ -97,8 +97,11 @@ function OnShift({ shift, now, scheduleHref, codeMode }: { shift: ShiftBrief; no
   const ended = left <= 0
   const pending = shift.checklists.filter(waiting)
   const firstOpen = pending.find((item) => !isChecklistLocked(lockFor(shift, item), now))
+  // How far into the shift: drives the progress line (and, in some looks, the ring around the icon).
+  const length = shiftEndAbs(timesOf(shift)) - shiftStartAbs(timesOf(shift))
+  const progress = length > 0 ? Math.max(0, Math.min(100, Math.round(((clockAbs(now) - shiftStartAbs(timesOf(shift))) / length) * 100))) : 100
   return (
-    <section className="app-shiftcard app-shiftcard--live" aria-label="המשמרת שלי עכשיו">
+    <section className="app-shiftcard app-shiftcard--live" aria-label="המשמרת שלי עכשיו" style={{ '--shift-p': `${progress}%` } as CSSProperties}>
       <Link href={scheduleHref} className="app-shiftcard__link press">
         <span className="app-shiftcard__icon"><Radio size={24} aria-hidden="true" /></span>
         <span className="app-shiftcard__copy">
@@ -108,6 +111,12 @@ function OnShift({ shift, now, scheduleHref, codeMode }: { shift: ShiftBrief; no
         </span>
         <ChevronLeft size={19} aria-hidden="true" className="app-row__chevron" />
       </Link>
+      {!ended && (
+        <div className="app-shiftprog" aria-hidden="true">
+          <span className="app-shiftprog__track"><span className="app-shiftprog__fill" /></span>
+          <span className="app-shiftprog__ends"><span>{shift.startTime}</span><span>{shift.endTime}</span></span>
+        </div>
+      )}
       {!shift.checklists.some((item) => !item.dismissed) && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>אין צ׳קליסט זמין למשמרת הזו.</span></p>}
       {shift.checklists.some((item) => !item.dismissed) && (
         <div className="app-shiftcard__actions">
@@ -129,8 +138,20 @@ function OnShift({ shift, now, scheduleHref, codeMode }: { shift: ShiftBrief; no
           })}
         </div>
       )}
+      <ScheduleRow href={scheduleHref} />
       {codeMode && <p className="app-shiftcard__note">{CODE_NOTE}</p>}
     </section>
+  )
+}
+
+/** The visible way into the schedule: the card's one link (the whole top of the card goes there too). */
+function ScheduleRow({ href }: { href: string }) {
+  return (
+    <Link href={href} className="app-shiftcard__schedule press">
+      <CalendarClock size={19} aria-hidden="true" />
+      <span>לסידור המשמרות והאילוצים</span>
+      <ChevronLeft size={17} aria-hidden="true" />
+    </Link>
   )
 }
 
@@ -161,6 +182,7 @@ function Upcoming({ shift, now, scheduleHref, developer, codeMode, onSim }: { sh
       )}
       {!soon && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>הצ׳קליסטים יהיו זמינים ביום המשמרת.</span></p>}
       {soon && pending.length === 0 && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>אין צ׳קליסט שממתין למשמרת הזו.</span></p>}
+      <ScheduleRow href={scheduleHref} />
       {codeMode && <p className="app-shiftcard__note">{CODE_NOTE}</p>}
       {developer && <div className="app-shiftcard__actions"><button type="button" className="app-shiftcard__cta press" onClick={onSim}><Beaker size={18} aria-hidden="true" />כניסה למשמרת בדיקה</button></div>}
     </section>

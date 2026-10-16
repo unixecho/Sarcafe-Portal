@@ -49,8 +49,10 @@ eq('"later" skips Google', W.wizardStep({ ...base, coded: true, googleSkipped: t
 eq('a person who already has Google goes straight to their details', W.wizardStep({ ...base, coded: true, hasGoogle: true }), 'details')
 eq('back from Google they carry on at the details (not the Google step again)', W.wizardStep({ ...base, coded: true, hasGoogle: true, continuing: true }), 'details')
 eq('after the details comes the tour', W.wizardStep({ ...base, coded: true, hasGoogle: true, detailsDone: true }), 'tour')
-eq('the progress strip has the six steps in order, setup first', W.WIZARD_STEPS.map((s) => s.id), ['setup', 'welcome', 'code', 'google', 'details', 'tour'])
-eq('progress follows the step', ['setup', 'welcome', 'code', 'google', 'details', 'tour'].map(W.progressIndex), [0, 1, 2, 3, 4, 5])
+eq('after the details comes the style (2026-10-17), and only then the tour', W.wizardStep({ ...base, coded: true, hasGoogle: true, detailsDone: true, styleDone: false }), 'style')
+eq('a person who already chose a look (this device remembers it) goes straight to the tour', W.wizardStep({ ...base, coded: true, hasGoogle: true, detailsDone: true, styleDone: true }), 'tour')
+eq('the progress strip has the seven steps in order, setup first', W.WIZARD_STEPS.map((s) => s.id), ['setup', 'welcome', 'code', 'google', 'details', 'style', 'tour'])
+eq('progress follows the step', ['setup', 'welcome', 'code', 'google', 'details', 'style', 'tour'].map(W.progressIndex), [0, 1, 2, 3, 4, 5, 6])
 eq('the tour ends on the employee home', W.WIZARD_END_HREF, '/staff')
 
 section('the invite link survives: the address, this device, or a paste')

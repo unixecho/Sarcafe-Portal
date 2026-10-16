@@ -1,0 +1,20 @@
+/* The staff style picker (ThemePicker): five cards, each a small drawing of that look, in the look's own colours. */
+.sp { display: grid; gap: 12px; }
+.sp__item {
+  display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 14px; align-items: center; width: 100%; padding: 10px; text-align: start;
+  border: 1.5px solid var(--line-strong); border-radius: 22px; background: var(--bg-elev); color: var(--text); font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.sp__item:focus-visible { outline: 3px solid var(--neon); outline-offset: 3px; }
+.sp__item[aria-checked='true'] { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), var(--glow); }
+.sp__thumb { pointer-events: none; }
+.sp__thumb .tp { padding: 8px; border-radius: 14px; }
+.sp__thumb .tp__card { margin-top: 6px; padding: 8px; gap: 5px; }
+.sp__thumb .tp__time { font-size: 0.92rem; white-space: nowrap; }
+.sp__copy { display: grid; gap: 4px; min-width: 0; }
+.sp__name { display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 750; }
+.sp__mode { padding: 1px 8px; border-radius: 999px; background: var(--bg-elev-2); color: var(--text-dim); font-size: 0.68rem; font-weight: 650; }
+.sp__blurb { color: var(--text-dim); font-size: 0.8rem; line-height: 1.55; }
+.sp__check { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--neon); color: var(--on-neon, var(--bg)); margin-inline-start: auto; }
+.sp__status { margin: 0; min-height: 1.4em; color: var(--text-dim); font-size: 0.84rem; }
+@media (max-width: 360px) { .sp__item { grid-template-columns: 1fr; } }

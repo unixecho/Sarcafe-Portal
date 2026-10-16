@@ -3,10 +3,10 @@
 //
 // Aligned with the Ayeka Bar wizard (2026-10-16), with the owner's first rule on top: before anything else the device must be able
 // to be told things. So the walk is: SETUP (put the app on the Home Screen, turn notifications on) -> welcome -> choose a code ->
-// connect Google (skippable) -> my details -> a short tour (the "demo") -> the employee home. The security chain underneath is
+// connect Google (skippable) -> my details -> my style (one of five looks) -> a short tour (the "demo") -> the employee home. The security chain underneath is
 // unchanged: a one-time link sets a code, and a Google account is linked only with that code as proof.
 
-export type WizardStep = 'dead' | 'recover' | 'setup' | 'welcome' | 'code' | 'google' | 'details' | 'tour'
+export type WizardStep = 'dead' | 'recover' | 'setup' | 'welcome' | 'code' | 'google' | 'details' | 'style' | 'tour'
 
 export const WIZARD_STEPS: readonly { id: Exclude<WizardStep, 'dead' | 'recover'>; label: string }[] = [
   { id: 'setup', label: 'אפליקציה והתראות' },
@@ -14,6 +14,7 @@ export const WIZARD_STEPS: readonly { id: Exclude<WizardStep, 'dead' | 'recover'
   { id: 'code', label: 'קוד אישי' },
   { id: 'google', label: 'חשבון Google' },
   { id: 'details', label: 'הפרטים שלי' },
+  { id: 'style', label: 'סגנון' },
   { id: 'tour', label: 'סיור קצר' },
 ]
 
@@ -32,6 +33,8 @@ export type WizardState = {
   /** the person returned from Google (or resumed) and is continuing */
   continuing: boolean
   detailsDone: boolean
+  /** the look was chosen (or skipped, or already chosen on this device). Optional: a caller that does not know about the step skips it. */
+  styleDone?: boolean
 }
 
 /** Which screen the wizard shows. */
@@ -42,6 +45,8 @@ export function wizardStep(s: WizardState): WizardStep {
   if (!s.coded) return s.welcomed ? 'code' : 'welcome'
   if (!s.hasGoogle && !s.googleSkipped && !s.continuing) return 'google'
   if (!s.detailsDone) return 'details'
+  // 2026-10-17: after the details and before the tour, each person picks the look of the app (src/lib/staff/theme.ts).
+  if (s.styleDone === false) return 'style'
   return 'tour'
 }
 

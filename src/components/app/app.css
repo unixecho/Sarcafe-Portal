@@ -57,7 +57,7 @@
 }
 .app-nav { flex: 0 0 auto; }
 .app-nav__trigger { position:relative; z-index:321; }
-.app-nav__trigger[aria-expanded='true'] { color: var(--bg); background: var(--neon); border-color: var(--neon); }
+.app-nav__trigger[aria-expanded='true'] { color: var(--on-neon, var(--bg)); background: var(--neon); border-color: var(--neon); }
 .app-nav__scrim { position: fixed; inset: 0; z-index: 317; border: 0; background: rgba(0,0,0,.44); backdrop-filter: blur(3px); cursor: default; }
 .app-nav__panel {
   position: fixed;
@@ -132,7 +132,7 @@
   background: radial-gradient(circle at 100% 0,color-mix(in srgb,var(--neon) 16%,transparent),transparent 58%),var(--bg-elev);
   box-shadow: 0 16px 40px rgba(0,0,0,.22);
 }
-.app-shift-focus__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--bg); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb,var(--neon) 28%,transparent); }
+.app-shift-focus__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--on-neon, var(--bg)); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb,var(--neon) 28%,transparent); }
 .app-shift-focus__copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .app-shift-focus__copy small { color: var(--neon-soft); font-size: .75rem; font-weight: 650; }
 .app-shift-focus__copy strong { font-size: clamp(1rem,3.6vw,1.24rem); line-height: 1.35; letter-spacing: -.02em; }
@@ -207,7 +207,7 @@
 .app-account .app-row { min-height: 74px; }
 .app-notifications { margin-block: 0 24px; }
 .app-notifications__head { display: flex; align-items: center; gap: 8px; }
-.app-notifications__count { display: inline-grid; min-width: 21px; height: 21px; padding-inline: 6px; place-items: center; border-radius: 8px; background: var(--neon); color: var(--bg); font-size: .72rem; font-weight: 800; }
+.app-notifications__count { display: inline-grid; min-width: 21px; height: 21px; padding-inline: 6px; place-items: center; border-radius: 8px; background: var(--neon); color: var(--on-neon, var(--bg)); font-size: .72rem; font-weight: 800; }
 .app-notifications__action { background: none; border: 0; color: var(--neon-soft); min-height: 44px; padding-inline: 6px; font-size: .78rem; font-weight: 600; cursor: pointer; }
 .app-notice { padding: 15px 17px; }
 .app-notice + .app-notice { border-block-start: 1px solid var(--line); }
@@ -235,7 +235,7 @@
 @media (min-width: 600px) { .app-categories--staff { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 399px) { .app-header { gap: 6px; } .app-header__title { font-size: .95rem; } .app-page { padding-inline: 12px; } }
 @media (prefers-reduced-motion: reduce) { .app-row, .app-nav__panel { transition: none; } .app-route-loading::after { animation:none; width:100%; opacity:.65; } }
-.app-install__primary { display: flex; align-items: center; justify-content: center; gap: 9px; background: var(--neon); color: var(--bg); border: 0; border-radius: 16px; font-weight: 700; font-size: .95rem; cursor: pointer; }
+.app-install__primary { display: flex; align-items: center; justify-content: center; gap: 9px; background: var(--neon); color: var(--on-neon, var(--bg)); border: 0; border-radius: 16px; font-weight: 700; font-size: .95rem; cursor: pointer; }
 .app-install-trigger { width: 100%; text-align: start; font: inherit; border: 0; background: none; cursor: pointer; }
 
 /* Staff push-notification card (StaffPushCard): onboarding wizard + staff / owner home. */
@@ -294,7 +294,7 @@
 .app-shiftcard--live { border-color: color-mix(in srgb, var(--success, #48b978) 55%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--success, #48b978) 18%, transparent), transparent 60%), var(--bg-elev); }
 .app-shiftcard--dev { border-style: dashed; border-color: color-mix(in srgb, var(--neon-2) 60%, var(--line)); }
 .app-shiftcard__link { display: flex; align-items: center; gap: 14px; color: var(--text); text-decoration: none; min-height: 92px; }
-.app-shiftcard__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--bg); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb, var(--neon) 28%, transparent); }
+.app-shiftcard__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--on-neon, var(--bg)); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb, var(--neon) 28%, transparent); }
 .app-shiftcard--live .app-shiftcard__icon { background: var(--success, #48b978); box-shadow: 0 8px 24px color-mix(in srgb, var(--success, #48b978) 30%, transparent); }
 .app-shiftcard__copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .app-shiftcard__copy small { display: inline-flex; align-items: center; gap: 7px; color: var(--neon-soft); font-size: .75rem; font-weight: 650; }
@@ -308,7 +308,7 @@
   display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 52px; padding: 0 16px; border-radius: 16px;
   border: 1px solid var(--line-strong, var(--line)); background: var(--bg); color: var(--text); font: inherit; font-weight: 750; text-align: center; text-decoration: none; cursor: pointer;
 }
-.app-shiftcard__cta--primary { background: var(--neon); border-color: var(--neon); color: var(--bg); box-shadow: 0 10px 26px color-mix(in srgb, var(--neon) 30%, transparent); }
+.app-shiftcard__cta--primary { background: var(--neon); border-color: var(--neon); color: var(--on-neon, var(--bg)); box-shadow: 0 10px 26px color-mix(in srgb, var(--neon) 30%, transparent); }
 .app-shiftcard__cta--locked, .app-shiftcard__cta--locked:disabled { opacity: .5; filter: grayscale(1); cursor: not-allowed; }
 .app-shiftcard__done { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--success, #48b978); font-weight: 700; }
 .app-shiftcard__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -339,8 +339,8 @@
 
 .lens-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 17px; background: var(--bg-elev); border: 1px solid var(--line); position: sticky; top: 8px; z-index: 20; margin-block: 0 18px; }
 .lens-tab { flex: 1; min-height: 46px; padding: 8px 6px; border: 0; border-radius: 13px; background: transparent; color: var(--text-dim); font: inherit; font-size: .86rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .25s var(--ease), color .25s var(--ease); }
-.lens-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); }
-.lens-tab__badge { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding-inline: 5px; border-radius: 999px; background: var(--neon); color: var(--bg); font-size: .68rem; font-weight: 800; }
+.lens-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--on-neon, var(--bg)); }
+.lens-tab__badge { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding-inline: 5px; border-radius: 999px; background: var(--neon); color: var(--on-neon, var(--bg)); font-size: .68rem; font-weight: 800; }
 .lens-tab[aria-selected='true'] .lens-tab__badge { background: var(--bg); color: var(--neon-soft); }
 .lens-panel { display: flex; flex-direction: column; outline: none; }
 .dev-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; margin-block: 0 18px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); }
@@ -361,3 +361,12 @@
 .lens-greeting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-block: 2px 12px; }
 .lens-greeting strong { font-size: 1.2rem; font-weight: 800; }
 .lens-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 11px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--neon) 40%, var(--line)); background: color-mix(in srgb, var(--neon) 10%, transparent); color: var(--neon-soft); font-size: .76rem; font-weight: 700; }
+
+/* How far into the shift (a line under the times) and the visible way into the schedule. The five looks (staff-themes.css) restyle both. */
+.app-shiftprog { display: grid; gap: 7px; direction: ltr; }
+.app-shiftprog__track { display: block; height: 6px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.app-shiftprog__fill { display: block; height: 100%; width: var(--shift-p, 0%); border-radius: inherit; background: linear-gradient(90deg, var(--neon), var(--neon-soft)); }
+.app-shiftprog__ends { display: flex; justify-content: space-between; color: var(--text-faint); font-size: .72rem; font-variant-numeric: tabular-nums; }
+.app-shiftcard__schedule { display: flex; align-items: center; gap: 10px; margin: 0 -18px -20px; padding: 15px 18px; border-top: 1px solid var(--line); color: var(--neon-soft); font-size: .88rem; font-weight: 650; text-decoration: none; }
+.app-shiftcard__schedule span { flex: 1; }
+.app-welcome__name { font-weight: inherit; }

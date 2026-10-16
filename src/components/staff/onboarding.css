@@ -39,8 +39,8 @@
 .ob-steps li span { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--neon, var(--accent)) 16%, transparent); color: var(--neon-soft, var(--accent)); font-weight: 800; font-size: .82rem; }
 .ob-kicker { margin: 0; text-align: center; font-size: .82rem; font-weight: 700; color: var(--neon-soft, var(--accent)); }
 .ob-lead { margin: 0; color: var(--text-dim, var(--text-muted)); font-size: .95rem; line-height: 1.65; }
-.ob-tour, .ob-details { display: flex; flex-direction: column; gap: 14px; text-align: start; }
-.ob-tour h1, .ob-details h1 { font-size: clamp(1.35rem, 5.5vw, 1.8rem); outline: none; }
+.ob-tour, .ob-details, .ob-style { display: flex; flex-direction: column; gap: 14px; text-align: start; }
+.ob-tour h1, .ob-details h1, .ob-style h1 { font-size: clamp(1.35rem, 5.5vw, 1.8rem); outline: none; }
 .ob-slide { display: flex; flex-direction: column; gap: 10px; }
 .ob-points { list-style: none; margin: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface, var(--bg-elev)); font-size: .88rem; color: var(--text-dim, var(--text-muted)); line-height: 1.6; }
 .ob-points li { display: flex; gap: 8px; }

@@ -68,7 +68,7 @@
   padding: 0 7px;
   border-radius: 999px;
   background: var(--neon);
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
   font-size: 0.74rem;
   font-weight: 800;
   display: inline-grid;
@@ -107,7 +107,7 @@
 .sch-btn--primary {
   background: var(--neon);
   border-color: transparent;
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
 }
 .sch-btn--ok {
   background: var(--ok);
@@ -639,7 +639,7 @@ button.sch-shift {
 .sch-chip[aria-checked='true'] {
   background: var(--neon);
   border-color: transparent;
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
   font-weight: 800;
 }
 .sch-chip small {
@@ -732,7 +732,7 @@ button.sch-shift {
   border: 2px solid var(--line-interactive);
   display: grid;
   place-items: center;
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
 }
 .sch-pick[aria-checked='true'] .sch-check {
   background: var(--neon);
@@ -1040,7 +1040,7 @@ details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
 }
 .sch-segment button[aria-pressed='true'] {
   background: var(--neon);
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
 }
 
 /* ---- Print ------------------------------------------------------------------------------------ */
@@ -1445,7 +1445,7 @@ details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
 }
 .ew-strip__day[data-today='true'] .ew-strip__num {
   background: var(--neon);
-  color: var(--bg);
+  color: var(--on-neon, var(--bg));
 }
 .ew-strip__day[data-past='true'] .ew-strip__num {
   opacity: 0.5;

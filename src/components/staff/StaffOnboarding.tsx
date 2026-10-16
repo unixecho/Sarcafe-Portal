@@ -6,6 +6,8 @@ import { ArrowRight, CalendarDays, Check, ClipboardPaste, KeyRound, Sparkles } f
 import LogoMark from '@/components/LogoMark'
 import GoogleLinkButton from '@/components/staff/GoogleLinkButton'
 import StaffProfileStep from '@/components/staff/StaffProfileStep'
+import StaffStyleStep from '@/components/staff/StaffStyleStep'
+import { THEME_COOKIE, parseTheme, type StaffTheme } from '@/lib/staff/theme'
 import StaffTour from '@/components/staff/StaffTour'
 import { SetupGate } from '@/components/staff/NotificationsGate'
 import { InlineError } from '@/components/shifts/ui'
@@ -48,6 +50,9 @@ export default function StaffOnboarding() {
   const [googleSkipped, setGoogleSkipped] = useState(false)
   const [continuing, setContinuing] = useState(false)
   const [detailsDone, setDetailsDone] = useState(false)
+  // The look: a person who already chose one on this device (the cookie) is not asked again; otherwise the walk has a style step.
+  const [styleDone, setStyleDone] = useState(false)
+  const [chosenLook, setChosenLook] = useState<StaffTheme | null>(null)
   const [tourOnly, setTourOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -95,7 +100,7 @@ export default function StaffOnboarding() {
           clearInvite(storage())
           setPerson(mine); setCoded(true)
           if (returning) setContinuing(true)
-          else if (params.get('tour') === '1') { setContinuing(true); setDetailsDone(true); setTourOnly(true); setGateDone(true) }
+          else if (params.get('tour') === '1') { setContinuing(true); setDetailsDone(true); setStyleDone(true); setTourOnly(true); setGateDone(true) }
           else if (mine.onboardingDone && !failed) { window.location.replace('/staff'); return }
           return
         }
@@ -160,7 +165,15 @@ export default function StaffOnboarding() {
     setError(null); setPasted(''); setNoLink(false); setLoading(true); setAttempt((n) => n + 1)
   }
 
-  const step = wizardStep({ person: !!person, noLink, gateDone, coded, welcomed, hasGoogle: !!person?.hasGoogle, googleSkipped, continuing, detailsDone })
+  useEffect(() => {
+    try {
+      const match = document.cookie.split('; ').find((part) => part.startsWith(`${THEME_COOKIE}=`))
+      const saved = parseTheme(match?.slice(THEME_COOKIE.length + 1))
+      if (saved) { setChosenLook(saved); setStyleDone(true) }
+    } catch { /* no cookies: the step is simply asked */ }
+  }, [])
+
+  const step = wizardStep({ person: !!person, noLink, gateDone, coded, welcomed, hasGoogle: !!person?.hasGoogle, googleSkipped, continuing, detailsDone, styleDone })
   // Each screen is announced: focus moves to its heading so a screen-reader user lands on the new content.
   useEffect(() => { headingRef.current?.focus({ preventScroll: true }) }, [step])
   const who = person?.firstName?.trim() || person?.name?.split(' ')[0] || 'חבר/ת צוות'
@@ -242,6 +255,7 @@ export default function StaffOnboarding() {
           )}
 
           {step === 'details' && <StaffProfileStep emoji={person.emoji ?? null} firstName={person.firstName ?? person.name.split(' ')[0] ?? ''} lastName={person.lastName ?? person.name.split(' ').slice(1).join(' ')} onDone={() => setDetailsDone(true)} />}
+          {step === 'style' && <StaffStyleStep initial={chosenLook} onDone={() => setStyleDone(true)} />}
           {step === 'tour' && <StaffTour who={who} onFinish={finish} />}
         </section>
       </main>

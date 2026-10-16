@@ -1,0 +1,310 @@
+/* The staff app's five looks (owner, 2026-10-17). Each person picks one when their account is made (and can change it in
+   their profile). A look is selected by `data-staff-theme` on the staff wrapper (server-rendered, so there is no flash) and on
+   <html> (set by ThemeScope, so sheets and menus that portal to <body> match). Every rule starts with the attribute and nothing
+   else, so the same rules also style the small previews in the picker (a preview carries its own attribute).
+
+   Two layers. TOKENS: the whole app already draws itself from --bg, --bg-elev, --neon, --text and friends, so a new set of
+   tokens re-skins every staff screen (schedule, checklists, profile, sheets). STRUCTURE: the home screen (header, greeting, the
+   shift card, the cards) gets each look's own shapes. Lib: src/lib/staff/theme.ts. Contrast of every token pair is checked by
+   scripts/check-staff-themes.mjs; --on-neon is the text colour on an accent fill (the dark looks fall back to --bg).
+
+   neon  = Neon Roast    glass = Frosted Scene    pass = Shift Pass    crema = Crema Day (light)    latte = Latte Blossom (light) */
+
+.native-app[data-staff-theme] { min-height: 100dvh; }
+
+/* =============================================================== neon · Neon Roast */
+[data-staff-theme='neon'] {
+  --bg: #110b08; --bg-elev: #1a110d; --bg-elev-2: #251812;
+  --neon: #ff7a45; --neon-soft: #ffab7a; --neon-2: #57d9c0;
+  --text: #fdf6ec; --text-dim: #b9ada0; --text-faint: #9c9086;
+  --line: rgba(253, 246, 236, 0.09); --line-strong: rgba(253, 246, 236, 0.15); --line-interactive: rgba(253, 246, 236, 0.42);
+  --glow: 0 0 28px rgba(255, 122, 69, 0.5);
+}
+.native-app[data-staff-theme='neon'] {
+  background: radial-gradient(120% 50% at 100% 0%, rgba(255, 122, 69, 0.16), rgba(255, 122, 69, 0) 62%), radial-gradient(90% 40% at 0% 100%, rgba(87, 217, 192, 0.06), rgba(87, 217, 192, 0) 60%), var(--bg);
+}
+[data-staff-theme='neon'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) {
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 42%), var(--bg-elev);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+}
+[data-staff-theme='neon'] .app-header { border-radius: 999px; padding: 8px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)), var(--bg-elev); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4); }
+[data-staff-theme='neon'] .app-header__icon { border-radius: 50%; }
+[data-staff-theme='neon'] .app-header .app-header__signout { border-radius: 50% !important; }
+[data-staff-theme='neon'] .app-header__home { border-color: rgba(255, 122, 69, 0.55); background: rgba(255, 122, 69, 0.12); box-shadow: 0 0 18px rgba(255, 122, 69, 0.28); }
+[data-staff-theme='neon'] .app-welcome h2 { font-size: clamp(1.9rem, 8vw, 2.2rem); font-weight: 800; letter-spacing: -0.045em; }
+[data-staff-theme='neon'] .app-notifications__count { box-shadow: 0 0 14px rgba(255, 122, 69, 0.5); border-radius: 999px; }
+/* the shift card: ONE glowing hero */
+[data-staff-theme='neon'] .app-shiftcard {
+  border: 1.5px solid transparent; border-radius: 28px;
+  background: linear-gradient(#1c1310, #1c1310) padding-box, linear-gradient(135deg, var(--neon) 0%, rgba(255, 122, 69, 0.2) 55%, var(--neon-2) 100%) border-box;
+  box-shadow: 0 0 40px rgba(255, 122, 69, 0.22), 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+[data-staff-theme='neon'] .app-shiftcard--live .app-shiftcard__icon { display: none; }
+[data-staff-theme='neon'] .app-shiftcard--live .app-shiftcard__copy small { justify-self: start; padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; color: #7fe9d2; background: rgba(87, 217, 192, 0.12); border: 1px solid rgba(87, 217, 192, 0.35); }
+[data-staff-theme='neon'] .app-shiftcard--live .app-shiftcard__copy strong { font-size: clamp(2.2rem, 11vw, 2.9rem); line-height: 1; font-weight: 800; letter-spacing: -0.05em; }
+[data-staff-theme='neon'] .app-shiftprog__fill { box-shadow: 0 0 14px rgba(255, 122, 69, 0.7); }
+[data-staff-theme='neon'] .app-shiftcard__cta { min-height: 56px; justify-content: flex-start; border-radius: 18px; font-weight: 800; }
+[data-staff-theme='neon'] .app-shiftcard__cta--primary { box-shadow: 0 0 28px rgba(255, 122, 69, 0.5), 0 10px 22px rgba(0, 0, 0, 0.35); }
+[data-staff-theme='neon'] .app-shiftcard__cta--locked, [data-staff-theme='neon'] .app-shiftcard__cta--locked:disabled { opacity: 1; filter: none; border-style: dashed; border-color: rgba(253, 246, 236, 0.28); background: rgba(253, 246, 236, 0.03); color: var(--text-faint); }
+[data-staff-theme='neon'] .app-shiftcard__schedule { border-top-color: rgba(253, 246, 236, 0.09); }
+
+/* =============================================================== glass · Frosted Scene */
+[data-staff-theme='glass'] {
+  --bg: #120a07; --bg-elev: #261812; --bg-elev-2: #32211a;
+  --neon: #ff7a45; --neon-soft: #ffb089; --neon-2: #57d9c0;
+  --text: #fff6ec; --text-dim: #d6c9bc; --text-faint: #c6b9ac;
+  --line: rgba(255, 255, 255, 0.12); --line-strong: rgba(255, 255, 255, 0.2); --line-interactive: rgba(255, 255, 255, 0.48);
+  --glow: 0 0 30px rgba(255, 122, 69, 0.5);
+}
+.native-app[data-staff-theme='glass'] { position: relative; isolation: isolate; background: var(--bg); }
+/* the cart at night, out of focus: soft light pools, not a picture, so it costs nothing to load or to scroll */
+.native-app[data-staff-theme='glass']::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(54% 34% at 92% 4%, rgba(255, 122, 69, 0.32), rgba(255, 122, 69, 0) 100%),
+    radial-gradient(46% 30% at 4% 30%, rgba(255, 171, 122, 0.3), rgba(255, 171, 122, 0) 100%),
+    radial-gradient(50% 30% at 98% 66%, rgba(87, 217, 192, 0.2), rgba(87, 217, 192, 0) 100%),
+    radial-gradient(44% 26% at 6% 96%, rgba(255, 122, 69, 0.3), rgba(255, 122, 69, 0) 100%),
+    radial-gradient(circle at 12% 7%, rgba(255, 214, 170, 0.42) 0 22px, rgba(255, 214, 170, 0) 30px),
+    radial-gradient(circle at 34% 11%, rgba(255, 200, 150, 0.36) 0 12px, rgba(255, 200, 150, 0) 18px),
+    radial-gradient(circle at 60% 4%, rgba(255, 230, 190, 0.32) 0 16px, rgba(255, 230, 190, 0) 22px),
+    radial-gradient(circle at 86% 15%, rgba(255, 190, 140, 0.38) 0 26px, rgba(255, 190, 140, 0) 34px),
+    var(--bg);
+}
+[data-staff-theme='glass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) {
+  border-radius: 28px; border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 16px 40px rgba(0, 0, 0, 0.3);
+}
+[data-staff-theme='glass'] .app-row:active { background: rgba(255, 255, 255, 0.07); }
+[data-staff-theme='glass'] .app-row + .app-row::before { background: rgba(255, 255, 255, 0.1); }
+[data-staff-theme='glass'] .app-header { border-radius: 999px; border-color: rgba(255, 255, 255, 0.16); background: rgba(24, 14, 10, 0.5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 10px 30px rgba(0, 0, 0, 0.3); }
+[data-staff-theme='glass'] .app-header__icon { border-radius: 50%; border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.09); }
+[data-staff-theme='glass'] .app-header .app-header__signout { border-radius: 50% !important; background: rgba(255, 255, 255, 0.09) !important; }
+[data-staff-theme='glass'] .app-header__home { border-color: rgba(255, 171, 122, 0.6); background: rgba(255, 122, 69, 0.2); box-shadow: 0 0 20px rgba(255, 122, 69, 0.35); }
+[data-staff-theme='glass'] .app-welcome > div { display: flex; flex-direction: column; }
+[data-staff-theme='glass'] .app-welcome p { order: -1; margin: 0 0 4px; }
+[data-staff-theme='glass'] .app-welcome h2 { font-size: clamp(2.3rem, 11vw, 2.8rem); font-weight: 300; letter-spacing: -0.045em; line-height: 1.1; }
+[data-staff-theme='glass'] .app-welcome__name { font-weight: 800; }
+[data-staff-theme='glass'] .app-shiftcard {
+  border: 1px solid rgba(255, 171, 122, 0.55); border-radius: 34px;
+  background: linear-gradient(160deg, rgba(255, 150, 100, 0.2), rgba(255, 255, 255, 0.07) 55%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%); backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 44px rgba(255, 122, 69, 0.3), 0 20px 44px rgba(0, 0, 0, 0.4);
+}
+/* how far into the shift is the ring around the icon */
+[data-staff-theme='glass'] .app-shiftcard--live .app-shiftcard__icon {
+  flex-basis: 70px; height: 70px; border-radius: 50%; color: var(--neon-soft); box-shadow: none;
+  background: radial-gradient(closest-side, #2b1a12 calc(100% - 8px), transparent calc(100% - 7px)), conic-gradient(var(--neon) var(--shift-p, 0%), rgba(255, 255, 255, 0.16) 0);
+  filter: drop-shadow(0 0 8px rgba(255, 122, 69, 0.7));
+}
+[data-staff-theme='glass'] .app-shiftcard--live .app-shiftprog { display: none; }
+[data-staff-theme='glass'] .app-shiftcard--live .app-shiftcard__copy strong { font-size: clamp(2rem, 9vw, 2.5rem); font-weight: 300; letter-spacing: -0.05em; line-height: 1.05; }
+[data-staff-theme='glass'] .app-shiftcard__cta { min-height: 58px; justify-content: flex-start; border-radius: 999px; border-color: rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); font-weight: 700; }
+[data-staff-theme='glass'] .app-shiftcard__cta--primary { border-color: rgba(255, 255, 255, 0.35); background: linear-gradient(180deg, #ff9566, #ff6d37); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 122, 69, 0.55), 0 10px 22px rgba(0, 0, 0, 0.3); }
+[data-staff-theme='glass'] .app-shiftcard__cta--locked, [data-staff-theme='glass'] .app-shiftcard__cta--locked:disabled { opacity: 1; filter: none; color: var(--text-faint); }
+[data-staff-theme='glass'] .app-shiftcard__schedule { border-top-color: rgba(255, 255, 255, 0.14); }
+/* the workshop becomes a poster: the first slide big, the words under it */
+[data-staff-theme='glass'] .app-workshop { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+[data-staff-theme='glass'] .app-workshop__cover { inline-size: 100%; block-size: auto; aspect-ratio: 16 / 7; border: 0; border-radius: 0; }
+[data-staff-theme='glass'] .app-workshop__copy { padding: 14px 18px 4px; }
+[data-staff-theme='glass'] .app-workshop .app-row__chevron { display: none; }
+[data-staff-theme='glass'] .app-workshop__copy > span { padding-bottom: 6px; }
+
+/* =============================================================== pass · Shift Pass */
+[data-staff-theme='pass'] {
+  --bg: #0c0907; --bg-elev: #17100c; --bg-elev-2: #21170f;
+  --neon: #ff7a45; --neon-soft: #ff9a6c; --neon-2: #57d9c0;
+  --text: #fdf6ec; --text-dim: #b9ada0; --text-faint: #9c9086;
+  --line: rgba(253, 246, 236, 0.14); --line-strong: rgba(253, 246, 236, 0.22); --line-interactive: rgba(253, 246, 236, 0.45);
+  --glow: 0 0 22px rgba(255, 122, 69, 0.45);
+  --pass-mono: 'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+.native-app[data-staff-theme='pass'] {
+  background-color: var(--bg);
+  background-image: radial-gradient(110% 36% at 50% 0%, rgba(255, 122, 69, 0.14), rgba(255, 122, 69, 0) 70%), linear-gradient(rgba(253, 246, 236, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(253, 246, 236, 0.04) 1px, transparent 1px);
+  background-size: auto, 26px 26px, 26px 26px;
+}
+[data-staff-theme='pass'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border-radius: 14px; border-color: var(--line-strong); background: rgba(20, 13, 10, 0.86); box-shadow: none; }
+[data-staff-theme='pass'] .app-group:has(> .app-row--soon) { border-style: dashed; border-color: rgba(253, 246, 236, 0.26); background: transparent; }
+[data-staff-theme='pass'] .app-row__icon, [data-staff-theme='pass'] .app-push__icon { border-radius: 9px; }
+[data-staff-theme='pass'] .app-row__soon { border-radius: 6px; border-style: solid; }
+[data-staff-theme='pass'] .app-header { border-radius: 14px; border-color: var(--line-strong); background: rgba(12, 9, 7, 0.92); box-shadow: none; }
+[data-staff-theme='pass'] .app-header__icon { border-radius: 10px; background: transparent; }
+[data-staff-theme='pass'] .app-header .app-header__signout { border-radius: 10px !important; background: transparent !important; }
+[data-staff-theme='pass'] .app-header__home { border-color: var(--neon); background: rgba(255, 122, 69, 0.1); box-shadow: 0 0 16px rgba(255, 122, 69, 0.3); }
+[data-staff-theme='pass'] .app-header__title { font-family: var(--pass-mono); font-size: 0.95rem; letter-spacing: 0.1em; }
+[data-staff-theme='pass'] .app-welcome h2 { font-size: clamp(2rem, 9vw, 2.4rem); font-weight: 700; letter-spacing: -0.04em; }
+[data-staff-theme='pass'] .app-welcome p { font-family: var(--pass-mono); font-size: 0.74rem; letter-spacing: 0.1em; color: var(--neon-soft); }
+[data-staff-theme='pass'] .app-notifications__count { font-family: var(--pass-mono); border-radius: 6px; }
+[data-staff-theme='pass'] .app-notice time { font-family: var(--pass-mono); }
+/* the shift is a boarding pass: route line, a perforation, numbered checklists, a barcode, the schedule at the bottom */
+[data-staff-theme='pass'] .app-shiftcard { position: relative; overflow: visible; border: 1px solid rgba(255, 122, 69, 0.7); border-radius: 20px; background: #17100c; box-shadow: 0 0 34px rgba(255, 122, 69, 0.2), 0 18px 40px rgba(0, 0, 0, 0.5); }
+[data-staff-theme='pass'] .app-shiftcard--live .app-shiftcard__icon { display: none; }
+[data-staff-theme='pass'] .app-shiftcard__copy small { justify-self: start; padding: 4px 11px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; }
+[data-staff-theme='pass'] .app-shiftcard--live .app-shiftcard__copy small { color: #8fe8d3; background: rgba(87, 217, 192, 0.1); border: 1px solid rgba(87, 217, 192, 0.55); }
+[data-staff-theme='pass'] .app-shiftcard__copy strong { font-family: var(--pass-mono); }
+[data-staff-theme='pass'] .app-shiftcard--live .app-shiftcard__copy strong { font-size: clamp(2rem, 9.6vw, 2.5rem); font-weight: 700; letter-spacing: -0.05em; line-height: 1; }
+[data-staff-theme='pass'] .app-shiftprog__track { position: relative; height: 3px; overflow: visible; background: repeating-linear-gradient(90deg, rgba(253, 246, 236, 0.32) 0 6px, transparent 6px 10px); }
+[data-staff-theme='pass'] .app-shiftprog__fill { position: relative; border-radius: 0; background: var(--neon); box-shadow: 0 0 10px rgba(255, 122, 69, 0.8); }
+[data-staff-theme='pass'] .app-shiftprog__fill::after { content: ''; position: absolute; inset-inline-end: -8px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); border-radius: 50%; background: var(--neon); box-shadow: 0 0 16px var(--neon); }
+[data-staff-theme='pass'] .app-shiftprog__ends { font-family: var(--pass-mono); font-size: 0.74rem; }
+[data-staff-theme='pass'] .app-shiftcard__actions { position: relative; counter-reset: ck; margin-top: 8px; padding-top: 20px; border-top: 2px dashed rgba(253, 246, 236, 0.26); }
+[data-staff-theme='pass'] .app-shiftcard__actions::before, [data-staff-theme='pass'] .app-shiftcard__actions::after {
+  content: ''; position: absolute; top: -12px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); border: 1px solid rgba(255, 122, 69, 0.7);
+}
+[data-staff-theme='pass'] .app-shiftcard__actions::before { inset-inline-start: -30px; }
+[data-staff-theme='pass'] .app-shiftcard__actions::after { inset-inline-end: -30px; }
+[data-staff-theme='pass'] .app-shiftcard__cta, [data-staff-theme='pass'] .app-shiftcard__done { counter-increment: ck; }
+[data-staff-theme='pass'] .app-shiftcard__cta::before, [data-staff-theme='pass'] .app-shiftcard__done::before { content: counter(ck, decimal-leading-zero); font-family: var(--pass-mono); font-size: 0.8rem; font-weight: 700; }
+[data-staff-theme='pass'] .app-shiftcard__cta { min-height: 58px; justify-content: flex-start; border-radius: 12px; font-weight: 800; }
+[data-staff-theme='pass'] .app-shiftcard__cta--primary { box-shadow: 0 0 26px rgba(255, 122, 69, 0.5); }
+[data-staff-theme='pass'] .app-shiftcard__cta--locked, [data-staff-theme='pass'] .app-shiftcard__cta--locked:disabled { opacity: 1; filter: none; border-style: dashed; border-color: rgba(253, 246, 236, 0.3); background: transparent; color: var(--text-faint); }
+[data-staff-theme='pass'] .app-shiftcard::after { content: ''; order: 6; height: 22px; opacity: 0.5; background: repeating-linear-gradient(90deg, var(--text) 0 2px, transparent 2px 5px, var(--text) 5px 6px, transparent 6px 9px, var(--text) 9px 12px, transparent 12px 14px, var(--text) 14px 15px, transparent 15px 19px); }
+[data-staff-theme='pass'] .app-shiftcard__schedule { order: 7; }
+[data-staff-theme='pass'] .app-workshop__cover { border-radius: 8px; }
+
+/* =============================================================== crema · Crema Day (light, readable in the sun) */
+[data-staff-theme='crema'] {
+  --bg: #f4ead9; --bg-elev: #fff9ee; --bg-elev-2: #ead9c0;
+  --neon: #f4601f; --neon-soft: #b8400f; --neon-2: #0b7f6c; --on-neon: #26150d;
+  --text: #26150d; --text-dim: #6b5546; --text-faint: #6f5849;
+  --line: rgba(38, 21, 13, 0.16); --line-strong: rgba(38, 21, 13, 0.28); --line-interactive: rgba(38, 21, 13, 0.58);
+  --ok: #0b7a45; --warn: #8a5a00; --danger: #b42318;
+  --ok-bg: #dcf1e4; --warn-bg: #f9ebc8; --danger-bg: #fadcd6;
+  --glow: 3px 4px 0 rgba(38, 21, 13, 0.9); --paper: rgba(38, 21, 13, 0.04);
+}
+.native-app[data-staff-theme='crema'] { background: var(--bg); }
+.native-app[data-staff-theme='crema']::after { content: ''; position: fixed; z-index: 400; top: 0; inset-inline: 0; height: env(safe-area-inset-top, 0px); background: #26150d; pointer-events: none; }
+[data-staff-theme='crema'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border: 2px solid #26150d; border-radius: 24px; background: var(--bg-elev); box-shadow: 4px 5px 0 #26150d; }
+[data-staff-theme='crema'] .app-group:has(> .app-row--soon) { border: 0; box-shadow: none; background: transparent; }
+[data-staff-theme='crema'] .app-notice + .app-notice, [data-staff-theme='crema'] .app-row + .app-row::before { border-color: rgba(38, 21, 13, 0.18); }
+[data-staff-theme='crema'] .app-header { border: 2px solid #26150d; border-radius: 26px; background: var(--bg-elev); box-shadow: 3px 4px 0 #26150d; backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-staff-theme='crema'] .app-header__icon { width: 46px; height: 46px; flex-basis: 46px; border: 2px solid #26150d; border-radius: 50%; background: var(--bg-elev); box-shadow: 2px 3px 0 #26150d; }
+[data-staff-theme='crema'] .app-header .app-header__signout { width: 46px !important; height: 46px !important; border: 2px solid #26150d !important; border-radius: 50% !important; background: var(--bg-elev) !important; box-shadow: 2px 3px 0 #26150d; }
+[data-staff-theme='crema'] .app-header__home { background: var(--neon); color: #26150d; }
+[data-staff-theme='crema'] .app-header__title { font-weight: 800; text-align: center; }
+[data-staff-theme='crema'] .app-nav__panel { box-shadow: 4px 6px 0 #26150d; border: 2px solid #26150d; }
+[data-staff-theme='crema'] .app-welcome h2 { font-size: clamp(2.2rem, 10vw, 2.8rem); font-weight: 800; letter-spacing: -0.05em; line-height: 1.1; }
+[data-staff-theme='crema'] .app-welcome__name { background: linear-gradient(transparent 58%, #ffb08a 58%, #ffb08a 92%, transparent 92%); padding-inline: 2px; }
+[data-staff-theme='crema'] .app-notifications__count { border-radius: 999px; background: #26150d; color: #fff9ee; }
+[data-staff-theme='crema'] .app-row__icon { border: 1.5px solid #26150d; background: #ffd9c4; color: #26150d; }
+[data-staff-theme='crema'] .app-row--quiet .app-row__icon, [data-staff-theme='crema'] .app-row--soon .app-row__icon { background: #ead9c0; color: var(--text-dim); border-color: rgba(38, 21, 13, 0.4); }
+[data-staff-theme='crema'] .app-row__soon { border-style: solid; border-color: #26150d; background: #ffd9c4; color: #26150d; }
+/* the shift card: a dark espresso block, so it is the one thing that is dark in bright sun */
+[data-staff-theme='crema'] .app-shiftcard {
+  --bg: #3a2418; --text: #fff9ee; --text-dim: #e6d6c4; --text-faint: #d3c1ad; --neon-soft: #ffb08a; --neon-2: #7fe9d2;
+  --line: rgba(255, 249, 238, 0.22); --line-strong: rgba(255, 249, 238, 0.34);
+  border: 2px solid #26150d; border-radius: 30px; background: #26150d; color: var(--text); box-shadow: 6px 7px 0 var(--neon);
+}
+[data-staff-theme='crema'] .app-shiftcard--live .app-shiftcard__icon { display: none; }
+[data-staff-theme='crema'] .app-shiftcard__copy small { justify-self: start; padding: 5px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; }
+[data-staff-theme='crema'] .app-shiftcard--live .app-shiftcard__copy small { color: #0a3b32; background: #7fe9d2; }
+[data-staff-theme='crema'] .app-shiftcard--live .app-shiftcard__pulse { background: #0a3b32; box-shadow: none; }
+[data-staff-theme='crema'] .app-shiftcard--live .app-shiftcard__copy strong { font-size: clamp(2.3rem, 11.6vw, 3.1rem); font-weight: 800; letter-spacing: -0.06em; line-height: 1; }
+[data-staff-theme='crema'] .app-shiftprog__track { height: 16px; padding: 2px; border: 2px solid #fff9ee; background: transparent; }
+[data-staff-theme='crema'] .app-shiftprog__fill { background: repeating-linear-gradient(135deg, #f4601f 0, #f4601f 8px, #ff9a6c 8px, #ff9a6c 16px); }
+[data-staff-theme='crema'] .app-shiftcard__cta { min-height: 58px; justify-content: flex-start; border: 2px solid #fff9ee; border-radius: 20px; background: transparent; color: var(--text); font-weight: 800; }
+[data-staff-theme='crema'] .app-shiftcard__cta--primary { background: var(--neon); color: #26150d; box-shadow: 0 4px 0 #fff9ee; }
+[data-staff-theme='crema'] .app-shiftcard__cta--locked, [data-staff-theme='crema'] .app-shiftcard__cta--locked:disabled { opacity: 1; filter: none; border-style: dashed; border-color: rgba(255, 249, 238, 0.5); color: #d9cab8; }
+[data-staff-theme='crema'] .app-shiftcard__schedule { color: #ffb08a; border-top-color: rgba(255, 249, 238, 0.22); font-weight: 700; }
+[data-staff-theme='crema'] .app-workshop { background: #c4ebdd; --text-dim: #3d5a51; --neon-soft: #2c5d4f; }
+[data-staff-theme='crema'] .app-workshop__cover { border: 2px solid #26150d; border-radius: 14px; }
+[data-staff-theme='crema'] .app-push--on { background: #d3f0e6; }
+[data-staff-theme='crema'] .lens-tab[aria-selected='true'], [data-staff-theme='crema'] .bm-tab[aria-selected='true'], [data-staff-theme='crema'] .bm-slide[aria-current='page'] { background: var(--neon); }
+[data-staff-theme='crema'] .ck-progress > span, [data-staff-theme='crema'] .bm-progress span { background: var(--neon); }
+
+/* =============================================================== latte · Latte Blossom (light, soft and pink) */
+[data-staff-theme='latte'] {
+  --bg: #fbece6; --bg-elev: #fff7f3; --bg-elev-2: #f7ded5;
+  --neon: #e45f87; --neon-soft: #b0305a; --neon-2: #8f5530; --on-neon: #3a1620;
+  --text: #3a211b; --text-dim: #7a5a52; --text-faint: #7f5f56;
+  --line: rgba(58, 33, 27, 0.11); --line-strong: rgba(58, 33, 27, 0.2); --line-interactive: rgba(58, 33, 27, 0.56);
+  --ok: #1f7a48; --warn: #8a5a00; --danger: #b42318;
+  --ok-bg: #e0f3e6; --warn-bg: #fbefd0; --danger-bg: #fbe0dc;
+  --glow: 0 6px 18px rgba(242, 122, 156, 0.35); --paper: rgba(58, 33, 27, 0.04);
+}
+.native-app[data-staff-theme='latte'] { background: radial-gradient(90% 40% at 100% 0%, rgba(242, 122, 156, 0.2), rgba(242, 122, 156, 0) 70%), radial-gradient(80% 36% at 0% 100%, rgba(255, 196, 160, 0.3), rgba(255, 196, 160, 0) 70%), var(--bg); }
+.native-app[data-staff-theme='latte']::after { content: ''; position: fixed; z-index: 400; top: 0; inset-inline: 0; height: env(safe-area-inset-top, 0px); background: #3a211b; pointer-events: none; }
+[data-staff-theme='latte'] :is(.app-group, .app-push, .app-workshop, .app-attention__card, .dev-card) { border: 1.5px solid rgba(242, 122, 156, 0.38); border-radius: 30px; background: var(--bg-elev); box-shadow: 0 10px 28px rgba(224, 80, 124, 0.14); }
+[data-staff-theme='latte'] .app-group:has(> .app-row--soon) { border: 0; box-shadow: none; background: transparent; }
+[data-staff-theme='latte'] .app-header { border: 1.5px solid rgba(242, 122, 156, 0.45); border-radius: 999px; background: color-mix(in srgb, var(--bg-elev) 92%, transparent); box-shadow: 0 10px 26px rgba(224, 80, 124, 0.18); }
+[data-staff-theme='latte'] .app-header__icon { border-radius: 50%; background: #fff; border-color: rgba(242, 122, 156, 0.4); }
+[data-staff-theme='latte'] .app-header .app-header__signout { border-radius: 50% !important; background: #fff !important; }
+[data-staff-theme='latte'] .app-header__home { background: var(--neon); border-color: var(--neon); color: #3a1620; }
+[data-staff-theme='latte'] .app-nav__panel { box-shadow: 0 24px 60px rgba(224, 80, 124, 0.25); }
+[data-staff-theme='latte'] .app-welcome h2 { font-size: clamp(2rem, 9.4vw, 2.5rem); font-weight: 800; letter-spacing: -0.045em; }
+[data-staff-theme='latte'] .app-welcome__name { color: var(--neon-soft); }
+[data-staff-theme='latte'] .app-notifications__count { border-radius: 999px; }
+[data-staff-theme='latte'] .app-row__icon, [data-staff-theme='latte'] .app-push__icon { border-radius: 50%; background: #fde3ea; color: var(--neon-soft); }
+[data-staff-theme='latte'] .app-row--quiet .app-row__icon, [data-staff-theme='latte'] .app-row--soon .app-row__icon { background: var(--bg-elev-2); color: var(--text-dim); }
+[data-staff-theme='latte'] .app-row__soon { border-color: rgba(176, 48, 90, 0.5); background: #fde3ea; color: var(--neon-soft); }
+/* the shift card: a latte, pink foam melting into peach, with a small heart */
+[data-staff-theme='latte'] .app-shiftcard {
+  --text-dim: #6a4a42; --neon-soft: #a02b55; --line: rgba(58, 33, 27, 0.14); --line-strong: rgba(58, 33, 27, 0.26);
+  position: relative; border: 1.5px solid rgba(242, 122, 156, 0.55); border-radius: 34px;
+  background: linear-gradient(150deg, #fbc3d3 0%, #fde0cf 58%, #fff3ea 100%);
+  box-shadow: 0 16px 36px rgba(224, 80, 124, 0.22);
+}
+[data-staff-theme='latte'] .app-shiftcard::before {
+  content: ''; position: absolute; top: 16px; inset-inline-end: 18px; width: 54px; height: 54px; opacity: 0.38; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f27a9c' stroke='%23b0305a' stroke-width='1.2' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+[data-staff-theme='latte'] .app-shiftcard--live .app-shiftcard__icon { display: none; }
+[data-staff-theme='latte'] .app-shiftcard__copy small { justify-self: start; padding: 5px 13px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+[data-staff-theme='latte'] .app-shiftcard--live .app-shiftcard__copy small { color: #1d6b43; background: #fff7f3; }
+[data-staff-theme='latte'] .app-shiftcard--live .app-shiftcard__pulse { background: #1f7a48; }
+[data-staff-theme='latte'] .app-shiftcard--live .app-shiftcard__copy strong { font-size: clamp(2.2rem, 11vw, 2.9rem); font-weight: 700; letter-spacing: -0.05em; line-height: 1; }
+[data-staff-theme='latte'] .app-shiftprog__track { height: 11px; background: rgba(255, 255, 255, 0.75); }
+[data-staff-theme='latte'] .app-shiftprog__fill { background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 1.3px, transparent 1.9px) 0 0 / 9px 9px, var(--neon); }
+[data-staff-theme='latte'] .app-shiftprog__ends { color: #6a4a42; }
+[data-staff-theme='latte'] .app-shiftcard__cta { min-height: 58px; justify-content: flex-start; border: 1.5px solid rgba(58, 33, 27, 0.2); border-radius: 999px; background: rgba(255, 255, 255, 0.6); color: var(--text); font-weight: 800; }
+[data-staff-theme='latte'] .app-shiftcard__cta--primary { border-color: var(--neon); background: var(--neon); color: #3a1620; box-shadow: 0 8px 20px rgba(242, 122, 156, 0.45); }
+[data-staff-theme='latte'] .app-shiftcard__cta--locked, [data-staff-theme='latte'] .app-shiftcard__cta--locked:disabled { opacity: 1; filter: none; border-style: dashed; border-color: rgba(58, 33, 27, 0.35); background: rgba(255, 255, 255, 0.4); color: #6a4a42; }
+[data-staff-theme='latte'] .app-shiftcard__schedule { color: #8f2349; border-top-color: rgba(58, 33, 27, 0.14); }
+[data-staff-theme='latte'] .app-workshop { background: #fde7dc; }
+[data-staff-theme='latte'] .app-workshop__cover { border-radius: 18px; }
+[data-staff-theme='latte'] .lens-tab[aria-selected='true'], [data-staff-theme='latte'] .bm-tab[aria-selected='true'], [data-staff-theme='latte'] .bm-slide[aria-current='page'] { background: var(--neon); }
+[data-staff-theme='latte'] .ck-progress > span, [data-staff-theme='latte'] .bm-progress span { background: var(--neon); }
+
+/* ---- two small tiles for "coming soon" (neon, crema, latte): a bento pair instead of a list ---- */
+:is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-group:has(> .app-row--soon) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; }
+:is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-row--soon { flex-direction: column; align-items: flex-start; min-height: 0; padding: 16px; gap: 10px; border: 1px solid var(--line); border-radius: 22px; background: var(--bg-elev); }
+[data-staff-theme='neon'] .app-row--soon { background: #170f0b; }
+[data-staff-theme='crema'] .app-row--soon { border: 2px dashed rgba(38, 21, 13, 0.4); background: transparent; }
+[data-staff-theme='latte'] .app-row--soon { border: 1.5px dashed rgba(176, 48, 90, 0.4); background: rgba(255, 255, 255, 0.5); }
+:is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-row--soon::before { display: none; }
+:is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .app-row--soon .app-row__soon { order: 3; }
+
+/* ---- the style picker's miniatures (ThemePicker): the same tokens, drawn small ---- */
+.tp { display: block; padding: 10px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--bg); color: var(--text); overflow: hidden; text-align: start; }
+.tp__top { display: flex; align-items: center; gap: 6px; }
+.tp__dot { width: 14px; height: 14px; border-radius: 50%; background: var(--bg-elev-2); border: 1px solid var(--line-strong); }
+.tp__dot--on { background: var(--neon); border-color: var(--neon); }
+.tp__title { flex: 1; height: 7px; border-radius: 999px; background: var(--line-strong); }
+.tp__card { margin-top: 8px; padding: 10px; display: grid; gap: 6px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--bg-elev); }
+.tp__pill { justify-self: start; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--neon-2) 16%, transparent); color: var(--neon-2); font-size: 0.62rem; font-weight: 700; }
+.tp__time { direction: ltr; text-align: start; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; }
+.tp__bar { height: 5px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.tp__bar > span { display: block; height: 100%; width: 38%; background: var(--neon); }
+.tp__cta { display: grid; place-items: center; height: 26px; border-radius: 10px; background: var(--neon); color: var(--on-neon, var(--bg)); font-size: 0.64rem; font-weight: 800; }
+.tp[data-staff-theme='neon'] .tp__card { border: 1px solid rgba(255, 122, 69, 0.5); box-shadow: 0 0 18px rgba(255, 122, 69, 0.25); border-radius: 16px; }
+.tp[data-staff-theme='glass'] { background: radial-gradient(60% 70% at 90% 0%, rgba(255, 122, 69, 0.6), rgba(255, 122, 69, 0) 100%), radial-gradient(50% 60% at 0% 100%, rgba(255, 171, 122, 0.3), rgba(255, 171, 122, 0) 100%), var(--bg); }
+.tp[data-staff-theme='glass'] .tp__card { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.22); border-radius: 18px; }
+.tp[data-staff-theme='glass'] .tp__time { font-weight: 300; }
+.tp[data-staff-theme='glass'] .tp__cta { border-radius: 999px; }
+.tp[data-staff-theme='pass'] { background-color: var(--bg); background-image: linear-gradient(rgba(253, 246, 236, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(253, 246, 236, 0.05) 1px, transparent 1px); background-size: 14px 14px; }
+.tp[data-staff-theme='pass'] .tp__card { border-radius: 8px; border-color: rgba(255, 122, 69, 0.7); }
+.tp[data-staff-theme='pass'] .tp__time { font-family: var(--pass-mono); }
+.tp[data-staff-theme='pass'] .tp__bar { height: 2px; background: repeating-linear-gradient(90deg, rgba(253, 246, 236, 0.4) 0 5px, transparent 5px 8px); }
+.tp[data-staff-theme='pass'] .tp__cta { border-radius: 6px; }
+.tp[data-staff-theme='crema'] .tp__card { background: #26150d; border: 2px solid #26150d; box-shadow: 3px 4px 0 var(--neon); color: #fff9ee; border-radius: 16px; }
+.tp[data-staff-theme='crema'] .tp__time { color: #fff9ee; }
+.tp[data-staff-theme='crema'] .tp__pill { background: #7fe9d2; color: #0a3b32; }
+.tp[data-staff-theme='crema'] .tp__bar { background: rgba(255, 249, 238, 0.3); }
+.tp[data-staff-theme='latte'] .tp__card { background: linear-gradient(150deg, #fbc3d3, #fde0cf 70%, #fff3ea); border-color: rgba(242, 122, 156, 0.55); border-radius: 18px; }
+.tp[data-staff-theme='latte'] .tp__pill { background: #fff7f3; color: #1d6b43; }
+.tp[data-staff-theme='latte'] .tp__bar { background: rgba(255, 255, 255, 0.75); }
+.tp[data-staff-theme='latte'] .tp__cta { border-radius: 999px; }

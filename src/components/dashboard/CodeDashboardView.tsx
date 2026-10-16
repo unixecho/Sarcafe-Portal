@@ -17,7 +17,7 @@ export default async function CodeDashboardView({ me }: { me: StaffIdentity }) {
   const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   return (
     <>
-      <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{date}</p></div></div>
+      <div className="app-welcome"><div><h2>שלום, <span className="app-welcome__name">{name}</span></h2><p>{date}</p></div></div>
       <ShiftStatusCard status={shiftStatus} scheduleHref={CODE_SCHEDULE_HREF} developer={false} codeMode />
       <div className="app-group app-account"><InstallAppButton /></div>
     </>

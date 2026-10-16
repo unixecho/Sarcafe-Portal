@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Palette, Receipt, ShoppingBag, UserRound } from 'lucide-react'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
@@ -7,6 +7,8 @@ import GoogleLinkPrompt from '@/components/staff/GoogleLinkPrompt'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { loadShiftStatus } from '@/lib/staff/shift-status'
+import { loadStaffTheme } from '@/lib/staff/theme-server'
+import { THEMES } from '@/lib/staff/theme'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { hasAnyMenuEditAccess, isOp } from '@/lib/staff/access'
 import { getBranches } from '@/lib/branches/server'
@@ -27,10 +29,11 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   const developer = isDeveloper(me)
   const scheduleHref = fullLogin ? '/staff/schedule' : '/login?next=/staff/schedule'
   const service = createServiceRoleClient()
-  const [updates, count, shiftStatus] = await Promise.all([
+  const [updates, count, shiftStatus, look] = await Promise.all([
     service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(20),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
     loadShiftStatus(service, me.id),
+    loadStaffTheme(me.id),
   ])
   // A general manager edits their own branch's checklists from here (the builder is per branch); an owner is sent to the branches.
   const ownBranch = fullLogin && me.branch_id ? (await getBranches()).find((branch) => branch.id === me.branch_id) ?? null : null
@@ -59,7 +62,7 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
 
   return (
     <>
-      <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{date}</p></div></div>
+      <div className="app-welcome"><div><h2>שלום, <span className="app-welcome__name">{name}</span></h2><p>{date}</p></div></div>
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
       {alerts}
@@ -67,6 +70,7 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
       <WorkshopCard />
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account">
+        <Link href="/staff/profile#style" className="app-row app-row--quiet"><span className="app-row__icon"><Palette size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>מראה האפליקציה</strong><small>{THEMES.find((item) => item.id === look.theme)?.name}{look.chosen ? ' · לחצו לשינוי' : ' · עוד לא בחרתם. לחצו לבחירת סגנון'}</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
         <Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
       </div>
       {developer && (

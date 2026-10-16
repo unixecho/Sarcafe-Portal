@@ -69,7 +69,7 @@
 .gate-step:not(:last-child)::before { content: ''; position: absolute; inset-block: 38px 6px; inset-inline-start: 15px; width: 2px; border-radius: 2px; background: var(--line-strong); }
 .gate-step.done:not(:last-child)::before { background: color-mix(in srgb, var(--ok) 50%, transparent); }
 .gate-step-n { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; border: 1.5px solid var(--line-interactive); color: var(--text-dim); font-weight: 800; font-size: .85rem; transition: background .3s var(--ease), border-color .3s var(--ease), color .3s var(--ease); }
-.gate-step.now .gate-step-n { background: var(--neon); border-color: var(--neon); color: var(--bg); box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--neon) 50%, transparent); }
+.gate-step.now .gate-step-n { background: var(--neon); border-color: var(--neon); color: var(--on-neon, var(--bg)); box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--neon) 50%, transparent); }
 .gate-step.done .gate-step-n { background: color-mix(in srgb, var(--ok) 16%, transparent); border-color: color-mix(in srgb, var(--ok) 60%, transparent); color: var(--ok); }
 .gate-step-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .gate-step-body b { font-size: 1.02rem; font-weight: 700; line-height: 32px; }
@@ -88,7 +88,7 @@
 }
 .gate-btn:active { transform: scale(.985); }
 .gate-btn:disabled { opacity: .6; cursor: default; }
-.gate-btn--primary { background: var(--neon); border-color: var(--neon); color: var(--bg); box-shadow: 0 14px 30px -10px color-mix(in srgb, var(--neon) 60%, transparent); }
+.gate-btn--primary { background: var(--neon); border-color: var(--neon); color: var(--on-neon, var(--bg)); box-shadow: 0 14px 30px -10px color-mix(in srgb, var(--neon) 60%, transparent); }
 .gate-btn:focus-visible, .gate-quiet:focus-visible { outline: 2px solid var(--neon-2); outline-offset: 3px; }
 @media (hover: hover) and (pointer: fine) {
   .gate-btn:not(:disabled):hover { background: color-mix(in srgb, var(--bg-elev-2) 82%, var(--text)); }

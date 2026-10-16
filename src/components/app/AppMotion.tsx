@@ -8,7 +8,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
 /** Short, interruptible app reveals; every control stays usable during travel. */
-export default function AppMotion({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+export default function AppMotion({ children, className = '', theme }: { children: React.ReactNode; className?: string; theme?: string }) {
   const scope = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   useGSAP(() => {
@@ -21,5 +21,5 @@ export default function AppMotion({ children, className = '' }: { children: Reac
     })
     return () => media.revert()
   }, { scope, dependencies: [pathname], revertOnUpdate: true })
-  return <div ref={scope} className={`native-app ${className}`}>{children}</div>
+  return <div ref={scope} className={`native-app ${className}`} data-staff-theme={theme}>{children}</div>
 }

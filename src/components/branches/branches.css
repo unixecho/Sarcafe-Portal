@@ -12,7 +12,7 @@
 .bm-tabs { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg-elev); overflow-x: auto; scrollbar-width: none; position: sticky; top: 8px; z-index: 20; }
 .bm-tabs::-webkit-scrollbar { display: none; }
 .bm-tab { flex: 1 0 auto; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--text-dim); font: inherit; font-size: 0.86rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; transition: background .2s var(--ease), color .2s var(--ease); }
-.bm-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); }
+.bm-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--on-neon, var(--bg)); }
 .bm-tab__badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--danger, #ff6b6b); color: #fff; font-size: 0.7rem; display: inline-grid; place-items: center; }
 .bm-panel { display: flex; flex-direction: column; gap: 14px; outline: none; }
 
@@ -81,6 +81,6 @@
 .bm-slider { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; scroll-snap-type: x proximity; }
 .bm-slider::-webkit-scrollbar { display: none; }
 .bm-slide { flex: 0 0 auto; scroll-snap-align: start; display: inline-flex; align-items: center; gap: 7px; min-height: 46px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-interactive); background: var(--bg-elev); color: var(--text-dim); font: inherit; font-size: .88rem; font-weight: 800; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background .2s var(--ease), color .2s var(--ease), border-color .2s var(--ease); }
-.bm-slide[aria-current='page'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); border-color: transparent; }
+.bm-slide[aria-current='page'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--on-neon, var(--bg)); border-color: transparent; }
 .bm-slide--add { border-style: dashed; color: var(--neon-soft); }
 @media (prefers-reduced-motion: reduce) { .bm-slide { transition: none; } }

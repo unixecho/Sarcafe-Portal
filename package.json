@@ -13,6 +13,7 @@
     "check:checklist-window": "node scripts/check-checklist-window.mjs",
     "check:checklist-issues": "node scripts/check-checklist-issues.mjs",
     "check:onboarding-wizard": "node scripts/check-onboarding-wizard.mjs",
+    "check:staff-themes": "node scripts/check-staff-themes.mjs",
     "check:branch-manager": "node scripts/check-branch-manager.mjs",
     "check:a11y-scope": "node scripts/check-a11y-scope.mjs",
     "check:notifications-gate": "node scripts/check-notifications-gate.mjs",
