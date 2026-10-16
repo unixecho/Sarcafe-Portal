@@ -15,9 +15,8 @@ import { effectiveWeek, openStatus, settingsFromWeek, usualHours, type DayHours,
 import { weekdayLongLabel } from '@/lib/shifts/time'
 import type { SafetyRules } from '@/lib/shifts/types'
 
-const SAFETY_LABELS: Record<keyof SafetyRules, string> = {
+const SAFETY_LABELS: Record<Exclude<keyof SafetyRules, 'minRestHours'>, string> = {
   maxWeeklyHours: 'מקסימום שעות שבועיות',
-  minRestHours: 'מינימום שעות מנוחה בין משמרות',
   maxDailyHours: 'מקסימום שעות ביום אחד',
   maxConsecutiveDays: 'מקסימום ימים רצופים',
 }
@@ -44,7 +43,7 @@ export default function ManagerPanel() {
       <section>
         <h3 style={sectionTitleStyle}>כללי בטיחות</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {(Object.keys(SAFETY_LABELS) as (keyof SafetyRules)[]).map((key) => {
+          {(Object.keys(SAFETY_LABELS) as (keyof typeof SAFETY_LABELS)[]).map((key) => {
             const bounds = SAFETY_BOUNDS[key]
             return (
               <label key={key}>

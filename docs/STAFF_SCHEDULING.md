@@ -1,5 +1,7 @@
 # Staff & Scheduling
 
+**No minimum rest between shifts (2026-10-16).** Removed: it does not fit this business (one person can work a morning at Givat Haviva and an evening at Maor). The schedule warning `min_rest` is gone (`rules.ts`), the setting is no longer shown in the scheduler's safety rules, and migration `20261016150000_drop_min_rest_from_fill.sql` replaces `sched_fill_eligible` without the rest check so the automatic fill no longer skips people for it. The stored `minRestHours` value stays in old settings rows and is ignored. Overlap, weekly/daily caps and consecutive days still apply. **That migration must be applied** (until then the automatic fill still avoids short rests; the manual editor already allows them).
+
 ## אילוצים: what an employee may ask for, and the manager's two limits — 2026-10-16
 
 **Asked by the owner (modelled on the Ayeka Bar scheduler).** Each day an employee can choose **לא יכול/ה משמרת בוקר**, **לא יכול/ה משמרת ערב** or **יום חופש כל היום**. The manager sets how many DAYS OFF a week (default 2) and how many morning/evening blocks a week (today: no limit). The owner is told when אילוצים are sent and when a note is added.

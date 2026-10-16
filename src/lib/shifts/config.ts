@@ -32,7 +32,6 @@ export const DEFAULT_SAFETY: SafetyRules = {
  *  rules engine would treat as nonsensical (e.g. 0-hour rest). */
 export const SAFETY_BOUNDS = {
   maxWeeklyHours: { min: 20, max: 60, step: 1 },
-  minRestHours: { min: 6, max: 16, step: 0.5 },
   maxDailyHours: { min: 4, max: 14, step: 0.5 },
   maxConsecutiveDays: { min: 3, max: 10, step: 1 },
 } as const

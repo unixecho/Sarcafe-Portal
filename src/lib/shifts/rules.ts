@@ -146,15 +146,8 @@ export function evaluate(input: EvalInput): Warning[] {
       const next = intervals[i + 1]!
       if (next.start < cur.end) {
         push(out, settings, 'overlap', 'error', 'משמרות חופפות לאותו איש/אשת צוות', { shiftId: next.shiftId, staffId })
-      } else {
-        const restMinutes = next.start - cur.end
-        if (restMinutes < settings.safety.minRestHours * 60) {
-          push(out, settings, 'min_rest', 'warning', `פחות מ-${settings.safety.minRestHours} שעות מנוחה בין משמרות`, {
-            shiftId: next.shiftId,
-            staffId,
-          })
-        }
       }
+      // No minimum rest between shifts: a morning at one branch and an evening at the other is a normal day here.
     }
 
     // Weekly hours — only shifts actually starting within the target week

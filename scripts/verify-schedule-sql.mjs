@@ -929,6 +929,8 @@ check('event schedules remain branch-scoped',
 const planningMigration = files.find((f) => f.endsWith('_schedule_planning_fair_fill.sql'))
 await db.exec(readFileSync(MIG + planningMigration, 'utf8'))
 check('planning migration may be run again', true)
+// Re-running the planning migration restores its (older) fill function; the newer migrations that replace it go back on top.
+await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_drop_min_rest_from_fill.sql')), 'utf8'))
 check('deadline is preceding Tuesday even for a non-Sunday input', (await one(`select public.sched_request_deadline('2026-10-12')::text d`)).d === '2026-10-06')
 check('summer Jerusalem: Tuesday 23:59 stays open; Wednesday 00:00 closes', (await one(`select public.sched_requests_open('2026-10-11','2026-10-06 20:59:59+00') a, public.sched_requests_open('2026-10-11','2026-10-06 21:00:00+00') b`)).a === true && (await one(`select public.sched_requests_open('2026-10-11','2026-10-06 21:00:00+00') b`)).b === false)
 check('winter Jerusalem follows local midnight after DST', (await one(`select public.sched_requests_open('2026-11-01','2026-10-27 21:59:59+00') a, public.sched_requests_open('2026-11-01','2026-10-27 22:00:00+00') b`)).a === true && (await one(`select public.sched_requests_open('2026-11-01','2026-10-27 22:00:00+00') b`)).b === false)
@@ -993,7 +995,7 @@ check('no submitted availability means available; unavailable employee is not ch
 check('repeat completion is idempotent', (await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })).added === 0)
 const saturdaySecond = await save(owner, planWeek, { p_date: day(6, pw), p_start: '14:00', p_end: '18:00' })
 const spread = await rpc('sched_fill_week', { p_actor: owner.id, p_week: planWeek })
-check('multiple Saturday slots spread across eligible staff while preserving rest', spread.added === 1 && (await assignmentsOf(saturdaySecond.shiftId))[0].staff_id === heavy.id)
+check('multiple Saturday slots are filled by eligible staff (no minimum-rest rule any more)', spread.added === 1 && [heavy.id, light.id].includes((await assignmentsOf(saturdaySecond.shiftId))[0].staff_id))
 check('completion remains draft until deliberate publication', (await one(`select status, published_snapshot from public.schedule_weeks where id=$1`, [planWeek])).status === 'draft' && (await one(`select published_snapshot from public.schedule_weeks where id=$1`, [planWeek])).published_snapshot === null)
 check('completion is audited with fairness horizon', (await one(`select detail from public.shift_audit where branch_id=$1 and action='schedule.fill' order by id desc limit 1`, [planBranch])).detail.saturdayHistoryWeeks === 12)
 
@@ -1009,7 +1011,7 @@ check('partial availability covering all shift hours is eligible', await elig(li
 check('employee weekly cap stops completion', await elig(light, partialShift.shiftId, safe, 6) === false)
 check('daily cap stops a long shift', await elig(light, partialShift.shiftId, JSON.stringify({ maxWeeklyHours: 42, minRestHours: 10, maxDailyHours: 5, maxConsecutiveDays: 6 })) === false)
 const restShift = await save(owner, planWeek, { p_date: day(5, pw), p_start: '22:00', p_end: '02:00' })
-check('cross-midnight rest is protected against Saturday assignment', await elig(light, restShift.shiftId) === false)
+check('there is NO minimum-rest rule: the stored minRestHours setting no longer changes who is eligible', (await elig(light, restShift.shiftId, safe)) === (await elig(light, restShift.shiftId, JSON.stringify({ maxWeeklyHours: 42, minRestHours: 0, maxDailyHours: 10, maxConsecutiveDays: 6 }))) && (await elig(light, restShift.shiftId, JSON.stringify({ maxWeeklyHours: 42, minRestHours: 24, maxDailyHours: 10, maxConsecutiveDays: 6 }))) === (await elig(light, restShift.shiftId, safe)))
 const otherWeek = await weekOf(ghav, pw)
 await save(owner, otherWeek, { p_date: day(3, pw), p_start: '08:00', p_end: '14:00', p_assignees: JSON.stringify([asg(light.id)]) })
 // Branch assignment cannot be created for a branch-bound employee; use an
