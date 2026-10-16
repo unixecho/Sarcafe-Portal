@@ -113,7 +113,8 @@ check('...and refuses a session-less caller', /if \(!staff\) throw Forbidden/.te
 
 section('the tour matches the real home screen')
 const home = read('src/components/dashboard/EmployeeDashboardView.tsx')
-for (const row of T.TOUR_ROWS) check(`the tour row "${row.he}" is a real row of the employee home`, home.includes(`label: '${row.he}'`) || home.includes(`<strong>${row.he}</strong>`))
+const shiftCard = read('src/components/staff/ShiftStatusCard.tsx')
+for (const row of T.TOUR_ROWS) check(`the tour row "${row.he}" is a real row of the employee home`, home.includes(`label: '${row.he}'`) || home.includes(`<strong>${row.he}</strong>`) || shiftCard.includes(row.he))
 check('every slide that is about a row names a row that exists', T.TOUR_SLIDES.every((s) => s.row === null || T.TOUR_ROWS.some((r) => r.id === s.row)))
 check('the constraints slide uses the owner\'s three options and the weekly days-off limit', T.TOUR_SLIDES.find((s) => s.key === 'schedule').points.join(' ').includes('לא יכול/ה משמרת בוקר') && T.TOUR_SLIDES.find((s) => s.key === 'schedule').points.join(' ').includes('יום חופש כל היום'))
 check('the slide index is always clamped', T.clampSlide(-3) === 0 && T.clampSlide(99) === T.TOUR_SLIDES.length - 1 && T.clampSlide(Number.NaN) === 0 && T.isLastSlide(T.TOUR_SLIDES.length - 1) && !T.isLastSlide(0))

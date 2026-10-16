@@ -156,6 +156,20 @@
   border: 2px solid var(--bg-elev-2);
 }
 
+/* The one control the person is being sent to (the next-week arrow on a closed week): a calm pulsing ring. */
+.sch-iconbtn--nudge {
+  border-color: var(--neon);
+  background: color-mix(in srgb, var(--neon) 16%, var(--bg-elev-2));
+  animation: sch-nudge 1.8s ease-in-out infinite;
+}
+@keyframes sch-nudge {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--neon) 55%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--neon) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .sch-iconbtn--nudge { animation: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--neon) 45%, transparent); } }
+.sch-closedcard { border-color: var(--line-strong); }
+.sch-closedcard__sent { display: flex; flex-wrap: wrap; gap: 6px; }
+
 /* ---- Cards & text -------------------------------------------------------- */
 .sch-card {
   background: var(--bg-elev);

@@ -31,7 +31,11 @@ const timesOf = (shift: ShiftBrief) => ({ date: shift.date, startTime: shift.sta
 // the end for closing / a departing handover (the shift has an opening checklist).
 const lockFor = (shift: ShiftBrief, item: ShiftChecklistBrief): LockInput => ({ ...timesOf(shift), kind: item.kind, shiftHasOpening: shift.checklists.some((other) => other.kind === 'opening') })
 
-export default function ShiftStatusCard({ status, scheduleHref, developer }: { status: ShiftStatus; scheduleHref: string; developer: boolean }) {
+/** On a six-digit-code sign-in the schedule is not available: the card still points at it, and the tap lands on the sign-in that
+ *  needs the app installed (`scheduleHref` is /login?next=/staff/schedule there). */
+const CODE_NOTE = 'הסידור המלא זמין רק בכניסה דרך האפליקציה. לחיצה על הכרטיס תעביר לכניסה.'
+
+export default function ShiftStatusCard({ status, scheduleHref, developer, codeMode = false }: { status: ShiftStatus; scheduleHref: string; developer: boolean; codeMode?: boolean }) {
   const loadedAt = useRef(Date.now())
   const [, setTick] = useState(0)
   const [sim, setSim] = useState(false)
@@ -54,7 +58,7 @@ export default function ShiftStatusCard({ status, scheduleHref, developer }: { s
     try { localStorage.setItem(SIM_KEY, on ? 'on' : 'off') } catch { /* see above */ }
   }
 
-  if (current) return <OnShift shift={current} now={now} scheduleHref={scheduleHref} />
+  if (current) return <OnShift shift={current} now={now} scheduleHref={scheduleHref} codeMode={codeMode} />
 
   if (developer && sim) {
     return (
@@ -72,7 +76,7 @@ export default function ShiftStatusCard({ status, scheduleHref, developer }: { s
     )
   }
 
-  if (next) return <Upcoming shift={next} now={now} scheduleHref={scheduleHref} developer={developer} onSim={() => toggleSim(true)} />
+  if (next) return <Upcoming shift={next} now={now} scheduleHref={scheduleHref} developer={developer} codeMode={codeMode} onSim={() => toggleSim(true)} />
 
   return (
     <section className="app-shiftcard" aria-label="סטטוס משמרת">
@@ -81,12 +85,14 @@ export default function ShiftStatusCard({ status, scheduleHref, developer }: { s
         <span className="app-shiftcard__copy"><small>סטטוס משמרת</small><strong>אין משמרת קרובה בלוח שפורסם</strong><span>פתיחת לוח המשמרות והבקשות</span></span>
         <ChevronLeft size={19} aria-hidden="true" className="app-row__chevron" />
       </Link>
+      <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>אין צ׳קליסט זמין: אין משמרת קרובה בלוח שפורסם.</span></p>
+      {codeMode && <p className="app-shiftcard__note">{CODE_NOTE}</p>}
       {developer && <div className="app-shiftcard__actions"><button type="button" className="app-shiftcard__cta press" onClick={() => toggleSim(true)}><Beaker size={18} aria-hidden="true" />כניסה למשמרת בדיקה</button></div>}
     </section>
   )
 }
 
-function OnShift({ shift, now, scheduleHref }: { shift: ShiftBrief; now: WallClock; scheduleHref: string }) {
+function OnShift({ shift, now, scheduleHref, codeMode }: { shift: ShiftBrief; now: WallClock; scheduleHref: string; codeMode: boolean }) {
   const left = shiftEndAbs(timesOf(shift)) - clockAbs(now)
   const ended = left <= 0
   const pending = shift.checklists.filter(waiting)
@@ -102,6 +108,7 @@ function OnShift({ shift, now, scheduleHref }: { shift: ShiftBrief; now: WallClo
         </span>
         <ChevronLeft size={19} aria-hidden="true" className="app-row__chevron" />
       </Link>
+      {!shift.checklists.some((item) => !item.dismissed) && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>אין צ׳קליסט זמין למשמרת הזו.</span></p>}
       {shift.checklists.some((item) => !item.dismissed) && (
         <div className="app-shiftcard__actions">
           {shift.checklists.filter((item) => !item.dismissed).map((item) => {
@@ -122,11 +129,12 @@ function OnShift({ shift, now, scheduleHref }: { shift: ShiftBrief; now: WallClo
           })}
         </div>
       )}
+      {codeMode && <p className="app-shiftcard__note">{CODE_NOTE}</p>}
     </section>
   )
 }
 
-function Upcoming({ shift, now, scheduleHref, developer, onSim }: { shift: ShiftBrief; now: WallClock; scheduleHref: string; developer: boolean; onSim: () => void }) {
+function Upcoming({ shift, now, scheduleHref, developer, codeMode, onSim }: { shift: ShiftBrief; now: WallClock; scheduleHref: string; developer: boolean; codeMode: boolean; onSim: () => void }) {
   const times = timesOf(shift)
   const minutes = shiftStartAbs(times) - clockAbs(now)
   const soon = minutes <= 24 * 60
@@ -151,6 +159,9 @@ function Upcoming({ shift, now, scheduleHref, developer, onSim }: { shift: Shift
           ))}
         </div>
       )}
+      {!soon && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>הצ׳קליסטים יהיו זמינים ביום המשמרת.</span></p>}
+      {soon && pending.length === 0 && <p className="app-shiftcard__note app-shiftcard__note--lock"><Lock size={14} aria-hidden="true" /><span>אין צ׳קליסט שממתין למשמרת הזו.</span></p>}
+      {codeMode && <p className="app-shiftcard__note">{CODE_NOTE}</p>}
       {developer && <div className="app-shiftcard__actions"><button type="button" className="app-shiftcard__cta press" onClick={onSim}><Beaker size={18} aria-hidden="true" />כניסה למשמרת בדיקה</button></div>}
     </section>
   )

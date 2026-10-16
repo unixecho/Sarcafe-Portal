@@ -287,13 +287,13 @@
 
 /* ---- Shift-status card on the staff home: next shift, on-shift now, and the checklist button ---- */
 .app-shiftcard {
-  display: grid; gap: 12px; margin-block: 0 24px; padding: 16px; overflow: hidden;
+  display: grid; gap: 14px; margin-block: 0 24px; padding: 20px 18px; overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--neon) 38%, var(--line)); border-radius: 25px;
   background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--neon) 16%, transparent), transparent 58%), var(--bg-elev);
 }
 .app-shiftcard--live { border-color: color-mix(in srgb, var(--success, #48b978) 55%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--success, #48b978) 18%, transparent), transparent 60%), var(--bg-elev); }
 .app-shiftcard--dev { border-style: dashed; border-color: color-mix(in srgb, var(--neon-2) 60%, var(--line)); }
-.app-shiftcard__link { display: flex; align-items: center; gap: 14px; color: var(--text); text-decoration: none; min-height: 76px; }
+.app-shiftcard__link { display: flex; align-items: center; gap: 14px; color: var(--text); text-decoration: none; min-height: 92px; }
 .app-shiftcard__icon { flex: 0 0 52px; height: 52px; display: grid; place-items: center; border-radius: 17px; color: var(--bg); background: var(--neon); box-shadow: 0 8px 24px color-mix(in srgb, var(--neon) 28%, transparent); }
 .app-shiftcard--live .app-shiftcard__icon { background: var(--success, #48b978); box-shadow: 0 8px 24px color-mix(in srgb, var(--success, #48b978) 30%, transparent); }
 .app-shiftcard__copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
@@ -316,6 +316,8 @@
 .app-shiftcard__quiet { background: none; border: 0; color: var(--text-dim); min-height: 44px; padding-inline: 8px; font: inherit; font-size: .8rem; cursor: pointer; }
 .app-shiftcard__title { font-size: 1.15rem; }
 .app-shiftcard__note { margin: 0; color: var(--text-dim); font-size: .85rem; line-height: 1.6; }
+.app-shiftcard__note--lock { display: flex; align-items: flex-start; gap: 7px; }
+.app-shiftcard__note--lock svg { flex: none; margin-top: 5px; }
 @media (prefers-reduced-motion: reduce) { .app-shiftcard__pulse { animation: none; } }
 
 .app-install__home { margin: 0 0 12px; color: var(--text-dim); font-size: .9rem; line-height: 1.7; }

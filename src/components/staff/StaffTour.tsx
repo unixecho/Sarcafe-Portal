@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { CalendarClock, ChevronLeft, ClipboardCheck, Receipt, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react'
+import { CalendarClock, ChevronLeft, Receipt, ShoppingBag, UserRound, type LucideIcon } from 'lucide-react'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import { haptic } from '@/lib/haptics'
 import { TOUR_ROWS, TOUR_SLIDES, clampSlide, isLastSlide, type TourRowId } from '@/lib/staff/tour'
 import { WIZARD_END_HREF } from '@/lib/staff/onboarding-wizard'
 
-const ROW_ICON: Record<TourRowId, LucideIcon> = { checklists: ClipboardCheck, schedule: CalendarClock, orders: ShoppingBag, events: Receipt, profile: UserRound }
+const ROW_ICON: Record<TourRowId, LucideIcon> = { shift: CalendarClock, orders: ShoppingBag, events: Receipt, profile: UserRound }
 
 // The employee's first-run tour — the wizard's last screen (the "demo"). A miniature of the real home screen sits on top and
 // lights the row each slide is about (the rows are lib/staff/tour.ts's, which scripts/check-onboarding-wizard.mjs compares

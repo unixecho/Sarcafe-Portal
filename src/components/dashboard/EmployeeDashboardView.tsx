@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound } from 'lucide-react'
-import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
@@ -19,8 +18,10 @@ import type { StaffIdentity } from '@/lib/staff/session'
 // The employee's dashboard BODY — everything under the header. Two pages show it: the employee home (/staff) and the
 // developer's single dashboard (/staff/dev) as its "employee" view, so the developer sees exactly what staff see.
 //
-// Order, by what the person needs first: the shift (and its checklist button) → anything waiting for them (alerts) → the
-// one-time set-up prompts → the workshop → the tools for the shift → their profile.
+// Order (owner, 2026-10-17): updates and notifications → the shift card (the one door to the schedule and to the checklists,
+// so there is no separate "my shift" list under it) → the coffee workshop → the rest → the person's own area. This is the
+// APP sign-in (Google); a six-digit-code sign-in gets CodeDashboardView instead. No "add to Home Screen" row here: the
+// notifications gate already makes the app live on the Home Screen before this page opens.
 export default async function EmployeeDashboardView({ me }: { me: StaffIdentity }) {
   const fullLogin = me.via === 'google' && !me.quick
   const developer = isDeveloper(me)
@@ -34,10 +35,6 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   // A general manager edits their own branch's checklists from here (the builder is per branch); an owner is sent to the branches.
   const ownBranch = fullLogin && me.branch_id ? (await getBranches()).find((branch) => branch.id === me.branch_id) ?? null : null
   const categories: DashboardCategory[] = [
-    { title: 'המשמרת שלי', entries: [
-      { href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה — הכל במקום אחד' },
-      { href: scheduleHref, icon: CalendarClock, label: 'משמרות ואילוצים', description: fullLogin ? 'הסידור שפורסם, אילוצים והחלפת משמרת' : 'כניסה עם Google לצפייה בסידור ולשליחת אילוצים' },
-    ] },
     // Owner, 2026-10-16: for employees these two stay on the page but are not open yet. Managers keep their own (open) entries
     // under "ניהול במשמרת" and on the owner dashboard.
     { title: 'במהלך השירות', entries: [
@@ -63,17 +60,14 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   return (
     <>
       <div className="app-welcome"><div><h2>שלום, {name}</h2><p>{date}</p></div></div>
-      <ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} />
-      {/* Something waiting for the person comes before the set-up prompts; with nothing new the prompts go first. */}
-      {unread > 0 && alerts}
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
-      {unread === 0 && alerts}
+      {alerts}
+      <ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} />
       <WorkshopCard />
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account">
         <Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
-        <InstallAppButton />
       </div>
       {developer && (
         <div className="app-group app-account">

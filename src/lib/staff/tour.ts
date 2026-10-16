@@ -5,12 +5,11 @@
 // below. Each slide that is about a row of the home screen carries that row's id; the check compares the labels here with
 // the real screen (EmployeeDashboardView) so the miniature cannot drift from it. Hebrew only, like the rest of staff.
 
-export type TourRowId = 'checklists' | 'schedule' | 'orders' | 'events' | 'profile'
+export type TourRowId = 'shift' | 'orders' | 'events' | 'profile'
 
 /** The rows of the home screen the tour shows, in the order the screen has them. `he` equals the real row's label. */
 export const TOUR_ROWS: readonly { id: TourRowId; he: string }[] = [
-  { id: 'checklists', he: 'צ׳קליסטים למשמרת' },
-  { id: 'schedule', he: 'משמרות ואילוצים' },
+  { id: 'shift', he: 'המשמרת הבאה שלך' },
   { id: 'orders', he: 'הזמנות מהירות' },
   { id: 'events', he: 'קופת אירועים ועמדות' },
   { id: 'profile', he: 'הפרופיל שלי' },
@@ -31,15 +30,15 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     title: 'זה אזור הצוות שלכם',
     lead: 'כל מה שצריך למשמרת במקום אחד. נעבור על זה בקצרה, כדקה.',
     points: [
-      'למעלה: המשמרת הקרובה שלכם, והכפתור לצ׳קליסט כשהמשמרת פעילה.',
-      'מתחת: עדכונים שמחכים לכם, ואז הכפתורים לכל מה שעושים בעבודה.',
+      'למעלה: עדכונים והתראות שמחכים לכם.',
+      'מתחת: כרטיס המשמרת. ממנו נכנסים לצ׳קליסט כשהמשמרת פעילה, ולסידור ולאילוצים.',
       'מנהלים רואים כאן גם כלי ניהול, לפי התפקיד.',
     ],
   },
   {
-    key: 'checklists', row: 'checklists',
+    key: 'checklists', row: 'shift',
     title: 'צ׳קליסטים למשמרת',
-    lead: 'פתיחה, החלפת משמרת וסגירה. כל צ׳קליסט נפתח בזמן שלו.',
+    lead: 'פתיחה, החלפת משמרת וסגירה. הכפתורים בכרטיס המשמרת, וכל צ׳קליסט נפתח בזמן שלו.',
     points: [
       'פתיחה והחלפה נפתחות כשהמשמרת מתחילה. סגירה נפתחת חצי שעה לפני הסוף.',
       'אם שניים עובדים באותה משמרת, אחד ממלא וזה מספיק. המנהל/ת יכולים לבחור מי.',
@@ -47,9 +46,9 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     ],
   },
   {
-    key: 'schedule', row: 'schedule',
+    key: 'schedule', row: 'shift',
     title: 'משמרות ואילוצים',
-    lead: 'הסידור שפורסם, ומה שלא מתאים לכם בשבוע הבא.',
+    lead: 'לוחצים על כרטיס המשמרת: הסידור שפורסם, ומה שלא מתאים לכם בשבוע הבא.',
     points: [
       'בכל יום בוחרים אחד: לא יכול/ה משמרת בוקר, לא יכול/ה משמרת ערב, או יום חופש כל היום.',
       'המנהל/ת קובעים כמה ימי חופש אפשר לבקש בשבוע (בדרך כלל 2). יום חופש מחכה לאישור שלהם.',

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import OwnerHeader from '@/components/OwnerHeader'
 import EmployeeDashboardView from '@/components/dashboard/EmployeeDashboardView'
+import CodeDashboardView from '@/components/dashboard/CodeDashboardView'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { isOp } from '@/lib/staff/access'
 import { isDeveloper } from '@/lib/checklists/developer'
@@ -19,11 +20,12 @@ export default async function StaffIndexPage() {
   if ((await loadGateState(me.id)).onboardingPending) redirect('/staff/onboarding')
   const fullLogin = me.via === 'google' && !me.quick
   if (fullLogin && isOp(me)) redirect('/owner/dashboard')
+  // A six-digit-code sign-in (the QR code on the cart) gets the checklist dashboard, not the app's home.
 
   return (
     <main id="main" tabIndex={-1} className="app-page">
       <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
-      <EmployeeDashboardView me={me} />
+      {fullLogin ? <EmployeeDashboardView me={me} /> : <CodeDashboardView me={me} />}
     </main>
   )
 }

@@ -21,7 +21,10 @@ export const metadata: Metadata = {
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const me = await resolveStaffIdentity().catch(() => null)
   const state = me ? await loadGateState(me.id) : null
-  const mode = gateModeFor(me ? { role: me.role, badge: isDeveloper(me) ? 'developer' : me.badge, pushGateExempt: state?.exempt } : null)
+  // A six-digit-code sign-in (the QR code on the cart) is floor work only and is never stopped by the app set-up: its page
+  // offers the Home Screen shortcut, and the schedule behind it needs the app sign-in, which the gate does guard.
+  const codeSession = !!me && !(me.via === 'google' && !me.quick)
+  const mode = codeSession ? 'off' : gateModeFor(me ? { role: me.role, badge: isDeveloper(me) ? 'developer' : me.badge, pushGateExempt: state?.exempt } : null)
   return (
     <AppMotion className={GeistSans.variable}>
       <NotificationsGate mode={mode}>

@@ -133,6 +133,7 @@ export function scheduleStatus(reason: string): number {
     case 'time_off':
     case 'too_many_days_off':
     case 'too_many_shift_blocks':
+    case 'requests_closed':
       return 409
     default:
       return 400

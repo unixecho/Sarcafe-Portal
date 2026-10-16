@@ -18,7 +18,7 @@ import { ApiError, NotFound } from '@/lib/http/errors'
 import { requirePublishedScheduleViewer, requireScheduleDelegator, requireScheduleManager, requireScheduleViewer } from './guard'
 import { scheduleMessage, scheduleStatus, type Details } from './messages'
 import { requireStaff } from '@/lib/staff/guard'
-import { addDays, weekStartOf } from './time'
+import { addDays, requestsOpen, wallClockNow, weekStartOf } from './time'
 import type { ScheduleAction } from './actions'
 import type { SettingsPatch } from './schema'
 import { DEFAULT_PRESETS } from './config'
@@ -43,6 +43,14 @@ function codeFor(status: number): string {
 export function refusal(reason: string, details: Details = {}): ApiError {
   const status = scheduleStatus(reason)
   return new ApiError(status, codeFor(status), scheduleMessage(reason, details), { reason, ...details })
+}
+
+/** The constraints window of a week is closed once its Tuesday (the branch's wall clock) has passed. The form hides itself then;
+ *  this is the check that matters, because the form is only a screen (owner, 2026-10-17: an אילוצים send went through after the cut-off). */
+async function requireRequestsOpen(service: Service, branchId: string, weekStart: string): Promise<void> {
+  const { data: branch } = await service.from('branches').select('timezone').eq('id', branchId).maybeSingle()
+  const now = wallClockNow((branch?.timezone as string | undefined) || 'Asia/Jerusalem')
+  if (!requestsOpen(weekStart, now)) throw refusal('requests_closed')
 }
 
 /** Calls one sched_* function and unwraps its { ok, reason, details } result. */
@@ -309,6 +317,7 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       for (const e of action.entries as { date: string }[]) {
         if (e.date < start || e.date > end) throw refusal('bad_date')
       }
+      await requireRequestsOpen(service, action.branchId, start)
       return callSched(service, 'sched_submit_availability', {
         p_actor: staff.id, p_branch: action.branchId, p_week_start: start,
         p_entries: action.entries, p_note: action.note ?? null, p_status: action.status,
@@ -323,6 +332,7 @@ export async function performDispatch(action: ScheduleAction): Promise<Row> {
       for (const e of action.entries) {
         if (e.date < start || e.date > end) throw refusal('bad_date')
       }
+      await requireRequestsOpen(service, action.branchId, start)
       // The manager's limits (days off, "cannot do the morning/evening") are checked against the week the person
       // WANTS after this save; a week already over a limit may be kept or reduced, never increased (constraints.ts).
       const [{ data: cfg }, { data: live }] = await Promise.all([
