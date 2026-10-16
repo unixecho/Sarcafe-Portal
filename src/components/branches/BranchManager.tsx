@@ -8,6 +8,7 @@ import Switch from '@/components/Switch'
 import ScheduleSettings from '@/components/branches/ScheduleSettings'
 import BranchLinksEditor from '@/components/BranchLinksEditor'
 import BranchSlider from '@/components/branches/BranchSlider'
+import { branchChecklistBuilderPath } from '@/lib/checklists/links'
 import EventSheet from '@/components/owner/pos/EventSheet'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 import { messageOf } from '@/components/staff/types'
@@ -174,8 +175,8 @@ function Checklists({ state, setState }: { state: BranchOverview; setState: (nex
 
   return (
     <section className="bm-card" aria-labelledby="bm-ck">
-      <h3 id="bm-ck">צ׳קליסטים של הסניף</h3>
-      <p className="sch-sub">אפשר להפעיל או לכבות כל צ׳קליסט בנפרד לסניף הזה. צ׳קליסט שכבוי לא מופיע לעובדים, לא נספר כפער, ולא שולחים עליו התראות. מה שכבר נשלח נשמר.</p>
+      <h3 id="bm-ck">צ׳קליסטים של {state.name}</h3>
+      <p className="sch-sub">לכל סניף יש טפסים משלו: כאן מדליקים ומכבים אותם, ובעריכה משנים את הטופס של {state.name} בלבד (שם, קטגוריות ובדיקות). צ׳קליסט שכבוי לא מופיע לעובדים, לא נספר כפער, ולא שולחים עליו התראות. מה שכבר נשלח נשמר.</p>
       <ul className="bm-list">
         {state.checklists.map((item) => (
           <li key={item.kind} className={`bm-ck${item.enabled ? '' : ' bm-ck--off'}`}>
@@ -193,11 +194,12 @@ function Checklists({ state, setState }: { state: BranchOverview; setState: (nex
                 <span>{item.enabled ? 'פעיל' : 'כבוי'}</span>
               </button>
             </div>
-            <Link href={`/owner/checklists?branch=${state.slug}`} className="bm-link bm-link--sm press"><Pencil size={15} aria-hidden="true" />עריכת הטופס ומעקב<ChevronLeft size={15} aria-hidden="true" /></Link>
+            <Link href={branchChecklistBuilderPath(state.slug, item.kind)} className="bm-link bm-link--sm press"><Pencil size={15} aria-hidden="true" />עריכת ״{item.label}״<ChevronLeft size={15} aria-hidden="true" /></Link>
             {message?.kind === item.kind && <p className={`bm-note bm-note--${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</p>}
           </li>
         ))}
       </ul>
+      <Link href={`/owner/checklists?branch=${state.slug}`} className="bm-link press"><ClipboardCheck size={17} aria-hidden="true" />מעקב משמרות ודיווחים של {state.name}<ChevronLeft size={16} aria-hidden="true" /></Link>
     </section>
   )
 }

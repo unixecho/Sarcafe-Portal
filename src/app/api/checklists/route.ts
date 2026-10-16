@@ -57,7 +57,8 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const previews = (previewRows ?? []).map((row) => ({
     id: row.id as string,
     kind: row.kind,
-    kindLabel: KIND_LABELS[row.kind as keyof typeof KIND_LABELS],
+    // The branch's own name for the form, as employees will read it.
+    kindLabel: String(row.name ?? '').trim() || KIND_LABELS[row.kind as keyof typeof KIND_LABELS],
     name: row.name,
     version: row.version,
     definition: row.definition,

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { SoonText } from '@/components/app/DashboardSections'
 import {
   Accessibility,
   Bell,
@@ -25,7 +26,7 @@ import {
   X,
 } from 'lucide-react'
 
-type Item = { href: string; label: string; icon: typeof House }
+type Item = { href: string; label: string; icon: typeof House; /** not open yet: shown, says why, and is not a link */ soon?: string }
 type Group = { label: string; items: Item[] }
 
 const STAFF_GROUPS: Group[] = [
@@ -33,7 +34,7 @@ const STAFF_GROUPS: Group[] = [
     { href: '/staff', label: 'בית', icon: House },
     { href: '/staff/schedule', label: 'משמרות ובקשות', icon: CalendarClock },
     { href: '/staff/checklists', label: 'צ׳קליסט למשמרת', icon: ClipboardCheck },
-    { href: '/pos', label: 'העמדה שלי', icon: Receipt },
+    { href: '/pos', label: 'העמדה שלי', icon: Receipt, soon: 'בפסטיבל הבא :)' },
   ] },
   { label: 'החשבון', items: [
     { href: '/staff/profile', label: 'הפרופיל שלי', icon: UserRound },
@@ -111,6 +112,14 @@ export default function AppNavigation() {
               <div className="app-nav__grid">
                 {group.items.map((item) => {
                   const active = pathname === item.href || (item.href !== '/staff' && item.href !== '/owner/dashboard' && pathname.startsWith(`${item.href}/`))
+                  if (item.soon) {
+                    return (
+                      <div key={item.href} className="app-nav__item app-nav__item--soon">
+                        <item.icon size={20} strokeWidth={1.9} aria-hidden="true" />
+                        <span>{item.label}<small><SoonText text={item.soon} /></small></span>
+                      </div>
+                    )
+                  }
                   return (
                     <Link key={item.href} href={item.href} className="app-nav__item press" aria-current={active ? 'page' : undefined} tabIndex={open ? 0 : -1}>
                       <item.icon size={20} strokeWidth={1.9} aria-hidden="true" />

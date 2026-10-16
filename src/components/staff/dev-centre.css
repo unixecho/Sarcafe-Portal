@@ -1,0 +1,48 @@
+/* The developer's notification centre: three containers, one per kind of alert the developer account receives.
+   Each has its own accent so they are told apart at a glance without reading: teal for the system (the app's "info" colour),
+   orange for management (the brand), and a quiet neutral for the person as an employee. Rows are plain list rows, not cards. */
+.dnc { display: flex; flex-direction: column; gap: 14px; margin-block: 0 24px; }
+.dnc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 900px) { .dnc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.dnc-box { --accent: var(--text-dim); display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 8px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); }
+.dnc-box--developer { --accent: var(--neon-2); }
+.dnc-box--owner { --accent: var(--neon); border-color: color-mix(in srgb, var(--neon) 24%, var(--line)); background: radial-gradient(circle at 100% 0, color-mix(in srgb, var(--neon) 9%, transparent), transparent 58%), var(--bg-elev); }
+.dnc-box--employee { --accent: var(--neon-soft); }
+
+.dnc-head { display: flex; align-items: flex-start; gap: 12px; }
+.dnc-icon { flex: 0 0 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--bg-elev-2)); }
+.dnc-title { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.dnc-title h2 { margin: 0; font-size: 1.02rem; font-weight: 750; line-height: 1.35; letter-spacing: -.01em; }
+.dnc-title p { margin: 0; color: var(--text-dim); font-size: .77rem; line-height: 1.55; text-wrap: pretty; }
+.dnc-count { flex: 0 0 auto; display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding-inline: 7px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: .78rem; font-weight: 800; }
+
+.dnc-health { display: flex; align-items: center; gap: 9px; min-height: 44px; padding: 8px 12px; border-radius: 14px; background: var(--bg-elev-2); color: var(--text-dim); font-size: .82rem; font-weight: 600; text-decoration: none; }
+.dnc-health svg { flex: none; color: var(--ok); }
+.dnc-health--bad { color: var(--text); background: color-mix(in srgb, var(--warn) 12%, var(--bg-elev-2)); }
+.dnc-health--bad svg { color: var(--warn); }
+
+.dnc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dnc-list li + li { border-top: 1px solid var(--line); }
+.dnc-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 4px; color: var(--text); text-decoration: none; -webkit-tap-highlight-color: transparent; border-radius: 12px; transition: background .16s var(--ease); }
+.dnc-item:active { background: var(--bg-elev-2); }
+.dnc-dot { flex: 0 0 8px; height: 8px; margin-top: 8px; border-radius: 999px; background: transparent; }
+.dnc-item--unread .dnc-dot { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.dnc-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.dnc-text strong { font-size: .88rem; font-weight: 600; line-height: 1.5; color: var(--text-dim); overflow-wrap: anywhere; }
+.dnc-item--unread .dnc-text strong { font-weight: 750; color: var(--text); }
+.dnc-text small { color: var(--text-dim); font-size: .78rem; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dnc-text time { color: var(--text-faint); font-size: .72rem; font-variant-numeric: tabular-nums; }
+
+.dnc-empty { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 4px 4px 14px; color: var(--text-dim); font-size: .82rem; line-height: 1.65; text-wrap: pretty; }
+.dnc-empty svg { flex: none; margin-top: 3px; color: var(--accent); }
+
+.dnc-foot { display: flex; flex-wrap: wrap; gap: 2px 6px; padding: 6px 0 4px; border-top: 1px solid var(--line); }
+.dnc-link { min-height: 44px; padding: 0 10px; display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 12px; background: transparent; color: var(--accent); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.dnc-link:disabled { opacity: .6; cursor: default; }
+.dnc-link:focus-visible, .dnc-item:focus-visible, .dnc-health:focus-visible { outline: 2px solid var(--neon-2); outline-offset: 2px; }
+.dnc-flip { transform: rotate(180deg); }
+.dnc-error { margin: 0; padding: 10px 12px; border-radius: 14px; background: var(--danger-bg); color: var(--text); font-size: .84rem; }
+.dnc-error button { margin-inline-start: 8px; border: 0; background: none; color: var(--neon-soft); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .dnc-item:hover, .dnc-health:hover { background: var(--bg-elev-2); } .dnc-link:hover { text-decoration: underline; text-underline-offset: 4px; } }
+@media (prefers-reduced-motion: reduce) { .dnc-item { transition: none; } }

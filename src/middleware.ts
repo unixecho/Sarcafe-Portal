@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isOp, isStaff, hasAnyMenuEditAccess } from '@/lib/staff/access'
 import { jwtSessionId } from '@/lib/pos/quick-jwt'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
-import { isOwnerChecklistPath, isStaffChecklistPath } from '@/lib/checklists/links'
+import { isBranchChecklistBuilderPath, isOwnerChecklistPath, isStaffChecklistPath } from '@/lib/checklists/links'
 
 // Mirrors AyekaBar's src/middleware.ts, minus the loyalty-club gate and the
 // floor/shift-scheduling prefixes — Sarcafe has none of those systems.
@@ -129,8 +129,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const editorProtected = matchesAny(pathname, MENU_EDITOR_PREFIXES)
-  const opProtected = matchesAny(pathname, OP_ONLY_PREFIXES)
+  // A branch's checklist builder lives under /owner/branches (owner-only) but is also the work of that branch's general manager
+  // ("I will let the owner or a manager edit the Maor checklist"): menu-editor access here, the exact branch decided by the page and
+  // the API (canEditMenu / requireMenuEditor), like /owner/pos and /owner/issues.
+  const checklistBuilder = isBranchChecklistBuilderPath(pathname)
+  const editorProtected = checklistBuilder || matchesAny(pathname, MENU_EDITOR_PREFIXES)
+  const opProtected = !checklistBuilder && matchesAny(pathname, OP_ONLY_PREFIXES)
   const onboarding = pathname === '/staff/onboarding'
   const staffProtected = !onboarding && matchesAny(pathname, STAFF_ONLY_PREFIXES)
 
@@ -154,7 +158,7 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set('next', isStaffChecklistPath(pathname) ? pathname : '/staff/checklists')
       url.searchParams.set('quick', '1')
     }
-    if (isOwnerChecklistPath(pathname)) url.searchParams.set('next', pathname)
+    if (isOwnerChecklistPath(pathname) || checklistBuilder) url.searchParams.set('next', pathname)
     const redirected = NextResponse.redirect(url)
     if (pathname === '/pos') redirected.cookies.set(POS_RETURN_COOKIE, safePosReturn(`${pathname}${request.nextUrl.search}`) || '/pos', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 600 })
     return redirected

@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { clearDashboardBranchConfirmed } from '@/lib/branches/current'
 
-export default function SignOutButton({ className }: { className?: string }) {
+/** `label` turns the round header icon into a plain text button with that wording (the gate screen uses it). */
+export default function SignOutButton({ className, label }: { className?: string; label?: string }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +42,10 @@ export default function SignOutButton({ className }: { className?: string }) {
         disabled={busy}
         aria-label="התנתקות"
         title="התנתקות"
-        style={{
+        style={label ? {
+          display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44, padding: '0 14px', borderRadius: 12, background: 'transparent', border: 'none',
+          color: 'var(--text-dim)', font: 'inherit', fontSize: '.88rem', fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+        } : {
           width: 34,
           height: 34,
           minWidth: 34,
@@ -55,7 +59,7 @@ export default function SignOutButton({ className }: { className?: string }) {
           opacity: busy ? 0.6 : 1,
         }}
       >
-        <LogOut size={16} strokeWidth={2} aria-hidden="true" />
+        <LogOut size={label ? 17 : 16} strokeWidth={2} aria-hidden="true" />{label}
       </button>
       {error && (
         <p role="alert" style={{ color: '#ff6b6b', fontSize: '0.8rem', marginTop: 6 }}>

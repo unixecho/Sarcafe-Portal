@@ -1,7 +1,7 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { coveredByFor } from '@/lib/checklists/server'
+import { checklistNames, coveredByFor } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistKind } from '@/lib/checklists/types'
 import { clockAbs, isDismissed, shiftEndAbs, shiftStartAbs, type WallClock } from '@/lib/checklists/window'
 import { END_GRACE_MINUTES } from '@/lib/push/staff-rules'
@@ -93,6 +93,7 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
 
   const coveredRows = rows.filter((row) => row.status === 'covered').map((row) => ({ shiftId: row.shift_id as string, kind: row.checklist_kind as string }))
   const covered = await coveredByFor(service, coveredRows)
+  const names = await checklistNames(service, branchIds)
   const brief = (c: Candidate | null): ShiftBrief | null => {
     if (!c) return null
     const branch = branchById.get(c.row.branch_id as string)
@@ -111,7 +112,7 @@ export async function loadShiftStatus(service: SupabaseClient, staffId: string):
       place,
       checklists: rows
         .filter((row) => row.shift_id === c.row.id)
-        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'], dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }), coveredBy: row.status === 'covered' ? (({ name, reason }) => ({ name, reason }))(covered.get(`${row.shift_id}|${row.checklist_kind}`) ?? { name: 'עמית/ה', reason: 'submitted' as const }) : undefined }))
+        .map((row) => ({ id: row.id as string, kind: row.checklist_kind as ChecklistKind, kindLabel: names.get(`${c.row.branch_id}|${row.checklist_kind}`) ?? KIND_LABELS[row.checklist_kind as ChecklistKind], status: row.status as ShiftChecklistBrief['status'], dismissed: isDismissed({ status: row.status as string, resolvedAt: row.manager_resolved_at as string | null }), coveredBy: row.status === 'covered' ? (({ name, reason }) => ({ name, reason }))(covered.get(`${row.shift_id}|${row.checklist_kind}`) ?? { name: 'עמית/ה', reason: 'submitted' as const }) : undefined }))
         .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]),
     }
   }

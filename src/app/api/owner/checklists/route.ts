@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { apiRoute, ApiError, BadRequest, NotFound } from '@/lib/http/errors'
-import { requireOwner } from '@/lib/owner/guard'
+import { requireMenuEditor, requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureChecklistTemplates, syncPublishedChecklists } from '@/lib/checklists/server'
 import { isDismissed } from '@/lib/checklists/window'
@@ -117,12 +117,13 @@ export const GET = apiRoute(async (request: NextRequest) => {
 })
 
 export const POST = apiRoute(async (request: NextRequest) => {
-  const owner = await requireOwner()
   const body = bodySchema.parse(await request.json())
   const service = createServiceRoleClient()
   if (body.action === 'publish') {
+    // Editing a branch's form is the owner's or that branch's general manager's (the database applies the same rule again).
+    const editor = await requireMenuEditor(body.branchId)
     const { data, error } = await service.rpc('publish_checklist_template', {
-      p_actor: owner.id,
+      p_actor: editor.id,
       p_branch_id: body.branchId,
       p_kind: body.kind,
       p_name: body.name,
@@ -132,8 +133,11 @@ export const POST = apiRoute(async (request: NextRequest) => {
       console.error('publish_checklist_template failed:', error.code)
       throw new ApiError(400, 'bad_request', 'לא הצלחנו לפרסם את הטופס. בדקו שכל הקטגוריות והבדיקות מלאות.')
     }
-    return NextResponse.json({ ok: true, id: data })
+    const { data: published } = await service.from('checklist_templates').select('id, version, published_at, name').eq('id', data as string).maybeSingle()
+    return NextResponse.json({ ok: true, id: data, version: published?.version ?? null, publishedAt: published?.published_at ?? null, name: published?.name ?? body.name })
   }
+
+  const owner = await requireOwner()
 
   if (body.action === 'dismiss' || body.action === 'restore') {
     const { data: row } = await service.from('checklist_assignments').select('id, status, shift_id, checklist_kind').eq('id', body.assignmentId).maybeSingle()

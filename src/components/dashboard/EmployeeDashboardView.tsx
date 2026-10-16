@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound } from 'lucide-react'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
@@ -9,7 +9,9 @@ import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { loadShiftStatus } from '@/lib/staff/shift-status'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { hasAnyMenuEditAccess } from '@/lib/staff/access'
+import { hasAnyMenuEditAccess, isOp } from '@/lib/staff/access'
+import { getBranches } from '@/lib/branches/server'
+import { branchChecklistBuilderPath } from '@/lib/checklists/links'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { alertTitle } from '@/lib/push/staff-rules'
 import type { StaffIdentity } from '@/lib/staff/session'
@@ -29,19 +31,26 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
     loadShiftStatus(service, me.id),
   ])
+  // A general manager edits their own branch's checklists from here (the builder is per branch); an owner is sent to the branches.
+  const ownBranch = fullLogin && me.branch_id ? (await getBranches()).find((branch) => branch.id === me.branch_id) ?? null : null
   const categories: DashboardCategory[] = [
     { title: 'המשמרת שלי', entries: [
       { href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה — הכל במקום אחד' },
       { href: scheduleHref, icon: CalendarClock, label: 'משמרות ואילוצים', description: fullLogin ? 'הסידור שפורסם, אילוצים והחלפת משמרת' : 'כניסה עם Google לצפייה בסידור ולשליחת אילוצים' },
     ] },
+    // Owner, 2026-10-16: for employees these two stay on the page but are not open yet. Managers keep their own (open) entries
+    // under "ניהול במשמרת" and on the owner dashboard.
     { title: 'במהלך השירות', entries: [
-      ...(fullLogin ? [{ href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' }] : []),
-      { href: '/pos', icon: Receipt, label: 'קופת אירועים ועמדות', description: 'הזמנות האירוע והעמדה שבה עובדים' },
+      { icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת', soon: 'בקרוב · בפיתוח' },
+      { icon: Receipt, label: 'קופת אירועים ועמדות', description: 'הזמנות האירוע והעמדה שבה עובדים', soon: 'בפסטיבל הבא :)' },
     ] },
   ]
   if (fullLogin && hasAnyMenuEditAccess(me)) categories.push({ title: 'ניהול במשמרת', entries: [
     { href: '/owner/schedule', icon: CalendarClock, label: 'ניהול סידור העבודה', description: 'שיבוצים, אילוצים ואישור החלפות בסניף שלך' },
     { href: '/owner/issues', icon: ClipboardCheck, label: 'חוסרים ופערים', description: 'מה חסר, מה לא עובד ומה לא הוגש בסניף שלך' },
+    ...(ownBranch
+      ? [{ href: branchChecklistBuilderPath(ownBranch.slug, 'opening'), icon: ClipboardList, label: 'עריכת הצ׳קליסטים', description: `הטפסים של ${ownBranch.name.he}: שמות, קטגוריות ובדיקות` }]
+      : isOp(me) ? [{ href: '/owner/branches', icon: ClipboardList, label: 'ניהול סניפים וצ׳קליסטים', description: 'לכל סניף הטפסים והצוות שלו' }] : []),
     { href: '/owner/editor', icon: ShoppingBag, label: 'ניהול התפריט', description: 'עריכת התפריט והזמינות בסניף שלך' },
     { href: '/owner/pos', icon: Receipt, label: 'ניהול קופת אירועים', description: 'כלי ניהול לאירועים שבאחריותך' },
   ] })

@@ -302,12 +302,12 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 .ck-entry-grid { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 16px; align-items: center; }
 .ck-entry-qr { inline-size: 136px; block-size: 136px; border-radius: 14px; padding: 8px; background: #fff; }
 .ck-entry-url { direction: ltr; text-align: left; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); padding: 9px 10px; color: var(--text-dim); font-size: .78rem; }
-.ck-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 14px; padding: 4px; background: var(--bg-elev); }
+.ck-tabs { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--line); border-radius: 14px; padding: 4px; background: var(--bg-elev); }
 .ck-tabs button { min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--text-dim); font: inherit; font-weight: 700; cursor: pointer; }
 .ck-tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
 @media (max-width: 560px) {
   .ck-choice-grid { grid-template-columns: 1fr; }
-  .ck-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ck-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ck-tabs button { padding-inline: 6px; font-size: .74rem; }
   .ck-builder-category { padding: 12px; }
   .ck-builder-category__head { grid-template-columns: 1fr; align-items: stretch; }
@@ -356,3 +356,12 @@ button.ck-card { text-align: start; cursor: pointer; font: inherit; min-height: 
 .ck-short__stamp { text-align: center; opacity: 0.7; margin-top: 4px; }
 @keyframes ck-short-open { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ck-short__body { animation: none; } .ck-short__chevron { transition: none; } }
+
+/* ---- The per-branch builder (2026-10-16) ---- */
+.bm-textlink { color: var(--neon-soft); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.ck-off-tag { color: var(--warn); font-weight: 700; }
+.ck-builder-warn { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line)); background: var(--warn-bg); color: var(--text); font-size: .88rem; line-height: 1.6; }
+.ck-builder-warn svg { flex: none; margin-top: 2px; color: var(--warn); }
+.ck-builder-ok { padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ok) 45%, var(--line)); background: var(--ok-bg); color: var(--text); font-size: .88rem; line-height: 1.6; }
+.ck-builder-copy { width: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ck-builder-copy label { flex: 1; min-width: 200px; }

@@ -26,3 +26,13 @@ export const isOwnerChecklistPath = (value: unknown): value is `/owner/checklist
   if (typeof value !== 'string' || !value.startsWith('/owner/checklists/')) return false
   return isChecklistId(value.slice('/owner/checklists/'.length))
 }
+
+/** The checklist builder of ONE branch (owner, 2026-10-16: "the builder should exist under each branch's manager, not on the main
+ *  page, so each branch has its own"): /owner/branches/<slug>/checklists/<kind>. The branch and the kind are PATH segments so the
+ *  address survives the sign-in redirect, which keeps only plain path characters. */
+export const branchChecklistBuilderPath = (slug: string, kind: 'opening' | 'handover' | 'closing') => `/owner/branches/${slug}/checklists/${kind}`
+
+/** The builder's address, or its bare "checklists" parent that opens the first form. The coarse door for middleware: an owner or the
+ *  branch's general manager (the page and the API decide the branch). */
+export const isBranchChecklistBuilderPath = (value: unknown): value is string =>
+  typeof value === 'string' && /^\/owner\/branches\/[a-z0-9-]+\/checklists(\/(opening|handover|closing))?$/.test(value)

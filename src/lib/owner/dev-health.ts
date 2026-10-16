@@ -18,6 +18,8 @@ const PROBES: { id: string; label: string; migration: string; table: string; col
   { id: 'branch-checklists', label: 'צ׳קליסטים לפי סניף (הפעלה וכיבוי)', migration: '20261016090000', table: 'checklist_branch_settings' },
   { id: 'push-subs', label: 'מכשירים להתראות', migration: '20261012120000', table: 'staff_push_subscriptions' },
   { id: 'push-outbox', label: 'תור ההתראות לטלפון', migration: '20261012120000', table: 'schedule_notifications', column: 'push_sent_at' },
+  { id: 'onboarding-progress', label: 'התקדמות הצטרפות עובדים והיתר כניסה בלי התראות', migration: '20261016140000', table: 'staff', column: 'onboarding_done_at' },
+  { id: 'event-parent', label: 'קופות אירועים לפי סניף', migration: '20261016140000', table: 'branches', column: 'parent_branch_id' },
 ]
 
 async function probe(service: Service, table: string, column?: string): Promise<string | null> {

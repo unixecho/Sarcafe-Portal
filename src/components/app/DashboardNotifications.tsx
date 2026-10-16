@@ -8,7 +8,7 @@ import { pushPathFor } from '@/lib/push/staff-rules'
 // A range such as 13:00–19:00 or 18/10–24/10 inside Hebrew text is flipped by the bidi rules (it would read 19:00–13:00).
 // The rest of the app isolates ranges left-to-right; the alert text does the same.
 const RANGE = /(\d{1,2}[:/]\d{1,2}[–-]\d{1,2}[:/]\d{1,2})/
-function Text({ text }: { text: string }) {
+export function AlertText({ text }: { text: string }) {
   return <>{text.split(RANGE).map((part, index) => (index % 2 === 1 ? <span key={index} dir="ltr" style={{ whiteSpace: 'nowrap' }}>{part}</span> : part))}</>
 }
 
@@ -59,7 +59,7 @@ export default function DashboardNotifications({ initialNotifications = [], init
   // Each alert opens what it is about: the exact checklist, the requests tab, the availability tab… (the same
   // resolver the phone push uses, so a tap on the push and a tap on this list land in the same place).
   const hrefFor = (item: DashboardNotification) => {
-    const path = pushPathFor(item.kind ?? '', item.link ?? null, { manager })
+    const path = pushPathFor(item.kind ?? '', item.link ?? null, { manager, title: item.title })
     return !googleSignedIn && (path.startsWith('/staff/schedule') || path.startsWith('/owner/')) ? '/login?next=/staff/schedule' : path
   }
   const shown = notifications.slice(0, 5)
@@ -75,7 +75,7 @@ export default function DashboardNotifications({ initialNotifications = [], init
         {shown.map((item) => (
           <article key={item.id} className={`app-notice${item.read_at ? '' : ' app-notice--unread'}`}>
             <Link href={hrefFor(item)} onClick={() => { if (!item.read_at) void markRead([item.id]) }}>
-              <strong><Text text={item.title} /></strong>{item.body && <p><Text text={item.body} /></p>}
+              <strong><AlertText text={item.title} /></strong>{item.body && <p><AlertText text={item.body} /></p>}
               <time dateTime={item.created_at}>{new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(item.created_at))}</time>
             </Link>
           </article>

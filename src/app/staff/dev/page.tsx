@@ -3,6 +3,7 @@ import { Beaker, ClipboardCheck, ExternalLink, GitBranch, Database, Triangle } f
 import OwnerHeader from '@/components/OwnerHeader'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import DevPushPanel from '@/components/staff/DevPushPanel'
+import DevNotificationCenter from '@/components/staff/DevNotificationCenter'
 import LensTabs from '@/components/dashboard/LensTabs'
 import OwnerDashboardView from '@/components/dashboard/OwnerDashboardView'
 import EmployeeDashboardView from '@/components/dashboard/EmployeeDashboardView'
@@ -11,17 +12,21 @@ import { isDeveloper } from '@/lib/checklists/developer'
 import { isOp } from '@/lib/staff/access'
 import { lensesFor, parseLens } from '@/lib/dashboard/lens'
 import { readDevHealth, type HealthRow } from '@/lib/owner/dev-health'
+import { loadDevCentre } from '@/lib/push/dev-centre'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { AUDIENCE_PREFIX } from '@/lib/push/staff-rules'
 import { badgeLabel } from '@/lib/staff/badges'
 import '@/components/app/app.css'
 
 export const dynamic = 'force-dynamic'
 
-// The developer's dashboard — ONE place with all three views (owner, 2026-10-16: "make the dev panel just like Ayeka Bar's"):
+// The developer's dashboard — ONE place with all the views (owner, 2026-10-16: "make the dev panel just like Ayeka Bar's"):
 //
 //   מנהל   — exactly the owner's dashboard (components/dashboard/OwnerDashboardView.tsx)
 //   עובד   — exactly what staff see (components/dashboard/EmployeeDashboardView.tsx), including the test-shift card
 //   מפתח   — the developer's own tools: system health, the alert test bench, test checklists, and the reference links
+//   התראות — the developer's own notification centre: the one inbox sorted into three containers (system, management,
+//            the person as an employee), each alert opening the thing it is about
 //
 // The first two are the SAME components the owner and employee pages render, so the developer sees what those people see
 // by construction. /owner/dashboard and /staff send a developer here (?view=manager / ?view=employee), so there is no
@@ -48,9 +53,13 @@ export default async function StaffDevPage({ searchParams }: { searchParams: Pro
 
   // All three views are built on the server, in parallel, and handed to the switcher: switching is then instant (nothing to fetch)
   // and only the one on screen is mounted. The same arrangement as the Ayeka Bar developer dashboard.
+  const health = await readDevHealth()
+  const centre = await loadDevCentre(createServiceRoleClient(), me.id).catch(() => ({ rows: [], unread: { developer: 0, owner: 0, employee: 0 } }))
+  const problems = health.filter((row) => row.state === 'bad' || row.state === 'warn').length
   const panels: Parameters<typeof LensTabs>[0]['panels'] = {
     employee: <EmployeeDashboardView me={me} />,
-    dev: await DevPanel(),
+    dev: DevPanel({ health }),
+    alerts: <DevNotificationCenter initial={centre} health={{ problems }} />,
     ...(canManage ? { manager: <OwnerDashboardView me={{ id: me.id, role: me.role ?? null, badge: me.badge ?? null, branch_id: me.branch_id ?? null, email: me.email, first_name: me.first_name }} /> } : {}),
   }
 
@@ -61,13 +70,12 @@ export default async function StaffDevPage({ searchParams }: { searchParams: Pro
         <strong>{me.first_name || me.display_name || 'מפתח'}</strong>
         <span className="lens-badge">{badgeLabel(me.badge) || 'מפתח/ת'}</span>
       </div>
-      <LensTabs initial={view} lenses={lenses} panels={panels} />
+      <LensTabs initial={view} lenses={lenses} panels={panels} badges={{ alerts: centre.unread.developer + centre.unread.owner + centre.unread.employee }} />
     </main>
   )
 }
 
-async function DevPanel() {
-  const health = await readDevHealth()
+function DevPanel({ health }: { health: HealthRow[] }) {
   const categories: DashboardCategory[] = [
     { title: 'צ׳קליסט לבדיקה (לא נשמר)', entries: [
       { href: '/staff/checklists?preview=opening', icon: ClipboardCheck, label: 'פתיחת משמרת', description: 'עוברים על הטופס כמו עובד, בלי שיוך למשמרת' },
@@ -94,9 +102,9 @@ async function DevPanel() {
 
       <section className="dev-card rise" aria-labelledby="dev-legend">
         <h2 id="dev-legend">איך מזהים של מי ההתראה</h2>
-        <p>בחשבון הזה מגיעות כל ההתראות: של עובד, של בעלים ושל מפתח. התראה שמיועדת לבעלים או למפתח נפתחת עם הסימון שלה. אצל בעלים ואצל עובדים אין שום סימון.</p>
+        <p>בחשבון הזה מגיעות כל ההתראות: של עובד, של בעלים ושל מפתח. בלשונית ״התראות״ הן מחולקות לשלושה מכלים, וכל התראה נפתחת במקום שהיא עוסקת בו. במסכי העובד והמנהל התראה של בעלים או של מפתח נפתחת עם הסימון שלה. אצל בעלים ואצל עובדים אין שום סימון.</p>
         <div className="dev-legend">
-          <span><b>{AUDIENCE_PREFIX.developer.trim()}</b>התראות מערכת ובדיקות</span>
+          <span><b>{AUDIENCE_PREFIX.developer.trim()}</b>התראות מערכת ובדיקות (גם כל התראת בדיקה מהלוח הזה)</span>
           <span><b>{AUDIENCE_PREFIX.owner.trim()}</b>דוח חוסרים ופערים, צ׳קליסט שלא הוגש, אילוצים ובקשות שמחכות להחלטה</span>
           <span><b>בלי סימון</b>המשמרות והצ׳קליסטים שלך כעובד/ת</span>
         </div>

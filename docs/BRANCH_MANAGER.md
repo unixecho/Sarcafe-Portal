@@ -1,5 +1,12 @@
 # Branch manager, developer dashboard, חוסרים ופערים (2026-10-16)
 
+## Second batch, 2026-10-16: per-branch checklist builder, spacing, employee tiles, the developer's notification centre
+
+- **Checklist builder per branch** — see `docs/STAFF_CHECKLISTS.md` ("One builder per branch"). The branch manager's checklists tab shows each form under the name that branch gave it and links straight to its builder (`/owner/branches/<slug>/checklists/<kind>`), also for that branch's general manager.
+- **Spacing** — the two cards under the "waiting for you" rows on the owner dashboard (חוסרים ופערים, ניהול סניפים) touched the row above them: `.app-attention` now has a 16px top margin (`app.css`).
+- **Employee home** — "הזמנות מהירות" says *בקרוב · בפיתוח* and "קופת אירועים ועמדות" says *בפסטיבל הבא :)*: tiles that stay on the page, are not links, and are not tab stops (`DashboardSections` `soon`). The staff menu's "העמדה שלי" says the same. Managers keep their open entries ("ניהול במשמרת", the owner dashboard). The smiley is set left-to-right so right-to-left text does not mirror it.
+- **Developer notification centre** — a fourth view, התראות, on `/staff/dev` (`DevNotificationCenter.tsx`, `src/lib/push/dev-centre.ts`, `GET/POST /api/staff/dev/notifications`): the developer's one inbox sorted into three containers (alerts for the developer: tests and system; for the manager/owner; for the person as an employee). Test-bench alerts ("(בדיקה)") always land in the developer's container so they never hide a real owner or employee alert. Each alert opens the thing it is about and shows what the push service did with it. The tab carries the unread count. A multi-alert push for the developer opens this view.
+
 ## Round 3 (2026-10-16): a slider between branches, and the POS as a subsystem of each branch
 
 **The slider.** A row of pills on top of the branch manager and the branch list: `כל הסניפים` · one pill per coffee truck · `+` add a branch (`src/components/branches/BranchSlider.tsx`). The current branch is marked (`aria-current`), the other pills are links to that branch and **keep the tab you are on** (`/owner/branches/<slug>?tab=pos` stays on the POS tab when you move to the other truck). Events are never pills: they are not branches of the business.

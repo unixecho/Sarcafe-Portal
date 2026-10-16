@@ -128,7 +128,18 @@ export function useGate(registrar: PushRegistrar, active = true): GateState {
 /** The screen. `extra` is the wizard's own note (copy the link); `skip` and `signOut` are for the staff pages. */
 export function GateScreen({ gate, intro, extra, skip, signOut, hard }: { gate: GateState; intro?: ReactNode; extra?: ReactNode; skip?: () => void; signOut?: boolean; hard?: boolean }) {
   const { env, busy, failed, canPrompt, turnOn, install, recheck } = gate
-  if (!env) return <div className="gate-wrap"><div className="gate" role="status"><LogoMark size={44} /><p className="gate-muted">בודקים…</p></div></div>
+  // The artwork and its shade belong to every state of the screen, so the page never flashes from one ground to another.
+  const ground = (<><div className="gate-scene" aria-hidden="true" /><div className="gate-shade" aria-hidden="true" /></>)
+  if (!env) {
+    return (
+      <div className="gate-wrap">
+        {ground}
+        <div className="gate" role="status" aria-live="polite">
+          <div className="gate-checking"><LogoMark size={58} /><p>בודקים את המכשיר…</p><span className="gate-pulse" aria-hidden="true"><i /><i /><i /></span></div>
+        </div>
+      </div>
+    )
+  }
   const step = gateStep(env)
   const rows = stepRows(env)
   const platformSteps = env.platform === 'ios' ? IOS_STEPS : ANDROID_STEPS
@@ -136,17 +147,20 @@ export function GateScreen({ gate, intro, extra, skip, signOut, hard }: { gate: 
 
   return (
     <div className="gate-wrap">
+      {ground}
       <div className="gate" role="main" aria-labelledby="gate-title">
-        <LogoMark size={44} />
-        <h1 id="gate-title">{title}</h1>
-        {step === 'unsupported' ? (
-          <>
-            <p className="gate-muted">פתחו את האתר ב־Chrome או Safari עדכניים (ובטלפון: שמרו אותו במסך הבית). דפדפנים שנפתחים מתוך אינסטגרם, וואטסאפ וכדומה לא תומכים בהתראות.</p>
-            {hard && <p className="gate-note">אם הטלפון שלכם פשוט לא יכול לקבל התראות, פנו למנהל/ת: אפשר לאשר לכם כניסה בלי התראות מדף הצוות.</p>}
-          </>
-        ) : (
-          <p className="gate-muted">{intro ?? 'כדי לעבוד עם Sarcafe צריך לקבל התראות: שינוי בסידור, תזכורת לפני משמרת, צ׳קליסט שמחכה, החלפת משמרת. בלי זה לא תדעו מה קורה, ולכן הצוות נפתח רק אחרי שני הצעדים:'}</p>
-        )}
+        <header className="gate-head">
+          <LogoMark size={58} />
+          <h1 id="gate-title">{title}</h1>
+          {step === 'unsupported' ? (
+            <>
+              <p className="gate-lede">פתחו את האתר ב־Chrome או Safari עדכניים (ובטלפון: שמרו אותו במסך הבית). דפדפנים שנפתחים מתוך אינסטגרם, וואטסאפ וכדומה לא תומכים בהתראות.</p>
+              {hard && <p className="gate-note">אם הטלפון שלכם פשוט לא יכול לקבל התראות, פנו למנהל/ת: אפשר לאשר לכם כניסה בלי התראות מדף הצוות.</p>}
+            </>
+          ) : (
+            <p className="gate-lede">{intro ?? 'כדי לעבוד עם Sarcafe צריך לקבל התראות: שינוי בסידור, תזכורת לפני משמרת, צ׳קליסט שמחכה, החלפת משמרת. בלי זה לא תדעו מה קורה, ולכן הצוות נפתח רק אחרי שני הצעדים:'}</p>
+          )}
+        </header>
 
         {step === 'browser' && (
           <div className="gate-box" role="note">
@@ -159,10 +173,10 @@ export function GateScreen({ gate, intro, extra, skip, signOut, hard }: { gate: 
         {step !== 'unsupported' && step !== 'browser' && (
           <ol className="gate-steps">
             {rows.map((row, index) => (
-              <li key={row.key} className={`gate-step${row.done ? ' done' : ''}${row.now ? ' now' : ''}`}>
-                <span className="gate-step-n" aria-hidden="true">{row.done ? <Check size={15} /> : index + 1}</span>
+              <li key={row.key} className={`gate-step${row.done ? ' done' : ''}${row.now ? ' now' : ''}`} aria-current={row.now ? 'step' : undefined}>
+                <span className="gate-step-n" aria-hidden="true">{row.done ? <Check size={16} strokeWidth={2.6} /> : index + 1}</span>
                 <div className="gate-step-body">
-                  <b>{row.key === 'install' ? 'הוספה למסך הבית' : 'הפעלת התראות'}</b>
+                  <b>{row.key === 'install' ? 'הוספה למסך הבית' : 'הפעלת התראות'}{row.done && <span className="sr-only"> (הושלם)</span>}</b>
                   {row.key === 'install' && row.now && (
                     <>
                       <p>{env.platform === 'ios' ? 'באייפון התראות עובדות רק מהאפליקציה שעל מסך הבית.' : 'מהאפליקציה שעל מסך הבית ההתראות מגיעות גם כשהטלפון נעול.'}</p>
@@ -179,14 +193,19 @@ export function GateScreen({ gate, intro, extra, skip, signOut, hard }: { gate: 
         )}
 
         <div className="gate-actions">
-          {step === 'install' && canPrompt && <button type="button" className="sch-btn sch-btn--primary press" onClick={() => void install()}><Download size={18} aria-hidden="true" />התקנת האפליקציה</button>}
-          {step === 'install' && <button type="button" className={`sch-btn press${canPrompt ? '' : ' sch-btn--primary'}`} onClick={() => void recheck()}><Smartphone size={18} aria-hidden="true" />התקנתי, פתחתי מהסמל</button>}
-          {step === 'notifications' && <button type="button" className="sch-btn sch-btn--primary press" disabled={busy} onClick={() => void turnOn()}><BellRing size={18} aria-hidden="true" />{busy ? 'מפעילים…' : 'הפעלת התראות'}</button>}
-          {step === 'notifications' && failed && <p className="gate-muted" role="alert">לא הצלחנו להפעיל. נסו שוב. אם זה חוזר, בדקו חיבור לאינטרנט.</p>}
-          {(step === 'blocked' || step === 'unsupported' || step === 'browser') && <button type="button" className="sch-btn sch-btn--primary press" onClick={() => void recheck()}>בדקתי, נסו שוב</button>}
-          {skip && <button type="button" className="sch-btn press" onClick={skip}>להמשיך בלי התראות (הנהלה בלבד)</button>}
-          {signOut && <SignOutButton className="gate-signout" />}
+          {step === 'install' && canPrompt && <button type="button" className="gate-btn gate-btn--primary press" onClick={() => void install()}><Download size={19} aria-hidden="true" />התקנת האפליקציה</button>}
+          {step === 'install' && <button type="button" className={`gate-btn press${canPrompt ? '' : ' gate-btn--primary'}`} onClick={() => void recheck()}><Smartphone size={19} aria-hidden="true" />התקנתי, פתחתי מהסמל</button>}
+          {step === 'notifications' && <button type="button" className="gate-btn gate-btn--primary press" disabled={busy} onClick={() => void turnOn()}><BellRing size={19} aria-hidden="true" />{busy ? 'מפעילים…' : 'הפעלת התראות'}</button>}
+          {step === 'notifications' && failed && <p className="gate-error" role="alert">לא הצלחנו להפעיל. נסו שוב. אם זה חוזר, בדקו חיבור לאינטרנט.</p>}
+          {(step === 'blocked' || step === 'unsupported' || step === 'browser') && <button type="button" className="gate-btn gate-btn--primary press" onClick={() => void recheck()}>בדקתי, נסו שוב</button>}
         </div>
+
+        {(skip || signOut) && (
+          <div className="gate-foot">
+            {skip && <button type="button" className="gate-quiet press" onClick={skip}>להמשיך בלי התראות (הנהלה בלבד)</button>}
+            {signOut && <SignOutButton className="gate-signout" label="התנתקות" />}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -195,9 +214,9 @@ export function GateScreen({ gate, intro, extra, skip, signOut, hard }: { gate: 
 function CopyLink() {
   const [copied, setCopied] = useState(false)
   return (
-    <button type="button" className="sch-btn press" onClick={async () => {
+    <button type="button" className="gate-btn press" onClick={async () => {
       try { await navigator.clipboard.writeText(window.location.href); setCopied(true) } catch { /* the address bar still holds it */ }
-    }}>{copied ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}{copied ? 'הקישור הועתק' : 'העתקת הקישור'}</button>
+    }}>{copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}{copied ? 'הקישור הועתק' : 'העתקת הקישור'}</button>
   )
 }
 

@@ -50,7 +50,7 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
     { title: 'הצוות והמשמרות', entries: [
       { href: '/owner/staff', icon: Users, label: 'העובדים שלי', description: 'קליטה, קישורי הצטרפות, היסטוריה ותלושי שכר' },
       { href: '/owner/schedule', icon: CalendarClock, label: 'סידור עבודה', description: 'אילוצים, שיבוצים ואישור החלפות' },
-      { href: '/owner/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים', description: 'מעקב משמרות ועריכת טפסים' },
+      { href: '/owner/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים', description: 'מעקב משמרות ודיווחים. הטפסים עצמם בניהול הסניף' },
     ] },
     { title: 'שירות והזמנות', entries: [
       { href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' },

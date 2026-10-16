@@ -24,6 +24,7 @@ export const CHECKLIST_EXPLAIN: Record<ChecklistKind, string> = {
 
 export type BranchChecklistState = {
   kind: ChecklistKind
+  /** What this branch calls the form (the name its builder gave it), or the standard name until it has one. */
   label: string
   explain: string
   enabled: boolean
@@ -86,7 +87,7 @@ export async function loadBranchOverview(service: Service, branch: Branch): Prom
   await ensureChecklistTemplates(service, { id: branch.id, slug: branch.slug, name: { he: branch.name.he } }).catch(() => undefined)
   const [tree, templates, switches, settings, staffRows, members, shortages] = await Promise.all([
     loadEventTree(service).catch(() => ({ trucks: [] as TruckLite[], events: [] as PosEvent[] })),
-    service.from('checklist_templates').select('kind, version, published_at').eq('branch_id', branch.id).eq('active', true),
+    service.from('checklist_templates').select('kind, name, version, published_at').eq('branch_id', branch.id).eq('active', true),
     service.from('checklist_branch_settings').select('kind, enabled, disabled_from').eq('branch_id', branch.id),
     service.from('shift_settings').select('presets, roles, stations, features').eq('branch_id', branch.id).maybeSingle(),
     service.from('staff').select('id, display_name, first_name, last_name, handle, badge, role, branch_id').eq('active', true),
@@ -101,7 +102,7 @@ export async function loadBranchOverview(service: Service, branch: Branch): Prom
     const sw = switchOf.get(kind)
     const enabled = sw ? sw.enabled === true : true
     return {
-      kind, label: KIND_LABELS[kind], explain: CHECKLIST_EXPLAIN[kind], enabled,
+      kind, label: (template?.name as string | undefined)?.trim() || KIND_LABELS[kind], explain: CHECKLIST_EXPLAIN[kind], enabled,
       hasTemplate: Boolean(template), version: (template?.version as number | undefined) ?? null, publishedAt: (template?.published_at as string | undefined) ?? null,
       disabledFrom: !enabled ? ((sw?.disabled_from as string | undefined) ?? null) : null,
     }

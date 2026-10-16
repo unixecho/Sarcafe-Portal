@@ -1,5 +1,13 @@
 # Staff push notifications
 
+## Where every alert goes, one alert per person, and the developer's centre — 2026-10-16 (second batch)
+
+**Duplicate alert (found in production).** One "X sent אילוצים" submission wrote six rows: two per manager, all in the same millisecond. `sched_submit_time_off` looped over the employee's branches and told each branch's managers, and the owner manages both. Migration `20261016160000_timeoff_alert_once_per_person.sql` collects the managers of every branch first and tells each ONCE (same signature, no overload). `verify:schedule-sql` has the regression (a person in two branches tells the owner once, and a withdrawn approved day off once); it fails when the old loop comes back. Other writers were checked: `availability.*` is per branch by construction, the checklist escalations are per checklist.
+
+**Audit of where an alert opens** (`pushPathFor`, one resolver for the phone push, the home list, the developer's centre). Every kind the database holds was walked, per kind of reader (`check:staff-push` has the table). Found and fixed: (1) `request.cancelled` and `swap.cancelled` are written for BOTH the person involved ("הבקשה שלך בוטלה") and the managers ("דנה ביטל/ה בקשה להצטרף למשמרת"); the person's copy used to open the manager's schedule: the TITLE now says which copy it is (`alertAudience(kind, title)`, `pushPathFor(..., { title })`), which also fixes the developer's prefix on the person's copy. (2) `request.approved` stored `tab: 'schedule'` but opened the requests tab: it now opens the schedule it changed. (3) `issues.digest` without a stored link falls back to `/owner/issues`. (4) A multi-alert push for the developer opens `/staff/dev?view=alerts` (the centre) instead of `/staff`.
+
+**The developer's notification centre** — see `docs/BRANCH_MANAGER.md` (second batch). `notificationAudience(kind, title)` is the one sorting rule: `dev.*` and "(בדיקה)" rows → developer; the owner kinds → owner; the rest → employee.
+
 Employees and managers install Sarcafe on their home screen and switch on alerts. The server then
 pushes (Web Push, the same VAPID keys the customer order page uses) the things that matter at work.
 

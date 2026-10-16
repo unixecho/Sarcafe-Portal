@@ -1,5 +1,9 @@
 # Employee setup and Google linking
 
+## The setup gate got a ground and its own buttons — 2026-10-16 (second batch)
+
+`/staff` for someone without the app and notifications looked broken: flat dark page, and the buttons were plain text because the gate used `.sch-btn` and `schedule.css` is not loaded on that screen. `gate.css` is now self-contained: the brand's own artwork (`/backdrops/maor-1-*.webp`, the same pictures the customer pages use) shaded down to the app's ground, one panel on it, the steps as a rail (marker, line, the current step lit, finished ones green), its own `.gate-btn` buttons, a quiet footer (continue without alerts for management, sign out as a labelled text button). No behaviour changed: same rules, same copy, same re-checking. The panel only travels in (never transparent), and reduced motion switches the entrance off. Verified in a browser at 375 px and 1440 px for the iPhone, desktop and in-app-browser states.
+
 ## Round 3 (2026-10-16): app + notifications come FIRST, and the walk survives anything
 
 **The order.** The employee's link used to open a welcome whose first button went to the main page, so people never installed the app or switched notifications on. Now the very first screen of the link is the **setup step** (`SetupGate` inside `StaffOnboarding.tsx`): *install to the Home Screen, then allow notifications*. Only after both are true does the walk go on: welcome → personal code → Google (skippable) → my details → tour → home. Nothing on the setup screen leads to the main page.

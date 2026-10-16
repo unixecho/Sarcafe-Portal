@@ -28,6 +28,20 @@ export async function ensureChecklistTemplates(service: Service, branch: BranchR
   }
 }
 
+/** What each branch calls its forms: the name its builder gave the active form, keyed `<branchId>|<kind>`. A branch that never renamed
+ *  one still has the standard name, and a branch with no form yet has no entry (callers fall back to KIND_LABELS). Employees read
+ *  these names, so "whatever name they come up with in the builder" is what the shift card and the checklist list say. */
+export async function checklistNames(service: Service, branchIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (branchIds.length === 0) return out
+  const { data } = await service.from('checklist_templates').select('branch_id, kind, name').in('branch_id', [...new Set(branchIds)]).eq('active', true)
+  for (const row of data ?? []) {
+    const name = String(row.name ?? '').trim()
+    if (name) out.set(`${row.branch_id}|${row.kind}`, name)
+  }
+  return out
+}
+
 export async function syncPublishedChecklists(service: Service, branchId: string) {
   const { data: weeks } = await service
     .from('schedule_weeks')
@@ -54,6 +68,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
     : { data: [] as { id: string; shift_date: string; start_time: string; end_time: string }[] }
   const byShift = new Map((shifts ?? []).map((shift) => [shift.id as string, shift]))
   const covered = await coveredByFor(service, (rows ?? []).filter((row) => row.status === 'covered').map((row) => ({ shiftId: row.shift_id as string, kind: row.checklist_kind as string })))
+  const names = await checklistNames(service, [branch.id])
   return (rows ?? [])
     .map((row): ChecklistAssignment | null => {
       const shift = byShift.get(row.shift_id as string)
@@ -69,7 +84,7 @@ export async function loadStaffChecklistAssignments(service: Service, branch: Br
         startTime: shift.start_time as string,
         endTime: shift.end_time as string,
         kind,
-        kindLabel: KIND_LABELS[kind],
+        kindLabel: names.get(`${branch.id}|${kind}`) ?? KIND_LABELS[kind],
         templateVersion: row.template_version as number,
         template: row.template_snapshot as ChecklistDefinition,
         status: row.status as ChecklistAssignment['status'],

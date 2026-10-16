@@ -92,6 +92,10 @@
 .app-nav__grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--line); }
 .app-nav__item { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 11px 12px; color: var(--text); background: var(--bg-elev-2); text-decoration: none; font-size: .82rem; font-weight: 600; }
 .app-nav__item svg { flex: none; color: var(--neon-soft); }
+.app-nav__item--soon { opacity: .7; cursor: default; }
+.app-nav__item--soon svg { color: var(--text-faint); }
+.app-nav__item--soon span { display: grid; gap: 2px; }
+.app-nav__item--soon small { color: var(--neon-soft); font-size: .68rem; font-weight: 700; }
 .app-nav__item[aria-current='page'] { background: color-mix(in srgb,var(--neon) 16%,var(--bg-elev-2)); }
 .app-nav__hint { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 0 5px; color: var(--text-faint); font-size: .72rem; line-height: 1.5; }
 .app-header__home { color: var(--neon-soft); }
@@ -185,6 +189,12 @@
 .app-row__badge { font-size: .71rem; font-weight: 700; color: var(--danger); }
 .app-row:active { background: var(--bg-elev-2); }
 .app-row--quiet .app-row__icon { color: var(--text-dim); background: var(--bg-elev-2); }
+/* A tile that is not open yet (owner, 2026-10-16: quick orders "coming soon", the event register "next festival"): it stays on
+   the page so people know it exists, says why it cannot be opened, and is not a link, a button or a tab stop. */
+.app-row--soon { cursor: default; -webkit-user-select: none; user-select: none; }
+.app-row--soon .app-row__icon { color: var(--text-faint); background: var(--bg-elev-2); }
+.app-row--soon .app-row__copy strong, .app-row--soon .app-row__copy small { color: var(--text-dim); }
+.app-row__soon { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--neon) 45%, var(--line-strong)); background: color-mix(in srgb, var(--neon) 8%, transparent); color: var(--neon-soft); font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .app-account { margin-block-start: 22px; }
 /* The coffee workshop card (WorkshopCard.tsx): a quiet row, a small picture of the first slide, no glow and no motion. */
 .app-workshop { display: flex; align-items: center; gap: 14px; margin-block: 0 24px; padding: 12px 14px 12px 16px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); color: var(--text); text-decoration: none; -webkit-tap-highlight-color: transparent; transition: background 160ms var(--ease); }
@@ -311,7 +321,9 @@
 .app-install__home { margin: 0 0 12px; color: var(--text-dim); font-size: .9rem; line-height: 1.7; }
 
 /* ---- Dashboards, 2026-10-16: the two cards an owner opens most, and the developer's lens tabs ---- */
-.app-attention { display: grid; grid-template-columns: 1fr; gap: 10px; margin-block: 0 24px; }
+/* margin-block-start: the cards follow DashboardLive, whose last child (the "waiting for you" list) ends flush with its own box;
+   without this the first card touched the request row above it (owner, 2026-10-16). 16px = DashboardLive's own gap. */
+.app-attention { display: grid; grid-template-columns: 1fr; gap: 10px; margin-block: 16px 24px; }
 @media (min-width: 640px) { .app-attention { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .app-attention__card { display: flex; align-items: center; gap: 13px; min-height: 84px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); color: var(--text); text-decoration: none; -webkit-tap-highlight-color: transparent; transition: background 160ms var(--ease), border-color 160ms var(--ease); }
 .app-attention__card:active { background: var(--bg-elev-2); }
@@ -326,6 +338,8 @@
 .lens-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 17px; background: var(--bg-elev); border: 1px solid var(--line); position: sticky; top: 8px; z-index: 20; margin-block: 0 18px; }
 .lens-tab { flex: 1; min-height: 46px; padding: 8px 6px; border: 0; border-radius: 13px; background: transparent; color: var(--text-dim); font: inherit; font-size: .86rem; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .25s var(--ease), color .25s var(--ease); }
 .lens-tab[aria-selected='true'] { background: linear-gradient(135deg, var(--neon), var(--neon-soft)); color: var(--bg); }
+.lens-tab__badge { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding-inline: 5px; border-radius: 999px; background: var(--neon); color: var(--bg); font-size: .68rem; font-weight: 800; }
+.lens-tab[aria-selected='true'] .lens-tab__badge { background: var(--bg); color: var(--neon-soft); }
 .lens-panel { display: flex; flex-direction: column; outline: none; }
 .dev-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; margin-block: 0 18px; border: 1px solid var(--line); border-radius: 23px; background: var(--bg-elev); }
 .dev-card h2 { margin: 0; font-size: .98rem; font-weight: 700; }

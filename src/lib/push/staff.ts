@@ -38,13 +38,15 @@ const clip = (text: string | null) => {
 }
 
 /** One summary push for several alerts: if they all point to the same place go there, if they are all owner
- *  checklist alerts go to the tracker, otherwise the home page (whose list links each alert to its own place). */
-function digestPath(rows: InboxRow[], recipient: { manager: boolean }): string {
-  const paths = new Set(rows.map((r) => pushPathFor(r.kind, r.link, recipient)))
+ *  checklist alerts go to the tracker, otherwise the place that lists them: the developer's notification centre for the
+ *  developer (alerts of every audience, sorted into three containers), the home page for everyone else (whose list links
+ *  each alert to its own place). */
+function digestPath(rows: InboxRow[], recipient: { manager: boolean; developer: boolean }): string {
+  const paths = new Set(rows.map((r) => pushPathFor(r.kind, r.link, { manager: recipient.manager, title: r.title })))
   const [only] = [...paths]
   if (paths.size === 1 && only) return only
   if (rows.every((r) => r.kind === 'checklist.gap')) return '/owner/checklists'
-  return '/staff'
+  return recipient.developer ? '/staff/dev?view=alerts' : '/staff'
 }
 
 type SendOutcome = { ok: boolean; statusCode: number | null; detail: string }
@@ -139,12 +141,12 @@ export async function flushStaffPush(): Promise<{ claimed: number; sent: number 
         await recordOutcome(service, rows, [], 0) // claimed with nobody to send to: on record, so it is not a mystery later
         continue
       }
-      const recipient = { manager: managers.has(staffId) }
-      const named = { developer: developers.has(staffId) }
+      const recipient = { manager: managers.has(staffId), developer: developers.has(staffId) }
+      const named = { developer: recipient.developer }
       const outbound: { payload: Payload; rows: InboxRow[] }[] =
         rows.length > MAX_INDIVIDUAL
           ? [{ payload: { title: `${rows.length} עדכונים חדשים ב-Sarcafe`, body: rows.slice(0, 3).map((r) => alertTitle(r.kind, r.title, named)).join(' · '), url: digestPath(rows, recipient), tag: `staff-digest-${staffId}` }, rows }]
-          : rows.map((r) => ({ payload: { title: alertTitle(r.kind, r.title, named), body: clip(r.body), url: pushPathFor(r.kind, r.link, recipient), tag: `staff-${r.id}` }, rows: [r] }))
+          : rows.map((r) => ({ payload: { title: alertTitle(r.kind, r.title, named), body: clip(r.body), url: pushPathFor(r.kind, r.link, { manager: recipient.manager, title: r.title }), tag: `staff-${r.id}` }, rows: [r] }))
       for (const { payload, rows: covered } of outbound) {
         const results = await Promise.all(devices.map((device) => sendToOne(service, device, payload)))
         sent += results.filter((r) => r.ok).length

@@ -1,5 +1,18 @@
 # Staff checklists
 
+## One builder per branch, under its manager — 2026-10-16 (second batch)
+
+**Asked (owner).** The checklist builder was one shared screen on `/owner/checklists`, and "edit" in the branch manager only opened that screen on its first tab. The owner wants every branch to have its own forms and its own builder, under that branch's manager: Maor's, Givat Haviva's, and a third for the next branch, each editable by the owner or by that branch's manager, with the name the person gives the form (not "Maor's opening checklist").
+
+**What was already true.** Forms were always per branch: `checklist_templates.branch_id`, one active form per (branch, kind), the standard names carry no branch name, `ensureChecklistTemplates` makes a working set for any branch that has none, and `publish_checklist_template` only touches the branch it is given (a new version, only forms nobody started pick it up). What was missing was the place to edit them.
+
+**Now.**
+- `/owner/branches/<slug>/checklists/<kind>` (`kind` = opening / handover / closing; the bare `/checklists` opens the first) is that branch's builder (`ChecklistBuilder.tsx`). The form's name is editable and is what the branch manager, the employee's list and the shift card show (`checklistNames()` in `src/lib/checklists/server.ts`). Switching between the three forms keeps each draft in the browser until it is published. **Start from another branch**: a new branch copies a sister branch's form into its own draft, then edits and publishes it; nothing is published by copying.
+- The branch manager's checklists tab: each form row has its own "edit ״<name>״" link straight to that form's builder, and one link to the shift tracker. The shared `/owner/checklists` page is the tracker and the report only (the builder tab is gone from it) and points to the branch manager.
+- Who may edit: the owner, or the general manager of THAT branch (`canEditMenu`; a general manager with no branch is all-branch). Middleware gives the builder path menu-editor access (`isBranchChecklistBuilderPath` in `links.ts`, an exact shape, so no other page under `/owner/branches` opens to a manager); the page and `POST /api/owner/checklists` (`action: 'publish'`, now `requireMenuEditor(branchId)`) decide the branch; the database applies the same rule again. Every other action on that route stays owner-only. A general manager reaches the builder from "ניהול במשמרת" on the staff home; an owner from the branch manager (events have no forms: their team works the truck's).
+- Not changed: the on/off switch per form stays in the branch manager (owner-only); reminders and the morning report still say the standard kind names ("סגירת משמרת לא הוגש"), they do not use a branch's custom name.
+- Checks: `check:branch-manager` (the builder's path shape, middleware, page and API guards, that publishing sends only the opened branch, that names reach employees).
+
 ## Per-branch switches, and חוסרים ופערים — 2026-10-16
 
 The owner can switch opening / handover / closing off (and on) for ONE branch from the branch manager (`docs/BRANCH_MANAGER.md`): table `checklist_branch_settings`, `checklist_expected()` honours it, `checklist_set_branch_kind()` does the clean-up atomically (migration `20261016090000`, NOT applied to production, see handoff). The "missing or not working" report below now also lists **unsent checklists** (late, not sent, not covered, not dismissed: `src/lib/checklists/gaps.ts`) in the same collapsible list, can be opened by the branch's general manager, and its 08:00 alert (`issues.digest`) goes to owners, developers and the branch's general manager with the title `חוסרים ופערים: N דברים לטיפול`.

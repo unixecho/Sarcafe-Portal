@@ -130,15 +130,33 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 export type AlertAudience = 'developer' | 'owner' | 'employee'
 /** Management alerts: the checklist escalation and the morning report, and everything that waits for a manager's decision. */
 const OWNER_KINDS = new Set(['checklist.gap', 'issues.digest', ...MANAGER_KINDS])
-export function alertAudience(kind: string): AlertAudience {
+/** Two kinds are written for BOTH the person a request or swap concerns ("הבקשה שלך בוטלה") and for the managers
+ *  ("דנה ביטל/ה בקשה להצטרף למשמרת"), with the same `kind`. The title is what tells the two copies apart. */
+const BOTH_COPIES = new Set(['request.cancelled', 'swap.cancelled'])
+const MANAGER_COPY_TITLE = /המתינה לאישור|להצטרף למשמרת/
+/** A row the developer's test bench wrote: it is a test of the system, not an alert for the person who reads it. */
+export const isTestAlert = (title: string | null | undefined) => typeof title === 'string' && title.includes('(בדיקה)')
+/** True when this copy of an alert is the managers' copy. `title` unknown = the old answer (request.cancelled is the managers'). */
+function isManagerCopy(kind: string, title?: string | null): boolean {
+  if (BOTH_COPIES.has(kind) && typeof title === 'string') return MANAGER_COPY_TITLE.test(title)
+  return MANAGER_KINDS.has(kind)
+}
+export function alertAudience(kind: string, title?: string | null): AlertAudience {
   if (kind.startsWith('dev.')) return 'developer'
+  if (BOTH_COPIES.has(kind) && typeof title === 'string') return MANAGER_COPY_TITLE.test(title) ? 'owner' : 'employee'
   return OWNER_KINDS.has(kind) ? 'owner' : 'employee'
+}
+/** Which of the developer's three notification containers an alert belongs to (/staff/dev, "התראות"): system and test alerts,
+ *  alerts meant for a manager or owner, and alerts meant for the person as an employee. Test rows are the developer's own
+ *  business whatever they imitate, so they go to the first, and the other two hold only what is real. */
+export function notificationAudience(kind: string, title?: string | null): AlertAudience {
+  return isTestAlert(title) ? 'developer' : alertAudience(kind, title)
 }
 export const AUDIENCE_PREFIX: Record<AlertAudience, string> = { developer: 'מפתח · ', owner: 'בעלים · ', employee: '' }
 /** The title a person should read. `recipient.developer` is true only for the developer account. Idempotent. */
 export function alertTitle(kind: string, title: string, recipient: { developer?: boolean } | null | undefined): string {
   if (!recipient?.developer) return title
-  const prefix = AUDIENCE_PREFIX[alertAudience(kind)]
+  const prefix = AUDIENCE_PREFIX[alertAudience(kind, title)]
   return prefix && !title.startsWith(prefix) ? `${prefix}${title}` : title
 }
 
@@ -147,17 +165,24 @@ export function alertTitle(kind: string, title: string, recipient: { developer?:
  *  become an open redirect), which is how a checklist alert names its exact checklist. Otherwise the kind decides,
  *  with the scheduler's own `tab` / `weekStart` hints. `manager` says the person can open the manager's schedule
  *  (an owner or general manager): the same swap alert goes to the employee's tab for one and the manager's for the other. */
-export function pushPathFor(kind: string, link: Record<string, unknown> | null, recipient?: { manager?: boolean }): string {
+export function pushPathFor(kind: string, link: Record<string, unknown> | null, recipient?: { manager?: boolean; title?: string | null }): string {
   const url = link?.url
   if (typeof url === 'string' && /^\/(?!\/)[A-Za-z0-9/_\-?=&%.]*$/.test(url)) return url
   if (kind === 'checklist.gap') return '/owner/checklists'
+  if (kind === 'issues.digest') return '/owner/issues'
   if (kind.startsWith('checklist.')) return '/staff/checklists'
   if (kind === 'requests.open' || kind === 'requests.closing') return '/staff/schedule?tab=availability'
   // The owner's answer to a day off lands where the person asked for it (a manager's own copy of timeoff.new is handled below).
   if (kind === 'timeoff.decided') return '/staff/schedule?tab=availability'
   const week = typeof link?.weekStart === 'string' && ISO_DATE.test(link.weekStart) ? link.weekStart : null
-  const asManager = MANAGER_KINDS.has(kind) || (kind === 'swap.cancelled' && recipient?.manager === true)
+  // A manager's copy goes to the manager's schedule. For the two kinds that serve both audiences the TITLE says which copy this is
+  // (a developer is a manager AND an employee, so the recipient alone cannot say); without a title swap.cancelled follows the recipient.
+  const asManager = BOTH_COPIES.has(kind) && typeof recipient?.title === 'string'
+    ? isManagerCopy(kind, recipient.title)
+    : MANAGER_KINDS.has(kind) || (kind === 'swap.cancelled' && recipient?.manager === true)
   if (asManager) return `/owner/schedule?tab=requests${week ? `&week=${week}` : ''}`
+  // An approved request is now the person's shift: show the schedule. Everything else about a request or swap waits in the requests tab.
+  if (link?.tab === 'schedule') return `/staff/schedule?tab=schedule${week ? `&week=${week}` : ''}`
   if (kind.startsWith('swap.') || kind.startsWith('request.') || link?.tab === 'requests') return `/staff/schedule?tab=requests${week ? `&week=${week}` : ''}`
   return week ? `/staff/schedule?week=${week}` : '/staff/schedule'
 }

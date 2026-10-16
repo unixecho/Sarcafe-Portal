@@ -194,8 +194,8 @@ check('the weekly request reminders cover permanent branches only, schedulable G
 check('the checklist alerts name their exact checklist: the employee\'s and the heads-up open /staff/checklists/<id>, the owner\'s opens /owner/checklists/<id>', (rem.match(/staffChecklistPath\(/g) ?? []).length >= 2 && (rem.match(/ownerChecklistPath\(/g) ?? []).length === 1 && !/url: '\/(staff|owner)\/checklists'/.test(rem))
 check('a checklist an owner dismissed is not asked for again: the reminder writer skips it before every alert', /manager_resolved_at/.test(rem) && /&& !a\.manager_resolved_at/.test(rem))
 const push = read('src/lib/push/staff.ts')
-check('the phone push resolves its destination per recipient (manager or not), and a digest goes where all its alerts go', /pushPathFor\(r\.kind, r\.link, recipient\)/.test(push) && /function digestPath/.test(push) && /hasAnyMenuEditAccess/.test(push))
-check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(item\.kind \?\? '', item\.link \?\? null, \{ manager \}\)/.test(read('src/components/app/DashboardNotifications.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
+check('the phone push resolves its destination per recipient (manager or not), and a digest goes where all its alerts go', /pushPathFor\(r\.kind, r\.link, \{ manager: recipient\.manager, title: r\.title \}\)/.test(push) && /function digestPath/.test(push) && /hasAnyMenuEditAccess/.test(push))
+check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(item\.kind \?\? '', item\.link \?\? null, \{ manager, title: item\.title \}\)/.test(read('src/components/app/DashboardNotifications.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
 {
   // A checklist link has to survive sign-in: login's `next` only keeps plain path characters (a query would be dropped).
   const L = await load('src/lib/checklists/links.ts', 'links.mjs')
@@ -203,7 +203,7 @@ check('the notification bar uses the same resolver as the push, so a tap on eith
   check('only an exact checklist id is accepted as a sign-in destination', L.isStaffChecklistPath(`/staff/checklists/${ID}`) && !L.isStaffChecklistPath('/staff/checklists') && !L.isStaffChecklistPath(`/staff/checklists/${ID}/x`) && !L.isStaffChecklistPath('/staff/checklists/not-an-id') && !L.isStaffChecklistPath(`/owner/checklists/${ID}`) && L.isOwnerChecklistPath(`/owner/checklists/${ID}`) && !L.isOwnerChecklistPath(`/staff/checklists/${ID}`))
 }
 const mw = read('src/middleware.ts')
-check('the middleware keeps the checklist id through the sign-in redirect (staff and owner), and falls back to the list for anything else', /isStaffChecklistPath\(pathname\) \? pathname : '\/staff\/checklists'/.test(mw) && /isOwnerChecklistPath\(pathname\)\) url\.searchParams\.set\('next', pathname\)/.test(mw))
+check('the middleware keeps the checklist id through the sign-in redirect (staff and owner), and falls back to the list for anything else', /isStaffChecklistPath\(pathname\) \? pathname : '\/staff\/checklists'/.test(mw) && /isOwnerChecklistPath\(pathname\) \|\| checklistBuilder\) url\.searchParams\.set\('next', pathname\)/.test(mw))
 check('the code sign-in page and route accept a checklist destination', /isStaffChecklistPath\(next\) \? next/.test(read('src/app/login/page.tsx')) && /refine\(isStaffChecklistPath\)/.test(read('src/app/api/auth/quick-login/route.ts')))
 for (const route of ['src/app/staff/checklists/[id]/page.tsx', 'src/app/owner/checklists/[id]/page.tsx']) check(`the per-checklist page exists (${route})`, existsSync(join(ROOT, route)))
 const staffBody = read('src/components/checklists/StaffChecklistsPageBody.tsx')
@@ -227,6 +227,36 @@ check('the developer sees the audience in front of the title', R.alertTitle('iss
 check('...but an employee alert has no prefix, even for the developer', R.alertTitle('shift.today', 'היום יש לך משמרת', { developer: true }) === 'היום יש לך משמרת')
 check('an owner or an employee gets the title exactly as written', R.alertTitle('issues.digest', 'x', { developer: false }) === 'x' && R.alertTitle('checklist.gap', 'x', null) === 'x' && R.alertTitle('checklist.gap', 'x', undefined) === 'x')
 check('it never doubles up', R.alertTitle('checklist.gap', 'בעלים · צ׳קליסט', { developer: true }) === 'בעלים · צ׳קליסט')
+// Audit of where every kind leads (owner, 2026-10-16: "make sure all notifications lead where they need").
+check('"request.cancelled" and "swap.cancelled" are written for BOTH the person and the managers: the title says which copy this is',
+  R.pushPathFor('request.cancelled', { tab: 'requests' }, { manager: true, title: 'הבקשה שלך בוטלה' }) === '/staff/schedule?tab=requests'
+  && R.pushPathFor('request.cancelled', { tab: 'requests' }, { manager: false, title: 'דנה ביטל/ה בקשה להצטרף למשמרת' }) === '/owner/schedule?tab=requests'
+  && R.pushPathFor('swap.cancelled', { tab: 'requests' }, { manager: true, title: 'בקשת ההחלפה בוטלה' }) === '/staff/schedule?tab=requests'
+  && R.pushPathFor('swap.cancelled', { tab: 'requests' }, { manager: false, title: 'בקשת החלפה שהמתינה לאישור בוטלה' }) === '/owner/schedule?tab=requests'
+  && R.pushPathFor('request.cancelled', { tab: 'requests' }) === '/owner/schedule?tab=requests')
+check('...and so does the audience: a manager copy is an owner alert, the person’s copy an employee alert (a developer reads them with the right prefix)',
+  R.alertAudience('request.cancelled', 'הבקשה שלך בוטלה') === 'employee' && R.alertAudience('request.cancelled', 'דנה ביטל/ה בקשה להצטרף למשמרת') === 'owner'
+  && R.alertAudience('swap.cancelled', 'בקשת החלפה שהמתינה לאישור בוטלה') === 'owner' && R.alertAudience('swap.cancelled', 'בקשת ההחלפה בוטלה') === 'employee'
+  && R.alertTitle('request.cancelled', 'הבקשה שלך בוטלה', { developer: true }) === 'הבקשה שלך בוטלה')
+check('an approved request opens the schedule it changed (its stored link says "schedule"), a rejected one the requests tab',
+  R.pushPathFor('request.approved', { tab: 'schedule', weekStart: '2026-10-04' }) === '/staff/schedule?tab=schedule&week=2026-10-04' && R.pushPathFor('request.rejected', { tab: 'requests' }) === '/staff/schedule?tab=requests')
+check('the morning report always has somewhere to go, even without its stored link', R.pushPathFor('issues.digest', {}) === '/owner/issues')
+{
+  // Every kind the database can write, for each kind of reader: the destination is a page that reader may open.
+  const KINDS = ['availability.submitted', 'availability.note', 'checklist.gap', 'checklist.late', 'checklist.soon', 'checklist.lead', 'checklist.lead_other', 'issues.digest', 'request.approved', 'request.cancelled', 'request.new', 'request.rejected', 'requests.closing', 'requests.open', 'schedule.hours_synced', 'schedule.published', 'shift.eve', 'shift.soon', 'shift.today', 'swap.accepted', 'swap.approved', 'swap.awaiting', 'swap.cancelled', 'swap.declined', 'swap.open', 'swap.rejected', 'swap.request', 'timeoff.cancelled', 'timeoff.decided', 'timeoff.new', 'timeoff.wish']
+  const OWNER_ONLY = /^\/owner\/(checklists|issues|schedule)/
+  const bad = []
+  for (const k of KINDS) {
+    const employee = R.pushPathFor(k, { weekStart: '2026-10-18' }, { manager: false, title: R.alertAudience(k) === 'owner' ? 'דנה ביטל/ה בקשה להצטרף למשמרת' : 'הבקשה שלך בוטלה' })
+    if (R.alertAudience(k) === 'employee' && !employee.startsWith('/staff/')) bad.push(`${k} -> ${employee}`)
+    if (R.alertAudience(k) === 'owner' && !OWNER_ONLY.test(R.pushPathFor(k, { weekStart: '2026-10-18' }, { manager: true }))) bad.push(`${k} (owner) -> ${R.pushPathFor(k, {}, { manager: true })}`)
+  }
+  check('every kind written today leads an employee to /staff/… and a manager to /owner/…', bad.length === 0, bad.join('; '))
+}
+check('a test-bench row is the developer’s own business, whatever it imitates; the other containers hold what is real',
+  R.notificationAudience('checklist.gap', 'צ׳קליסט לא הוגש (בדיקה)') === 'developer' && R.notificationAudience('shift.today', 'היום יש לך משמרת (בדיקה)') === 'developer'
+  && R.notificationAudience('dev.health', 'x') === 'developer' && R.notificationAudience('checklist.gap', 'צ׳קליסט לא הוגש') === 'owner' && R.notificationAudience('shift.today', 'היום יש לך משמרת') === 'employee')
+check('a digest for the developer opens the notification centre when its alerts do not share a destination', /recipient\.developer \? '\/staff\/dev\?view=alerts'/.test(push))
 check('the new constraint alerts open the managers requests tab', ['timeoff.wish', 'availability.note'].every((k) => R.pushPathFor(k, { tab: 'requests', weekStart: '2030-01-06' }) === '/owner/schedule?tab=requests&week=2030-01-06'))
 const flush = read('src/lib/push/staff.ts')
 check('the phone push, the inbox API and both home pages all apply it', /alertTitle\(r\.kind, r\.title, named\)/.test(flush) && /isDeveloper\(person/.test(flush) && /alertTitle\(/.test(read('src/app/api/staff/notifications/route.ts')) && /alertTitle\(/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /alertTitle\(/.test(read('src/components/dashboard/OwnerDashboardView.tsx')))

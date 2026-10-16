@@ -57,8 +57,8 @@ const categories = [
     { href: '/staff/checklists', icon: ClipboardCheck, label: 'צ׳קליסטים למשמרת', description: 'פתיחה, החלפה וסגירה', badge: '2 דיווחים דורשים טיפול' },
   ] },
   { title: 'במהלך השירות', entries: [
-    { href: '/staff/pos', icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת' },
-    { href: '/pos', icon: Receipt, label: 'קופת אירועים ועמדות', description: 'הזמנות האירוע והעמדה שבה עובדים' },
+    { icon: ShoppingBag, label: 'הזמנות מהירות', description: 'קבלת הזמנות ומעקב בזמן אמת', soon: 'בקרוב · בפיתוח' },
+    { icon: Receipt, label: 'קופת אירועים ועמדות', description: 'הזמנות האירוע והעמדה שבה עובדים', soon: 'בפסטיבל הבא :)' },
   ] },
 ]
 const notification = [{ id: 'notice', title: 'בקשת ההחלפה ממתינה לאישור מנהל', body: 'העובד השני אישר את ההחלפה. הסידור הקיים נשמר עד לאישור.', created_at: '2030-01-01T12:00:00Z', read_at: null }]

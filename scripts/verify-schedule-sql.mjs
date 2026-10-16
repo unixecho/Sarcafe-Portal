@@ -1050,6 +1050,9 @@ section('the owner hears about every constraint and every note (20261016090000)'
 await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_branch_manager_checklists_constraints.sql')), 'utf8'))
 await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_branch_manager_checklists_constraints.sql')), 'utf8'))
 check('the constraints migration may be run again', true)
+await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_timeoff_alert_once_per_person.sql')), 'utf8'))
+await db.exec(readFileSync(MIG + files.find((f) => f.endsWith('_timeoff_alert_once_per_person.sql')), 'utf8'))
+check('the once-per-person migration may be run again', true)
 const WISH = '2031-04-06' // a Sunday
 const wishNotes = async (kind) => q(`select staff_id, title, body from public.schedule_notifications where kind = $1 order by created_at`, [kind])
 const noWishYet = (await wishNotes('timeoff.wish')).length
@@ -1063,6 +1066,23 @@ check('a day off in the same send turns it into the "needs an answer" alert, wit
 const resendWish = (await wishNotes('timeoff.wish')).length
 await submitOff(lena, WISH, [{ date: day(1, WISH), kinds: ['no_morning'] }, { date: day(2, WISH), kinds: ['no_evening'] }, { date: day(4, WISH), kinds: ['day_off'] }])
 check('sending the same things again alerts nobody', (await wishNotes('timeoff.wish')).length === resendWish)
+
+// One submission, one alert per manager: a person who works in BOTH branches used to tell their owner twice (one loop per branch).
+// 20261016160000 collects the managers of every branch first. Production showed six rows for one send: two per manager.
+const SINI = '2031-04-13' // a Sunday
+const bothBranches = await addStaff({ first: 'Both branches', badge: 'barista' }) // branch null: works in every permanent branch
+const alertsFor = async (who, kind) => (await one(`select count(*)::int n from public.schedule_notifications where staff_id = $1 and kind = $2`, [who.id, kind])).n
+check('the fixture person really belongs to two branches', (await one(`select cardinality(public.sched_staff_branches($1)) n`, [bothBranches.id])).n >= 2)
+const ownerBefore = await alertsFor(owner, 'timeoff.new')
+const gmBefore = await alertsFor(gm, 'timeoff.new')
+const bothSent = await submitOff(bothBranches, SINI, [{ date: day(2, SINI), kinds: ['day_off'] }, { date: day(3, SINI), kinds: ['no_evening'] }])
+check('a person in two branches tells the owner ONCE, not once per branch', bothSent.ok === true && (await alertsFor(owner, 'timeoff.new')) === ownerBefore + 1, `${ownerBefore} -> ${await alertsFor(owner, 'timeoff.new')}`)
+check('...and the branch manager once as well', (await alertsFor(gm, 'timeoff.new')) === gmBefore + 1)
+const cancelBefore = await alertsFor(owner, 'timeoff.cancelled')
+const bothDay = await one(`select id from public.staff_time_off where staff_id = $1 and kind = 'day_off' and status = 'pending'`, [bothBranches.id])
+await rpc('sched_decide_time_off', { p_actor: owner.id, p_branch: maor, p_ids: [bothDay.id], p_approve: true, p_note: null })
+await submitOff(bothBranches, SINI, [])
+check('withdrawing an approved day off also tells the owner once', (await alertsFor(owner, 'timeoff.cancelled')) === cancelBefore + 1)
 
 const noteAlerts = async () => q(`select staff_id, title, body from public.schedule_notifications where kind = 'availability.note' order by created_at`)
 const sendNote = (note, entries = []) => rpc('sched_submit_availability', { p_actor: lena.id, p_branch: maor, p_week_start: WISH, p_entries: JSON.stringify(entries), p_note: note, p_status: 'submitted' })
