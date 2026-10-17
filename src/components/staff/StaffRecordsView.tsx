@@ -18,7 +18,8 @@ const kinds: Record<string, string> = { opening: 'פתיחה', handover: 'העב
 const status: Record<string, string> = { pending: 'ממתין', in_progress: 'במילוי', submitted: 'הוגש', open: 'בטיפול', completed: 'הושלמה', void: 'בוטלה' }
 const date = (value: string) => new Intl.DateTimeFormat('he-IL', { dateStyle: 'medium', timeZone: 'Asia/Jerusalem' }).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value))
 
-export default function StaffRecordsView({ initial, owner = false, children }: { initial: StaffRecords; owner?: boolean; children?: React.ReactNode }) {
+/** `embedded`: shown inside the owner's employee card, which already has the person's header. */
+export default function StaffRecordsView({ initial, owner = false, embedded = false, children }: { initial: StaffRecords; owner?: boolean; embedded?: boolean; children?: React.ReactNode }) {
   const [records, setRecords] = useState(initial)
   const [tab, setTab] = useState<(typeof TABS)[number]['id']>('shifts')
   const [busy, setBusy] = useState(false)
@@ -49,12 +50,12 @@ export default function StaffRecordsView({ initial, owner = false, children }: {
   }
 
   return <div className="staff-records" dir="rtl">
-    <section className="sr-profile rise">
+    {!embedded && <section className="sr-profile rise">
       <span className="sr-avatar" aria-hidden="true">{me.avatar_emoji || name.trim().slice(0, 1)}</span>
       <div><p className="sr-caption">{owner ? 'תיק עובד' : 'החשבון שלי'}</p><h1>{name}</h1>
         <p>{me.employee_no ? <>מספר עובד HYP <bdi>{me.employee_no}</bdi></> : 'מספר עובד עדיין לא הוגדר'}{!me.active && ' · לא פעיל'}</p>
       </div>
-    </section>
+    </section>}
     {!owner && <EmojiAvatarPicker value={me.avatar_emoji} onChange={(emoji) => setRecords((current) => ({ ...current, employee: { ...current.employee, avatar_emoji: emoji } }))} />}
     {children}
     <div className="sr-summary" aria-label="פעילות מתועדת">

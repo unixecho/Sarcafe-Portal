@@ -8,7 +8,7 @@ import SheetShell from '@/components/SheetShell'
 import ScheduleToast, { type ToastState } from '@/components/shifts/ScheduleToast'
 import { Avatar, EmptyState, Pill } from '@/components/shifts/ui'
 import AddStaffSheet from '@/components/staff/AddStaffSheet'
-import StaffEditSheet from '@/components/staff/StaffEditSheet'
+import StaffCard from '@/components/staff/StaffCard'
 import { messageOf, reasonOf, type BranchOption, type ScheduleMemberRow, type StaffRow } from '@/components/staff/types'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 import { badgeLabel, MANAGEMENT_BADGES, type Badge } from '@/lib/staff/badges'
@@ -364,7 +364,7 @@ export default function StaffManager({
         }}
       />
 
-      <StaffEditSheet
+      <StaffCard
         row={editing}
         branches={branches}
         scheduleMembers={scheduleMembers}
@@ -372,8 +372,8 @@ export default function StaffManager({
         isSelf={!!editing && editing.id === currentStaffId}
         quickBusy={!!editing && quickBusy === editing.id}
         onClose={() => setEditingId(null)}
+        // The card stays open after a change (the list behind it refreshes); a deleted person's card closes by itself (the row is gone).
         onChanged={(message) => {
-          setEditingId(null)
           flash('ok', message)
           void load()
         }}

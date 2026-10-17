@@ -256,7 +256,7 @@ List (name, role · branch, phone/email, status pills) with search, active/inact
 - `supabase/migrations/024_scheduling_overhaul.sql`
 - `src/lib/shifts/`: `names.ts` `presets.ts` `coverage.ts` `messages.ts` `schema.ts` `snapshot-diff.ts` `view.ts`
 - `src/components/shifts/`: `ui.tsx` `schedule.css` `ScheduleToast.tsx` `NotificationsSheet.tsx` `StaffPickerSheet.tsx` `MoveShiftSheet.tsx` `ShiftActionSheet.tsx` `SwapSheet.tsx` `MyRequests.tsx`
-- `src/components/staff/`: `AddStaffSheet.tsx` `StaffEditSheet.tsx` `types.ts`
+- `src/components/staff/`: `AddStaffSheet.tsx` `StaffCard.tsx` `types.ts`
 - `src/app/api/owner/staff/[id]/route.ts` (detail + guarded delete)
 - `scripts/verify-schedule-sql.mjs`, `scripts/check-schedule.mjs`
 

@@ -170,5 +170,16 @@ const crew = read('src/app/crew/page.tsx') + read('src/app/crew/CrewLogin.tsx')
 check('/crew is the public QR sign-in: number + code, then /staff; someone already in goes straight to /staff; not indexed', /<QuickLogin next="\/staff"/.test(crew) && /if \(me\) redirect\('\/staff'\)/.test(crew) && /index: false/.test(crew))
 check('the shift card says when a checklist is unavailable', (read('src/components/staff/ShiftStatusCard.tsx').match(/אין צ׳קליסט זמין|הצ׳קליסטים יהיו זמינים ביום המשמרת|אין צ׳קליסט שממתין/g) ?? []).length >= 4)
 
+section('the employee card (2026-10-17)')
+const card = read('src/components/staff/StaffCard.tsx')
+const afterReturn = card.slice(card.indexOf('if (!r) return null'))
+check('REGRESSION: no hook is called after the card\'s early return (a hook there crashed the old sheet the moment a person was opened: "Rendered more hooks than during the previous render")', card.includes('if (!r) return null') && !/\buse(State|Effect|Memo|Callback|Ref|Id|T|LayoutEffect)\(/.test(afterReturn))
+check('the staff list opens the card (not the old sheet) and the card stays open after a change', /<StaffCard\b/.test(read('src/components/StaffManager.tsx')) && !/StaffEditSheet/.test(read('src/components/StaffManager.tsx')) && !/setEditingId\(null\)\s*flash\('ok', message\)/.test(read('src/components/StaffManager.tsx')))
+check('it is big and on the page: the shared dialog with a blurred scrim, nearly full height', /className="sc-panel"/.test(card) && /\.sheet-scrim:has\(> \.sc-panel\)[^}]*backdrop-filter: blur\(20px\)/.test(read('src/components/staff/staff-card.css')) && /height: min\(calc\(100dvh - 20px\), 980px\)/.test(read('src/components/staff/staff-card.css')))
+check('six tabs: overview, details, access (roles explained), the employee file, history, end of work', ['overview', 'details', 'access', 'file', 'history', 'end'].every((id) => new RegExp(`id: '${id}'`).test(card)) && /role="tablist"/.test(card) && /role="tabpanel"/.test(card))
+check('the employee file (shifts, checklists, events, payslips with upload) is embedded, not re-implemented', /<StaffRecordsView key=\{records\.employee\.id\} initial=\{records\} owner embedded \/>/.test(card) && /embedded = false/.test(read('src/components/staff/StaffRecordsView.tsx')))
+check('changes to details, role and branch wait for ONE save bar, and leaving with unsaved changes asks first', /className="sc-savebar"/.test(card) && /function requestClose\(\) \{\s*if \(!dirty\) return onClose\(\)/.test(card) && /onClose=\{requestClose\}/.test(card))
+check('switches (schedule, notifications) apply at once; deactivate, reactivate and delete keep their confirmations', /onToggleSchedulable\(person, b\.id, !on\)/.test(card) && /toggleExempt\(!exempt\)/.test(card) && /setDeactivateOpen\(true\)/.test(card) && /askDelete/.test(card) && /<ConfirmSheet/.test(card))
+
 console.log(`\n${pass > 0 && failures.length === 0 ? '✓' : '✗'} ${pass} passed, ${failures.length} failed`)
 if (failures.length) { for (const f of failures) console.log(`  - ${f}`); process.exit(1) }
