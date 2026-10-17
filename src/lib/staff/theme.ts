@@ -13,14 +13,20 @@ export const DEFAULT_THEME: StaffTheme = 'neon'
 export const THEME_COOKIE = 'sarcafe_staff_theme'
 export const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
-export type ThemeInfo = { id: StaffTheme; name: string; blurb: string; mode: 'dark' | 'light' }
+/** The device remembers that this person has read the "choose your look" notice (it is shown until they do, owner 2026-10-17). */
+export const NUDGE_COOKIE = 'sarcafe_theme_ack'
+/** The home screen's "מראה האפליקציה" row: where the notice's "take me there" scrolls to and points at. */
+export const THEME_ROW_ID = 'theme-row'
+
+/** `swatch` is only for the small colour dots in the notice and the picker: the ground and the accent of each look. */
+export type ThemeInfo = { id: StaffTheme; name: string; blurb: string; mode: 'dark' | 'light'; swatch: { ground: string; accent: string } }
 
 export const THEMES: readonly ThemeInfo[] = [
-  { id: 'neon', name: 'ניאון קלאסי', blurb: 'כהה וחם עם זוהר כתום. כרטיס המשמרת מאיר.', mode: 'dark' },
-  { id: 'glass', name: 'זכוכית', blurb: 'כרטיסי זכוכית מעומעמת על רקע של עגלה בלילה.', mode: 'dark' },
-  { id: 'pass', name: 'כרטיס משמרת', blurb: 'המשמרת כמו כרטיס טיסה: מספרים, קווים וצ׳קליסטים ממוספרים.', mode: 'dark' },
-  { id: 'crema', name: 'קרמה ליום', blurb: 'בהיר וחד, נקרא מצוין בשמש. מסגרות עבות וכתום.', mode: 'light' },
-  { id: 'latte', name: 'לאטה בלוסם', blurb: 'ורוד של לאטה, עגול ורך, עם לב קטן של קפה.', mode: 'light' },
+  { id: 'neon', name: 'ניאון קלאסי', blurb: 'כהה וחם עם זוהר כתום. כרטיס המשמרת מאיר.', mode: 'dark', swatch: { ground: '#110b08', accent: '#ff7a45' } },
+  { id: 'glass', name: 'זכוכית', blurb: 'כרטיסי זכוכית מעומעמת על רקע של עגלה בלילה.', mode: 'dark', swatch: { ground: '#2b1a12', accent: '#ff9566' } },
+  { id: 'pass', name: 'כרטיס משמרת', blurb: 'המשמרת כמו כרטיס טיסה: מספרים, קווים וצ׳קליסטים ממוספרים.', mode: 'dark', swatch: { ground: '#0c0907', accent: '#ff7a45' } },
+  { id: 'crema', name: 'קרמה ליום', blurb: 'בהיר וחד, נקרא מצוין בשמש. מסגרות עבות וכתום.', mode: 'light', swatch: { ground: '#f4ead9', accent: '#f4601f' } },
+  { id: 'latte', name: 'לאטה בלוסם', blurb: 'ורוד של לאטה, עגול ורך, עם לב קטן של קפה.', mode: 'light', swatch: { ground: '#fbece6', accent: '#e45f87' } },
 ]
 
 export function isStaffTheme(value: unknown): value is StaffTheme {

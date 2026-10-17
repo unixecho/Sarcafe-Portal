@@ -2,13 +2,13 @@ import 'server-only'
 
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { THEME_COOKIE, resolveTheme, type StaffTheme } from '@/lib/staff/theme'
+import { NUDGE_COOKIE, THEME_COOKIE, resolveTheme, type StaffTheme } from '@/lib/staff/theme'
 
 // Reads and writes a person's look. TOLERANT ON PURPOSE, like gate-state.ts: `staff.ui_theme` is an extra column (migration
 // 20261017120000); until it exists, or if the read fails, the device's cookie decides and then the default. A failed read must never
 // be the reason a page does not open. The cookie is also what makes the choice instant on THIS device.
 
-export async function loadStaffTheme(staffId: string | null | undefined): Promise<{ theme: StaffTheme; chosen: boolean }> {
+export async function loadStaffTheme(staffId: string | null | undefined): Promise<{ theme: StaffTheme; chosen: boolean; nudgeSeen: boolean }> {
   let db: unknown = null
   if (staffId) {
     try {
@@ -17,8 +17,13 @@ export async function loadStaffTheme(staffId: string | null | undefined): Promis
     } catch { /* the cookie and the default still answer */ }
   }
   let cookie: unknown = null
-  try { cookie = (await cookies()).get(THEME_COOKIE)?.value } catch { /* no request scope (a build): default */ }
-  return resolveTheme(db, cookie)
+  let nudgeSeen = false
+  try {
+    const jar = await cookies()
+    cookie = jar.get(THEME_COOKIE)?.value
+    nudgeSeen = jar.get(NUDGE_COOKIE)?.value === '1'
+  } catch { /* no request scope (a build): default */ }
+  return { ...resolveTheme(db, cookie), nudgeSeen }
 }
 
 /** Saves the choice on the person's row. Returns false when the database refused (the column may not exist yet): the caller still

@@ -1,0 +1,19 @@
+/* The first-login "choose your look" notice (ThemeNudge). Drawn from the tokens, so it wears whichever look is on. */
+.tn { display: grid; gap: 14px; padding: 4px 4px 10px; text-align: start; }
+.tn__icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 17px; color: var(--neon-soft); background: color-mix(in srgb, var(--neon) 14%, var(--bg-elev-2)); }
+.tn__title { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+.tn__lead { margin: 0; color: var(--text-dim); font-size: 0.92rem; line-height: 1.7; }
+.tn__looks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tn__looks li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 10px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--bg-elev-2); font-size: 0.8rem; font-weight: 650; }
+.tn__dot { flex: none; width: 16px; height: 16px; border: 1px solid var(--line-interactive); border-radius: 50%; }
+.tn__check { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 16px; border: 1.5px solid var(--line-interactive); border-radius: 16px; background: var(--bg-elev-2); font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: border-color 200ms var(--ease), background-color 200ms var(--ease); }
+.tn__check input { flex: none; width: 26px; height: 26px; margin: 0; accent-color: var(--neon); cursor: pointer; }
+.tn__check:has(input:checked) { border-color: var(--neon); background: color-mix(in srgb, var(--neon) 12%, var(--bg-elev-2)); }
+.tn__check:focus-within { outline: 3px solid var(--neon); outline-offset: 2px; }
+.tn__check--refused { border-color: var(--danger); }
+.tn__actions { display: grid; gap: 10px; }
+.tn__btn { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 56px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--bg-elev-2); color: var(--text); font: inherit; font-size: 0.98rem; font-weight: 800; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: opacity 200ms var(--ease); }
+.tn__btn--primary { border-color: var(--neon); background: var(--neon); color: var(--on-neon, var(--bg)); box-shadow: 0 10px 26px color-mix(in srgb, var(--neon) 30%, transparent); }
+.tn__btn[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; }
+.tn__btn:focus-visible { outline: 3px solid var(--neon); outline-offset: 3px; }
+.tn__hint { margin: 0; color: var(--text-dim); font-size: 0.8rem; line-height: 1.5; text-align: center; }

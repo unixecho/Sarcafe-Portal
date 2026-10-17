@@ -1,5 +1,17 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-10-17 (latest of the day): smoother look change, first-login "choose your look" notice with "take me there" — committed locally, NOT pushed (no migration)
+
+**Asked by the owner.** (1) The change between looks must be smooth, a bit smoother and nicer. (2) A first login without a chosen look must alert the employee until they tick "I read it" and close the dialog. (3) "Take me there" scrolls down to the look button and marks it so the employee knows how to click.
+
+**Done** (`docs/STAFF_THEMES.md`, last section). Soft-edged bloom (feathered mask via a registered `@property`, hard clip-path fallback), old look sinks, new look settles, two rings, slower staggered burst and cards, 980 ms on one curve in both the module and the stylesheet. `ThemeNudge` (the shared sheet; the close button, Escape and a tap outside only work once "קראתי והבנתי" is ticked; otherwise the box is focused and shaken), read-cookie `sarcafe_theme_ack` (device, a year), `theme-spot.ts` (smooth scroll, ring + "לחצו כאן" pill, focus on the row), a "חדש" badge on the row until a look is chosen, `swatch` colours in the registry. Shown on the app home only (not code sign-ins, owners, `/crew`). `check:staff-themes` 181.
+
+**Why the acknowledgement is a cookie, not a column.** It needed no migration; the cost is one notice per phone. If the owner wants "once per person, on every phone", it is a second nullable column (same pattern as `ui_theme`).
+
+**Verification.** `tsc` clean and every usual check passes. Headless Edge against a scratch dev server (removed): the real transition frozen and scrubbed at 0/180/380/600/820/1000 ms (feathered edge, dissolve, rings, hearts; ends clean), neon → latte and latte → crema; the notice (shown on arrival; the close button, Escape and a tap outside do NOT close it unticked, the box is focused and refused; ticked, close works and the cookie is set for a year); "take me there" (closes, counts as read, scrolls to the row and brings it fully into view, marks it, focuses it, the pulse runs, tapping the row lets go); less motion (still scrolls and marks, no pulse). **Not verified:** a real iPhone (the soft bloom needs iOS 18 view transitions and `@property`; older iPhones get the colour glide), the notice and the scroll in a real session with real content height, the sheet over the light looks beyond the screenshot of neon and latte.
+
+**Exact next step.** The owner says yes to push; then on a phone with an account that has not chosen a look: open the app home (the notice must appear), try to close it without ticking, tick and close, reopen later (it must not come back; the row says "חדש"), and on a second account use "קחו אותי לשם".
+
 ## Claude addendum, 2026-10-17 (latest): the looks travel through the whole panel, a professional change animation — pushed to `main`
 
 **Asked by the owner.** (1) Make switching looks look professional: colours and everything change with animation and effects. (2) The looks must reach `/crew` and the owner dashboard, "throughout the panel". (3) Push to main; if the Supabase write is not allowed, bring up the tool permission.

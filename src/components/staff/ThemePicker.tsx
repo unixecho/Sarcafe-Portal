@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { Check } from 'lucide-react'
 import { haptic } from '@/lib/haptics'
 import { THEMES, type StaffTheme } from '@/lib/staff/theme'
@@ -38,13 +39,13 @@ export default function ThemePicker({ value, onSelect, label = 'סגנון הא�
     document.head.appendChild(link)
   }, [])
 
-  // The look changes from where the person tapped: a circle grows from the card, a ring rides its edge, the look's own shapes burst out
-  // and the cards of the page settle in (theme-transition.ts). Less motion asked for: it just changes.
+  // The look changes from where the person tapped: a soft bloom grows from the card, rings ride its edge, the look's own shapes burst out
+  // and the cards of the page settle in (theme-transition.ts). Less motion asked for: it just changes. The picker's own "chosen" mark
+  // changes at the same moment as the look (inside the transition, after the old picture was taken), never a beat before it.
   function choose(id: StaffTheme, card: HTMLElement) {
     haptic('impact')
     const box = card.getBoundingClientRect()
-    transitionTheme(id, { x: box.left + box.width / 2, y: box.top + box.height / 2 })
-    onSelect(id)
+    transitionTheme(id, { x: box.left + box.width / 2, y: box.top + box.height / 2 }, () => flushSync(() => onSelect(id)))
   }
 
   return (
