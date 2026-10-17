@@ -384,3 +384,10 @@
   .app-row--spot { animation: app-spot-ring 1.3s ease-in-out infinite; }
   .app-row--spot .app-row__spot { animation: app-spot-point 1s ease-in-out infinite; }
 }
+
+/* A thing a redirect points at (src/lib/ui/spotlight.ts): a ring that breathes. */
+.spot-target { outline: 3px solid var(--neon); outline-offset: 3px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--neon) 24%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes spot-breathe { 0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--neon) 30%, transparent); } 50% { box-shadow: 0 0 0 11px color-mix(in srgb, var(--neon) 8%, transparent); } }
+  .spot-target { animation: spot-breathe 1.3s ease-in-out infinite; }
+}

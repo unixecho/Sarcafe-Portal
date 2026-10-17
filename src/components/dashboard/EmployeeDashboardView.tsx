@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Palette, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound } from 'lucide-react'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
@@ -8,8 +8,8 @@ import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
 import { loadShiftStatus } from '@/lib/staff/shift-status'
 import { loadStaffTheme } from '@/lib/staff/theme-server'
-import { THEMES, THEME_ROW_ID } from '@/lib/staff/theme'
 import ThemeNudge from '@/components/staff/ThemeNudge'
+import ThemeRow from '@/components/staff/ThemeRow'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { hasAnyMenuEditAccess, isOp } from '@/lib/staff/access'
 import { getBranches } from '@/lib/branches/server'
@@ -71,7 +71,7 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
       <WorkshopCard />
       <DashboardSections categories={categories} staff />
       <div className="app-group app-account">
-        <Link id={THEME_ROW_ID} href="/staff/profile#style" className="app-row app-row--quiet"><span className="app-row__icon"><Palette size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>מראה האפליקציה</strong><small>{THEMES.find((item) => item.id === look.theme)?.name}{look.chosen ? ' · לחצו לשינוי' : ' · עוד לא בחרתם. לחצו לבחירת סגנון'}</small></span>{!look.chosen && <span className="app-row__new">חדש</span>}<span className="app-row__spot" aria-hidden="true">לחצו כאן</span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
+        <ThemeRow theme={look.theme} chosen={look.chosen} />
         <Link href="/staff/profile" className="app-row app-row--quiet"><span className="app-row__icon"><UserRound size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>הפרופיל שלי</strong><small>פרטי חשבון, קוד כניסה והיסטוריה אישית</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
       </div>
       {developer && (

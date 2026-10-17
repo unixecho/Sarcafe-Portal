@@ -418,7 +418,7 @@ body {
 .sheet-scrim {
   position: fixed;
   inset: 0;
-  z-index: 150;
+  z-index: 340; /* above the app header (320), so a dialog is never drawn under it */
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(6px);
   display: flex;

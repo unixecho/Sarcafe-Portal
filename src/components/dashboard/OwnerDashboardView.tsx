@@ -1,10 +1,9 @@
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { AlertTriangle, Accessibility, Building2, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, History, Link2, MessageCircle, Receipt, ShoppingBag, Sparkles, Star, Tablet, Users, Wrench } from 'lucide-react'
-import { Palette } from 'lucide-react'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import { loadStaffTheme } from '@/lib/staff/theme-server'
-import { THEMES } from '@/lib/staff/theme'
+import ThemeRow from '@/components/staff/ThemeRow'
 import DashboardLive from '@/components/DashboardLive'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
@@ -105,7 +104,7 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
       <WorkshopCard />
       <DashboardSections categories={categories} />
       <div className="app-group app-account">
-        <Link href="/staff/profile#style" className="app-row app-row--quiet"><span className="app-row__icon"><Palette size={22} aria-hidden="true" /></span><span className="app-row__copy"><strong>מראה האפליקציה</strong><small>{THEMES.find((item) => item.id === look.theme)?.name}{look.chosen ? ' · לחצו לשינוי' : ' · עוד לא בחרתם. לחצו לבחירת סגנון'}</small></span><ChevronLeft size={18} className="app-row__chevron" aria-hidden="true" /></Link>
+        <ThemeRow theme={look.theme} chosen={look.chosen} />
         <InstallAppButton />
       </div>
     </>

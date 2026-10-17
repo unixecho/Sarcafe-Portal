@@ -1,5 +1,6 @@
 'use client'
 
+import { spotlight } from '@/lib/ui/spotlight'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -41,8 +42,10 @@ export default function BranchManager({ overview, links, initialTab }: { overvie
   const [scheduleSeen, setScheduleSeen] = useState(initialTab === 'schedule')
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const go = useCallback((next: TabId) => {
+  const go = useCallback((next: TabId, spot = false) => {
     setTab(next)
+    // A jump from the readiness list scrolls to the tab's content and marks it, so the person sees where the missing thing is.
+    if (spot) spotlight(`bm-panel-${next}`, { focus: false })
     if (next === 'schedule') setScheduleSeen(true)
     try {
       const url = new URL(window.location.href)
@@ -86,7 +89,7 @@ export default function BranchManager({ overview, links, initialTab }: { overvie
       </div>
 
       <div ref={panelRef} role="tabpanel" id={`bm-panel-${tab}`} aria-labelledby={`bm-tab-${tab}`} className="bm-panel rise" key={tab}>
-        {tab === 'overview' && <Overview state={state} done={done} total={total} go={go} />}
+        {tab === 'overview' && <Overview state={state} done={done} total={total} go={(next) => go(next, true)} />}
         {tab === 'checklists' && <Checklists state={state} setState={setState} />}
         {tab === 'schedule' && scheduleSeen && (
           <div className="bm-card">

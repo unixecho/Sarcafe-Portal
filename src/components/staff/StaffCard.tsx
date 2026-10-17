@@ -11,6 +11,8 @@ import HandleChip from '@/components/owner/pos/HandleChip'
 import { Avatar, InlineError, Notice, Pill } from '@/components/shifts/ui'
 import StaffInvitation from '@/components/staff/StaffInvitation'
 import StaffRecordsView from '@/components/staff/StaffRecordsView'
+import FieldSheet from '@/components/ui/FieldSheet'
+import { spotlight } from '@/lib/ui/spotlight'
 import { BADGES, badgeLabel, type Badge } from '@/lib/staff/badges'
 import { formatPhone } from '@/lib/pos/validate'
 import { useT } from '@/lib/pos/useT'
@@ -28,6 +30,8 @@ import '@/components/staff/staff-card.css'
 //   היסטוריה   who changed what, and when
 //   סיום עבודה deactivate / reactivate / delete, said in plain words
 // Changes to details, role and branch wait for one visible save bar; switches apply at once; the dangerous things ask first.
+// A missing thing is fixed WITHOUT leaving the screen: "טיפול" opens a small dialog (FieldSheet) with just that field. Only when the work
+// really is in another tab of the card does it switch, scroll to the field and mark it (spotlight).
 // (Replaces StaffEditSheet, which crashed when a person was opened: it called hooks after an early return.)
 
 type TabId = 'overview' | 'details' | 'access' | 'file' | 'history' | 'end'
@@ -122,6 +126,9 @@ export default function StaffCard({
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [removeFuture, setRemoveFuture] = useState(true)
   const [busyDanger, setBusyDanger] = useState(false)
+  /** Which missing thing is being fixed in a small dialog right now. */
+  const [fix, setFix] = useState<'phone' | 'code' | 'joined' | 'schedule' | null>(null)
+  const [draftPhone, setDraftPhone] = useState('')
   const [exempt, setExempt] = useState(false)
   const [exemptBusy, setExemptBusy] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -172,6 +179,12 @@ export default function StaffCard({
   useEffect(() => { void loadRecords() }, [loadRecords])
 
   useEffect(() => { setExempt(r?.push_gate_exempt === true) }, [r?.id, r?.push_gate_exempt])
+  // When a value changes on the server (a save, a small dialog), the form follows it; a field the person is editing is never overwritten by a refresh that did not change it.
+  useEffect(() => { if (row) setPhone(formatPhone(row.phone)) }, [row?.phone]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (row) setEmail(row.email ?? '') }, [row?.email]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (row) setBadge((row.badge as Badge | null) ?? '') }, [row?.badge]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (row) setBranchId(row.branch_id ?? '') }, [row?.branch_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (fix === 'phone') setDraftPhone(formatPhone(row?.phone ?? null)) }, [fix]) // eslint-disable-line react-hooks/exhaustive-deps
   // Each tab starts at its top.
   useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }) }, [tab])
 
@@ -247,7 +260,11 @@ export default function StaffCard({
   }
 
   async function save() {
-    if (nameEmpty) { setTab('details'); return setError('יש להזין שם — לפחות שם פרטי.') }
+    if (nameEmpty) {
+      setTab('details')
+      spotlight(`${ids}-first`)
+      return setError('יש להזין שם — לפחות שם פרטי.')
+    }
     setSaving(true)
     setError(null)
     const body: Record<string, unknown> = {
@@ -321,13 +338,13 @@ export default function StaffCard({
   const scheduledEverywhere = targetBranches.length > 0 && targetBranches.every((b) => { const m = scheduleMembers.find((x) => x.branch_id === b.id && x.staff_id === person.id); return m ? m.schedulable : !operator })
 
   // What is still missing, each with the tab that fixes it.
-  const todo: { done: boolean; label: string; detail: string; go: TabId; optional?: boolean }[] = [
-    { done: !!person.phone, label: 'טלפון', detail: person.phone ? formatPhone(person.phone) : 'אין מספר: אי אפשר להתקשר או לשלוח הודעה', go: 'details' },
-    { done: !!person.employee_no, label: 'מספר עובד', detail: person.employee_no ? `מספר ${person.employee_no}` : 'נדרש לכניסה עם קוד אישי', go: 'access' },
-    { done: person.has_passcode === true, label: 'קוד כניסה אישי', detail: person.has_passcode ? 'קיים' : 'אין קוד: אי אפשר להיכנס עם מספר וקוד', go: 'access' },
-    { done: !!person.claimed_at || !!person.has_google, label: 'נכנס/ה לאפליקציה', detail: person.claimed_at || person.has_google ? 'כבר נכנס/ה' : 'עוד לא נכנס/ה. אפשר לשלוח קישור הזמנה', go: 'access' },
-    { done: !!person.has_google, label: 'חשבון Google מקושר', detail: person.has_google ? 'מקושר' : 'לא חובה: נדרש לצפייה בסידור ולתלושים', go: 'access', optional: true },
-    ...(person.active && targetBranches.length > 0 ? [{ done: scheduledEverywhere, label: 'ניתן לשיבוץ בלוח', detail: scheduledEverywhere ? 'מופיע/ה ברשימות השיבוץ' : 'לא מופיע/ה ברשימות השיבוץ', go: 'access' as TabId }] : []),
+  const todo: { done: boolean; label: string; detail: string; fix: 'phone' | 'employee_no' | 'code' | 'joined' | 'schedule'; optional?: boolean }[] = [
+    { done: !!person.phone, label: 'טלפון', detail: person.phone ? formatPhone(person.phone) : 'אין מספר: אי אפשר להתקשר או לשלוח הודעה', fix: 'phone' },
+    { done: !!person.employee_no, label: 'מספר עובד', detail: person.employee_no ? `מספר ${person.employee_no}` : 'נדרש לכניסה עם קוד אישי', fix: 'employee_no' },
+    { done: person.has_passcode === true, label: 'קוד כניסה אישי', detail: person.has_passcode ? 'קיים' : 'אין קוד: אי אפשר להיכנס עם מספר וקוד', fix: 'code' },
+    { done: !!person.claimed_at || !!person.has_google, label: 'נכנס/ה לאפליקציה', detail: person.claimed_at || person.has_google ? 'כבר נכנס/ה' : 'עוד לא נכנס/ה. אפשר לשלוח קישור הזמנה', fix: 'joined' },
+    { done: !!person.has_google, label: 'חשבון Google מקושר', detail: person.has_google ? 'מקושר' : 'לא חובה: נדרש לצפייה בסידור ולתלושים', fix: 'joined', optional: true },
+    ...(person.active && targetBranches.length > 0 ? [{ done: scheduledEverywhere, label: 'ניתן לשיבוץ בלוח', detail: scheduledEverywhere ? 'מופיע/ה ברשימות השיבוץ' : 'לא מופיע/ה ברשימות השיבוץ', fix: 'schedule' as const }] : []),
   ]
   const missing = todo.filter((x) => !x.done && !x.optional).length
 
@@ -339,7 +356,7 @@ export default function StaffCard({
 
   return (
     <>
-      <SheetShell open={open} onClose={requestClose} labelledBy={`${ids}-title`} suspended={!!confirm || deactivateOpen} className="sc-panel">
+      <SheetShell open={open} onClose={requestClose} labelledBy={`${ids}-title`} suspended={!!confirm || deactivateOpen || !!fix} className="sc-panel">
         {/* ============================================================ header */}
         <header className="sc-head">
           <Avatar name={name} emoji={person.avatar_emoji} large />
@@ -388,7 +405,7 @@ export default function StaffCard({
                     <li key={item.label} className={item.done ? 'sc-todo--done' : item.optional ? 'sc-todo--optional' : 'sc-todo--missing'}>
                       <span className="sc-todo__mark" aria-hidden="true">{item.done ? <Check size={15} /> : '!'}</span>
                       <span className="sc-todo__copy"><strong>{item.label}</strong><small>{item.detail}</small></span>
-                      {!item.done && <button type="button" className="sch-btn sch-btn--sm press" onClick={() => setTab(item.go)}>טיפול</button>}
+                      {!item.done && <button type="button" className="sch-btn sch-btn--sm press" onClick={() => (item.fix === 'employee_no' ? onEditEmpNo(person) : setFix(item.fix))}>טיפול</button>}
                     </li>
                   ))}
                 </ul>
@@ -410,10 +427,8 @@ export default function StaffCard({
               <section className="sch-card" aria-labelledby={`${ids}-quick`}>
                 <div className="sch-row"><KeyRound size={19} aria-hidden="true" /><h3 id={`${ids}-quick`} className="sch-h">פעולות מהירות</h3></div>
                 <div className="sc-actions">
-                  <button type="button" className="sch-btn press" onClick={() => setTab('details')}><UserRound size={17} aria-hidden="true" />עריכת פרטים</button>
-                  <button type="button" className="sch-btn press" onClick={() => setTab('access')}><ShieldCheck size={17} aria-hidden="true" />הרשאות ותפקיד</button>
-                  {person.active && <button type="button" className="sch-btn press" disabled={quickBusy} onClick={() => onGenerateCode(person)}><KeyRound size={17} aria-hidden="true" />{person.has_passcode ? 'קוד חדש' : 'יצירת קוד כניסה'}</button>}
-                  {person.active && <button type="button" className="sch-btn press" onClick={() => setTab('access')}><Mail size={17} aria-hidden="true" />קישור הזמנה</button>}
+                  {person.active && <button type="button" className="sch-btn press" disabled={quickBusy} onClick={() => setFix('code')}><KeyRound size={17} aria-hidden="true" />{person.has_passcode ? 'קוד חדש' : 'יצירת קוד כניסה'}</button>}
+                  {person.active && <button type="button" className="sch-btn press" onClick={() => setFix('joined')}><Mail size={17} aria-hidden="true" />קישור הזמנה</button>}
                   <Link href={`/owner/staff/${person.id}`} className="sch-btn press" onClick={onClose}><ExternalLink size={17} aria-hidden="true" />תיק בעמוד מלא</Link>
                 </div>
               </section>
@@ -433,7 +448,7 @@ export default function StaffCard({
               <section className="sch-card" aria-labelledby={`${ids}-who`}>
                 <h3 id={`${ids}-who`} className="sch-h">מי זה/זו</h3>
                 <div className="sch-row" style={{ alignItems: 'flex-start' }}>
-                  <label style={{ flex: 1, minWidth: 0 }}><span className="sch-label">שם פרטי</span><input className="sch-input" value={first} maxLength={60} onChange={(e) => editFirst(e.target.value)} /></label>
+                  <label style={{ flex: 1, minWidth: 0 }}><span className="sch-label">שם פרטי</span><input id={`${ids}-first`} className="sch-input" value={first} maxLength={60} onChange={(e) => editFirst(e.target.value)} /></label>
                   <label style={{ flex: 1, minWidth: 0 }}><span className="sch-label">שם משפחה</span><input className="sch-input" value={last} maxLength={60} onChange={(e) => editLast(e.target.value)} /></label>
                 </div>
                 <label>
@@ -603,6 +618,52 @@ export default function StaffCard({
           </div>
         )}
       </SheetShell>
+
+      {/* ---- the small dialogs: fix one missing thing without leaving the card ---- */}
+      <FieldSheet
+        open={fix === 'phone'}
+        title="טלפון"
+        lead={`מספר הטלפון של ${name}: לשיחה, להודעה ולוואטסאפ.`}
+        onClose={() => setFix(null)}
+        onSave={async () => {
+          const res = await patch({ phone: draftPhone.trim() || null })
+          if (!res.ok) return res.message
+          onChanged(`הטלפון של ${name} נשמר ✓`)
+          return null
+        }}
+      >
+        <label>
+          <span className="sch-label" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Phone size={14} aria-hidden="true" /> טלפון</span>
+          <input className="sch-input" type="tel" dir="ltr" inputMode="tel" autoFocus value={draftPhone} maxLength={32} onChange={(e) => setDraftPhone(e.target.value)} placeholder="050-1234567" style={{ textAlign: 'start' }} />
+        </label>
+      </FieldSheet>
+
+      <FieldSheet open={fix === 'code'} title="קוד כניסה אישי" lead={`עם מספר העובד והקוד ${name} נכנס/ת לצ׳קליסטים ולקופה.`} onClose={() => setFix(null)} hideSave>
+        <div className="sc-actions" style={{ flexDirection: 'column' }}>
+          <button type="button" className="sch-btn sch-btn--primary press" disabled={quickBusy} onClick={() => { setFix(null); onGenerateCode(person) }}><KeyRound size={17} aria-hidden="true" />{person.has_passcode ? 'ליצור קוד חדש אוטומטית' : 'ליצור קוד אוטומטית'}</button>
+          <button type="button" className="sch-btn press" disabled={quickBusy} onClick={() => { setFix(null); onSetCode(person) }}>לבחור קוד בעצמי (6 ספרות)</button>
+          {person.has_passcode === true && <button type="button" className="sch-btn sch-btn--danger press" disabled={quickBusy} onClick={() => { setFix(null); onClearCode(person) }}>{t('owner.menu.staff.quickClear')}</button>}
+        </div>
+      </FieldSheet>
+
+      <FieldSheet open={fix === 'joined'} title="קישור הצטרפות" lead={`${name} מצטרף/ת לאפליקציה דרך הקישור: מוסיפים למסך הבית, בוחרים קוד, ומקשרים Google.`} onClose={() => setFix(null)} hideSave>
+        <StaffInvitation staffId={person.id} completeProfile={!!person.first_name?.trim() && !!person.last_name?.trim() && !!person.employee_no} />
+      </FieldSheet>
+
+      <FieldSheet open={fix === 'schedule'} title="שיבוץ במשמרות" lead="מתעדכן מיד, בלי שמירה." onClose={() => setFix(null)} hideSave>
+        {targetBranches.map((b) => {
+          const member = scheduleMembers.find((m) => m.branch_id === b.id && m.staff_id === person.id)
+          const on = member ? member.schedulable : !operator
+          return (
+            <div key={b.id} className="sch-row">
+              <span style={{ flex: 1, fontWeight: 600 }}>{targetBranches.length > 1 ? `${b.name.he ?? b.slug}: ` : ''}ניתן לשיבוץ במשמרות</span>
+              <button type="button" role="switch" aria-checked={on} aria-label={`ניתן לשיבוץ במשמרות${targetBranches.length > 1 ? ` — ${b.name.he ?? b.slug}` : ''}`} className="press" onClick={() => void onToggleSchedulable(person, b.id, !on)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', minHeight: 44, minWidth: 52 }}>
+                <Switch on={on} />
+              </button>
+            </div>
+          )
+        })}
+      </FieldSheet>
 
       {/* ---- deactivate: say what happens to the future before doing it ---- */}
       <SheetShell open={deactivateOpen} onClose={() => setDeactivateOpen(false)} labelledBy={`${ids}-deact`} className="sch-sheet">
