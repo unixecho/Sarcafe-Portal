@@ -24,7 +24,8 @@
     "verify:onboarding-sql": "node scripts/verify-onboarding-sql.mjs",
     "check:staff-access": "node scripts/check-staff-access.mjs",
     "check:pos-access": "node scripts/check-pos-access.mjs",
-    "check:app-layout": "node scripts/check-app-layout.mjs"
+    "check:app-layout": "node scripts/check-app-layout.mjs",
+    "check:kiosk-menu": "node scripts/check-kiosk-menu.mjs"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",

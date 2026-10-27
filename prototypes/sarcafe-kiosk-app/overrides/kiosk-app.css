@@ -1,0 +1,80 @@
+/*
+ * Sarcafe kiosk app overrides. Loaded only inside the Android app, after the prototype's styles.css.
+ * The prototype is a review page: a header bar, a screen picker and a mock tablet frame around the real
+ * screen. Here the screen itself fills the display, in portrait and in landscape.
+ */
+html, body { height: 100%; overflow: hidden; background: #171813; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+input { -webkit-user-select: text; user-select: text; }
+
+.review-bar, .screen-picker, .concept-note, .skip-link { display: none !important; }
+.review-shell, .device-stage { display: block; min-height: 0; margin: 0; padding: 0; }
+
+.device {
+  position: fixed; inset: 0;
+  width: auto !important; height: auto; aspect-ratio: auto !important;
+  padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+  box-shadow: none; transition: none;
+}
+.kiosk-screen { border-radius: 0; }
+
+/* every screen scrolls instead of clipping; the welcome screen is a fixed picture */
+.panel { overflow-y: auto; overscroll-behavior: contain; }
+.panel-welcome { overflow: hidden; }
+
+/* the phone number keypad: 0-9 only, big touch targets, sits between the field and the submit button */
+.numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.numpad button {
+  min-height: 64px; border: 1px solid rgba(32, 35, 31, .18); border-radius: 18px;
+  color: var(--espresso); background: #fff; font-size: 1.75rem; font-weight: 700;
+  touch-action: manipulation; transition: transform .12s var(--ease-out), background-color .12s ease;
+}
+.numpad button:active { transform: scale(.96); background: #efe6d2; }
+.numpad .numpad-aux { color: var(--forest); background: #efe9db; font-size: 1.15rem; font-weight: 800; }
+.quick-form input { caret-color: transparent; }
+
+/* a field is focused, so the system keyboard is up: give the form the room */
+.kb-open .kiosk-header, .kb-open .kiosk-footer { display: none; }
+.kb-open .panel { inset: 0; }
+.kb-open .join-story, .kb-open .join-back { display: none; }
+.kb-open .join-shell { grid-template-columns: 1fr; align-content: start; }
+.kb-open .consent-intro { display: none; }
+.kb-open .consent-layout { grid-template-columns: 1fr; align-items: start; }
+.kb-open .panel-consent { padding-block: 14px; }
+
+/* portrait: the phone form comes first so the keypad and the button fit without scrolling; the pitch follows below */
+@media (orientation: portrait) {
+  .join-back { order: 0; }
+  .quick-form { order: 1; }
+  .join-story { order: 2; }
+}
+
+/* landscape is shorter than the prototype's mock frame: tighten the spacing */
+@media (orientation: landscape) {
+  .panel-choice { padding: 16px 28px; }
+  .choice-shell { gap: 14px; }
+  .choice-heading h1 { font-size: clamp(1.7rem, 3.2vw, 2.6rem); }
+  .decision-card { padding: 20px; gap: 14px; border-radius: 24px; }
+  .decision-copy strong { font-size: clamp(1.25rem, 2.4vw, 2rem); }
+  .menu-peek i { min-height: 30px; }
+  .panel-join { padding: 18px 28px; }
+  .join-story h1 { margin: 22px 0 10px; font-size: clamp(1.9rem, 3.6vw, 3rem); }
+  .benefit-list { margin-top: 12px; gap: 2px 18px; }
+  .quick-form { padding: 22px; gap: 9px; }
+  .quick-form input { min-height: 54px; }
+  .numpad { gap: 8px; }
+  .numpad button { min-height: 50px; font-size: 1.5rem; }
+  .quick-submit { min-height: 52px; }
+  .panel-menu { padding: 16px 28px; }
+  .menu-head h1 { font-size: clamp(1.7rem, 3vw, 2.6rem); }
+  .category-tabs { margin: 14px 0 12px; }
+  .panel-consent { padding: 18px 28px; }
+  .consent-intro h1 { margin: 14px 0 8px; font-size: clamp(2.2rem, 4.4vw, 3.6rem); }
+  .phone-summary { margin-top: 16px; }
+  .consent-form { padding: 20px; gap: 10px; }
+  .panel-privacy { padding: 18px 32px; }
+  .privacy-copy h1 { font-size: clamp(2rem, 3.6vw, 3.2rem); }
+  .panel-success h1 { font-size: clamp(2.4rem, 4.6vw, 4rem); }
+  .error-layout h1 { font-size: clamp(2.2rem, 4vw, 3.6rem); }
+  .idle-dialog { padding: 24px; }
+}
