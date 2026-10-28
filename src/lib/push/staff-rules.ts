@@ -129,7 +129,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
  *  an owner or an employee reads the title as written. */
 export type AlertAudience = 'developer' | 'owner' | 'employee'
 /** Management alerts: the checklist escalation and the morning report, and everything that waits for a manager's decision. */
-const OWNER_KINDS = new Set(['checklist.gap', 'issues.digest', ...MANAGER_KINDS])
+const OWNER_KINDS = new Set(['checklist.gap', 'issues.digest', 'club.signup', ...MANAGER_KINDS])
 /** Two kinds are written for BOTH the person a request or swap concerns ("הבקשה שלך בוטלה") and for the managers
  *  ("דנה ביטל/ה בקשה להצטרף למשמרת"), with the same `kind`. The title is what tells the two copies apart. */
 const BOTH_COPIES = new Set(['request.cancelled', 'swap.cancelled'])

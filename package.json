@@ -25,7 +25,9 @@
     "check:staff-access": "node scripts/check-staff-access.mjs",
     "check:pos-access": "node scripts/check-pos-access.mjs",
     "check:app-layout": "node scripts/check-app-layout.mjs",
-    "check:kiosk-menu": "node scripts/check-kiosk-menu.mjs"
+    "check:kiosk-menu": "node scripts/check-kiosk-menu.mjs",
+    "verify:waitlist-sql": "node scripts/verify-waitlist-sql.mjs",
+    "check:kiosk-waitlist": "node scripts/check-kiosk-waitlist.mjs"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",

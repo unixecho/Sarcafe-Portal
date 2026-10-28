@@ -40,5 +40,18 @@ export const GET = apiRoute(async (request: NextRequest) => {
     console.error('cleanup_order_access failed:', err instanceof Error ? err.message : err)
   }
 
-  return NextResponse.json({ ok: feedbackOk && orderAccessOk, feedback, orderAccessOk, at: new Date().toISOString() })
+  // The kiosk's loyalty-club list: erase anyone whose last interest is over 12 months old (the privacy notice's promise).
+  // Same rule as the jobs above: its own try/catch, and no contact detail ever reaches the log.
+  let waitlistErased: number | undefined
+  let waitlistOk = true
+  try {
+    const { data, error } = await service.rpc('customer_waitlist_purge_expired', { p_months: 12 })
+    if (error) throw error
+    waitlistErased = typeof data === 'number' ? data : undefined
+  } catch (err) {
+    waitlistOk = false
+    console.error('customer_waitlist_purge_expired failed:', err instanceof Error ? err.message : err)
+  }
+
+  return NextResponse.json({ ok: feedbackOk && orderAccessOk && waitlistOk, feedback, orderAccessOk, waitlistErased, at: new Date().toISOString() })
 })

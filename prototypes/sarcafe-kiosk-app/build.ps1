@@ -40,9 +40,10 @@ foreach ($f in Get-ChildItem "$out\assets" -Filter *.html) {
     if ($f.Name -eq 'index.html') {
         # kiosk-only layer: bundled font, real full-screen layout, numeric phone keypad, keyboard handling,
         # the last menu the dashboard pushed, the inactivity timer, and the menu-update listener
-        $t = $t.Replace('</head>', '    <link rel="stylesheet" href="./rubik.css" />' + "`n" + '    <link rel="stylesheet" href="./kiosk-app.css" />' + "`n  </head>")
+        # the speed check runs first, in <head>, so the right version is chosen before anything is painted
+        $t = $t.Replace('</head>', '    <script src="./kiosk-perf.js"></script>' + "`n" + '    <link rel="stylesheet" href="./rubik.css" />' + "`n" + '    <link rel="stylesheet" href="./kiosk-app.css" />' + "`n  </head>")
         $t = $t.Replace('<script src="./menu-data.js"></script>', '<script src="./menu-data.js"></script>' + "`n" + '    <script src="./kiosk-menu-cache.js"></script>')
-        $t = $t.Replace('</body>', '    <script src="./kiosk-app.js"></script>' + "`n" + '    <script src="./kiosk-idle.js"></script>' + "`n" + '    <script src="./kiosk-sync.js"></script>' + "`n  </body>")
+        $t = $t.Replace('</body>', '    <script src="./kiosk-app.js"></script>' + "`n" + '    <script src="./kiosk-business.js"></script>' + "`n" + '    <script src="./kiosk-legal.js"></script>' + "`n" + '    <script src="./kiosk-idle.js"></script>' + "`n" + '    <script src="./kiosk-signup.js"></script>' + "`n" + '    <script src="./kiosk-sync.js"></script>' + "`n  </body>")
     }
     [IO.File]::WriteAllText($f.FullName, $t, $utf8)
 }

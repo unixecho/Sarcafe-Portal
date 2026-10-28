@@ -165,12 +165,29 @@ public class MainActivity extends Activity {
         changed |= setSyncPref(intent, "api", "https://");     // snapshot endpoint the page fetches when told to
         changed |= setSyncPref(intent, "rt", "https://");      // realtime server base address
         changed |= setSyncPref(intent, "rt_key", "");           // its public (anon) key
+        changed |= setSyncPref(intent, "signup_key", "");       // the kiosk's key for the sign-up endpoint (adb extra: key)
+        String signupKey = intent.getStringExtra("key");
+        if (signupKey != null) {
+            if (signupKey.isEmpty()) prefs.edit().remove("signup_key").apply();
+            else if (signupKey.length() <= 200) prefs.edit().putString("signup_key", signupKey).apply();
+            changed = true;
+        }
+        String perf = intent.getStringExtra("perf"); // auto | lite | full
+        if (perf != null && perf.matches("auto|lite|full")) {
+            setPerfMode(perf);
+            changed = true;
+        }
         String channel = intent.getStringExtra("rt_channel");
         if (channel != null && channel.matches("[A-Za-z0-9:_-]{1,64}")) {
             prefs.edit().putString("rt_channel", channel).apply();
             changed = true;
         }
         return changed;
+    }
+
+    /** The page's speed setting; a change starts a fresh speed test (the epoch invalidates the remembered result). */
+    private void setPerfMode(String mode) {
+        prefs.edit().putString("perf", mode).putInt("perf_epoch", prefs.getInt("perf_epoch", 0) + 1).apply();
     }
 
     private boolean setSyncPref(Intent intent, String key, String requiredPrefix) {
@@ -193,6 +210,9 @@ public class MainActivity extends Activity {
             o.put("rt", prefs.getString("rt", ""));
             o.put("rtKey", prefs.getString("rt_key", ""));
             o.put("rtChannel", prefs.getString("rt_channel", "menu:givat-haviva") /* the dashboard's own menu channel */);
+            o.put("signupKey", prefs.getString("signup_key", ""));
+            o.put("perf", prefs.getString("perf", "auto"));
+            o.put("perfEpoch", prefs.getInt("perf_epoch", 0));
             return o.toString();
         } catch (Exception e) {
             return "{}";
@@ -380,10 +400,13 @@ public class MainActivity extends Activity {
     }
 
     private void staffMenu() {
+        final String perfNow = prefs.getString("perf", "auto");
+        final String perfNext = perfNow.equals("auto") ? "lite" : perfNow.equals("lite") ? "full" : "auto";
         final String[] items = {
             "Reload page", "Wi-Fi settings (unlocks for 5 min)", "Unlock for 5 min",
             "Exit kiosk mode (tap the Sarcafe Kiosk app to return)",
-            "Remove kiosk completely (needs adb to set up again)", "Cancel" };
+            "Remove kiosk completely (needs adb to set up again)",
+            "Speed: " + perfNow + "  (tap for " + perfNext + ")", "Cancel" };
         new AlertDialog.Builder(this)
             .setTitle("Sarcafe Kiosk")
             .setItems(items, new android.content.DialogInterface.OnClickListener() {
@@ -395,6 +418,7 @@ public class MainActivity extends Activity {
                     } else if (which == 2) unlockForStaff();
                     else if (which == 3) confirmLeave(false);
                     else if (which == 4) confirmLeave(true);
+                    else if (which == 5) { setPerfMode(perfNext); load(); }
                 }
             }).show();
     }

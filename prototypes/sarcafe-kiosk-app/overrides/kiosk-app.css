@@ -22,6 +22,37 @@ input { -webkit-user-select: text; user-select: text; }
 .panel { overflow-y: auto; overscroll-behavior: contain; }
 .panel-welcome { overflow: hidden; }
 
+/* when the idle timer ends: fade out, reset while dark, fade back in */
+.kiosk-screen { transition: opacity .9s ease; }
+.kiosk-screen.is-fading { opacity: 0; transition-duration: .65s; }
+
+/* legal text (privacy notice, terms) */
+.legal-lead { max-width: 70ch; color: var(--muted); font-size: .9rem; }
+.legal-fill { padding: 0 4px; color: #5a3a00; background: #ffe9a8; border-radius: 4px; font-weight: 600; }
+.privacy-copy h1 { font-size: clamp(1.9rem, 3.6vw, 3.4rem); }
+.privacy-copy section p { overflow-wrap: anywhere; }
+.short-notice { margin: 0; padding: 12px 14px; color: var(--muted); background: #f3ecdc; border-inline-start: 3px solid var(--brass); font-size: .76rem; line-height: 1.55; }
+.terms-link { margin-inline-start: 18px; }
+.kiosk-footer.has-terms button + button { margin-inline-start: 16px; }
+
+/* the optional "load the light version?" bar (web visitors only) */
+.perf-bar { position: fixed; inset: auto 12px 12px 12px; z-index: 200; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; color: #fff; background: var(--espresso); border-radius: 14px; font-size: .85rem; }
+.perf-bar span { flex: 1 1 220px; }
+.perf-bar button { min-height: 40px; padding: 0 14px; color: var(--espresso); background: var(--brass-light); border: 0; border-radius: 10px; font-weight: 800; }
+
+/*
+ * The light version (html[data-perf="lite"]): every animation stays, the costly parts get cheaper.
+ *  - no soft shadows (the most expensive thing to paint)
+ *  - only the photo that is showing drifts; the other two wait without a running animation or a promoted layer
+ *  - panels arrive with a fade only (no sliding layer)
+ */
+html[data-perf="lite"] *, html[data-perf="lite"] *::before, html[data-perf="lite"] *::after { box-shadow: none !important; text-shadow: none !important; }
+html[data-perf="lite"] .hero-slide { will-change: auto; }
+html[data-perf="lite"] .hero-slide:not(.is-active) { animation: none; transform: none; }
+html[data-perf="lite"] .hero-slide.is-active { will-change: opacity, transform; }
+html[data-perf="lite"] .panel:not(.panel-welcome) { animation: panel-in-lite .35s var(--ease-out) both; }
+@keyframes panel-in-lite { from { opacity: .72; } }
+
 /* the phone number keypad: 0-9 only, big touch targets, sits between the field and the submit button */
 .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .numpad button {

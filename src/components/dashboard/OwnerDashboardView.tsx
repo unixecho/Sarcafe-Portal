@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { AlertTriangle, Accessibility, Building2, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, History, Link2, MessageCircle, Receipt, ShoppingBag, Sparkles, Star, Tablet, Users, Wrench } from 'lucide-react'
+import { AlertTriangle, Accessibility, Building2, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, History, Link2, MessageCircle, Receipt, ShoppingBag, Sparkles, Star, Tablet, UserPlus, Users, Wrench } from 'lucide-react'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import { loadStaffTheme } from '@/lib/staff/theme-server'
 import ThemeRow from '@/components/staff/ThemeRow'
@@ -65,6 +65,7 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
       { href: '/owner/editor', icon: ClipboardList, label: 'התפריט שלי', description: 'פריטים, מחירים ופרסום שינויים' },
       { href: '/owner/reviews', icon: Star, label: 'ביקורות', description: 'חוויות שהלקוחות משתפים' },
       { href: '/owner/feedback', icon: MessageCircle, label: 'משוב מלקוחות', description: 'הודעות והצעות לשיפור' },
+      { href: '/owner/waitlist', icon: UserPlus, label: 'נרשמים למועדון', description: 'מי נרשם בקיוסק, בהסכמתו, לרשימת המתעניינים' },
       { href: '/owner/links', icon: Link2, label: 'קישורים ושיתוף', description: 'הפורטל, תפריטים וקודי QR' },
       { href: '/owner/audit', icon: History, label: 'יומן פעילות', description: 'שינויים שבוצעו במערכת' },
       { href: '/owner/intro', icon: Sparkles, label: 'מסך פתיחה', description: 'הדלקה וכיבוי, והשורות שמופיעות' },

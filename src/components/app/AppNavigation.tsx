@@ -21,6 +21,7 @@ import {
   Sparkles,
   Star,
   Tablet,
+  UserPlus,
   UserRound,
   Users,
   X,
@@ -57,6 +58,7 @@ const OWNER_GROUPS: Group[] = [
   { label: 'העסק', items: [
     { href: '/owner/reviews', label: 'ביקורות', icon: Star },
     { href: '/owner/feedback', label: 'משוב', icon: MessageCircle },
+    { href: '/owner/waitlist', label: 'נרשמים למועדון', icon: UserPlus },
     { href: '/owner/links', label: 'קישורים ושיתוף', icon: Link2 },
     { href: '/owner/audit', label: 'יומן פעילות', icon: History },
     { href: '/owner/intro', label: 'מסך פתיחה', icon: Sparkles },
