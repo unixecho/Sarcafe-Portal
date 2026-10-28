@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
     const result = data as { ok: boolean; error?: string }
     if (result.ok) return reply(200, { ok: true })
     if (result.error === 'rate_limited') return reply(429, { ok: false, error: 'rate_limited' })
+    // This number is already on the list. Nothing was changed, and the kiosk says so to the person at the screen.
+    if (result.error === 'already_registered') return reply(409, { ok: false, error: 'already_registered' })
     if (result.error === 'unavailable') return reply(503, { ok: false, error: 'unavailable' })
     const field = result.error === 'bad_phone' ? 'phone' : result.error === 'bad_name' ? 'firstName' : result.error === 'bad_email' ? 'email' : null
     return reply(400, { ok: false, error: 'bad_request', ...(field ? { fields: [field] } : {}) })

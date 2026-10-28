@@ -59,6 +59,9 @@ check('everything goes through the one transaction, as the service role', /rpc\(
 check('nothing is logged (no console call that could carry a contact detail)', !/console\./.test(route))
 check('answers are generic: no error object or contact field is echoed', !/error\.message|\.details|input\.(firstName|phone|email)\b[^,]*\)\s*\)/.test(route.replace(/p_[a-z_]+: input\.[a-zA-Z]+/g, '')))
 
+check('an already-registered number is answered 409 and the kiosk says so', /already_registered/.test(route) && /409/.test(route) && /res.status === 409/.test(read('prototypes/sarcafe-kiosk-app/overrides/kiosk-signup.js')))
+check('the register function refuses a known number and writes nothing (migration 20261028150000)', /already_registered/.test(read('supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql')) && !/update public.customer_waitlist_contacts/.test(read('supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql').split('create or replace function public.customer_waitlist_register')[1]))
+
 section('who is told, who can see')
 const sql = read('supabase/migrations/20261027150000_customer_waitlist.sql')
 check('every sign-up writes an owner row (club.signup) and a developer row (dev.club_signup)', /'club\.signup'/.test(sql) && /'dev\.club_signup'/.test(sql))

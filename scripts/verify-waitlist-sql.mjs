@@ -44,7 +44,8 @@ for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql'
 }
 check('all migrations apply in order (the new one is idempotent: it applies twice)', true)
 await db.exec(readFileSync(migrations + '20261027150000_customer_waitlist.sql', 'utf8'))
-check('re-applying the waitlist migration changes nothing', true)
+await db.exec(readFileSync(migrations + '20261028150000_customer_waitlist_no_repeat.sql', 'utf8')) // the later function definition goes back on top
+check('re-applying the waitlist migrations (in order) changes nothing', true)
 
 const branch = (await one(`select id from public.branches where slug = 'givat-haviva'`)).id
 const owner = (await one(`insert into public.staff (first_name, role, badge, branch_id) values ('Owner', 'owner', 'owner', $1) returning id`, [branch])).id
@@ -54,7 +55,8 @@ const gone = (await one(`insert into public.staff (first_name, role, badge, bran
 const notes = async () => (await db.query(`select staff_id, kind, title, body, link from public.schedule_notifications where kind in ('club.signup','dev.club_signup') order by created_at, kind`)).rows
 
 console.log('\nsigning up')
-let r = await reg({ marketing: true, email: 'Dana@Example.com' })
+const firstRequest = crypto.randomUUID()
+let r = await reg({ marketing: true, email: 'Dana@Example.com', request: firstRequest })
 check('a new sign-up succeeds and says created', r.ok === true && r.status === 'created', JSON.stringify(r))
 const c = await one(`select * from public.customer_waitlist_contacts`)
 check('the phone is stored normalized (05XXXXXXXX), the e-mail lower-cased', c.normalized_phone === '0541234567' && c.email === 'dana@example.com')
@@ -66,15 +68,30 @@ check('the owner and the developer are told, nobody else (no barista, no inactiv
 check('the owner gets club.signup and the developer dev.club_signup', n.find((x) => x.staff_id === owner).kind === 'club.signup' && n.find((x) => x.staff_id === dev).kind === 'dev.club_signup')
 check('the notification links to the owner page and holds no customer data', n.every((x) => x.link.url === '/owner/waitlist' && !/דנה|054|dana|example/i.test(x.title + x.body)))
 
-console.log('\nrepeats and retries')
-const again = crypto.randomUUID()
-const base = await reg({ request: again, phone: '+972 54 123 4567', name: 'דנה כהן' })
-check('+972 5X... is the same person: updated, not duplicated', base.status === 'updated' && Number((await one(`select count(*) n from public.customer_waitlist_contacts`)).n) === 1)
-check('a repeat refreshes the name and tells the team again', (await one(`select first_name from public.customer_waitlist_contacts`)).first_name === 'דנה כהן' && (await notes()).length === 4)
-const replay = await reg({ request: again })
-check('the same request id again is a replay: no new event, no new notification', replay.status === 'replayed' && (await notes()).length === 4)
-check('an unticked marketing box on a repeat never takes back the earlier yes', (await one(`select current_marketing_consent c from public.customer_waitlist_contacts`)).c === true)
-check('the marketing yes is not recorded twice', Number((await one(`select count(*) n from public.customer_waitlist_consent_events where event_type='marketing_granted'`)).n) === 1)
+console.log('\nthe same number cannot register again')
+const before = { notes: (await notes()).length, events: Number((await one(`select count(*) n from public.customer_waitlist_consent_events`)).n) }
+const again = await reg({ phone: '054-123 4567', name: 'מישהו אחר', email: 'other@example.com', marketing: true })
+check('a second sign-up with the same number is refused: already_registered', again.ok === false && again.error === 'already_registered', JSON.stringify(again))
+const stored = await one(`select first_name, email, current_marketing_consent from public.customer_waitlist_contacts`)
+check('nothing about the first person changed (name, e-mail)', stored.first_name === 'דנה' && stored.email === 'dana@example.com')
+check('no new event and no new notification was written', (await notes()).length === before.notes && Number((await one(`select count(*) n from public.customer_waitlist_consent_events`)).n) === before.events)
+for (const [label, phone] of [['+972 with spaces', '+972 54 123 4567'], ['972 without plus', '972541234567'], ['dashes', '054-123-4567'], ['dots', '054.123.4567'], ['wrapped in text', ' tel: 054 1234567 ']]) {
+  const x = await reg({ phone, name: 'x' })
+  check(`the same number written as "${label}" is the same person`, x.error === 'already_registered', JSON.stringify(x))
+}
+check('another person cannot switch marketing on or off for a registered number', (await one(`select current_marketing_consent c from public.customer_waitlist_contacts`)).c === true
+  && (await reg({ phone: '0541234567', marketing: false })).error === 'already_registered')
+const replay = await reg({ request: firstRequest })
+check('a retry of the SAME request (lost answer) is still a harmless success', replay.ok === true && replay.status === 'replayed' && (await notes()).length === before.notes)
+check('refused repeats do not count as registrations: one contact, one marketing event', Number((await one(`select count(*) n from public.customer_waitlist_contacts`)).n) === 1
+  && Number((await one(`select count(*) n from public.customer_waitlist_consent_events where event_type='marketing_granted'`)).n) === 1)
+check('a different number registers normally', (await reg({ phone: '0529990000', name: 'עוד' })).status === 'created')
+const gone2 = (await one(`select id from public.customer_waitlist_contacts where normalized_phone='0529990000'`)).id
+await one(`select public.customer_waitlist_erase($1) r`, [gone2])
+check('after the owner erases someone, that number can sign up again', (await reg({ phone: '0529990000', name: 'שוב' })).status === 'created')
+// tidy the fixtures this section added, so the later sections count what they always counted
+await db.query(`delete from public.customer_waitlist_contacts where normalized_phone = '0529990000'`)
+await db.query(`delete from public.customer_waitlist_consent_events where contact_id is null`)
 
 console.log('\nbad input')
 for (const [label, over, error] of [

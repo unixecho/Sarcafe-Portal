@@ -81,7 +81,10 @@
         go('success');        // ...then shows the confirmation
         return;
       }
-      if (res.status === 400) say('משהו בפרטים לא נקלט. בדקו את השם, המספר והדוא״ל ונסו שוב.');
+      if (res.status === 409) {
+        // already on the list: nothing was changed. Say so plainly, keep the person on this screen, and let them change the number.
+        say('המספר הזה כבר רשום ברשימה, ואין צורך להירשם שוב. אם הקלדתם מספר אחר בטעות, אפשר לשנות אותו.');
+      } else if (res.status === 400) say('משהו בפרטים לא נקלט. בדקו את השם, המספר והדוא״ל ונסו שוב.');
       else go('error');
     } catch (_) {
       go('error');
