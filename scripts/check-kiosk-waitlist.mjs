@@ -80,6 +80,7 @@ check('the list, the actions and the export are all full-owner only', (ownerApi.
 check('the export is never cached and uses the formula-injection guard', /no-store/.test(exportApi) && /csvLine/.test(exportApi))
 const page = read('src/app/owner/waitlist/page.tsx')
 check('the page redirects anyone who is not a full owner', /isOp\(me\)/.test(page) && /redirect\('\/no-access'\)/.test(page))
+check('the middleware also gates the page as owner-only (defence in depth, same as feedback)', /OP_ONLY_PREFIXES = \[[^\]]*'\/owner\/waitlist'/.test(read('src/middleware.ts')))
 check('the dashboard and the menu link to the page', /\/owner\/waitlist/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /\/owner\/waitlist/.test(read('src/components/app/AppNavigation.tsx')))
 
 section('the kiosk side')

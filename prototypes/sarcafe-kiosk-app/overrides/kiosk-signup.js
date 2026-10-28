@@ -24,7 +24,12 @@
   const submit = form.querySelector('.submit-consent');
   const go = (name) => document.querySelector(`.screen-picker [data-screen="${name}"]`)?.click();
   const clearAll = () => document.querySelector('.idle-dialog [data-clear]')?.click();
-  const say = (text) => { if (message) message.textContent = text; };
+  // the message sits under the button, below the fold on a tablet: bring it into view so the person always sees why
+  const say = (text) => {
+    if (!message) return;
+    message.textContent = text;
+    if (text) message.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
 
   const endpoint = cfg.api ? cfg.api.replace(/\/menu(\?.*)?$/, '/waitlist') : '';
   const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID()
