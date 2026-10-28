@@ -2,7 +2,12 @@ import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import OwnerHeader from '@/components/OwnerHeader'
 import StaffScheduleShell from '@/components/shifts/StaffScheduleShell'
+import OnShiftNow from '@/components/shifts/OnShiftNow'
 import { resolveStaffIdentity } from '@/lib/staff/session'
+import { loadOnShiftNow } from '@/lib/staff/on-shift'
+import { loadConstraintBranches } from '@/lib/shifts/constraint-branches'
+import { wallClockNow } from '@/lib/shifts/time'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import type { ScheduleEntry } from '@/lib/shifts/entry'
@@ -27,10 +32,21 @@ export default async function StaffSchedulePageBody({ branchSlug, entry = {} }: 
   const requested = branchSlug && visibleBranches.some((branch) => branch.slug === branchSlug) ? branchSlug : cookieStore.get(BRANCH_COOKIE)?.value
   const initialBranch = resolveCurrentBranchSlug(visibleBranches, requested)
 
+  // Who is on shift right now, and which branches this person may send constraints for (with each branch's hours). Both are
+  // extras around the schedule: if either read fails the schedule itself must still open.
+  const service = createServiceRoleClient()
+  const permanent = visibleBranches.filter((branch) => branch.kind !== 'event').map((branch) => ({ id: branch.id, slug: branch.slug, name: branch.name.he }))
+  const [onShift, constraintBranches] = await Promise.all([
+    loadOnShiftNow(service, me.branch_id ?? null).catch(() => null),
+    // null (a failed read) means "no restriction known": the form then behaves as it did before, and the server still refuses wrong branches.
+    loadConstraintBranches(service, { id: me.id, branch_id: me.branch_id ?? null }, permanent).catch(() => null),
+  ])
+
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 1560, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="לוח משמרות" backHref="/staff" />
-      <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} entry={entry} />
+      {onShift && <OnShiftNow branches={onShift} viewerId={me.id} clock={wallClockNow('Asia/Jerusalem').time} />}
+      <StaffScheduleShell branches={visibleBranches} initialBranch={initialBranch} entry={entry} constraintBranches={constraintBranches} />
     </main>
   )
 }

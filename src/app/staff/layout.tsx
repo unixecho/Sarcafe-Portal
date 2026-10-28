@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import StaffInstallIntro from '@/components/staff/StaffInstallIntro'
+import StaffIdentityBeacon from '@/components/staff/StaffIdentityBeacon'
 import NotificationsGate from '@/components/staff/NotificationsGate'
 import ThemedApp from '@/components/app/ThemedApp'
 import { GeistSans } from 'geist/font/sans'
@@ -28,6 +29,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   return (
     // The person's chosen look (neon until they choose) is drawn by ThemedApp: src/lib/staff/theme.ts, components/app/staff-themes.css.
     <ThemedApp staffId={me?.id} className={GeistSans.variable}>
+      <StaffIdentityBeacon name={me?.first_name || me?.display_name || null} signedIn={!!me} />
       <NotificationsGate mode={mode}>
         <StaffInstallIntro />
         {children}

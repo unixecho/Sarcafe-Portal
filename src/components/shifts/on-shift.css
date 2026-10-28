@@ -1,0 +1,48 @@
+/* "Who is on shift now" (OnShiftNow.tsx): the top of the staff schedule page. Tokens come from the person's look. */
+.osn { display: grid; gap: 12px; margin-block: 4px 18px; }
+.osn__head { display: flex; align-items: center; gap: 9px; }
+.osn__title { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: -.03em; }
+.osn__clock { margin-inline-start: auto; color: var(--text-dim); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.osn__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-faint, #777); flex: none; }
+.osn__dot--live { background: var(--success, #3ddc84); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); animation: osn-pulse 2.2s ease-out infinite; }
+
+.osn__grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+.osn__branch { padding: 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--bg-elev); }
+.osn__branch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.osn__branch-head strong { font-size: 1rem; letter-spacing: -.02em; }
+.osn__count { padding: 3px 10px; border-radius: 999px; background: var(--bg-elev-2); color: var(--text-dim); font-size: .74rem; font-weight: 600; white-space: nowrap; }
+.osn__count--on { background: color-mix(in srgb, var(--success, #3ddc84) 18%, transparent); color: var(--success, #3ddc84); }
+
+.osn__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.osn__person { display: flex; align-items: center; gap: 11px; min-height: 52px; padding: 8px 10px; border-radius: 14px; background: var(--bg-elev-2); }
+.osn__person--me { outline: 1.5px solid var(--neon); background: color-mix(in srgb, var(--neon) 10%, var(--bg-elev-2)); }
+.osn__avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--neon-soft, var(--neon)); color: var(--on-neon, var(--bg)); font-size: .78rem; font-weight: 800; flex: none; }
+.osn__who { display: grid; min-width: 0; gap: 1px; }
+.osn__who strong { font-size: .93rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.osn__who em { color: var(--neon); font-style: normal; font-weight: 700; }
+.osn__who small { display: inline-flex; align-items: center; gap: 3px; color: var(--text-dim); font-size: .74rem; }
+.osn__hours { margin-inline-start: auto; color: var(--text-dim); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.osn__empty { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px; border-radius: 14px; background: var(--bg-elev-2); color: var(--text-dim); font-size: .86rem; line-height: 1.5; }
+
+@keyframes osn-pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .osn__dot--live { animation: none; } }
+
+/* The swipeable strip of one branch: previous shift, now, next shift (ShiftScroller.tsx). Each slide is most of the card's width,
+   so the neighbour peeks in from the side and says "there is more". */
+.shs { display: grid; gap: 8px; }
+.shs__strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; border-radius: 16px; }
+.shs__strip::-webkit-scrollbar { display: none; }
+.shs__strip:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+.shs__slide { flex: 0 0 88%; scroll-snap-align: center; scroll-snap-stop: always; display: grid; align-content: start; gap: 9px; min-width: 0; }
+.shs__slide:not(.shs__slide--now) { opacity: .78; }
+.shs__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.shs__head strong { font-size: .9rem; letter-spacing: -.02em; }
+.shs__when { color: var(--text-dim); font-size: .78rem; }
+.shs__live { margin-inline-start: auto; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--success, #3ddc84) 18%, transparent); color: var(--success, #3ddc84); font-size: .72rem; font-weight: 700; }
+.shs__nav { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.shs__arrow { display: grid; place-items: center; width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-elev-2); color: var(--text); cursor: pointer; }
+.shs__arrow:disabled { opacity: .35; cursor: default; }
+.shs__dots { display: flex; gap: 6px; }
+.shs__dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong, var(--line)); transition: width .2s ease, background .2s ease; }
+.shs__dots span.is-on { width: 18px; border-radius: 4px; background: var(--neon); }
+@media (prefers-reduced-motion: reduce) { .shs__dots span { transition: none; } }

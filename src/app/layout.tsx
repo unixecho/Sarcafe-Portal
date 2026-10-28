@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import PageTransitions from '@/components/PageTransitions'
 import StandaloneLaunchGuard from '@/components/StandaloneLaunchGuard'
 import IntroGate from '@/components/intro/IntroGate'
+import StaffAppIntro from '@/components/staff/StaffAppIntro'
 import PublicA11yWidget from '@/components/PublicA11yWidget'
 import SkipLink from '@/components/SkipLink'
 import './globals.css'
@@ -69,6 +70,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             for an owner who turned it off. It sits one notch under the a11y
             widget below (z-index), so it can never hide the way into it. */}
         <IntroGate />
+        {/* The staff app's own opening screen (the jokes while it "works out who you are"). Installed app only, once per
+            launch; in the root layout for the same reason as the intro above. components/staff/StaffAppIntro.tsx. */}
+        <StaffAppIntro />
         {/* The shared accessibility widget (github.com/unixecho/a11y-widget)
             — extracted 2026-09-24 from this file's own former in-house build
             (src/components/a11y, src/lib/a11y) once this copy had already

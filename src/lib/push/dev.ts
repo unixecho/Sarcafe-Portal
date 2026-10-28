@@ -23,7 +23,7 @@ export function isPushDeveloper(me: { badge?: string | null; email?: string | nu
 type Template = { kind: string; title: string; body: string; url: string }
 const TEMPLATES: Record<string, Template[]> = {
   schedule: [{ kind: 'schedule.published', title: 'הסידור פורסם (בדיקה)', body: 'הסידור לשבוע הקרוב פורסם. כדאי לבדוק את המשמרות שלך.', url: '/staff/schedule' }],
-  shift_eve: [{ kind: 'shift.eve', title: 'מחר יש לך משמרת (בדיקה)', body: 'מאור · 07:30–13:00', url: '/staff/schedule' }],
+  shift_eve: [{ kind: 'shift.eve', title: 'המשמרת הבאה שלך: מחר 07:30 (בדיקה)', body: 'מאור · 07:30–13:00', url: '/staff/schedule' }],
   shift_today: [{ kind: 'shift.today', title: 'היום יש לך משמרת (בדיקה)', body: 'מאור · 16:30–18:30', url: '/staff/schedule' }],
   checklist_soon: [{ kind: 'checklist.soon', title: 'המשמרת מתחילה בעוד כרבע שעה (בדיקה)', body: 'מחכה לך צ׳קליסט: החלפת משמרת + סגירה · מאור · 16:30', url: '/staff/checklists' }],
   requests_open: [{ kind: 'requests.open', title: 'בקשות לשבוע — אפשר להגיש (בדיקה)', body: 'שבוע 18/10–24/10. אפשר להגיש בקשות וזמינות עד יום שלישי 13/10.', url: '/staff/schedule' }],
@@ -39,7 +39,7 @@ const TEMPLATES: Record<string, Template[]> = {
   // More than three at once: the phone gets one summary instead of a burst.
   digest: [
     { kind: 'schedule.published', title: 'הסידור פורסם (בדיקה)', body: '', url: '/staff/schedule' },
-    { kind: 'shift.eve', title: 'מחר יש לך משמרת (בדיקה)', body: '', url: '/staff/schedule' },
+    { kind: 'shift.eve', title: 'המשמרת הבאה שלך: מחר 07:30 (בדיקה)', body: '', url: '/staff/schedule' },
     { kind: 'checklist.late', title: 'הצ׳קליסט עוד לא הוגש (בדיקה)', body: '', url: '/staff/checklists' },
     { kind: 'swap.open', title: 'דנה מוסר/ת משמרת (בדיקה)', body: '', url: '/staff/schedule' },
   ],

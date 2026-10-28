@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound } from 'lucide-react'
+import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound, UsersRound } from 'lucide-react'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
@@ -64,6 +64,12 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   return (
     <>
       <div className="app-welcome"><div><h2>שלום, <span className="app-welcome__name">{name}</span></h2><p>{date}</p></div></div>
+      {/* The main door (owner, 2026-10-28): who is on shift right now at each branch, and the whole schedule behind it. */}
+      <Link href={scheduleHref} className="app-main-link press">
+        <span className="app-main-link__icon"><UsersRound size={26} aria-hidden="true" /></span>
+        <span className="app-main-link__copy"><strong>מי במשמרת & משמרות</strong><small>מי עובד עכשיו בכל סניף, והלוח והאילוצים שלכם</small></span>
+        <ChevronLeft size={20} className="app-main-link__chevron" aria-hidden="true" />
+      </Link>
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
       {alerts}

@@ -4,8 +4,13 @@
 import type { WallClock } from '@/lib/shifts/types'
 
 // ---- Shift reminders (the person's own shifts) ----------------------------------------------
-/** "You work tomorrow" goes out the evening before, at this local hour. */
-export const SHIFT_EVE_HOUR = 19
+/** "Your next shift is…" goes out to everyone who has one, every day at this local hour, whatever time that shift is
+ *  (a 07:00 shift tomorrow, a 17:00 one tomorrow, a 20:00 one tonight, or one three days away). Owner, 2026-10-28. */
+export const NEXT_SHIFT_HOUR = 19
+/** A next-shift notice that missed its hour (the scheduler was down) is still sent this long after it, then dropped. */
+export const NEXT_SHIFT_WINDOW_MINUTES = 3 * 60
+/** How far ahead "next shift" looks: a person whose next published shift is further away than this hears nothing. */
+export const NEXT_SHIFT_LOOKAHEAD_DAYS = 8
 /** "You work today" goes out on the morning of the shift, at this local hour. */
 export const SHIFT_TODAY_HOUR = 7
 /** A reminder that missed its hour (the scheduler was down) is still sent this long after it, then dropped. */
@@ -67,19 +72,43 @@ export function isPreShift(shift: { date: string; startTime: string }, now: Wall
   return m > 0 && m <= PRE_SHIFT_MINUTES
 }
 
-/** Which of the two shift reminders (if any) is due for this shift right now.
- *  eve: from 19:00 the day before; today: from 07:00 on the day, until the shift is over. */
-export function shiftReminderPhase(shift: { date: string; startTime: string; endTime: string }, now: WallClock): 'eve' | 'today' | null {
-  const minuteOfDay = minutesOf(now.time)
-  if (shift.date === addIsoDays(now.date, 1)) {
-    const since = minuteOfDay - SHIFT_EVE_HOUR * 60
-    return since >= 0 && since < SHIFT_REMINDER_WINDOW_MINUTES ? 'eve' : null
-  }
-  if (shift.date === now.date) {
-    const since = minuteOfDay - SHIFT_TODAY_HOUR * 60
-    return since >= 0 && since < SHIFT_REMINDER_WINDOW_MINUTES && endAbs(shift) > nowAbs(now) ? 'today' : null
-  }
-  return null
+/** Is the shift's "you work today" reminder due right now: from 07:00 on the day, until the shift is over.
+ *  (The evening-before reminder is now the daily next-shift notice below, which is not tied to one shift.) */
+export function shiftReminderPhase(shift: { date: string; startTime: string; endTime: string }, now: WallClock): 'today' | null {
+  if (shift.date !== now.date) return null
+  const since = minutesOf(now.time) - SHIFT_TODAY_HOUR * 60
+  return since >= 0 && since < SHIFT_REMINDER_WINDOW_MINUTES && endAbs(shift) > nowAbs(now) ? 'today' : null
+}
+
+// ---- The daily "your next shift" notice (19:00) ---------------------------------------------------
+/** True from NEXT_SHIFT_HOUR until the window ends, on the branch's own clock. */
+export function nextShiftDue(now: WallClock): boolean {
+  const since = minutesOf(now.time) - NEXT_SHIFT_HOUR * 60
+  return since >= 0 && since < NEXT_SHIFT_WINDOW_MINUTES
+}
+
+export type UpcomingShift = { date: string; startTime: string; endTime: string; line: string }
+
+/** A person's next shift day: every shift that has not started yet, on the earliest date that has one. */
+export function nextShiftDay<T extends UpcomingShift>(shifts: T[], now: WallClock): { date: string; shifts: T[] } | null {
+  const ahead = shifts.filter((s) => startAbs(s) > nowAbs(now)).sort((a, b) => startAbs(a) - startAbs(b) || a.line.localeCompare(b.line))
+  if (ahead.length === 0) return null
+  const date = ahead[0]!.date
+  return { date, shifts: ahead.filter((s) => s.date === date) }
+}
+
+const WEEKDAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+/** "היום", "מחר", else "יום חמישי 29/10". */
+export function nextShiftWhen(date: string, now: WallClock): string {
+  const days = dayNumber(date) - dayNumber(now.date)
+  if (days === 0) return 'היום'
+  if (days === 1) return 'מחר'
+  return `יום ${WEEKDAY_NAMES[weekdayOf(date)]} ${Number(date.slice(8, 10))}/${Number(date.slice(5, 7))}`
+}
+
+/** "המשמרת הבאה שלך: מחר 07:00": the time is in the title so a lock screen already says it. */
+export function nextShiftTitle(day: { date: string; shifts: UpcomingShift[] }, now: WallClock): string {
+  return `המשמרת הבאה שלך: ${nextShiftWhen(day.date, now)} ${day.shifts[0]!.startTime.slice(0, 5)}`
 }
 
 /** True from ISSUES_DIGEST_HOUR until the window ends, on the branch's own clock. */

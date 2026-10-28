@@ -82,4 +82,14 @@
 
   document.addEventListener('contextmenu', (event) => event.preventDefault());
   document.addEventListener('dragstart', (event) => event.preventDefault());
+
+  // Credit (owner, 2026-10-28): the welcome screen says who made this and why. It is a caption under the footnote, NOT part of the
+  // privacy notice or the terms (those are versioned texts; this line is not one of them, so no version id moves with it).
+  const footnote = document.querySelector('.panel-welcome .welcome-footnote');
+  if (footnote && !footnote.querySelector('.welcome-credit')) {
+    const credit = document.createElement('span');
+    credit.className = 'welcome-credit';
+    credit.textContent = 'פרויקט שנוצר ביוזמת ג׳ון, אחד מעובדי הרשת, לטובת הרשת ובאישורה. המידע שמוסרים כאן ניתן מרצון ובהסכמה.';
+    footnote.appendChild(credit);
+  }
 })();

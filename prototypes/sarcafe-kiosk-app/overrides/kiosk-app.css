@@ -109,3 +109,7 @@ html[data-perf="lite"] .panel:not(.panel-welcome) { animation: panel-in-lite .35
   .error-layout h1 { font-size: clamp(2.2rem, 4vw, 3.6rem); }
   .idle-dialog { padding: 24px; }
 }
+
+/* credit line under the welcome footnote (kiosk-app.js): a second, smaller line, kept inside the frame and clear of the start button */
+.panel-welcome .welcome-footnote { bottom: 24px; line-height: 1.35; }
+.panel-welcome .welcome-credit { display: block; margin-top: 2px; font-size: .66rem; line-height: 1.35; color: rgba(255, 255, 255, .78); }

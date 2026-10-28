@@ -12,7 +12,8 @@ import 'server-only'
 // users of checklists and deserve the same nudge.
 //
 // What goes out, and when (all branch-local time; the pure timing lives in staff-rules.ts):
-//   shift.eve        19:00 the evening before a shift
+//   shift.eve        19:00 every day: "your next shift is <when> <start>", to everyone with a published shift ahead
+//                    (any hour: tomorrow morning, tomorrow evening, tonight, or days away). Not tied to one shift.
 //   shift.today      07:00 on the day of a shift
 //   checklist.soon   15 minutes before the shift starts, naming the checklists waiting for it
 //   checklist.late   the checklist is due (opening / arriving handover: 1 h after the shift starts;
@@ -39,10 +40,15 @@ import {
   isPreShift,
   issuesDigestDue,
   minutesPastDue,
+  nextShiftDay,
+  nextShiftDue,
+  nextShiftTitle,
+  NEXT_SHIFT_LOOKAHEAD_DAYS,
   OWNER_ESCALATION_MINUTES,
   REMINDER_WINDOW_MINUTES,
   requestsReminder,
   shiftReminderPhase,
+  type UpcomingShift,
 } from './staff-rules'
 
 type Service = ReturnType<typeof createServiceRoleClient>
@@ -95,12 +101,12 @@ async function publishedWeekIds(service: Service, weekIds: string[]): Promise<Se
   return new Set(((data ?? []) as Row[]).map((w) => w.id as string))
 }
 
-/** "You work tomorrow" (19:00 the evening before) and "you work today" (07:00) — published shifts only,
- *  the same ones the staff home shows. One alert per person per day, however many shifts they have. */
+/** "You work today" (07:00) — published shifts only, the same ones the staff home shows. One alert per person per day,
+ *  however many shifts they have. (The evening one is nextShiftNotices below.) */
 async function shiftReminders(service: Service, clocks: Map<string, BranchClock>, shifts: Row[]): Promise<number> {
   const due = shifts
     .map((s) => ({ s, phase: shiftReminderPhase({ date: s.shift_date as string, startTime: s.start_time as string, endTime: s.end_time as string }, clocks.get(s.branch_id as string)?.clock ?? { date: '', time: '00:00' }) }))
-    .filter((x): x is { s: Row; phase: 'eve' | 'today' } => x.phase !== null && clocks.has(x.s.branch_id as string))
+    .filter((x): x is { s: Row; phase: 'today' } => x.phase !== null && clocks.has(x.s.branch_id as string))
   if (due.length === 0) return 0
 
   const published = await publishedWeekIds(service, due.map((x) => x.s.week_id as string))
@@ -109,7 +115,7 @@ async function shiftReminders(service: Service, clocks: Map<string, BranchClock>
 
   const { data: assignments } = await service.from('shift_assignments').select('shift_id, staff_id').in('shift_id', live.map((x) => x.s.id as string)).not('staff_id', 'is', null)
   const byShift = new Map(live.map((x) => [x.s.id as string, x]))
-  const grouped = new Map<string, { staffId: string; branchId: string; phase: 'eve' | 'today'; date: string; lines: string[] }>()
+  const grouped = new Map<string, { staffId: string; branchId: string; phase: 'today'; date: string; lines: string[] }>()
   for (const a of (assignments ?? []) as Row[]) {
     const hit = byShift.get(a.shift_id as string)
     if (!hit) continue
@@ -125,12 +131,72 @@ async function shiftReminders(service: Service, clocks: Map<string, BranchClock>
   const rows: NewRow[] = [...grouped.values()].map((g) => ({
     branch_id: g.branchId,
     staff_id: g.staffId,
-    kind: g.phase === 'eve' ? 'shift.eve' : 'shift.today',
-    title: g.phase === 'eve' ? 'מחר יש לך משמרת' : 'היום יש לך משמרת',
+    kind: 'shift.today',
+    title: 'היום יש לך משמרת',
     body: g.lines.join('\n'),
     link: { url: '/staff/schedule' },
     dedupe_key: `shift-${g.phase}:${g.date}`,
   }))
+  return insertReminders(service, rows)
+}
+
+/** The daily "your next shift is…" at 19:00 (owner, 2026-10-28): to EVERYONE who has a published shift coming up, whatever
+ *  its hour, so tomorrow-morning, tomorrow-evening, tonight and "nothing tomorrow, Thursday" are all told. The title carries
+ *  the day and start (the lock screen already says it); the body lists every shift of that day. One per person per day
+ *  (kind shift.eve, kept so the audience / link rules and the developer test tools still apply). Published weeks only;
+ *  nothing is sent to someone with no published shift in the next NEXT_SHIFT_LOOKAHEAD_DAYS days. */
+export async function nextShiftNotices(service: Service, clocks: Map<string, BranchClock>): Promise<number> {
+  const dueBranches = [...clocks.entries()].filter(([, b]) => nextShiftDue(b.clock))
+  if (dueBranches.length === 0) return 0
+  const now = dueBranches[0]![1].clock
+  const { data } = await service
+    .from('shifts')
+    .select('id, week_id, branch_id, shift_date, start_time, end_time')
+    .in('branch_id', dueBranches.map(([id]) => id))
+    .gte('shift_date', now.date)
+    .lte('shift_date', addIsoDays(now.date, NEXT_SHIFT_LOOKAHEAD_DAYS))
+  const shifts = (data ?? []) as Row[]
+  if (shifts.length === 0) return 0
+  const published = await publishedWeekIds(service, shifts.map((s) => s.week_id as string))
+  const live = shifts.filter((s) => published.has(s.week_id as string))
+  if (live.length === 0) return 0
+
+  const { data: assignments } = await service.from('shift_assignments').select('shift_id, staff_id').in('shift_id', live.map((s) => s.id as string)).not('staff_id', 'is', null)
+  const staffIds = [...new Set(((assignments ?? []) as Row[]).map((a) => a.staff_id as string))]
+  if (staffIds.length === 0) return 0
+  const { data: active } = await service.from('staff').select('id').in('id', staffIds).eq('active', true)
+  const activeIds = new Set(((active ?? []) as Row[]).map((s) => s.id as string))
+
+  const byShift = new Map(live.map((s) => [s.id as string, s]))
+  type Mine = UpcomingShift & { branchId: string }
+  const perStaff = new Map<string, Mine[]>()
+  for (const a of (assignments ?? []) as Row[]) {
+    const staffId = a.staff_id as string
+    const s = byShift.get(a.shift_id as string)
+    if (!s || !activeIds.has(staffId)) continue
+    const branchId = s.branch_id as string
+    const startTime = s.start_time as string
+    const endTime = s.end_time as string
+    const line = `${clocks.get(branchId)?.name ? `${clocks.get(branchId)!.name} · ` : ''}${range(startTime, endTime)}`
+    const list = perStaff.get(staffId) ?? []
+    if (!list.some((x) => x.date === s.shift_date && x.startTime === startTime && x.line === line)) list.push({ date: s.shift_date as string, startTime, endTime, line, branchId })
+    perStaff.set(staffId, list)
+  }
+
+  const rows: NewRow[] = []
+  for (const [staffId, list] of perStaff) {
+    const day = nextShiftDay(list, now)
+    if (!day) continue
+    rows.push({
+      branch_id: day.shifts[0]!.branchId,
+      staff_id: staffId,
+      kind: 'shift.eve',
+      title: nextShiftTitle(day, now),
+      body: day.shifts.map((s) => s.line).join('\n'),
+      link: { url: '/staff/schedule' },
+      dedupe_key: `shift-next:${now.date}`,
+    })
+  }
   return insertReminders(service, rows)
 }
 
@@ -400,7 +466,7 @@ export async function createStaffReminders(service: Service = createServiceRoleC
   const shifts = await nearbyShifts(service)
   const failed = <T,>(what: string, fallback: T) => (err: unknown) => (console.error(`${what} reminders failed:`, err instanceof Error ? err.message : err), fallback)
   const [shiftCount, checklist, requests, issues] = await Promise.all([
-    shiftReminders(service, clocks, shifts).catch(failed('shift', 0)),
+    Promise.all([shiftReminders(service, clocks, shifts), nextShiftNotices(service, clocks)]).then(([today, next]) => today + next).catch(failed('shift', 0)),
     checklistReminders(service, clocks, shifts).catch(failed('checklist', { soon: 0, staff: 0, owners: 0 })),
     requestReminders(service, clocks).catch(failed('request', 0)),
     issuesDigest(service, clocks).catch(failed('issues digest', 0)),

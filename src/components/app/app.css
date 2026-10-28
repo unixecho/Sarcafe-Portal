@@ -391,3 +391,24 @@
   @keyframes spot-breathe { 0%, 100% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--neon) 30%, transparent); } 50% { box-shadow: 0 0 0 11px color-mix(in srgb, var(--neon) 8%, transparent); } }
   .spot-target { animation: spot-breathe 1.3s ease-in-out infinite; }
 }
+
+/* The staff home's main door: "who is on shift & shifts" (EmployeeDashboardView). Filled with the person's accent so it is the first thing to tap. */
+.app-main-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 84px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  background: var(--neon);
+  color: var(--on-neon, var(--bg));
+  text-decoration: none;
+  box-shadow: 0 10px 28px -14px var(--neon);
+}
+.app-main-link__icon { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 17px; background: color-mix(in srgb, var(--on-neon, var(--bg)) 14%, transparent); flex: none; }
+.app-main-link__copy { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.app-main-link__copy strong { font-size: 1.12rem; font-weight: 800; letter-spacing: -.03em; }
+.app-main-link__copy small { font-size: .8rem; line-height: 1.45; opacity: .82; }
+.app-main-link__chevron { flex: none; opacity: .8; }
+.app-main-link:focus-visible { outline: 3px solid var(--text, #fff); outline-offset: 3px; }

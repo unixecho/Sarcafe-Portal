@@ -1754,3 +1754,10 @@ details[open] > summary .sch-disclosure-chevron { transform: rotate(180deg); }
 .sch-chip:disabled { opacity: 0.45; cursor: not-allowed; }
 .sch-usage { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .sch-usage--over { color: var(--warn, #fbbf24); }
+
+/* Constraints form: the hours of each branch the person works at (TimeOffPortal.tsx BranchHours), and the "not your branch" notice. */
+.sch-hours { display: grid; gap: 10px; }
+.sch-hours__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 9px 11px; border-radius: 13px; background: var(--bg-elev-2); }
+.sch-hours__row strong { flex: 1 1 100%; font-size: .92rem; }
+.sch-hours__part { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.sch-hours__switch { display: grid; gap: 8px; margin-top: 10px; }

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarOff, CheckCircle2, Clock3, MessageSquareText, Sunrise, Sunset, XCircle } from 'lucide-react'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
+import { useConstraintScope } from '@/components/shifts/ConstraintScope'
 import { InlineError, Pill } from '@/components/shifts/ui'
+import type { ConstraintBranch } from '@/lib/shifts/constraint-branches'
 import { blocksLeftText, canAdd, chooseKind, countWanted, daysOffLeftText, leftOf, limitsOf, type Wanted } from '@/lib/shifts/constraints'
 import { formatDateLabel, requestsOpen, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import { isLiveTimeOff, TIME_OFF_KINDS } from '@/lib/shifts/time-off'
@@ -27,6 +29,33 @@ function wantedFrom(entries: TimeOffEntry[], dates: string[]): Wanted {
   return out
 }
 
+// What "morning" and "evening" mean at each branch the person works at. Someone at two branches sends their constraints ONCE (a wish
+// belongs to the person, and an approved day off blocks every branch), so the hours of both are shown here, side by side.
+function BranchHours({ branches }: { branches: ConstraintBranch[] }) {
+  if (!branches.length) return null
+  const several = branches.length > 1
+  // The database counts a shift that ends after 13:00 as an evening shift too (sched_shift_periods), so "cannot do the evening" also
+  // covers it. A shift in both lists would look like a mistake, so the rule is said once, right under the hours.
+  const both = branches.some((branch) => branch.morning.some((range) => branch.evening.includes(range)))
+  return (
+    <div className="sch-card sch-hours" role="group" aria-label="שעות המשמרות בכל סניף">
+      <p className="sch-sub">
+        {several
+          ? `אתם עובדים ב${branches.length === 2 ? 'שני הסניפים' : 'כמה סניפים'}, לכן האילוצים נשלחים פעם אחת וחלים על כולם. כך נראות המשמרות בכל סניף:`
+          : `המשמרות בסניף ${branches[0]!.name}:`}
+      </p>
+      {branches.map((branch) => (
+        <div key={branch.slug} className="sch-hours__row">
+          <strong>{branch.name}</strong>
+          <span className="sch-hours__part"><Sunrise size={13} aria-hidden="true" /> בוקר <bdi className="ltr-isolate">{branch.morning.join(' · ') || '—'}</bdi></span>
+          <span className="sch-hours__part"><Sunset size={13} aria-hidden="true" /> ערב <bdi className="ltr-isolate">{branch.evening.join(' · ') || '—'}</bdi></span>
+        </div>
+      ))}
+      {both && <p className="sch-sub sch-faint">משמרת שנגמרת אחרי 13:00 נחשבת גם משמרת ערב, ולכן „לא יכול/ה ערב” חל גם עליה.</p>}
+    </div>
+  )
+}
+
 const sameWanted = (a: Wanted, b: Wanted) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort())
 
 // "מה לא מתאים לי השבוע?" — the employee's constraints for one week (אילוצים). Per day: cannot do the morning shift,
@@ -36,6 +65,7 @@ const sameWanted = (a: Wanted, b: Wanted) => JSON.stringify(Object.entries(a).so
 // for the manager travels with it. Days that already started cannot be changed.
 export default function TimeOffPortal({ target }: { target: string }) {
   const { db, dispatch } = useShifts()
+  const scope = useConstraintScope()
   const dates = useMemo(() => weekDates(target), [target])
   const mine = useMemo(() => (db ? db.timeOff.filter((entry) => entry.staffId === db.viewerStaffId) : []), [db])
   const saved = useMemo(() => wantedFrom(mine, dates), [mine, dates])
@@ -57,6 +87,27 @@ export default function TimeOffPortal({ target }: { target: string }) {
   useEffect(() => { setNote(savedNote) }, [target, savedNote])
 
   if (!db) return null
+  // Constraints go to the branch(es) the person works at (owner, 2026-10-28). Looking at another branch's schedule is allowed,
+  // but the form is not offered there: the server would refuse it, so the screen says so and offers the way to their own branch.
+  if (scope && !scope.branches.some((branch) => branch.slug === scope.current)) {
+    return (
+      <section className="sch-wrap" aria-label="אילוצים לשבוע">
+        <div className="sch-row"><CalendarOff size={19} aria-hidden="true" /><h3 className="sch-h">אילוצים</h3></div>
+        <div className="sch-card sch-closedcard" role="status">
+          {scope.branches.length === 0
+            ? <p className="sch-sub">אתם לא משובצים כרגע באף סניף, ולכן אי אפשר לשלוח אילוצים. לשינוי פנו למנהל/ת.</p>
+            : <>
+                <p className="sch-sub">אילוצים נשלחים רק לסניף שבו אתם עובדים. את הסניף הזה אפשר לראות, אבל לא להגיש לו.</p>
+                <div className="sch-hours__switch">
+                  {scope.branches.map((branch) => (
+                    <button key={branch.slug} type="button" className="sch-btn sch-btn--primary press" onClick={() => scope.switchTo(branch.slug)}>לאילוצים של {branch.name}</button>
+                  ))}
+                </div>
+              </>}
+        </div>
+      </section>
+    )
+  }
   const today = db.now.date
   const limits = limitsOf(db.settings.features)
   const counts = countWanted(wanted)
@@ -108,6 +159,8 @@ export default function TimeOffPortal({ target }: { target: string }) {
         בכל יום בוחרים אחד: <strong>לא יכול/ה משמרת בוקר</strong>, <strong>לא יכול/ה משמרת ערב</strong> או <strong>יום חופש כל היום</strong>.
         יום חופש מחכה לאישור המנהל/ת, ואחרי שאושר לא משבצים אתכם באף סניף באותו יום. חסימת בוקר או ערב המנהל/ת רואים בזמן בניית הסידור.
       </p>
+
+      {scope && <BranchHours branches={scope.branches} />}
 
       <div className="sch-limit-bar" role="status" aria-live="polite">
         <span className={`sch-limit-chip${left.daysOff === 0 ? ' sch-limit-chip--used' : ''}`}><CalendarOff size={14} aria-hidden="true" />{daysOffLeftText(left.daysOff)} <small>({counts.daysOff}/{limits.maxDaysOff})</small></span>

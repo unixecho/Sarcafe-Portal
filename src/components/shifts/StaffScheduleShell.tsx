@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import ShiftsProvider from '@/components/shifts/ShiftsProvider'
 import StaffWorkspace from '@/components/shifts/StaffWorkspace'
+import { ConstraintScopeProvider } from '@/components/shifts/ConstraintScope'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import { setCurrentBranchCookie } from '@/lib/branches/current'
 import type { ScheduleEntry } from '@/lib/shifts/entry'
+import type { ConstraintBranch } from '@/lib/shifts/constraint-branches'
 
-export default function StaffScheduleShell({ branches, initialBranch, entry = {} }: { branches: Branch[]; initialBranch: BranchSlug; entry?: ScheduleEntry }) {
+export default function StaffScheduleShell({ branches, initialBranch, entry = {}, constraintBranches = null }: { branches: Branch[]; initialBranch: BranchSlug; entry?: ScheduleEntry; constraintBranches?: ConstraintBranch[] | null }) {
   const [branch, setBranch] = useState<BranchSlug>(initialBranch)
 
   function selectBranch(next: BranchSlug) {
@@ -28,7 +30,9 @@ export default function StaffScheduleShell({ branches, initialBranch, entry = {}
       )}
       {branch && (
         <ShiftsProvider key={branch} branchSlug={branch} initialWeekStart={entry.week}>
-          <StaffWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} initialTab={entry.tab} />
+          <ConstraintScopeProvider value={constraintBranches ? { branches: constraintBranches, current: branch, switchTo: selectBranch } : null}>
+            <StaffWorkspace branchName={branches.find((b) => b.slug === branch)?.name.he ?? branch} initialTab={entry.tab} />
+          </ConstraintScopeProvider>
         </ShiftsProvider>
       )}
     </div>

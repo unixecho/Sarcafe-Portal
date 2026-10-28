@@ -1,0 +1,73 @@
+/* The staff app's opening screen (StaffAppIntro.tsx). Colours come from the person's look (the tokens ThemeScope mirrors onto <html>),
+   so it matches whatever theme the app opens in; the fallbacks are the neon look. */
+.sai {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  display: none;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  background: var(--bg, #0d0d0d);
+  color: var(--text, #f4f1ea);
+  text-align: center;
+  direction: rtl;
+  opacity: 1;
+  transition: opacity 380ms ease;
+  /* If script never takes over, the screen removes itself after 7 s rather than trap the app behind it. */
+  animation: sai-failsafe 10ms linear 7s forwards;
+}
+@media (display-mode: standalone) { .sai[data-armed] { display: grid; } }
+.sai[data-live] { display: grid; }
+html[data-sai-played] .sai:not([data-live]) { display: none; }
+.sai[data-out] { opacity: 0; pointer-events: none; }
+
+.sai__stage { display: grid; justify-items: center; gap: 22px; width: min(420px, 100%); }
+/* The logo is dark artwork on a transparent background: it needs its own light tile (the same small white square the kiosk uses)
+   or it sinks into the dark screen. */
+.sai__logo { box-sizing: border-box; width: 96px; height: 96px; padding: 10px; object-fit: contain; border-radius: 24px; background: #fff; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .6); animation: sai-pop 620ms cubic-bezier(.2, .9, .25, 1.15) both; }
+.sai__line {
+  display: grid;
+  place-items: center;
+  min-height: 3.6em;
+  margin: 0;
+  font-size: clamp(1.15rem, 5.2vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+  animation: sai-line 440ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.sai__line--question { color: var(--warn, #ffb347); }
+.sai__line--greeting { color: var(--neon, #6ee7a8); }
+
+.sai__bar { width: min(220px, 60%); height: 4px; overflow: hidden; border-radius: 4px; background: var(--line, rgba(255, 255, 255, .14)); }
+.sai__bar span { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--neon, #6ee7a8); transform-origin: right center; transform: scaleX(0); }
+.sai[data-live] .sai__bar span { animation: sai-bar var(--sai-total, 3520ms) linear forwards; }
+
+.sai__skip {
+  position: absolute;
+  inset-block-end: max(22px, env(safe-area-inset-bottom));
+  inset-inline: 0;
+  margin-inline: auto;
+  width: max-content;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 1px solid var(--line, rgba(255, 255, 255, .18));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim, rgba(244, 241, 234, .7));
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+
+@keyframes sai-pop { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+@keyframes sai-line { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes sai-bar { to { transform: scaleX(1); } }
+@keyframes sai-failsafe { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sai { transition: none; }
+  .sai__logo, .sai__line { animation: none; }
+  .sai[data-live] .sai__bar span { animation: none; transform: scaleX(1); }
+}
