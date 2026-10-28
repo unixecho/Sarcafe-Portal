@@ -46,3 +46,9 @@
 .shs__dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong, var(--line)); transition: width .2s ease, background .2s ease; }
 .shs__dots span.is-on { width: 18px; border-radius: 4px; background: var(--neon); }
 @media (prefers-reduced-motion: reduce) { .shs__dots span { transition: none; } }
+
+/* The live slide is the one that stands out: full strength, an accent edge and a pulsing dot; the others are quieter. */
+.shs__slide--now { padding: 10px; margin-block: -2px; border: 1.5px solid color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--success, #3ddc84) 6%, transparent); }
+.shs__pulse { display: inline-block; width: 8px; height: 8px; margin-inline-end: 7px; border-radius: 50%; background: var(--success, #3ddc84); animation: osn-pulse 2.2s ease-out infinite; }
+.shs__slide:not(.shs__slide--now) { opacity: .6; }
+@media (prefers-reduced-motion: reduce) { .shs__pulse { animation: none; } }

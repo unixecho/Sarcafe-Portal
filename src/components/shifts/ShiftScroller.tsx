@@ -30,25 +30,32 @@ export default function ShiftScroller({ slots, viewerId, branchName }: { slots: 
     return best
   }
 
+  const touched = useRef(false)
+
+  // scrollIntoView (inline: center) is the browser's own right-to-left-aware centring; block: 'nearest' keeps the page still.
   function goTo(index: number, smooth: boolean) {
-    const box = strip.current
-    const slide = box?.children[index] as HTMLElement | undefined
-    if (!box || !slide) return
-    const b = box.getBoundingClientRect()
-    const s = slide.getBoundingClientRect()
-    box.scrollBy({ left: s.left + s.width / 2 - (b.left + b.width / 2), behavior: smooth ? 'smooth' : 'auto' })
+    const slide = strip.current?.children[index] as HTMLElement | undefined
+    slide?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
   }
 
-  // Start on "now" without moving the page: only this strip scrolls.
-  useEffect(() => { goTo(Math.max(0, slots.findIndex((slot) => slot.kind === 'now')), false) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // The LIVE shift is what the strip opens on and stays on: centred after layout (twice, fonts and the phone's own layout can
+  // shift widths), and again whenever the people on shift now change (a refresh, a shift starting), unless the reader has swiped.
+  const nowIndex = Math.max(0, slots.findIndex((slot) => slot.kind === 'now'))
+  const liveKey = slots[nowIndex]?.people.map((p) => p.key).join(',') ?? ''
+  useEffect(() => {
+    if (touched.current) return
+    const a = requestAnimationFrame(() => goTo(nowIndex, false))
+    const b = window.setTimeout(() => goTo(nowIndex, false), 250)
+    return () => { cancelAnimationFrame(a); window.clearTimeout(b) }
+  }, [nowIndex, liveKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="shs">
-      <div ref={strip} className="shs__strip" role="group" aria-label={`המשמרות בסניף ${branchName}: הקודמת, הנוכחית והבאה`} tabIndex={0} onScroll={() => setActive(nearest())}>
+      <div ref={strip} className="shs__strip" role="group" aria-label={`המשמרות בסניף ${branchName}: הקודמת, הנוכחית והבאה`} tabIndex={0} onScroll={() => setActive(nearest())} onPointerDown={() => { touched.current = true }} onWheel={() => { touched.current = true }}>
         {slots.map((slot) => (
           <section key={slot.kind} className={`shs__slide shs__slide--${slot.kind}`} aria-label={TITLE[slot.kind]}>
             <header className="shs__head">
-              <strong>{TITLE[slot.kind]}</strong>
+              <strong>{slot.kind === 'now' && slot.people.length > 0 && <i className="shs__pulse" aria-hidden="true" />}{TITLE[slot.kind]}</strong>
               {slot.hours && <span className="shs__when">{slot.when} <bdi className="ltr-isolate">{slot.hours}</bdi></span>}
             </header>
             {slot.people.length > 0 ? (
