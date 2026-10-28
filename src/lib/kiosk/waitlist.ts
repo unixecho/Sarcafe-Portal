@@ -6,9 +6,9 @@ import { z } from 'zod'
 // versions below name that exact wording, are stored with every sign-up, and the server accepts ONLY the current
 // ones, so a stale or hand-made form cannot record consent to text that is not the text on screen.
 
-export const KIOSK_PRIVACY_VERSION = 'kiosk-privacy-he-v3-2026-10-28'
-export const KIOSK_CONSENT_VERSION = 'kiosk-consent-he-v3-2026-10-28'
-export const KIOSK_TERMS_VERSION = 'kiosk-terms-he-v2-2026-10-28'
+export const KIOSK_PRIVACY_VERSION = 'kiosk-privacy-he-v4-2026-10-28'
+export const KIOSK_CONSENT_VERSION = 'kiosk-consent-he-v4-2026-10-28'
+export const KIOSK_TERMS_VERSION = 'kiosk-terms-he-v3-2026-10-28'
 
 /** The longest body the endpoint reads. The form is a name, a phone and an e-mail; anything bigger is not from the kiosk. */
 export const MAX_BODY_BYTES = 4096

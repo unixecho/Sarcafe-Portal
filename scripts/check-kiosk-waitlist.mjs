@@ -62,6 +62,12 @@ check('answers are generic: no error object or contact field is echoed', !/error
 check('an already-registered number is answered 409 and the kiosk says so', /already_registered/.test(route) && /409/.test(route) && /res.status === 409/.test(read('prototypes/sarcafe-kiosk-app/overrides/kiosk-signup.js')))
 check('the register function refuses a known number and writes nothing (migration 20261028150000)', /already_registered/.test(read('supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql')) && !/update public.customer_waitlist_contacts/.test(read('supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql').split('create or replace function public.customer_waitlist_register')[1]))
 
+{ // the business is שרקפה (Hebrew) and Sarcafe (English); the misspelling must never come back in what this feature ships
+  const wrong = 'ס' + 'רקפה'
+  const files = ['supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql', 'prototypes/sarcafe-kiosk-app/overrides/kiosk-legal.js', 'prototypes/sarcafe-kiosk-app/overrides/kiosk-signup.js', 'src/lib/kiosk/waitlist.ts', 'src/components/WaitlistInbox.tsx', 'docs/SARCAFE_KIOSK_LEGAL_NOTES.md']
+  check('the business name is spelled שרקפה everywhere this feature writes it', files.every((f) => !read(f).includes(wrong)) && /במועדון שרקפה/.test(read('supabase/migrations/20261028150000_customer_waitlist_no_repeat.sql')))
+}
+
 section('who is told, who can see')
 const sql = read('supabase/migrations/20261027150000_customer_waitlist.sql')
 check('every sign-up writes an owner row (club.signup) and a developer row (dev.club_signup)', /'club\.signup'/.test(sql) && /'dev\.club_signup'/.test(sql))

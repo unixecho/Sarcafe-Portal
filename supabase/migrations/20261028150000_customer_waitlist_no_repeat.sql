@@ -32,7 +32,7 @@ declare
   v_marketing boolean := coalesce(p_marketing, false);
   v_contact   public.customer_waitlist_contacts%rowtype;
   v_recipient record;
-  v_title     text := '☕ התעניינות חדשה במועדון סרקפה';
+  v_title     text := '☕ התעניינות חדשה במועדון שרקפה';
 begin
   if p_key_hash is null or char_length(p_key_hash) not between 16 and 128 then
     return jsonb_build_object('ok', false, 'error', 'bad_request');

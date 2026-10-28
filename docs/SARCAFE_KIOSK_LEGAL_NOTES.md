@@ -18,7 +18,7 @@ This extends `docs/SARCAFE_KIOSK_CONSENT_DRAFT_HE.md` (the 2026-10-26 draft and 
 | On the tablet | Nothing is stored. A failed sign-up is not queued. The form lives in memory and is wiped by the idle timer. No cookies or analytics. |
 | Where it goes | `POST /api/kiosk/waitlist` on the portal → one database transaction → tables `customer_waitlist_contacts` and `customer_waitlist_consent_events` (Supabase, region eu-central-1 per the handoff). No browser role can read them. |
 | Who sees it | Full owners only, on `/owner/waitlist` (list, export, withdraw/grant marketing, erase). Developers have technical access to the database in their role; they are notified of each sign-up **without** the details. |
-| Notifications | Each sign-up writes one in-app/push notification per active owner (`club.signup`) and per developer (`dev.club_signup`): "☕ התעניינות חדשה במועדון סרקפה", no personal data, link to the owner page. |
+| Notifications | Each sign-up writes one in-app/push notification per active owner (`club.signup`) and per developer (`dev.club_signup`): "☕ התעניינות חדשה במועדון שרקפה", no personal data, link to the owner page. |
 | Marketing | Separate, optional, never pre-ticked. A new yes is its own dated event. An unticked box on a repeat never withdraws an earlier yes; withdrawal is an explicit owner action (or the person's request). |
 | Erasure | The owner can erase a person; a minimal `contact_deleted` event with no link to the person remains. |
 
@@ -50,9 +50,9 @@ it is an advertisement, who sent it, and carry a one-step opt-out; build the opt
 
 The ids in `kiosk-legal.js` and in `src/lib/kiosk/waitlist.ts` must match; the server accepts only the current ones and stores them with every sign-up:
 
-- privacy `kiosk-privacy-he-v3-2026-10-28`
-- consent wording `kiosk-consent-he-v3-2026-10-28`
-- terms `kiosk-terms-he-v2-2026-10-28`
+- privacy `kiosk-privacy-he-v4-2026-10-28`
+- consent wording `kiosk-consent-he-v4-2026-10-28`
+- terms `kiosk-terms-he-v3-2026-10-28`
 
 Change all of them together whenever any wording changes (`npm run check:kiosk-waitlist` fails if they drift apart).
 
