@@ -12,9 +12,9 @@
  */
 (() => {
   const VERSIONS = {
-    privacy: 'kiosk-privacy-he-v4-2026-10-28',
-    consent: 'kiosk-consent-he-v4-2026-10-28',
-    terms: 'kiosk-terms-he-v3-2026-10-28',
+    privacy: 'kiosk-privacy-he-v5-2026-10-28',
+    consent: 'kiosk-consent-he-v5-2026-10-28',
+    terms: 'kiosk-terms-he-v4-2026-10-28',
   };
   window.SARCAFE_LEGAL_VERSIONS = VERSIONS;
 
@@ -26,7 +26,7 @@
   const need = (value, label) => { if (value) return esc(value); missing += 1; return fill(label); };
 
   const owner = [val('ownerFirstName'), val('ownerLastName')].filter(Boolean).join(' ');
-  const LEGAL_NAME = `${need(val('businessName'), 'שם העסק')}, ח.פ. <bdi dir="ltr">${need(val('companyId'), 'מספר ח.פ.')}</bdi>`;
+  const LEGAL_NAME = need(val('businessName'), 'שם העסק');
   const OWNER = need(owner, 'שם פרטי ושם משפחה של האחראי/ת');
   const phone = val('phone');
   const CONTACT = `בטלפון <bdi dir="ltr">${need(phone, 'מספר טלפון')}</bdi>${val('email') ? `, בדוא״ל <bdi dir="ltr">${esc(val('email'))}</bdi>` : ''}${val('address') ? `, או בדואר אל ${esc(val('address'))}` : ''}`;

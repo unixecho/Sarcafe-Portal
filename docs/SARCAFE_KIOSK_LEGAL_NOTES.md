@@ -33,7 +33,7 @@ This extends `docs/SARCAFE_KIOSK_CONSENT_DRAFT_HE.md` (the 2026-10-26 draft and 
 
 ## 3. What the owner supplies: `overrides/kiosk-business.js`
 
-Owner's first and last name, the business name, the ח.פ. and a phone number (optionally e-mail and address). Until filled they show
+Filled 2026-10-28: owner שרי איסרליס, business שרקפה (Sarcafe), phone for privacy requests; no company number is shown (the owner's choice). A value left empty shows
 as yellow `[brackets]` and the privacy screen warns. After filling: run `build.ps1`, install the app, and (because the notice text
 changed) change the three version ids below together.
 
@@ -50,9 +50,9 @@ it is an advertisement, who sent it, and carry a one-step opt-out; build the opt
 
 The ids in `kiosk-legal.js` and in `src/lib/kiosk/waitlist.ts` must match; the server accepts only the current ones and stores them with every sign-up:
 
-- privacy `kiosk-privacy-he-v4-2026-10-28`
-- consent wording `kiosk-consent-he-v4-2026-10-28`
-- terms `kiosk-terms-he-v3-2026-10-28`
+- privacy `kiosk-privacy-he-v5-2026-10-28`
+- consent wording `kiosk-consent-he-v5-2026-10-28`
+- terms `kiosk-terms-he-v4-2026-10-28`
 
 Change all of them together whenever any wording changes (`npm run check:kiosk-waitlist` fails if they drift apart).
 

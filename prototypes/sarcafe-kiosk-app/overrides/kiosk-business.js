@@ -1,21 +1,21 @@
 /*
- * The business behind the kiosk: the facts the privacy notice and the terms must state (who holds the data, and how to
- * reach them). Fill the quoted values below, rebuild the app (build.ps1) and install it. Until a value is filled, the
- * notice shows it as a highlighted [bracket] and the sign-up screen warns, so a notice that does not say who is
- * responsible is never mistaken for a finished one.
+ * The business behind the kiosk: the facts the privacy notice and the terms state (who holds the data, and how to reach
+ * them). To change one, edit the value below, run build.ps1, install the app, and change the three version ids in
+ * kiosk-legal.js and src/lib/kiosk/waitlist.ts together (the notice text changed). A value left empty shows in the
+ * notice as a highlighted [bracket] and the privacy screen warns.
  *
  *   ownerFirstName / ownerLastName   the person responsible for the database
- *   businessName                     the name of the business as registered (e.g. the legal name behind "Sarcafe")
- *   companyId                        the company / authorised-dealer number (ח.פ. / ע.מ.)
+ *   businessName                     the business, as the notice names it
  *   phone                            the number people call for privacy requests (access, correction, deletion, opt-out)
  *   email, address                   optional, shown when filled
+ *
+ * No company / VAT number is shown: the owner chose not to present one.
  */
 window.SARCAFE_BUSINESS = {
-  ownerFirstName: '',
-  ownerLastName: '',
-  businessName: '',
-  companyId: '',
-  phone: '',
+  ownerFirstName: 'שרי',
+  ownerLastName: 'איסרליס',
+  businessName: 'שרקפה (Sarcafe)',
+  phone: '0507437395',
   email: '',
   address: '',
 };
