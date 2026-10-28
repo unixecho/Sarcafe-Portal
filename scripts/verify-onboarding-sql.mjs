@@ -31,7 +31,8 @@ check('all migrations apply in order', true)
 // locked everyone out. sched_save_shift is the one deliberate pair: its new overload adds
 // p_requests_open, so the names tell PostgREST which to call. Anything new needs a new name.
 const overloaded = (await db.query(`select proname, count(*)::int n from pg_proc p where pronamespace='public'::regnamespace and prokind='f' and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e') group by proname having count(*)>1`)).rows.map((r) => r.proname)
-check('no function name has two signatures (except sched_save_shift)', JSON.stringify(overloaded.filter((name) => name !== 'sched_save_shift')) === '[]')
+check('no function name has two signatures (no exceptions)', JSON.stringify(overloaded) === '[]')
+check('sched_save_shift has exactly one public signature, and the core is not callable by service_role', JSON.stringify((await db.query("select p.oid::regprocedure::text sig from pg_proc p where p.proname='sched_save_shift' and p.pronamespace='public'::regnamespace")).rows.length) === '1' && !(await one("select has_function_privilege('service_role','public.internal_sched_save_shift_core(uuid,uuid,uuid,date,text,text,text,text,jsonb,text,jsonb,text)','execute') a")).a)
 check('pos_verify_pin has exactly one signature (text, text)', JSON.stringify((await db.query(`select p.oid::regprocedure::text sig from pg_proc p where p.proname='pos_verify_pin' and p.pronamespace='public'::regnamespace`)).rows.map((r) => r.sig)) === '["pos_verify_pin(text,text)"]')
 const branch = (await one(`select id from public.branches where slug='givat-haviva'`)).id
 const owner = (await one(`insert into public.staff(first_name,last_name,role,badge,branch_id) values('Owner','Fixture','owner','owner',$1) returning id`, [branch])).id

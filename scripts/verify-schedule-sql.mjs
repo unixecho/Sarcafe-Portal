@@ -172,10 +172,15 @@ const wMaor = await weekOf(maor, W)
 const wGhav = await weekOf(ghav, W)
 const wPast = await weekOf(maor, WPAST)
 
-const save = (actor, week, over = {}) => rpc('sched_save_shift', {
-  p_actor: actor.id, p_week_id: week, p_shift_id: null, p_date: day(1), p_start: '07:00', p_end: '13:00',
-  p_preset_id: null, p_station_id: null, p_requirements: '[]', p_note: null, p_assignees: '[]', p_expected_updated: null, ...over,
-})
+// Before migration 20261009120000 there is only the 12-argument save; from then on the public one takes p_requests_open
+// (and, since 20261028120000, the 12-argument original is internal). The helper sends the flag exactly when the function takes it.
+const save = async (actor, week, over = {}) => {
+  const takesFlag = (await one("select to_regprocedure('public.sched_save_shift(uuid,uuid,uuid,date,text,text,text,text,jsonb,boolean,text,jsonb,text)') is not null t")).t
+  return rpc('sched_save_shift', {
+    p_actor: actor.id, p_week_id: week, p_shift_id: null, p_date: day(1), p_start: '07:00', p_end: '13:00',
+    p_preset_id: null, p_station_id: null, p_requirements: '[]', ...(takesFlag ? { p_requests_open: false } : {}), p_note: null, p_assignees: '[]', p_expected_updated: null, ...over,
+  })
+}
 const asg = (staffId, roleId = 'barista', assignmentId = null) => ({ staffId, roleId, ...(assignmentId ? { assignmentId } : {}) })
 const shiftRow = (id) => one(`select * from public.shifts where id = $1`, [id])
 const assignmentsOf = (shiftId) => q(`select * from public.shift_assignments where shift_id = $1`, [shiftId])
