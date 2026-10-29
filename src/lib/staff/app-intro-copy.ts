@@ -18,6 +18,10 @@ export const INTRO_NAME_MAX = 24
 
 export const INTRO_STEP_MS = 880
 export const INTRO_OUT_MS = 380
+/** The screen is the loading screen: it ends when the page is ready, but never before its first line has been readable, */
+export const INTRO_MIN_MS = 700
+/** and never later than this, ready or not. */
+export const INTRO_MAX_MS = 15000
 
 export function cleanName(raw: unknown): string {
   if (typeof raw !== 'string') return ''
