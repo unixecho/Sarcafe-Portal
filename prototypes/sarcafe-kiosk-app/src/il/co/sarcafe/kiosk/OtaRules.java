@@ -32,7 +32,7 @@ final class OtaRules {
      * (C:\Users\Johnathan\android-tools\), never on GitHub or Vercel. While this is empty the kiosk takes no web
      * update at all (fail closed). Changing it needs a new APK.
      */
-    static final String PUBLIC_KEY_B64 = "";
+    static final String PUBLIC_KEY_B64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfSAb30GqPVrVK50s+9xUSqZrIDt5TGRq79pKUFu601T8V6/56/YhIHa57H1e2ttsUJuDSARPN8Tzum22oCMKoQ==";
 
     static boolean hasPublicKey() {
         return PUBLIC_KEY_B64.length() > 0;
