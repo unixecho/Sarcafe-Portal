@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#171813" />
+    <title>שרקפה גבעת חביבה — חוויית קיוסק</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-screen="welcome">
+    <a class="skip-link" href="#kiosk">דלגו לקיוסק</a>
+
+    <header class="review-bar">
+      <div class="review-heading">
+        <strong>שרקפה · חוויית קיוסק יוקרתית</strong>
+        <span>תפריט גבעת חביבה לקריאה בלבד · התמונות הן המחשת קונספט</span>
+      </div>
+      <div class="review-actions">
+        <a href="./device-check.html">בדיקת הטאבלט</a>
+        <button type="button" data-toggle-orientation>תצוגת אורך</button>
+      </div>
+    </header>
+
+    <main class="review-shell">
+      <nav class="screen-picker" aria-label="מצבי האב־טיפוס">
+        <button type="button" data-screen="welcome" aria-current="page">מסך פתיחה</button>
+        <button type="button" data-screen="choice">בחירת מסלול</button>
+        <button type="button" data-screen="join">הצטרפות למועדון</button>
+        <button type="button" data-screen="menu">התפריט המלא</button>
+        <button type="button" data-screen="consent">השלמת הרשמה</button>
+        <button type="button" data-screen="privacy">פרטיות</button>
+        <button type="button" data-screen="inactivity">חוסר פעילות</button>
+        <button type="button" data-screen="success">אישור</button>
+        <button type="button" data-screen="error">תקלה</button>
+      </nav>
+
+      <section class="device-stage" aria-label="תצוגת טאבלט 10.1 אינץ׳">
+        <div class="device" id="kiosk">
+          <div class="kiosk-screen" tabindex="-1">
+            <header class="kiosk-header">
+              <button class="home-icon" type="button" data-screen="welcome" aria-label="חזרה למסך הפתיחה">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5M6.5 10v9h11v-9M10 19v-5h4v5" /></svg>
+              </button>
+              <img src="../../public/sarcafe-logo.png" alt="שרקפה" />
+              <span class="branch"><i aria-hidden="true"></i>גבעת חביבה</span>
+              <span class="menu-source">39 פריטים בתפריט</span>
+            </header>
+
+            <section class="panel panel-welcome" data-panel="welcome">
+              <div class="hero-slides" aria-hidden="true">
+                <picture class="hero-slide is-active">
+                  <source media="(orientation: portrait)" srcset="../../public/backdrops/givat-haviva-1-portrait.webp" />
+                  <img src="../../public/backdrops/givat-haviva-1-wide.webp" alt="" fetchpriority="high" />
+                </picture>
+                <picture class="hero-slide">
+                  <source media="(orientation: portrait)" srcset="../../public/backdrops/givat-haviva-2-portrait.webp" />
+                  <img src="../../public/backdrops/givat-haviva-2-wide.webp" alt="" />
+                </picture>
+                <picture class="hero-slide">
+                  <source media="(orientation: portrait)" srcset="../../public/backdrops/givat-haviva-3-portrait.webp" />
+                  <img src="../../public/backdrops/givat-haviva-3-wide.webp" alt="" />
+                </picture>
+              </div>
+              <div class="hero-shade" aria-hidden="true"></div>
+              <div class="welcome-topline">
+                <div class="welcome-logo"><img src="../../public/sarcafe-logo.png" alt="שרקפה" /></div>
+                <span>גבעת חביבה</span>
+              </div>
+              <div class="welcome-copy">
+                <p>קפה טוב. אוכל טרי. רגע של שקט.</p>
+                <h1>ברוכים הבאים<br />לשרקפה</h1>
+                <button class="start-cta" type="button" data-screen="choice">
+                  <span>לחץ להתחיל</span>
+                  <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M19 5 10 14l9 9" /></svg>
+                </button>
+              </div>
+              <div class="hero-progress" role="presentation"><span class="is-active"></span><span></span><span></span></div>
+              <p class="welcome-footnote">נגיעה אחת, וממשיכים לתפריט או להצטרפות מהירה</p>
+            </section>
+
+            <section class="panel panel-choice" data-panel="choice" hidden>
+              <div class="choice-shell">
+                <header class="choice-heading">
+                  <h1>איך תרצו להמשיך?</h1>
+                  <p>שתי אפשרויות ברורות. אפשר לשנות בחירה בכל רגע.</p>
+                </header>
+                <div class="decision-grid">
+                  <button class="decision-card decision-loyalty" type="button" data-screen="join">
+                    <span class="decision-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 3.5 20 12l8.5 1.2-6.2 6 1.5 8.4L16 23.5l-7.8 4.1 1.5-8.4-6.2-6L12 12 16 3.5Z" /></svg></span>
+                    <span class="decision-copy"><strong>להצטרף למועדון הלקוחות העתידי</strong><small>נקודות, הטבות, פרסים, הגרלות ועדכונים — כשהמועדון ייפתח.</small></span>
+                    <span class="decision-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></span>
+                  </button>
+                  <button class="decision-card decision-menu" type="button" data-screen="menu">
+                    <span class="decision-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M7 5h18v22H7zM11 11h10M11 16h10M11 21h6" /></svg></span>
+                    <span class="decision-copy"><strong>לצפות בתפריט</strong><small>39 פריטים מהתפריט שפורסם בגבעת חביבה, עם מחירים וזמינות.</small></span>
+                    <span class="menu-peek"><i>הפוך קטן <b dir="ltr">₪13</b></i><i>אייס קפה <b dir="ltr">₪16</b></i><i>טוסטים <b dir="ltr">₪32</b></i></span>
+                    <span class="decision-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></svg></span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel panel-join" data-panel="join" hidden>
+              <div class="join-shell">
+                <button class="back-link join-back" type="button" data-screen="choice">חזרה לבחירה</button>
+                <div class="join-story">
+                  <h1>מועדון שיחזיר לכם יותר מכל ביקור</h1>
+                  <p>המועדון עדיין בהקמה. כשייפתח, תוכלו לצבור נקודות, להשתמש ביתרה שצברתם למימוש פרסים והטבות, ולהשתתף בהגרלות עתידיות.</p>
+                  <div class="benefit-list" aria-label="מה מתוכנן במועדון">
+                    <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M9 12h6M12 9v6" /></svg>צוברים נקודות</span>
+                    <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14v11H5zM8 8V5h8v3M8 13h8" /></svg>מממשים הטבות ופרסים</span>
+                    <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16M6 8v11h12V8M9 5h6v3M12 8v11" /></svg>משתתפים בהגרלות עתידיות</span>
+                    <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 8 6 8-6M4 6h16v12H4z" /></svg>מקבלים עדכונים בניוזלטר, בהסכמה נפרדת</span>
+                  </div>
+                </div>
+                <form class="quick-form" novalidate>
+                  <div class="quick-form-copy">
+                    <h2>נתחיל במספר הנייד</h2>
+                    <p>לא שומרים דבר בתצוגת ההדגמה הזו.</p>
+                  </div>
+                  <label for="quick-phone">מספר נייד</label>
+                  <input id="quick-phone" name="quickPhone" type="tel" inputmode="numeric" enterkeyhint="next" autocomplete="tel" dir="ltr" maxlength="12" placeholder="05X-XXXXXXX" aria-describedby="quick-help" />
+                  <button class="quick-submit" type="submit"><span>המשך לאישור קצר</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg></button>
+                  <small id="quick-help">הצטרפות לעדכונים שיווקיים אינה חובה ולא מסומנת מראש.</small>
+                  <p class="quick-message" role="alert" aria-live="polite"></p>
+                </form>
+              </div>
+            </section>
+
+            <section class="panel panel-menu" data-panel="menu" hidden>
+              <div class="menu-head"><div><h1>מה יש היום בשרקפה?</h1><p>גבעת חביבה · תפריט שפורסם במערכת · מזמינים בדלפק</p></div><button type="button" class="join-shortcut" data-screen="join">רוצים לשמוע על המועדון?</button></div>
+              <div class="category-tabs" role="tablist" aria-label="קטגוריות התפריט"></div>
+              <div class="menu-content" aria-live="polite"></div>
+              <p class="snapshot-note">צילום נתונים לקריאה בלבד מהתפריט שפורסם. עודכן במקור: <span dir="ltr">18.09.2026</span>.</p>
+            </section>
+
+            <section class="panel panel-consent" data-panel="consent" hidden>
+              <div class="consent-layout">
+                <div class="consent-intro">
+                  <button class="back-link" type="button" data-screen="join">חזרה</button>
+                  <h1>כמעט סיימנו</h1>
+                  <p>זה עדיין לא מועדון פעיל. זו רק בקשה לקבל עדכון כשנפתח.</p>
+                  <div class="phone-summary"><span>המספר לעדכון</span><strong dir="ltr" data-phone-summary>—</strong><button type="button" data-screen="join">שינוי</button></div>
+                </div>
+                <form class="consent-form" novalidate>
+                  <div class="identity-fields">
+                    <label class="name-field">איך לפנות אליכם?<input name="firstName" autocomplete="given-name" required placeholder="שם פרטי" /></label>
+                    <label class="name-field">דוא״ל <small>לא חובה</small><input name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" /></label>
+                  </div>
+                  <label class="choice-check required-check"><input name="privacy" type="checkbox" required /><span><strong>קראתי את הודעת הפרטיות</strong> ואני מבקש/ת להירשם לרשימת המתעניינים במועדון העתידי של שרקפה.</span></label>
+                  <button class="privacy-link" type="button" data-screen="privacy">למה אנחנו צריכים את הפרטים?</button>
+                  <label class="choice-check marketing-check"><input name="marketing" type="checkbox" /><span><strong>אפשר לשלוח לי גם הטבות ועדכונים שיווקיים.</strong> לא חובה, לא מסומן מראש, ואפשר לבטל בכל עת.</span></label>
+                  <button class="submit-consent" type="submit">כן, הוסיפו אותי לרשימת המתעניינים</button>
+                  <p class="consent-message" role="alert" aria-live="polite"></p>
+                </form>
+              </div>
+            </section>
+
+            <section class="panel panel-privacy" data-panel="privacy" hidden>
+              <div class="privacy-copy">
+                <button class="back-link" type="button" data-screen="consent">חזרה להרשמה</button>
+                <h1>הפרטים שלכם נשארים בשליטתכם</h1>
+                <p class="legal-draft">טיוטה לעיון משפטי · עדיין לא נוסח לפרסום</p>
+                <div class="privacy-sections">
+                  <section><h2>מה נשמר?</h2><p>שם פרטי ומספר נייד. אין צורך בפרטי תשלום, מיקום או מידע רגיש.</p></section>
+                  <section><h2>למה?</h2><p>כדי לנהל את רשימת המתעניינים וליצור קשר רק כשהמועדון העתידי יהיה מוכן.</p></section>
+                  <section><h2>חייבים?</h2><p>לא. אפשר לעיין בתפריט בלי להירשם. בלי הפרטים לא נוכל להוסיף אתכם לרשימה.</p></section>
+                  <section><h2>ומה עם שיווק?</h2><p>רק בהסכמה נפרדת. אפשר לבטל אותה בכל עת, ללא תשלום.</p></section>
+                </div>
+                <p class="legal-warning">לפני הפעלה יש להשלים את שם הישות המשפטית, דרכי הקשר, תקופת השמירה והספקים, ולאשר את הנוסח משפטית.</p>
+              </div>
+            </section>
+
+            <section class="panel panel-inactivity" data-panel="inactivity" hidden>
+              <div class="paused-screen" aria-hidden="true"><span></span><span></span><span></span></div>
+              <div class="idle-dialog" role="dialog" aria-modal="true" aria-labelledby="idle-title"><strong class="seconds" dir="ltr">15</strong><h1 id="idle-title">עדיין איתנו?</h1><p>המסך עומד להתנקות כדי שהפרטים שלכם לא יישארו כאן.</p><button type="button" class="dialog-primary" data-screen="consent">כן, להמשיך</button><button type="button" class="dialog-secondary" data-clear data-screen="welcome">לנקות ולסיים</button></div>
+            </section>
+
+            <section class="panel panel-success" data-panel="success" hidden>
+              <svg class="success-icon" viewBox="0 0 72 72" aria-hidden="true"><path d="m18 37 12 12 25-28" /></svg><h1>זהו, אתם ברשימה</h1><p>נעדכן רק כשיהיה משהו אמיתי לספר. הפרטים כבר נוקו מהמסך.</p><button type="button" data-screen="menu">בינתיים, מה יש בתפריט?</button>
+            </section>
+
+            <section class="panel panel-error" data-panel="error" hidden>
+              <div class="error-layout"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 23c12-11 28-11 40 0M20 33c7-6 17-6 24 0M28 43c2-2 6-2 8 0M13 12l38 40" /></svg><h1>התפריט עדיין כאן.<br />ההרשמה תחכה לחיבור.</h1><p>לא נשמור את המספר על הטאבלט. אפשר לנסות שוב כשהרשת חוזרת או להמשיך לתפריט האחרון שנבדק.</p><div><button type="button" class="dialog-primary" data-screen="choice">לנסות שוב</button><button type="button" class="dialog-secondary" data-screen="menu">לתפריט השמור</button></div></div>
+            </section>
+
+            <footer class="kiosk-footer"><span>אב־טיפוס בלבד · אין שליחה או שמירה של פרטים</span><button type="button" data-screen="privacy">פרטיות</button></footer>
+          </div>
+        </div>
+      </section>
+
+      <aside class="concept-note"><strong>כיוון נבחר · אירוח ישראלי יוקרתי</strong><span>צילום מתחלף בנשימה איטית, כניסה אחת ברורה, ואז בחירה מהירה בין הרשמה למועדון לבין התפריט.</span></aside>
+    </main>
+    <script src="./menu-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

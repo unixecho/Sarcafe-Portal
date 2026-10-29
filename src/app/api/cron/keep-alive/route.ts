@@ -1,3 +1,4 @@
+import { bearerMatches } from '@/lib/http/cron'
 import { NextResponse, type NextRequest } from 'next/server'
 import { apiRoute, Unauthorized } from '@/lib/http/errors'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -14,9 +15,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 // can't be hit by anyone who finds the URL — Vercel automatically sends
 // `Authorization: Bearer $CRON_SECRET` on its own scheduled invocations.
 export const GET = apiRoute(async (request: NextRequest) => {
-  const secret = process.env.CRON_SECRET
-  const auth = request.headers.get('authorization')
-  if (!secret || auth !== `Bearer ${secret}`) throw Unauthorized('Not a scheduled invocation.')
+  if (!bearerMatches(request.headers.get('authorization'), process.env.CRON_SECRET)) throw Unauthorized('Not a scheduled invocation.')
 
   const service = createServiceRoleClient()
   const { error } = await service.from('branches').select('id').limit(1)

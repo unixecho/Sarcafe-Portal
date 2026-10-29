@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { resolveOrderIdByToken } from '@/lib/orders/customer'
+import { isAllowedPushEndpoint } from '@/lib/push/endpoint'
 
 // Saves a customer's browser push subscription against their order —
 // called once, right after NotificationPrimer gets a granted permission
@@ -54,8 +55,7 @@ export async function POST(request: NextRequest) {
     if (!PAGE_URL_PATTERN.test(pageUrl)) return refuse('bad_request', 400)
     if (
       !sub ||
-      typeof sub.endpoint !== 'string' ||
-      !sub.endpoint ||
+      !isAllowedPushEndpoint(sub.endpoint) ||
       typeof sub.keys?.p256dh !== 'string' ||
       typeof sub.keys?.auth !== 'string'
     ) {

@@ -9,7 +9,8 @@
 // default and never shows the widget. To give a new customer page the widget, add its prefix here.
 
 /** Customer pages: the portal's front page and the pages a visitor or a customer with an order can reach. */
-export const CUSTOMER_PREFIXES = ['/menu', '/order', '/accessibility', '/privacy', '/board'] as const
+// /feedback: the public poll the kiosk's QR opens (2026-10-28)
+export const CUSTOMER_PREFIXES = ['/menu', '/order', '/accessibility', '/privacy', '/board', '/feedback'] as const
 
 /** Is this a page a customer sees? The front page (`/`) is, exactly; the others by prefix. */
 export function isCustomerFacing(pathname: string | null | undefined): boolean {

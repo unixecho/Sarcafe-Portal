@@ -4,8 +4,8 @@
  * The kiosk keeps showing the menu it has (shipped in the app, or the last one pushed) and never polls. When the
  * owner dashboard changes the menu, the portal already broadcasts a short "menu-updated" message on the branch's
  * realtime channel (lib/menu/realtime.ts, "menu:givat-haviva"); this page listens to that same channel. The message carries no data: the page then fetches the real snapshot from the
- * portal's snapshot endpoint, validates it, stores it, and reloads itself once the kiosk is back on the welcome
- * screen (never in the middle of someone's sign-up). A forged message can therefore only cause a re-fetch.
+ * portal's snapshot endpoint, validates it, stores it, and reloads itself once the session controller says the kiosk
+ * is idle and clean (KioskSession state ATTRACT: never in the middle of someone's visit). A forged message can therefore only cause a re-fetch.
  * On every (re)connect the page also asks for the snapshot once, so a push missed while offline is caught up.
  *
  * Where to listen and fetch is set over adb (see MainActivity): nothing is configured by default, and then the
@@ -39,10 +39,15 @@
 
   if (!cfg.api) return;
 
+  const session = window.KioskSession;
+  const idle = () => (session ? session.state === 'ATTRACT' : body.dataset.screen === 'welcome');
   function applyWhenIdle() {
-    if (state.pendingReload && body.dataset.screen === 'welcome') location.reload();
+    if (state.pendingReload && idle()) location.reload();
   }
-  new MutationObserver(applyWhenIdle).observe(body, { attributes: true, attributeFilter: ['data-screen'] });
+  if (session) session.onChange(applyWhenIdle);
+  else new MutationObserver(applyWhenIdle).observe(body, { attributes: true, attributeFilter: ['data-screen'] });
+  // the announcements (kiosk-attract.js) refresh on the same push
+  const ping = () => { try { window.dispatchEvent(new Event('kiosk:menu-ping')); } catch (_) { /* old engine */ } };
 
   async function refresh() {
     state.lastCheck = Date.now();
@@ -97,10 +102,11 @@
       try { message = JSON.parse(event.data); } catch (_) { return; }
       if (message.topic !== topic) return;
       if (message.event === 'phx_reply' && message.payload && message.ref !== null) {
-        if (message.payload.status === 'ok') { state.push = 'joined'; attempt = 0; refresh(); }
+        if (message.payload.status === 'ok') { state.push = 'joined'; attempt = 0; refresh(); ping(); }
         else { state.push = 'join refused'; }
       } else if (message.event === 'broadcast' && message.payload && message.payload.event === 'menu-updated') {
         refresh();
+        ping();
       } else if (message.event === 'phx_error' || message.event === 'phx_close') {
         socket.close();
       }

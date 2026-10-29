@@ -7,7 +7,7 @@
 .osn__dot--live { background: var(--success, #3ddc84); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); animation: osn-pulse 2.2s ease-out infinite; }
 
 .osn__grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
-.osn__branch { padding: 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--bg-elev); }
+.osn__branch { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--bg-elev); }
 .osn__branch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .osn__branch-head strong { font-size: 1rem; letter-spacing: -.02em; }
 .osn__count { padding: 3px 10px; border-radius: 999px; background: var(--bg-elev-2); color: var(--text-dim); font-size: .74rem; font-weight: 600; white-space: nowrap; }
@@ -27,15 +27,16 @@
 @keyframes osn-pulse { 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .osn__dot--live { animation: none; } }
 
-/* The swipeable strip of one branch: previous shift, now, next shift (ShiftScroller.tsx). Each slide is most of the card's width,
-   so the neighbour peeks in from the side and says "there is more". */
-.shs { display: grid; gap: 8px; }
-.shs__strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; border-radius: 16px; }
+/* The swipeable strip of one branch: previous shift, now, next shift (ShiftScroller.tsx). One whole slide at a time: a slide is
+   exactly the strip's width and carries its own border and padding INSIDE that width, so nothing (border, rounded corner, the
+   "you" outline, the pulse) relies on overflow being visible: a scroller clips on both axes, which cut the live slide's edges
+   (2026-10-28). Only the strip scrolls; touch-action keeps a vertical drag over it scrolling the page. */
+.shs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
+.shs__strip { display: flex; align-items: stretch; gap: 12px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; touch-action: pan-x pan-y; scrollbar-width: none; border-radius: 16px; }
 .shs__strip::-webkit-scrollbar { display: none; }
 .shs__strip:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
-.shs__slide { flex: 0 0 88%; scroll-snap-align: center; scroll-snap-stop: always; display: grid; align-content: start; gap: 9px; min-width: 0; }
-.shs__slide:not(.shs__slide--now) { opacity: .78; }
-.shs__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.shs__slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: center; scroll-snap-stop: always; display: grid; align-content: start; gap: 9px; padding: 10px; border: 1.5px solid var(--line); border-radius: 16px; }
+.shs__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-height: 1.5em; }
 .shs__head strong { font-size: .9rem; letter-spacing: -.02em; }
 .shs__when { color: var(--text-dim); font-size: .78rem; }
 .shs__live { margin-inline-start: auto; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--success, #3ddc84) 18%, transparent); color: var(--success, #3ddc84); font-size: .72rem; font-weight: 700; }
@@ -47,8 +48,8 @@
 .shs__dots span.is-on { width: 18px; border-radius: 4px; background: var(--neon); }
 @media (prefers-reduced-motion: reduce) { .shs__dots span { transition: none; } }
 
-/* The live slide is the one that stands out: full strength, an accent edge and a pulsing dot; the others are quieter. */
-.shs__slide--now { padding: 10px; margin-block: -2px; border: 1.5px solid color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--success, #3ddc84) 6%, transparent); }
+/* The live slide is the one that stands out: an accent edge, a tint and a pulsing dot. Same box as the others (only colours change),
+   so moving between slides never changes the strip's size. */
+.shs__slide--now { border-color: color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); background: color-mix(in srgb, var(--success, #3ddc84) 6%, transparent); }
 .shs__pulse { display: inline-block; width: 8px; height: 8px; margin-inline-end: 7px; border-radius: 50%; background: var(--success, #3ddc84); animation: osn-pulse 2.2s ease-out infinite; }
-.shs__slide:not(.shs__slide--now) { opacity: .6; }
 @media (prefers-reduced-motion: reduce) { .shs__pulse { animation: none; } }

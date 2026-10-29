@@ -26,3 +26,6 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+
+# kiosk OTA web bundle: generated at build time by scripts/publish-kiosk-ota.mjs (apk/ and web-signature.json are committed)
+/public/kiosk-ota/web/

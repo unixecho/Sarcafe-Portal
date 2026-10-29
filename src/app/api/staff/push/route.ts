@@ -4,6 +4,7 @@ import { Unauthorized, ApiError, Forbidden } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { DEV_TEMPLATE_IDS, devPushStatus, devSendTemplate, isPushDeveloper } from '@/lib/push/dev'
 import { sendStaffTest } from '@/lib/push/staff'
+import { isAllowedPushEndpoint } from '@/lib/push/endpoint'
 import { privateStaffRoute } from '@/lib/staff/records'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -17,7 +18,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const subscription = z
   .object({
-    endpoint: z.string().url().max(1000).refine((value) => value.startsWith('https://'), 'push endpoints are https'),
+    endpoint: z.string().url().max(1000).refine(isAllowedPushEndpoint, 'push endpoints are a browser push service over https'),
     keys: z.object({ p256dh: z.string().min(10).max(300), auth: z.string().min(8).max(100) }).strict(),
   })
   .passthrough() // PushSubscription.toJSON() also carries expirationTime

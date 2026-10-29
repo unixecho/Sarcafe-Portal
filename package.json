@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/publish-kiosk-ota.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -27,7 +28,13 @@
     "check:app-layout": "node scripts/check-app-layout.mjs",
     "check:kiosk-menu": "node scripts/check-kiosk-menu.mjs",
     "verify:waitlist-sql": "node scripts/verify-waitlist-sql.mjs",
-    "check:kiosk-waitlist": "node scripts/check-kiosk-waitlist.mjs"
+    "check:kiosk-waitlist": "node scripts/check-kiosk-waitlist.mjs",
+    "verify:kiosk-content-sql": "node scripts/verify-kiosk-content-sql.mjs",
+    "check:kiosk-content": "node scripts/check-kiosk-content.mjs",
+    "check:security": "node scripts/check-security.mjs",
+    "check:kiosk-session": "node scripts/check-kiosk-session.mjs",
+    "check:shift-scroller": "node scripts/check-shift-scroller.mjs",
+    "check:kiosk-ota": "node scripts/check-kiosk-ota.mjs"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",
@@ -38,7 +45,7 @@
     "gsap": "3.15.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.45.0",
-    "next": "^15.1.0",
+    "next": "^15.5.28",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -54,7 +61,7 @@
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.15.0",
-    "eslint-config-next": "^15.1.0",
+    "eslint-config-next": "^15.5.28",
     "playwright": "1.64.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",

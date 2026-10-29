@@ -1,3 +1,4 @@
+import { bearerMatches } from '@/lib/http/cron'
 import { NextResponse, type NextRequest } from 'next/server'
 import { apiRoute, Unauthorized } from '@/lib/http/errors'
 import { createStaffReminders } from '@/lib/push/staff-reminders'
@@ -18,8 +19,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 export const GET = apiRoute(async (request: NextRequest) => {
   const header = request.headers.get('authorization') ?? ''
   const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : ''
-  const envSecret = process.env.CRON_SECRET
-  let allowed = !!envSecret && bearer === envSecret
+  let allowed = bearerMatches(header, process.env.CRON_SECRET)
   if (!allowed && bearer.length >= 32) {
     const { data } = await createServiceRoleClient().rpc('staff_push_verify_cron', { p_secret: bearer })
     allowed = data === true

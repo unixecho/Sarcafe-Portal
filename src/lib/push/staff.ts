@@ -14,6 +14,7 @@ import 'server-only'
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { ensureVapidConfigured } from './send'
+import { isAllowedPushEndpoint } from './endpoint'
 import { hasAnyMenuEditAccess } from '@/lib/staff/access'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { alertTitle, pushPathFor } from './staff-rules'
@@ -70,6 +71,8 @@ async function recordOutcome(service: Service, rows: InboxRow[], results: SendOu
 }
 
 async function sendToOne(service: Service, row: SubscriptionRow, payload: Payload): Promise<SendOutcome> {
+  // Never POST to an address that is not a browser push service (see ./endpoint.ts).
+  if (!isAllowedPushEndpoint(row.endpoint)) return { ok: false, statusCode: null, detail: 'endpoint_not_allowed' }
   try {
     await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(payload), {
       urgency: 'high',

@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- self-update through PackageInstaller (silent because the app is the device owner; see OtaUpdater) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="Sarcafe Kiosk"
@@ -51,6 +53,28 @@
                 android:resource="@xml/device_admin" />
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Configuration over adb only: android.permission.DUMP is held by the adb shell and by no installed app, so no
+          other app on the tablet can change the PIN, the page address, the keys or debugging. MainActivity ignores
+          launch extras. Use: adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver plus the extras.
+        -->
+        <receiver
+            android:name=".KioskConfigReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
+        <!--
+          After a self-update: MY_PACKAGE_REPLACED starts the kiosk again (system broadcast, reaches a non-exported
+          receiver), and the installer's result arrives here through OtaUpdater's own PendingIntent.
+        -->
+        <receiver
+            android:name=".OtaReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
     </application>

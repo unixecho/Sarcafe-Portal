@@ -8,7 +8,8 @@
  *  - nothing is queued or kept on the tablet if the network or the server fails: a generic message, form cleared by
  *    the idle timer, and the person can try again
  *  - one request id per form fill, reused for a retry, so a retry can never create a second sign-up
- *  - the idle reset is held back (window.__kioskBusy) while a request is in flight
+ *  - a privacy reset waits for a request in flight (KioskSession.hold), and an answer that arrives after a reset
+ *    (another visitor's screen) is ignored: nothing is shown, no success, no data put back
  * Where to send it and the kiosk's key are set over adb (see MainActivity); with nothing configured the kiosk
  * says it cannot register right now instead of pretending.
  */
@@ -22,8 +23,8 @@
 
   const message = form.querySelector('.consent-message');
   const submit = form.querySelector('.submit-consent');
+  const S = window.KioskSession;
   const go = (name) => document.querySelector(`.screen-picker [data-screen="${name}"]`)?.click();
-  const clearAll = () => document.querySelector('.idle-dialog [data-clear]')?.click();
   // the message sits under the button, below the fold on a tablet: bring it into view so the person always sees why
   const say = (text) => {
     if (!message) return;
@@ -37,8 +38,8 @@
   let requestId = newId();
   let sending = false;
 
-  // a fresh form means a fresh request id
-  document.addEventListener('click', (event) => { if (event.target.closest('[data-clear]')) requestId = newId(); }, true);
+  // a fresh form means a fresh request id (every reset and every finished sign-up)
+  if (S) S.registerClearer(() => { requestId = newId(); });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -68,11 +69,14 @@
     };
 
     sending = true;
-    window.__kioskBusy = true;
     if (submit) submit.disabled = true;
     say('');
+    const gen = S ? S.generation : 0;
+    const current = () => !S || S.isCurrent(gen); // false once the screen was reset for the next visitor
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 15000);
+    let finish;
+    if (S) S.hold(new Promise((resolve) => { finish = resolve; }), 16000);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -81,9 +85,10 @@
         signal: abort.signal,
         cache: 'no-store',
       });
+      if (!current()) return;
       if (res.ok) {
-        clearAll();           // clears every field and returns to the welcome screen...
-        go('success');        // ...then shows the confirmation
+        if (S) S.clearCustomerData('submitted'); // every field, message and the request id...
+        go('success');                           // ...then the confirmation
         return;
       }
       if (res.status === 409) {
@@ -92,12 +97,12 @@
       } else if (res.status === 400) say('משהו בפרטים לא נקלט. בדקו את השם, המספר והדוא״ל ונסו שוב.');
       else go('error');
     } catch (_) {
-      go('error');
+      if (current()) go('error');
     } finally {
       clearTimeout(timer);
       sending = false;
-      window.__kioskBusy = false;
       if (submit) submit.disabled = false;
+      if (finish) finish();
     }
   }, true);
 })();

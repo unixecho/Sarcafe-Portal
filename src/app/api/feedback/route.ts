@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { getCustomerFeedbackEnabled } from '@/lib/settings/server'
 import { validateFeedbackInput } from '@/lib/feedback/validate'
+import { readLimitedText } from '@/lib/kiosk/waitlist'
 import {
   FEEDBACK_RATE_MAX,
   FEEDBACK_RATE_WINDOW_SECONDS,
@@ -81,7 +82,11 @@ export async function POST(request: NextRequest) {
       return refuse('rate_limited', 429)
     }
 
-    const body = await request.json().catch(() => null)
+    // The real byte cap: Content-Length can be absent (a chunked body) or lie, so the body itself is read with a limit.
+    const text = await readLimitedText(request, MAX_BODY_BYTES)
+    if (text === null) return refuse('message_too_long', 413)
+    let body: unknown = null
+    try { body = JSON.parse(text) } catch { body = null }
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return refuse('bad_request', 400)
     }

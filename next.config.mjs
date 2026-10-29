@@ -3,6 +3,8 @@ const nextConfig = {
   // a11y-widget ships TypeScript/TSX source, not a pre-built bundle (see its
   // own README) — this is what makes Next transpile it like first-party code.
   transpilePackages: ['a11y-widget'],
+  // No `X-Powered-By: Next.js` on every response: it tells a scanner which framework (and so which advisories) to try.
+  poweredByHeader: false,
   images: {
     remotePatterns: [
       {
@@ -25,8 +27,14 @@ const nextConfig = {
         source: '/:path*',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          // frame-ancestors as before, plus two directives that cannot break a page here: no <base> pointing scripts
+          // elsewhere, and no plugins (<object>/<embed>; the payslip viewer uses an <iframe>, which this does not
+          // touch). A full script-src policy is a separate, tested change (see docs/SECURITY_AUDIT_2026-10-28.md).
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Browser features this site never uses are switched off for it and anything it embeds. The camera stays
+          // available to this origin only (the /crew and order QR scanner).
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()' },
           // Keeps recovery-code / temp-order tokens (Phase 2+3) out of the
           // Referer header on cross-origin navigation.
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

@@ -1,0 +1,99 @@
+/*
+ * Sarcafe kiosk app: the welcome (attract) screen with the announcements panel and the two permanent buttons
+ * (kiosk-attract.js), and the privacy-reset warning (kiosk-session.js). Loaded after kiosk-app.css.
+ * Only opacity and transform move; nothing animates layout, and there is no blur (WebView 97, MT6771).
+ */
+
+/* the prototype's "press to start" block and photo progress make way for the panel and the two buttons */
+body.has-attract .panel-welcome .welcome-copy,
+body.has-attract .panel-welcome .hero-progress { display: none; }
+body.has-attract .panel-welcome .hero-shade { background: linear-gradient(0deg, rgba(9, 11, 8, .82) 0%, rgba(9, 11, 8, .38) 60%, rgba(9, 11, 8, .5) 100%); }
+
+.attract { position: absolute; z-index: 6; inset: 152px 34px 96px; display: flex; flex-direction: column; gap: 16px; }
+
+/* the announcements: a framed panel; the slides sit on top of each other so their size never moves anything */
+.attract-ads {
+  position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden;
+  border: 1px solid rgba(234, 215, 166, .6); border-radius: 28px; background: rgba(14, 16, 12, .74);
+}
+.attract-ad {
+  position: absolute; inset: 0; padding: 28px 30px 40px;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; align-items: center; gap: 18px 24px;
+  color: #fff; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .8s ease, visibility 0s linear .8s;
+}
+.attract-ad.is-active { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .8s ease, visibility 0s; }
+.attract.is-instant .attract-ad { transition: none; }
+.attract-ad.has-media { grid-template-columns: minmax(0, 1fr) auto; }
+.attract-text { min-width: 0; display: grid; gap: 10px; align-content: center; }
+.attract-kicker { color: var(--brass-light); font-size: .8rem; font-weight: 800; letter-spacing: .06em; }
+.attract-ad h2 { margin: 0; font-size: clamp(1.7rem, 4.4vw, 2.7rem); font-weight: 800; line-height: 1.05; }
+.attract-ad p { margin: 0; color: #f1ead9; font-size: clamp(1.05rem, 2.6vw, 1.4rem); line-height: 1.45; }
+.attract-note { justify-self: start; padding: 5px 10px; color: var(--espresso); background: var(--brass-light); border-radius: 8px; font-size: .82rem; font-weight: 800; }
+.attract-cta { justify-self: start; color: var(--brass-light); font-size: .95rem; font-weight: 800; text-decoration: underline; text-underline-offset: 5px; }
+
+.attract-qr-wrap { margin: 0; display: grid; justify-items: center; gap: 6px; }
+.attract-qr { display: block; border-radius: 10px; image-rendering: pixelated; }
+.attract-qr-wrap figcaption { color: #e6dfcf; font-size: .7rem; direction: ltr; }
+.attract-image { max-width: 220px; max-height: 100%; border-radius: 16px; object-fit: cover; }
+
+.attract-hours, .attract-highlights { min-width: 0; }
+.attract-today { margin: 0 0 8px; color: var(--brass-light); font-size: 1.15rem; font-weight: 800; }
+.attract-today small { color: #e6dfcf; font-size: .85rem; font-weight: 600; }
+.attract-week, .attract-exceptions, .attract-highlights { margin: 0; padding: 0; list-style: none; }
+.attract-week li, .attract-highlights li { min-height: 30px; display: flex; justify-content: space-between; gap: 18px; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, .14); font-size: .95rem; }
+.attract-week li.is-today { color: var(--brass-light); font-weight: 800; }
+.attract-week b, .attract-highlights b { font-variant-numeric: tabular-nums; }
+.attract-exceptions { margin-top: 10px; }
+.attract-exceptions li { color: #f5d9a0; font-size: .85rem; font-weight: 700; }
+.attract-highlights { min-width: 220px; }
+.attract-highlights li { min-height: 40px; font-size: 1.05rem; font-weight: 700; }
+.attract-highlights b { color: var(--brass-light); }
+
+.attract-dots { position: absolute; z-index: 2; inset: auto 0 16px; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.attract-dots i { width: 22px; height: 3px; background: rgba(255, 255, 255, .32); transition: background-color .4s ease; }
+.attract-dots i.is-active { background: var(--brass-light); }
+
+/* the two permanent buttons */
+.attract-actions { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.attract-btn {
+  min-height: 104px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid rgba(255, 255, 255, .55); border-radius: 24px; color: var(--espresso);
+  font-size: clamp(1.3rem, 3.4vw, 1.9rem); font-weight: 800; text-align: start;
+  touch-action: manipulation; transition: transform .14s var(--ease-out), background-color .14s ease;
+}
+.attract-btn:active { transform: scale(.985); }
+.attract-btn svg { width: 34px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.attract-menu { background: var(--paper); }
+.attract-join { background: #f5e5bb; }
+.attract-menu:active { background: #efe6d2; }
+.attract-join:active { background: #ead7a6; }
+
+@media (orientation: portrait) {
+  .attract-ad[data-kind="hours"].has-media { grid-template-columns: minmax(0, 1fr); align-content: center; }
+}
+@media (orientation: landscape) {
+  body.has-attract .welcome-topline { inset: 26px 40px auto; }
+  body.has-attract .welcome-logo { width: 72px; height: 72px; padding: 7px; border-radius: 20px; }
+  .attract { inset: 112px 40px 74px; gap: 12px; }
+  .attract-ad { padding: 20px 28px 32px; }
+  .attract-ad h2 { font-size: clamp(1.6rem, 3.2vw, 2.4rem); }
+  .attract-ad p { font-size: clamp(1rem, 1.9vw, 1.25rem); }
+  .attract-btn { min-height: 84px; }
+  .attract-week { columns: 2; column-gap: 24px; }
+  .attract-week li { break-inside: avoid; min-height: 26px; font-size: .85rem; }
+}
+
+/* ---- the privacy-reset warning (kiosk-session.js) ---- */
+.kiosk-warning { position: absolute; z-index: 60; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(23, 24, 19, .96); /* near-opaque: whoever walks up during the countdown cannot read the form behind it */ opacity: 0; transition: opacity .2s ease; }
+.kiosk-warning[hidden] { display: none; }
+.kiosk-warning.is-open { opacity: 1; }
+.kiosk-warning-card { width: min(100%, 470px); padding: 30px; display: grid; gap: 10px; text-align: center; color: var(--ink); background: var(--paper); border-radius: 26px; }
+.kiosk-warning-count { width: 76px; height: 76px; margin: 0 auto 4px; display: grid; place-items: center; border: 5px solid #eadfd2; border-radius: 50%; color: var(--wine); font-size: 1.7rem; font-variant-numeric: tabular-nums; }
+.kiosk-warning-card h2 { margin: 0; font-size: 2.2rem; font-weight: 800; }
+.kiosk-warning-card p { margin: 0; color: var(--muted); font-size: 1rem; }
+.kiosk-warning-left b { color: var(--wine); font-variant-numeric: tabular-nums; }
+.kiosk-warning-bar { height: 4px; margin: 4px 0 8px; overflow: hidden; background: #eadfd2; border-radius: 2px; }
+.kiosk-warning-bar i { display: block; height: 100%; background: var(--wine); transform-origin: right center; }
+.kiosk-warning-card button { width: 100%; min-height: 60px; border-radius: 16px; font-size: 1.15rem; }
+html[data-perf="lite"] .kiosk-warning { transition: none; }

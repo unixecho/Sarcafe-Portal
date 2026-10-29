@@ -1,3 +1,4 @@
+import { bearerMatches } from '@/lib/http/cron'
 import { NextResponse, type NextRequest } from 'next/server'
 import { apiRoute, Unauthorized } from '@/lib/http/errors'
 import { createServiceRoleClient } from '@/lib/supabase/server'
@@ -16,9 +17,7 @@ import { safeLogMessage } from '@/lib/pos/server/guard'
 //
 // Only COUNTS are logged or returned — never a name, never a number.
 export const GET = apiRoute(async (request: NextRequest) => {
-  const secret = process.env.CRON_SECRET
-  const auth = request.headers.get('authorization')
-  if (!secret || auth !== `Bearer ${secret}`) throw Unauthorized('Not a scheduled invocation.')
+  if (!bearerMatches(request.headers.get('authorization'), process.env.CRON_SECRET)) throw Unauthorized('Not a scheduled invocation.')
 
   const service = createServiceRoleClient()
   const { data, error } = await service.rpc('pos_clear_old_pii', {

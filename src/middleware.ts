@@ -37,7 +37,7 @@ const MENU_EDITOR_PREFIXES = [
 // /owner/feedback is owner-only, not menu-edit-scoped — unsolicited public
 // correspondence, sometimes with a contact address attached, and being
 // trusted with the menu has never implied being handed that.
-const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/branches', '/owner/accessibility', '/owner/feedback', '/owner/intro', '/owner/waitlist']
+const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/branches', '/owner/accessibility', '/owner/feedback', '/owner/intro', '/owner/waitlist', '/owner/kiosk']
 // /owner/schedule and /staff/* are gated by isStaff() only — a delegated
 // schedule manager can be any active staff member (badge might just be
 // "barista"), so neither the editor nor the op-only check applies here.
@@ -87,7 +87,33 @@ async function hasValidEmployeeSession(request: NextRequest): Promise<boolean> {
   }
 }
 
+// Cross-site request forgery, defence in depth. Every API write is reached by our own pages with fetch(), which
+// always sends an Origin header; a write whose Origin is another site is refused here, before any cookie is used.
+// (Session cookies are SameSite=Lax as well, and parseBody() repeats this check on the routes that use it.)
+// A request with no Origin at all (curl, Vercel Cron, a native app) is let through to the route's own checks.
+// The kiosk tablet's page is bundled inside the app (a file origin, sent as "null"), so its routes are exempt and
+// rely on their shared key instead; the public feedback form is exempt for the same reason.
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+const CROSS_ORIGIN_API_PREFIXES = ['/api/kiosk/', '/api/feedback']
+
+function isCrossSiteApiWrite(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl
+  if (!pathname.startsWith('/api/') || SAFE_METHODS.has(request.method)) return false
+  if (CROSS_ORIGIN_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return false
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  try {
+    return new URL(origin).host !== request.headers.get('host')
+  } catch {
+    return true
+  }
+}
+
 export async function middleware(request: NextRequest) {
+  if (isCrossSiteApiWrite(request)) {
+    return NextResponse.json({ error: { code: 'forbidden', message: 'You do not have access to do that.' } }, { status: 403 })
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(

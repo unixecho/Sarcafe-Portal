@@ -130,6 +130,8 @@
 
   // "back" on privacy / terms returns to wherever the person opened them from (the prototype always jumped to sign-up)
   let cameFrom = 'consent';
+  // where this visitor came from is theirs: a privacy reset forgets it
+  if (window.KioskSession) window.KioskSession.registerClearer(() => { cameFrom = 'consent'; });
   document.addEventListener('click', (event) => {
     if (!event.target.closest('[data-screen="privacy"], [data-screen="terms"]')) return;
     const now = document.body.dataset.screen;

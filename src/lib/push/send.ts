@@ -34,6 +34,7 @@
 
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { isAllowedPushEndpoint } from './endpoint'
 
 let vapidReady: boolean | null = null
 
@@ -193,6 +194,8 @@ export async function sendTestNotification(orderId: string): Promise<TestNotific
 type SendOutcome = { ok: boolean; statusCode: number | null; detail: string }
 
 async function sendToOne(service: ReturnType<typeof createServiceRoleClient>, row: SubscriptionRow, payload: string): Promise<SendOutcome> {
+  // Never POST to an address that is not a browser push service (see ./endpoint.ts).
+  if (!isAllowedPushEndpoint(row.endpoint)) return { ok: false, statusCode: null, detail: 'endpoint_not_allowed' }
   try {
     await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, payload, {
       urgency: 'high',

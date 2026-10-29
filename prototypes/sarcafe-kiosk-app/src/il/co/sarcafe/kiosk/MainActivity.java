@@ -24,6 +24,7 @@ import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -32,21 +33,22 @@ import android.widget.FrameLayout;
 
 import org.json.JSONObject;
 
-import java.security.MessageDigest;
 
 /**
  * Full-screen WebView kiosk. Loads the bundled page (or an https URL set over adb), hides the system
  * bars, and, once provisioned as device owner, locks the tablet to this app.
  *
- * Configure over adb (needs the cable, so staff cannot do it by accident):
- *   adb shell am start -n il.co.sarcafe.kiosk/.MainActivity --es url https://example.com/kiosk
- *   adb shell am start -n il.co.sarcafe.kiosk/.MainActivity --es url asset     (back to the bundled page)
- *   adb shell am start -n il.co.sarcafe.kiosk/.MainActivity --es pin 123456    (staff PIN, 4-8 digits)
- *   adb shell am start -n il.co.sarcafe.kiosk/.MainActivity --es orient portrait   (auto | portrait | landscape)
+ * Configure over adb ONLY (the receiver needs android.permission.DUMP, which the adb shell has and apps cannot get;
+ * launching this activity ignores every extra). See KioskConfigReceiver for the full list:
+ *   adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es pin 123456    (staff PIN, 6-8 digits)
+ *   adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es orient portrait   (auto | portrait | landscape)
+ *   adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es ota_check now   (look for updates at once)
+ * The bundled page is served from https://kiosk.sarcafe.invalid/ (OtaUpdater): the newest verified web bundle the
+ * portal published, or the copy inside the APK. See docs/SARCAFE_KIOSK_OTA.md.
  * Staff menu: tap the top-left corner 5 times quickly, then enter the PIN.
  */
 public class MainActivity extends Activity {
-    static final String ASSET_URL = "file:///android_asset/index.html";
+    static final String ASSET_URL = OtaUpdater.START_URL; // the bundled page, through the update layer's virtual origin
     static final String HOME_ALIAS = "il.co.sarcafe.kiosk.HomeAlias";
     static final long STAFF_WINDOW_MS = 5 * 60 * 1000L;
     static final long RETRY_MS = 10 * 1000L;
@@ -63,6 +65,28 @@ public class MainActivity extends Activity {
     private int cornerTaps;
     private long firstTapAt;
     private long staffUntil;
+    private OtaUpdater ota;
+
+    /** What the update layer may ask of this screen. */
+    private final OtaUpdater.Host otaHost = new OtaUpdater.Host() {
+        @Override public void queryIdle(final OtaUpdater.IdleCallback cb) {
+            if (web == null || isFinishing() || System.currentTimeMillis() < staffUntil) {
+                cb.onResult(false); // never while staff have the tablet unlocked
+                return;
+            }
+            // KioskSession (the session controller) says ATTRACT/CLEAN when no customer is mid-visit; a page without
+            // it (older bundle) counts as idle only on its welcome screen; the offline page has no screen at all
+            web.evaluateJavascript("(function(){try{var k=window.KioskSession;"
+                + "if(k&&k.state)return k.state==='ATTRACT'||k.state==='CLEAN';"
+                + "var b=document.body;return !!b&&(!b.dataset.screen||b.dataset.screen==='welcome');"
+                + "}catch(e){return false}})()", new android.webkit.ValueCallback<String>() {
+                    @Override public void onReceiveValue(String v) { cb.onResult("true".equals(v)); }
+                });
+        }
+        @Override public void reloadPage() {
+            if (web != null) load();
+        }
+    };
 
     private final Runnable retry = new Runnable() {
         @Override public void run() {
@@ -81,8 +105,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("kiosk", MODE_PRIVATE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        applyIntentConfig(getIntent());
-        applyOrientation();
+        applyOrientation(); // launch extras are ignored: configuration arrives only through KioskConfigReceiver
 
         web = new WebView(this);
         configureWebView();
@@ -102,13 +125,25 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         applyDeviceOwnerPolicies();
+        ota = OtaUpdater.get(this);
+        ota.onAppStart(otaHost); // may switch in a downloaded bundle or roll a failed one back, before the first load
+        KioskConfigReceiver.onChanged = configChanged;
         load();
     }
 
+    /** After an adb configuration broadcast (main thread): apply what can change while running and reload. */
+    private final Runnable configChanged = new Runnable() {
+        @Override public void run() {
+            if (web == null || isFinishing()) return;
+            applyOrientation();
+            WebView.setWebContentsDebuggingEnabled(prefs.getBoolean("debug", false));
+            load();
+        }
+    };
+
     @Override
     protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        if (applyIntentConfig(intent)) load();
+        super.onNewIntent(intent); // extras ignored on purpose (any app may start this activity)
     }
 
     @Override
@@ -131,76 +166,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         ui.removeCallbacksAndMessages(null);
+        if (ota != null) ota.onHostGone(otaHost);
+        if (KioskConfigReceiver.onChanged == configChanged) KioskConfigReceiver.onChanged = null;
         if (web != null) web.destroy();
         super.onDestroy();
     }
 
-    // ---- configuration over adb ------------------------------------------------------------
+    // ---- configuration (stored by KioskConfigReceiver) ------------------------------------------
 
-    private boolean applyIntentConfig(Intent intent) {
-        if (intent == null) return false;
-        boolean changed = false;
-        String url = intent.getStringExtra("url");
-        if (url != null) {
-            if (url.equals("asset")) {
-                prefs.edit().remove("url").apply();
-                changed = true;
-            } else if (url.startsWith("https://")) {
-                prefs.edit().putString("url", url).apply();
-                changed = true;
-            }
-        }
-        String orient = intent.getStringExtra("orient"); // auto|portrait|landscape
-        if (orient != null && orient.matches("auto|portrait|landscape")) {
-            prefs.edit().putString("orient", orient).apply();
-            applyOrientation();
-        }
-        String debug = intent.getStringExtra("debug"); // on|off: Chrome remote debugging over the cable
-        if (debug != null) prefs.edit().putBoolean("debug", debug.equals("on")).apply();
-        String pin = intent.getStringExtra("pin");
-        if (pin != null && pin.matches("\\d{4,8}")) {
-            prefs.edit().putString("pin_hash", hash(pin)).apply();
-        }
-        // menu-update channel (empty value removes it); the page reads these through SarcafeKiosk.config()
-        changed |= setSyncPref(intent, "api", "https://");     // snapshot endpoint the page fetches when told to
-        changed |= setSyncPref(intent, "rt", "https://");      // realtime server base address
-        changed |= setSyncPref(intent, "rt_key", "");           // its public (anon) key
-        changed |= setSyncPref(intent, "signup_key", "");       // the kiosk's key for the sign-up endpoint (adb extra: key)
-        String signupKey = intent.getStringExtra("key");
-        if (signupKey != null) {
-            if (signupKey.isEmpty()) prefs.edit().remove("signup_key").apply();
-            else if (signupKey.length() <= 200) prefs.edit().putString("signup_key", signupKey).apply();
-            changed = true;
-        }
-        String perf = intent.getStringExtra("perf"); // auto | lite | full
-        if (perf != null && perf.matches("auto|lite|full")) {
-            setPerfMode(perf);
-            changed = true;
-        }
-        String channel = intent.getStringExtra("rt_channel");
-        if (channel != null && channel.matches("[A-Za-z0-9:_-]{1,64}")) {
-            prefs.edit().putString("rt_channel", channel).apply();
-            changed = true;
-        }
-        return changed;
-    }
-
-    /** The page's speed setting; a change starts a fresh speed test (the epoch invalidates the remembered result). */
-    private void setPerfMode(String mode) {
-        prefs.edit().putString("perf", mode).putInt("perf_epoch", prefs.getInt("perf_epoch", 0) + 1).apply();
-    }
-
-    private boolean setSyncPref(Intent intent, String key, String requiredPrefix) {
-        String value = intent.getStringExtra(key);
-        if (value == null) return false;
-        if (value.isEmpty()) {
-            prefs.edit().remove(key).apply();
-            return true;
-        }
-        if (!value.startsWith(requiredPrefix) || value.length() > 400) return false;
-        prefs.edit().putString(key, value).apply();
-        return true;
-    }
+    /** True while the top-level page is the kiosk's own (the virtual origin); set on every main-frame load. */
+    private volatile boolean kioskPageOnTop;
 
     /** What the bundled page may know about the menu-update channel. None of it is secret (public key only). */
     private String syncConfigJson() {
@@ -227,28 +202,25 @@ public class MainActivity extends Activity {
             : ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
     }
 
-    private static String hash(String pin) {
-        try {
-            byte[] d = MessageDigest.getInstance("SHA-256").digest(("sarcafe-kiosk:" + pin).getBytes("UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : d) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
     // ---- web view --------------------------------------------------------------------------
 
     private void configureWebView() {
         WebView.setWebContentsDebuggingEnabled(prefs.getBoolean("debug", false));
         web.addJavascriptInterface(new Object() {
-            @JavascriptInterface public String config() { return syncConfigJson(); }
+            // the sign-up key is in here: only the kiosk's own page gets an answer, any other top-level page gets "{}"
+            @JavascriptInterface public String config() { return kioskPageOnTop ? syncConfigJson() : "{}"; }
         }, "SarcafeKiosk");
+        // the page reports that it booted; a freshly switched-in web bundle is rolled back without this
+        web.addJavascriptInterface(new Object() {
+            @JavascriptInterface public void ready(final String version) {
+                if (!kioskPageOnTop) return;
+                ui.post(new Runnable() { @Override public void run() { if (ota != null) ota.onReady(version); } });
+            }
+        }, "KioskNative");
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true); // needed for the bundled page; file URLs may not reach other files
+        s.setAllowFileAccess(false); // the bundled page is served from the virtual https origin, not file://
         s.setAllowFileAccessFromFileURLs(false);
         s.setAllowUniversalAccessFromFileURLs(false);
         s.setAllowContentAccess(false);
@@ -269,12 +241,31 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if ("file".equals(u.getScheme()) && u.toString().startsWith("file:///android_asset/")) return false;
+                if ("https".equals(u.getScheme()) && OtaUpdater.VIRTUAL_HOST.equals(u.getHost())) return false;
                 Uri home = Uri.parse(currentUrl);
                 if ("https".equals(u.getScheme()) && home.getHost() != null && home.getHost().equals(u.getHost())) {
                     return false;
                 }
                 return true; // anything else is blocked
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                Uri u = req.getUrl();
+                if (ota != null && "https".equals(u.getScheme()) && OtaUpdater.VIRTUAL_HOST.equals(u.getHost())) {
+                    return ota.serve(u, req.getMethod());
+                }
+                return null; // everything else goes to the network as before
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                kioskPageOnTop = isKioskPage(url);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (ota != null) ota.onPageFinished(url);
             }
 
             @Override
@@ -284,20 +275,27 @@ public class MainActivity extends Activity {
 
             @Override
             public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                if (ota != null) ota.onRendererGone(); // a bundle on trial is rolled back before the page comes back
                 recreate();
                 return true;
             }
         });
     }
 
+    static boolean isKioskPage(String url) {
+        return url != null && url.startsWith("https://" + OtaUpdater.VIRTUAL_HOST + "/");
+    }
+
     private void load() {
         String saved = prefs.getString("url", null);
         currentUrl = saved != null ? saved : ASSET_URL;
+        kioskPageOnTop = isKioskPage(currentUrl); // before any script of the new page can run
         ui.removeCallbacks(retry);
         web.loadUrl(currentUrl);
     }
 
     private void showOffline() {
+        kioskPageOnTop = false;
         web.loadDataWithBaseURL(null, OFFLINE_HTML, "text/html", "utf-8", null);
         ui.removeCallbacks(retry);
         ui.postDelayed(retry, RETRY_MS);
@@ -375,10 +373,18 @@ public class MainActivity extends Activity {
     }
 
     private void askPin() {
-        final String stored = prefs.getString("pin_hash", null);
-        if (stored == null) {
+        final String stored = prefs.getString("pin_v2", null);
+        final String legacy = prefs.getString("pin_hash", null); // the pre-2026-10-28 format, accepted once
+        if (stored == null && legacy == null) {
             new AlertDialog.Builder(this)
                 .setMessage("No staff PIN is set. Set one over adb.")
+                .setPositiveButton("OK", null).show();
+            return;
+        }
+        long lockedFor = prefs.getLong("pin_locked_until", 0) - System.currentTimeMillis();
+        if (lockedFor > 0) {
+            new AlertDialog.Builder(this)
+                .setMessage("Too many wrong PINs. Try again in " + ((lockedFor + 59999) / 60000) + " min.")
                 .setPositiveButton("OK", null).show();
             return;
         }
@@ -390,13 +396,29 @@ public class MainActivity extends Activity {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
                 @Override public void onClick(android.content.DialogInterface d, int w) {
-                    if (stored.equals(hash(input.getText().toString()))) staffMenu();
+                    checkPin(input.getText().toString(), stored, legacy);
                 }
             }).create();
         // the number keypad opens by itself, with the cursor already in the field
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         dialog.show();
         input.requestFocus();
+    }
+
+    /** PBKDF2 check; a correct legacy PIN is moved to the new format; wrong tries lock the dialog for longer each time. */
+    private void checkPin(String pin, String stored, String legacy) {
+        boolean ok = stored != null ? StaffPin.verify(stored, pin) : StaffPin.verifyLegacy(legacy, pin);
+        if (ok) {
+            SharedPreferences.Editor e = prefs.edit().remove("pin_failures").remove("pin_locked_until");
+            if (stored == null) e.putString("pin_v2", StaffPin.create(pin, new java.security.SecureRandom())).remove("pin_hash");
+            e.apply();
+            staffMenu();
+            return;
+        }
+        int failures = prefs.getInt("pin_failures", 0) + 1;
+        long lock = StaffPin.lockoutMs(failures);
+        prefs.edit().putInt("pin_failures", failures)
+            .putLong("pin_locked_until", lock > 0 ? System.currentTimeMillis() + lock : 0).apply();
     }
 
     private void staffMenu() {
@@ -406,7 +428,8 @@ public class MainActivity extends Activity {
             "Reload page", "Wi-Fi settings (unlocks for 5 min)", "Unlock for 5 min",
             "Exit kiosk mode (tap the Sarcafe Kiosk app to return)",
             "Remove kiosk completely (needs adb to set up again)",
-            "Speed: " + perfNow + "  (tap for " + perfNext + ")", "Cancel" };
+            "Speed: " + perfNow + "  (tap for " + perfNext + ")",
+            ota.summaryLine(), "Check for updates now", "Cancel" };
         new AlertDialog.Builder(this)
             .setTitle("Sarcafe Kiosk")
             .setItems(items, new android.content.DialogInterface.OnClickListener() {
@@ -418,8 +441,36 @@ public class MainActivity extends Activity {
                     } else if (which == 2) unlockForStaff();
                     else if (which == 3) confirmLeave(false);
                     else if (which == 4) confirmLeave(true);
-                    else if (which == 5) { setPerfMode(perfNext); load(); }
+                    else if (which == 5) { KioskConfigReceiver.setPerfMode(prefs, perfNext); load(); }
+                    else if (which == 6) updatesDialog();
+                    else if (which == 7) checkUpdatesNow();
                 }
+            }).show();
+    }
+
+    private void checkUpdatesNow() {
+        ota.checkNow();
+        android.widget.Toast.makeText(this, "Checking for updates; open this menu again in a minute for the result.",
+            android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    /** Details of the update state, with "check now" and "undo the last page update". */
+    private void updatesDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("Updates")
+            .setMessage(ota.details())
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Undo page update", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) {
+                    if (!ota.undoWebUpdate()) {
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setMessage("The page built into the app is in use; there is nothing to undo.")
+                            .setPositiveButton("OK", null).show();
+                    }
+                }
+            })
+            .setPositiveButton("Check now", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { checkUpdatesNow(); }
             }).show();
     }
 

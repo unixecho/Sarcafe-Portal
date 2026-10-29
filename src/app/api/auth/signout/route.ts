@@ -30,7 +30,9 @@ export async function POST() {
   const { error } = await supabase.auth.signOut({ scope })
 
   if (error && error.name !== 'AuthSessionMissingError') {
-    return NextResponse.json({ error: { code: 'signout_failed', message: error.message } }, { status: 500 })
+    // The auth server's own wording stays in the log, never in the response.
+    console.error('signout failed:', error.name)
+    return NextResponse.json({ error: { code: 'signout_failed', message: 'Sign-out failed. Try again.' } }, { status: 500 })
   }
   return response
 }

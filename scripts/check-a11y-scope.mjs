@@ -23,14 +23,14 @@ writeFileSync(join(dir, 'scope.mjs'), ts.transpileModule(read('src/lib/a11y-scop
 const S = await import(pathToFileURL(join(dir, 'scope.mjs')).href)
 
 section('which pages are customer-facing')
-for (const p of ['/', '/menu', '/menu/maor', '/order', '/order/abc', '/accessibility', '/privacy', '/board/xyz']) check(`${p} is customer-facing`, S.isCustomerFacing(p) === true)
+for (const p of ['/', '/menu', '/menu/maor', '/order', '/order/abc', '/accessibility', '/privacy', '/board/xyz', '/feedback']) check(`${p} is customer-facing`, S.isCustomerFacing(p) === true)
 for (const p of ['/owner', '/owner/dashboard', '/owner/branches/maor', '/owner/issues', '/staff', '/staff/dev', '/staff/schedule', '/staff/onboarding', '/pos', '/login', '/auth/callback', '/no-access', '/checklists', '/something-new', '/menuX', '/ordering', '']) check(`${JSON.stringify(p)} is NOT`, S.isCustomerFacing(p) === false)
 check('no path at all is private', S.isCustomerFacing(null) === false && S.isCustomerFacing(undefined) === false)
 
 section('every top-level page of the app is classified (a new one must be decided on purpose)')
 const app = join(ROOT, 'src/app')
 const tops = readdirSync(app).filter((n) => statSync(join(app, n)).isDirectory() && n !== 'api')
-const CUSTOMER = ['accessibility', 'board', 'menu', 'order', 'privacy']
+const CUSTOMER = ['accessibility', 'board', 'feedback', 'menu', 'order', 'privacy']
 const PRIVATE = ['auth', 'login', 'crew', 'no-access', 'owner', 'pos', 'staff', 'fixture']
 const unknown = tops.filter((n) => !CUSTOMER.includes(n) && !PRIVATE.includes(n))
 check('no unclassified top-level route', unknown.length === 0, unknown.join(', '))
