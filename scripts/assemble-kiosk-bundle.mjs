@@ -26,9 +26,9 @@ const PUBLIC = join(repo, 'public');
 //             it registers with it), legal texts, the welcome screen's announcements, the sign-up, menu updates,
 //             and last the "page booted" signal to the app
 export const LAYERS = {
-  head: ['kiosk-perf.js', 'rubik.css', 'kiosk-app.css', 'kiosk-attract.css'],
+  head: ['kiosk-perf.js', 'rubik.css', 'kiosk-app.css', 'kiosk-attract.css', 'kiosk-battery.css'],
   afterMenu: ['kiosk-menu-cache.js'],
-  body: ['kiosk-menu-i18n.js', 'kiosk-i18n.js', 'kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-ready.js'],
+  body: ['kiosk-menu-i18n.js', 'kiosk-i18n.js', 'kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-battery.js', 'kiosk-ready.js'],
 };
 
 const tag = (file) => (file.endsWith('.css')

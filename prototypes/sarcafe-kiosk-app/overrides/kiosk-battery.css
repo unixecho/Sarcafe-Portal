@@ -1,0 +1,21 @@
+/* The battery pill (kiosk-battery.js): bottom corner, above every screen, never takes a touch. */
+.kiosk-battery {
+  position: fixed; z-index: 300; left: 10px; bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px 0 8px; border-radius: 13px;
+  color: #fff; background: rgba(23, 24, 19, .66);
+  font: 700 .78rem/1 Rubik, system-ui, sans-serif; letter-spacing: 0;
+  pointer-events: none; -webkit-user-select: none; user-select: none;
+}
+.kiosk-battery[hidden] { display: none; }
+.kb-cell { position: relative; width: 20px; height: 10px; border: 1.5px solid rgba(255, 255, 255, .85); border-radius: 3px; }
+.kb-cell::after { content: ""; position: absolute; top: 2px; right: -4px; width: 2px; height: 4px; background: rgba(255, 255, 255, .85); border-radius: 0 1px 1px 0; }
+.kb-fill { display: block; height: 100%; background: #9fd18b; border-radius: 1px; }
+.kb-bolt { display: none; width: 8px; height: 11px; fill: #9fd18b; }
+.kiosk-battery.is-charging .kb-bolt { display: block; }
+.kiosk-battery.is-low { background: rgba(176, 112, 8, .92); }
+.kiosk-battery.is-low .kb-fill { background: #ffe29a; }
+.kiosk-battery.is-critical { background: rgba(170, 32, 32, .95); animation: kb-pulse 1.6s ease-in-out infinite; }
+.kiosk-battery.is-critical .kb-fill { background: #fff; }
+@keyframes kb-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .kiosk-battery.is-critical { animation: none; } }

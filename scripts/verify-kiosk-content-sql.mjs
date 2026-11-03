@@ -10,6 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const MIGRATION = '20261028171500_kiosk_content_and_customer_feedback.sql'
+const NOTIFY_MIGRATION = '20261103130000_kiosk_poll_vote_notifications.sql'
 const migrations = fileURLToPath(new URL('../supabase/migrations/', import.meta.url))
 const db = new PGlite({ extensions: { pgcrypto } })
 let passed = 0
@@ -42,6 +43,8 @@ for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql'
 }
 check('all migrations apply in order', true)
 await db.exec(readFileSync(migrations + MIGRATION, 'utf8'))
+// the first migration's version of kiosk_feedback_submit is replaced by the later one; apply it again so the later one stays current
+await db.exec(readFileSync(migrations + NOTIFY_MIGRATION, 'utf8'))
 check('re-applying the migration works and seeds nothing twice', await count(`select count(*) n from public.kiosk_ads`) === 5
   && await count(`select count(*) n from public.kiosk_feedback_options`) === 5 && await count(`select count(*) n from public.kiosk_settings`) === 1)
 
@@ -158,6 +161,38 @@ check('a missing or short caller key is refused', (await submit({ key: 'short', 
 const off = opts[3]
 await save({ options: opts.map((o) => (o.id === off.id ? { ...o, enabled: false } : o)) })
 check('a switched-off option cannot be voted for', (await submit({ options: [off.id], key: key('d') })).error === 'bad_option')
+
+console.log('\nvote notifications')
+const dev = (await one(`insert into public.staff (first_name, badge, branch_id) values ('Dev', 'developer', $1) returning id`, [branch])).id
+const note = async (staff) => (await db.query(`select kind, title, body, link from public.schedule_notifications where staff_id=$1 and kind in ('poll.vote','dev.poll_vote') order by created_at, id`, [staff])).rows
+const ownerBefore = (await note(owner)).length
+const devBefore = (await note(dev)).length
+const reqN = crypto.randomUUID()
+await submit({ options: [opts[1].id, opts[2].id], suggestion: 'סוד שלא יוצג בהתראה', rating: 4, request: reqN, key: key('n') })
+const ownerNotes = await note(owner)
+const devNotes = await note(dev)
+check('an owner gets one poll.vote for the new answer', ownerNotes.length === ownerBefore + 1 && ownerNotes.at(-1).kind === 'poll.vote')
+check('a developer gets one dev.poll_vote for the new answer', devNotes.length === devBefore + 1 && devNotes.at(-1).kind === 'dev.poll_vote')
+check('an employee gets nothing', await count(`select count(*) n from public.schedule_notifications where staff_id=$1 and kind in ('poll.vote','dev.poll_vote')`, [barista]) === 0)
+const lastNote = ownerNotes.at(-1)
+check('the title names the poll and the link opens the results page', /הצבעה חדשה בסקר/.test(lastNote.title) && lastNote.link.url === '/owner/kiosk/feedback')
+check('the text carries the rating and the ticked options', lastNote.body.includes('★★★★☆') && lastNote.body.includes(opts[1].label) && lastNote.body.includes(opts[2].label), lastNote.body)
+check('the written suggestion is never in the alert, only that one exists', !lastNote.body.includes('סוד') && /הצעה כתובה/.test(lastNote.body))
+await submit({ options: [opts[1].id], request: reqN, key: key('n') })
+check('a replay writes no second alert', (await note(owner)).length === ownerBefore + 1)
+await submit({ options: opts.slice(0, 4).map((o) => o.id), key: key('n') })
+check('a refused answer writes no alert', (await note(owner)).length === ownerBefore + 1)
+await db.query(`update public.staff set active=false where id=$1`, [dev])
+await submit({ rating: 2, key: key('o') })
+check('an inactive developer is not told', (await note(dev)).length === devBefore + 1)
+await db.query(`update public.staff set active=true where id=$1`, [dev])
+for (let i = 0; i < 25; i++) await db.query(`insert into public.schedule_notifications (branch_id, staff_id, kind, title, body) values ($1,$2,'poll.vote','x','x')`, [branch, owner])
+const floodBefore = (await note(owner)).length
+await submit({ rating: 5, key: key('p') })
+check('past 20 poll alerts in an hour an owner gets no more, the answer is still stored', (await note(owner)).length === floodBefore
+  && await count(`select count(*) n from public.kiosk_feedback_responses where rating = 5 and suggestion is null`) >= 1)
+check('the other recipient (under the cap) is still told', (await note(dev)).length === devBefore + 2)
+await db.query(`delete from public.schedule_notifications where kind in ('poll.vote','dev.poll_vote')`)
 
 console.log('\nrate limit and retention')
 let limited = null
