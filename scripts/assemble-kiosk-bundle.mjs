@@ -22,13 +22,13 @@ const PUBLIC = join(repo, 'public');
 // The kiosk-only layers, in load order.
 //  head:      the speed check first (picks the light version before anything is painted), the bundled font, styles
 //  afterMenu: the last menu the dashboard pushed replaces the one shipped in the app, before app.js renders it
-//  body:      full-screen layout + keypad, business facts, the session controller (privacy reset; everything after
+//  body:      the languages first (Hebrew / English / Arabic: every later layer speaks through them), full-screen layout + keypad, business facts, the session controller (privacy reset; everything after
 //             it registers with it), legal texts, the welcome screen's announcements, the sign-up, menu updates,
 //             and last the "page booted" signal to the app
 export const LAYERS = {
   head: ['kiosk-perf.js', 'rubik.css', 'kiosk-app.css', 'kiosk-attract.css'],
   afterMenu: ['kiosk-menu-cache.js'],
-  body: ['kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-ready.js'],
+  body: ['kiosk-menu-i18n.js', 'kiosk-i18n.js', 'kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-ready.js'],
 };
 
 const tag = (file) => (file.endsWith('.css')

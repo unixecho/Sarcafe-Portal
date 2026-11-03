@@ -33,6 +33,7 @@
     "check:kiosk-content": "node scripts/check-kiosk-content.mjs",
     "check:security": "node scripts/check-security.mjs",
     "check:kiosk-session": "node scripts/check-kiosk-session.mjs",
+    "check:kiosk-i18n": "node scripts/check-kiosk-i18n.mjs",
     "check:shift-scroller": "node scripts/check-shift-scroller.mjs",
     "check:kiosk-ota": "node scripts/check-kiosk-ota.mjs"
   },

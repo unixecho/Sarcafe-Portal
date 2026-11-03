@@ -47,6 +47,15 @@
   const KINDS = new Set(Object.keys(KIND_LABEL));
   const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
+  // the visitor's language (kiosk-i18n.js); without that layer, the Hebrew above. Announcement texts the owner wrote
+  // stay as written; the built-in and starting ones, and every fixed word, follow the language.
+  const I = window.KioskI18n;
+  const tr = (key, hebrew, ...args) => (I ? I.t(key, ...args) : hebrew);
+  const kindLabel = (kind) => (I ? I.t('kinds')[kind] : KIND_LABEL[kind]);
+  const dayName = (d) => (I ? I.t('day', d) : `יום ${DAYS[d]}`);
+  const said = (text) => (I && text ? I.announcement(text) : text);
+  const dish = (name) => (I ? I.menuName(name) : name);
+
   // ---- strict validation of what the server sent (anything odd is dropped, never shown) ------------------------
   const isStr = (v, max) => typeof v === 'string' && v.length <= max;
   const optStr = (v, max) => v === null || v === undefined || isStr(v, max);
@@ -118,7 +127,7 @@
     canvas.width = canvas.height = (n + quiet * 2) * k;
     canvas.style.width = canvas.style.height = `${canvas.width / dpr}px`;
     canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', 'קוד QR');
+    canvas.setAttribute('aria-label', tr('qrAria', 'קוד QR'));
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -149,7 +158,7 @@
     const todaySource = todayException || todayRegular;
     if (todaySource) {
       const open = todayException ? !todayException.closed : !!todayRegular.open;
-      const line = el('p', 'attract-today', open ? 'היום ' : 'היום סגור');
+      const line = el('p', 'attract-today', open ? tr('today', 'היום ') : tr('closedToday', 'היום סגור'));
       if (open) {
         const time = el('span', '', span(todaySource.open, todaySource.close));
         time.dir = 'ltr'; // a time range inside Hebrew text must not be reordered
@@ -162,7 +171,7 @@
       const list = el('ul', 'attract-week');
       hours.week.slice().sort((a, b) => a.day - b.day).forEach((d) => {
         const item = el('li', d.day === today.weekday ? 'is-today' : '');
-        item.append(el('span', '', `יום ${DAYS[d.day]}`), el('b', '', d.open ? span(d.open, d.close) : 'סגור'));
+        item.append(el('span', '', dayName(d.day)), el('b', '', d.open ? span(d.open, d.close) : tr('closed', 'סגור')));
         item.lastChild.dir = 'ltr';
         list.append(item);
       });
@@ -178,11 +187,11 @@
     if (ahead.length) {
       const list = el('ul', 'attract-exceptions');
       ahead.slice(0, 3).forEach(({ day, e }) => {
-        const item = el('li', '', `יום ${DAYS[day.weekday]} `);
+        const item = el('li', '', `${dayName(day.weekday)} `);
         const date = el('span', '', day.label);
         date.dir = 'ltr';
         item.append(date, ': ');
-        if (e.closed) item.append('סגור');
+        if (e.closed) item.append(tr('closed', 'סגור'));
         else { const time = el('span', '', span(e.open, e.close)); time.dir = 'ltr'; item.append(time); }
         if (e.note) item.append(` · ${e.note}`);
         list.append(item);
@@ -206,7 +215,7 @@
     const list = el('ul', 'attract-highlights');
     items.forEach((item) => {
       const row = el('li');
-      row.append(el('span', '', item.name));
+      row.append(el('span', '', dish(item.name)));
       if (item.price !== null && item.price !== undefined) {
         const price = el('b', '', `₪${item.price}`);
         price.dir = 'ltr';
@@ -244,10 +253,10 @@
     slide.dataset.action = ad.action;
     slide.dataset.id = ad.id;
     const text = el('div', 'attract-text');
-    text.append(el('span', 'attract-kicker', KIND_LABEL[ad.kind]), el('h2', '', ad.title));
-    if (ad.body) text.append(el('p', '', ad.body));
-    if (ad.kind === 'loyalty') text.append(el('small', 'attract-note', 'המועדון בהקמה · ההטבות עוד לא פעילות'));
-    if (ad.action !== 'none') text.append(el('span', 'attract-cta', ad.action === 'join' ? 'לחצו להצטרפות לרשימה' : 'לחצו לתפריט'));
+    text.append(el('span', 'attract-kicker', kindLabel(ad.kind)), el('h2', '', said(ad.title)));
+    if (ad.body) text.append(el('p', '', said(ad.body)));
+    if (ad.kind === 'loyalty') text.append(el('small', 'attract-note', tr('clubNote', 'המועדון בהקמה · ההטבות עוד לא פעילות')));
+    if (ad.action !== 'none') text.append(el('span', 'attract-cta', ad.action === 'join' ? tr('ctaJoin', 'לחצו להצטרפות לרשימה') : tr('ctaMenu', 'לחצו לתפריט')));
     slide.append(text);
     if (media) { slide.classList.add('has-media'); slide.append(media); }
     return slide;
@@ -256,8 +265,11 @@
   // ---- the layout ----------------------------------------------------------------------------------------------
   const root = el('div', 'attract');
   const adsBox = el('section', 'attract-ads');
-  adsBox.setAttribute('aria-roledescription', 'קרוסלה');
-  adsBox.setAttribute('aria-label', 'עדכונים משרקפה');
+  const labelAds = () => {
+    adsBox.setAttribute('aria-roledescription', tr('carousel', 'קרוסלה'));
+    adsBox.setAttribute('aria-label', tr('adsAria', 'עדכונים משרקפה'));
+  };
+  labelAds();
   const dots = el('div', 'attract-dots');
   dots.setAttribute('aria-hidden', 'true');
   const actions = el('div', 'attract-actions');
@@ -276,8 +288,8 @@
     return b;
   };
   actions.append(
-    button('attract-menu', 'menu', 'לתפריט שלנו', 'M7 5h18v22H7zM11 11h10M11 16h10M11 21h6'),
-    button('attract-join', 'join', 'הצטרפו למועדון', 'M16 3.5 20 12l8.5 1.2-6.2 6 1.5 8.4L16 23.5l-7.8 4.1 1.5-8.4-6.2-6L12 12 16 3.5Z'),
+    button('attract-menu', 'menu', tr('btnMenu', 'לתפריט שלנו'), 'M7 5h18v22H7zM11 11h10M11 16h10M11 21h6'),
+    button('attract-join', 'join', tr('btnJoin', 'הצטרפו למועדון'), 'M16 3.5 20 12l8.5 1.2-6.2 6 1.5 8.4L16 23.5l-7.8 4.1 1.5-8.4-6.2-6L12 12 16 3.5Z'),
   );
   root.append(adsBox, actions);
   adsBox.append(dots);
@@ -406,6 +418,14 @@
   }
   S.onChange(onState);
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopSlides(); else runSlides(); });
+
+  // another language: the two buttons at once, the slides now if the welcome screen shows, else when it shows next
+  if (I) I.onChange(() => {
+    actions.querySelector('.attract-menu span').textContent = tr('btnMenu', 'לתפריט שלנו');
+    actions.querySelector('.attract-join span').textContent = tr('btnJoin', 'הצטרפו למועדון');
+    labelAds();
+    if (S.state === 'ATTRACT') { render(); runSlides(); } else renderPending = true;
+  });
 
   S.configure(content.settings);
   render();

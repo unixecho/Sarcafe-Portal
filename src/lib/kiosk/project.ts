@@ -5,6 +5,13 @@ import type { Localized, MenuCategory, MenuItem } from '@/lib/menu/types'
 // kiosk page renders. No draft, audit, uid, image, POS or modifier data leaves the server through here.
 // Pure (no database, no network) so scripts/check-kiosk-menu.mjs can run it directly.
 
+/** The kiosk's other languages. Hebrew is the main field set (name, title, note, types); these ride alongside. */
+export type KioskLang = 'en' | 'ar'
+export const KIOSK_LANGS: KioskLang[] = ['en', 'ar']
+
+/** An item's words in one other language. `types` lines up one-to-one with the Hebrew `types`. */
+export type KioskItemText = { name: string; note?: string; types?: string[] }
+
 export type KioskItem = {
   name: string
   price: number | string
@@ -12,9 +19,11 @@ export type KioskItem = {
   types?: string[]
   recommended?: boolean
   quantity?: number
+  /** Present only for a language the owner gave this item a name in; older kiosk pages simply ignore it. */
+  tr?: Partial<Record<KioskLang, KioskItemText>>
 }
 
-export type KioskCategory = { id: string; title: string; items: KioskItem[] }
+export type KioskCategory = { id: string; title: string; items: KioskItem[]; tr?: Partial<Record<KioskLang, { title: string }>> }
 
 export type KioskSnapshot = {
   branch: string
@@ -28,6 +37,31 @@ export type KioskSnapshot = {
 const label = (value?: Localized): string => (value?.he ?? value?.en ?? '').trim()
 
 const SOLD_OUT = 'אזל'
+const SOLD_OUT_IN: Record<KioskLang, string> = { en: 'Sold out', ar: 'نفدت الكمية' }
+
+/** A label in one of the other languages, or '' when the owner did not write one (the kiosk then shows the Hebrew). */
+const labelIn = (value: Localized | undefined, lang: KioskLang): string => (value?.[lang] ?? '').trim()
+
+function itemText(item: MenuItem, lang: KioskLang): KioskItemText | null {
+  const name = labelIn(item, lang)
+  if (!name) return null
+  const soldOut = SOLD_OUT_IN[lang]
+  const out: KioskItemText = { name }
+  // same rules as the Hebrew note below, in this language; a missing translation falls back to the Hebrew words
+  const note = labelIn(item.note, lang) || label(item.note)
+  if (note && item.available === false) out.note = `${note} — ${soldOut}`
+  else if (item.available === false) out.note = soldOut
+  else if (note) out.note = note
+  const types = (item.types ?? [])
+    .map((type) => {
+      const typeName = labelIn(type, lang) || label(type)
+      if (!typeName) return null
+      return type.available === false || type.quantity === 0 ? `${typeName} — ${soldOut}` : typeName
+    })
+    .filter((typeName): typeName is string => typeName !== null)
+  if (types.length > 0) out.types = types
+  return out
+}
 
 function projectItem(item: MenuItem): KioskItem | null {
   const name = label(item)
@@ -53,6 +87,13 @@ function projectItem(item: MenuItem): KioskItem | null {
 
   if (item.recommended === true) out.recommended = true
   if (typeof item.quantity === 'number' && item.quantity > 0) out.quantity = item.quantity
+
+  const tr: Partial<Record<KioskLang, KioskItemText>> = {}
+  for (const lang of KIOSK_LANGS) {
+    const text = itemText(item, lang)
+    if (text) tr[lang] = text
+  }
+  if (Object.keys(tr).length > 0) out.tr = tr
   return out
 }
 
@@ -62,7 +103,12 @@ export function projectKioskMenu(categories: MenuCategory[]): KioskCategory[] {
     const title = label(category.title)
     const items = (category.items ?? []).map(projectItem).filter((item): item is KioskItem => item !== null)
     if (!category.id || !title || items.length === 0) continue
-    out.push({ id: category.id, title, items })
+    const tr: Partial<Record<KioskLang, { title: string }>> = {}
+    for (const lang of KIOSK_LANGS) {
+      const text = labelIn(category.title, lang)
+      if (text) tr[lang] = { title: text }
+    }
+    out.push(Object.keys(tr).length > 0 ? { id: category.id, title, items, tr } : { id: category.id, title, items })
   }
   return out
 }

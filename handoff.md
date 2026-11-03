@@ -1,5 +1,41 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-11-03: kiosk in Hebrew, English and Arabic — pushed to `main`; the tablet takes it only after the owner signs the bundle on the PC; no migration
+
+- **Owner asks:** implement and thoroughly QA English and Arabic for the kiosk, push it to the kiosk, and have the kiosk update itself automatically over the truck's Wi-Fi.
+- **Language layer:**
+  - New files: `overrides/kiosk-i18n.js` (all fixed words in he/en/ar, the switch, lang/dir/title, menu localisation, revert rules) and `overrides/kiosk-menu-i18n.js` (Hebrew → [en, ar] glossary for the shipped/cached menu, names from the published Givat Haviva menu). Both load first in `LAYERS.body`.
+  - Layers now speaking through `window.KioskI18n`: `kiosk-attract.js` (labels, days, built-in and seeded announcements; owner-written text stays as written), `kiosk-session.js` (warning, and calls `attachSession`), `kiosk-signup.js` (messages by key, re-said on a change), `kiosk-sync.js` (item count), `kiosk-legal.js` (rewritten: full en/ar privacy notice, terms, short notice and both consent boxes; `SARCAFE_LEGAL_VERSIONS` is now a getter for the language on screen).
+  - Switch: on the welcome topline and in the header. Hebrew comes back on every reset except a finished sign-up's confirmation (the clearer skips reason `submitted`), and after the idle time on an abandoned welcome screen.
+  - CSS in `kiosk-app.css`: the switch, LTR arrow flips and card alignment, no letter-spacing for Arabic.
+  - Font: `fonts/rubik-arabic.woff2` (from `@fontsource-variable/rubik` 5.3.0, OFL) is in `rubik.css`.
+  - The prototype (`prototypes/sarcafe-kiosk/`) was not edited.
+- **Server:**
+  - `src/lib/kiosk/waitlist.ts`: `KIOSK_LEGAL_VERSIONS` (he = the unchanged v5/v5/v4 ids; en/ar `-v1-2026-11-03`). The schema accepts one language's set and refuses a mix. `legalLanguageOf()`.
+  - `src/lib/kiosk/project.ts`: the menu snapshot carries optional `tr.en/ar` per item (name, note, types with a localised "sold out") and per category (title) from `Localized.en/ar`. Hebrew fields are unchanged and old kiosk pages ignore `tr`. The snapshot version changes once, so the tablet re-fetches the menu.
+  - No database change: `customer_waitlist_register` only checks the length of the version strings.
+- **Docs:** new `docs/SARCAFE_KIOSK_LANGUAGES.md`; `SARCAFE_KIOSK_LEGAL_NOTES.md` §4 lists the per-language ids and says the translations were not reviewed by a lawyer or a native Arabic speaker. `package.json` has `check:kiosk-i18n`.
+- **Verification (cloud container, headless Chromium):**
+  - New `check:kiosk-i18n`: 233 pass. It covers en and ar in portrait and landscape on the packaged page:
+    - every screen, every menu category and the warning, with no Hebrew left and no overflow or clipping;
+    - the sign-up sends the language's ids (409 and 200 paths), and switching mid-form keeps the data;
+    - the timeout, the home button, the confirmation and an abandoned welcome screen bring back Hebrew;
+    - server `tr` takes priority over the glossary.
+  - Screenshots of every screen were reviewed by eye.
+  - Hebrew parity: the bundle from `bbcd164` against the new one is identical in text on all 9 screens, in the legal HTML, the version ids, the menu object, lang/dir and the title.
+  - Other checks: `check:kiosk-session` 132, `check:kiosk-ota` 94, `check:kiosk-content` 66, `check:kiosk-waitlist` 52, `check:kiosk-menu` 33 (9 new), `verify:kiosk-content-sql` 96.
+  - `tsc` is clean except the `a11y-widget` imports: that GitHub tarball dependency cannot be downloaded through this container's proxy, so `npm ci` was done in a scratch copy without it. No `next build` was run.
+- **NOT verified:** anything on the real tablet (Arabic shaping on its WebView, touch on the switch); the live `/api/kiosk/menu` returning `tr` (vercel.app is blocked from this container); a real sign-up in en/ar against production. The Arabic and English legal wording has not been reviewed by a lawyer or a native speaker.
+- **Automatic updates:** already on in the installed APK. `OtaUpdater` checks 20 s after start, every 10 minutes while the screen is on, and on network return, then switches at an idle moment. No APK change was needed.
+- **Blocker:** the tablet accepts a page bundle only when `public/kiosk-ota/web-signature.json` carries an ECDSA signature made with the private key on the owner's PC (`C:\Users\Johnathan\android-tools\sarcafe-kiosk-ota.pem`). This cloud session has no access to that PC (no Remote Control folder), so the bundle is published unsigned and the tablet keeps the current page.
+- **Exact next step (owner, on the PC):**
+  1. `git pull`
+  2. `node scripts/sign-kiosk-ota.mjs`
+  3. `git add public/kiosk-ota/web-signature.json && git commit -m "kiosk OTA: sign web bundle" && git push`
+  4. Within about 10 minutes, or with "Check for updates now" in the staff menu, the tablet switches at an idle moment and shows the language switch.
+  5. Optionally `node scripts/sign-kiosk-ota.mjs status` confirms the live manifest is signed.
+- **Still open from earlier:** migrations `20261028171500` / `20261028190000` are still not applied (unchanged by this work).
+
 ## Claude addendum, 2026-10-29: staff intro is now the loading screen, kiosk APK v2 installed + first signed OTA taken on the tablet — pushed (`dc73ce9`, `2c7c933`) and live; the two migrations are STILL NOT applied (the connector declined `apply_migration` again)
 
 - **Owner asks:** (1) run the migrations and verify them; (2) the staff-app intro was meant to replace the black screen while the app loads: play during loading and skip to the dashboard as soon as it is ready; (3) the tablet is connected: update it, make it take the OTA and check it works.

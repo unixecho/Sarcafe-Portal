@@ -25,12 +25,25 @@
   const submit = form.querySelector('.submit-consent');
   const S = window.KioskSession;
   const go = (name) => document.querySelector(`.screen-picker [data-screen="${name}"]`)?.click();
-  // the message sits under the button, below the fold on a tablet: bring it into view so the person always sees why
-  const say = (text) => {
-    if (!message) return;
-    message.textContent = text;
-    if (text) message.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // the message sits under the button, below the fold on a tablet: bring it into view so the person always sees why.
+  // Messages are named by key and spoken in the visitor's language (kiosk-i18n.js); a language change re-says the
+  // one on screen.
+  const I = window.KioskI18n;
+  const HEBREW = {
+    needNameAndConsent: 'כדי להמשיך צריך שם פרטי ואישור הודעת הפרטיות ותנאי השימוש.',
+    badEmail: 'כתובת הדוא״ל לא נראית תקינה. אפשר גם להשאיר אותה ריקה.',
+    alreadyRegistered: 'המספר הזה כבר רשום ברשימה, ואין צורך להירשם שוב. אם הקלדתם מספר אחר בטעות, אפשר לשנות אותו.',
+    notReceived: 'משהו בפרטים לא נקלט. בדקו את השם, המספר והדוא״ל ונסו שוב.',
   };
+  let shown = '';
+  const words = (key) => (key ? (I ? I.t(key) : HEBREW[key]) : '');
+  const say = (key) => {
+    if (!message) return;
+    shown = key;
+    message.textContent = words(key);
+    if (key) message.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
+  if (I) I.onChange(() => { if (message && shown && message.textContent) message.textContent = words(shown); });
 
   const endpoint = cfg.api ? cfg.api.replace(/\/menu(\?.*)?$/, '/waitlist') : '';
   const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID()
@@ -40,6 +53,7 @@
 
   // a fresh form means a fresh request id (every reset and every finished sign-up)
   if (S) S.registerClearer(() => { requestId = newId(); });
+  if (S) S.registerClearer(() => { shown = ''; }); // and no message is left to re-say
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -50,11 +64,11 @@
     const email = (form.elements.email.value || '').trim();
     const acknowledged = form.elements.privacy.checked;
     if (!firstName || !acknowledged) {
-      say('כדי להמשיך צריך שם פרטי ואישור הודעת הפרטיות ותנאי השימוש.');
+      say('needNameAndConsent');
       return;
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      say('כתובת הדוא״ל לא נראית תקינה. אפשר גם להשאיר אותה ריקה.');
+      say('badEmail');
       form.elements.email.focus();
       return;
     }
@@ -62,6 +76,7 @@
     if (!/^05\d{8}$/.test(phone)) { go('join'); return; }
     if (!endpoint || !cfg.signupKey) { go('error'); return; }
 
+    // the versions of the texts on screen right now, in the language they are shown in (kiosk-legal.js)
     const versions = window.SARCAFE_LEGAL_VERSIONS || {};
     const body = {
       firstName, phone, email, acknowledged: true, marketing: !!form.elements.marketing.checked,
@@ -93,8 +108,8 @@
       }
       if (res.status === 409) {
         // already on the list: nothing was changed. Say so plainly, keep the person on this screen, and let them change the number.
-        say('המספר הזה כבר רשום ברשימה, ואין צורך להירשם שוב. אם הקלדתם מספר אחר בטעות, אפשר לשנות אותו.');
-      } else if (res.status === 400) say('משהו בפרטים לא נקלט. בדקו את השם, המספר והדוא״ל ונסו שוב.');
+        say('alreadyRegistered');
+      } else if (res.status === 400) say('notReceived');
       else go('error');
     } catch (_) {
       if (current()) go('error');

@@ -8,6 +8,8 @@
  *   businessName                     the business, as the notice names it
  *   phone                            the number people call for privacy requests (access, correction, deletion, opt-out)
  *   email, address                   optional, shown when filled
+ *   businessNameEn / businessNameAr  how the English and Arabic texts name the business (the Hebrew name stays the
+ *                                    legal one; these only change the English / Arabic texts and their version ids)
  *
  * No company / VAT number is shown: the owner chose not to present one.
  */
@@ -15,6 +17,8 @@ window.SARCAFE_BUSINESS = {
   ownerFirstName: 'שרי',
   ownerLastName: 'איסרליס',
   businessName: 'שרקפה (Sarcafe)',
+  businessNameEn: 'Sarcafe (שרקפה)',
+  businessNameAr: 'ساركافيه (Sarcafe)',
   phone: '0507437395',
   email: '',
   address: '',

@@ -98,6 +98,20 @@
   const barEl = modal.querySelector('.kiosk-warning-bar i');
   const stayButton = modal.querySelector('[data-session="stay"]');
 
+  // the warning's words follow the kiosk's language (kiosk-i18n.js); the template above is the Hebrew
+  function words() {
+    const I = window.KioskI18n;
+    if (!I) return;
+    modal.querySelector('#kiosk-warning-title').textContent = I.t('warnTitle');
+    modal.querySelector('#kiosk-warning-text').textContent = I.t('warnText');
+    const left = modal.querySelector('.kiosk-warning-left');
+    const [before, after] = I.t('warnLeft');
+    left.firstChild.nodeValue = before;
+    left.lastChild.nodeValue = after;
+    stayButton.textContent = I.t('warnStay');
+    modal.querySelector('[data-session="reset"]').textContent = I.t('warnReset');
+  }
+
   function showCount() {
     const left = Math.max(0, Math.ceil((graceDeadline - now()) / (1000 * scale)));
     countEl.textContent = String(left);
@@ -315,6 +329,13 @@
       if (state === 'ACTIVE') arm();
     },
   };
+
+  // languages: the warning speaks the visitor's language, and every reset puts the kiosk back in Hebrew
+  if (window.KioskI18n) {
+    window.KioskI18n.attachSession(window.KioskSession);
+    window.KioskI18n.onChange(words);
+    words();
+  }
 
   // the app always opens on the welcome screen, which is clean
   if (screen() === 'welcome') setState('ATTRACT', { reason: 'start' });

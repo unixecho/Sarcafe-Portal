@@ -10,6 +10,30 @@ export const KIOSK_PRIVACY_VERSION = 'kiosk-privacy-he-v5-2026-10-28'
 export const KIOSK_CONSENT_VERSION = 'kiosk-consent-he-v5-2026-10-28'
 export const KIOSK_TERMS_VERSION = 'kiosk-terms-he-v4-2026-10-28'
 
+/**
+ * The kiosk shows its texts in Hebrew, English or Arabic. Each language is its own wording, so each has its own
+ * version ids, and a sign-up must name the three ids of ONE language (the one on screen when the box was ticked).
+ * Hebrew stays the ids above; English and Arabic are translations of that same Hebrew wording.
+ */
+export const KIOSK_LEGAL_VERSIONS = {
+  he: { privacy: KIOSK_PRIVACY_VERSION, consent: KIOSK_CONSENT_VERSION, terms: KIOSK_TERMS_VERSION },
+  en: { privacy: 'kiosk-privacy-en-v1-2026-11-03', consent: 'kiosk-consent-en-v1-2026-11-03', terms: 'kiosk-terms-en-v1-2026-11-03' },
+  ar: { privacy: 'kiosk-privacy-ar-v1-2026-11-03', consent: 'kiosk-consent-ar-v1-2026-11-03', terms: 'kiosk-terms-ar-v1-2026-11-03' },
+} as const
+
+export type KioskLegalLang = keyof typeof KIOSK_LEGAL_VERSIONS
+const LEGAL_LANGS = Object.keys(KIOSK_LEGAL_VERSIONS) as KioskLegalLang[]
+const versionsOf = (kind: 'privacy' | 'consent' | 'terms') =>
+  LEGAL_LANGS.map((lang) => KIOSK_LEGAL_VERSIONS[lang][kind]) as [string, ...string[]]
+
+/** The language whose three version ids these are, or null when they are not one current set. */
+export function legalLanguageOf(privacy: string, consent: string, terms: string): KioskLegalLang | null {
+  return LEGAL_LANGS.find((lang) => {
+    const v = KIOSK_LEGAL_VERSIONS[lang]
+    return v.privacy === privacy && v.consent === consent && v.terms === terms
+  }) ?? null
+}
+
 /** The longest body the endpoint reads. The form is a name, a phone and an e-mail; anything bigger is not from the kiosk. */
 export const MAX_BODY_BYTES = 4096
 
@@ -23,13 +47,18 @@ export const signupSchema = z
     /** The separate, optional marketing consent. */
     marketing: z.boolean(),
     requestId: z.string().uuid(),
-    privacyVersion: z.literal(KIOSK_PRIVACY_VERSION),
-    consentVersion: z.literal(KIOSK_CONSENT_VERSION),
-    termsVersion: z.literal(KIOSK_TERMS_VERSION),
+    privacyVersion: z.enum(versionsOf('privacy')),
+    consentVersion: z.enum(versionsOf('consent')),
+    termsVersion: z.enum(versionsOf('terms')),
     /** Honeypot: a person never sees this field; a bot fills it. */
     website: z.string().max(200).optional().default(''),
   })
   .strict()
+  // the three ids must be one language's set: no Hebrew notice with English terms
+  .refine((v) => legalLanguageOf(v.privacyVersion, v.consentVersion, v.termsVersion) !== null, {
+    message: 'The notice, consent and terms versions must belong to one language.',
+    path: ['termsVersion'],
+  })
 
 export type SignupInput = z.infer<typeof signupSchema>
 

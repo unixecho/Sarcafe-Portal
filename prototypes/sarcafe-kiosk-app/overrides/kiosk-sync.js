@@ -26,8 +26,9 @@
     const menu = window.SARCAFE_MENU;
     if (!menu || !menu.version || !Array.isArray(menu.categories)) return; // the menu shipped in the app says its own numbers
     const count = menu.categories.reduce((sum, category) => sum + category.items.length, 0);
-    document.querySelectorAll('.menu-source').forEach((el) => { el.textContent = `${count} פריטים בתפריט`; });
-    document.querySelectorAll('.decision-menu small').forEach((el) => { el.textContent = el.textContent.replace(/\d+/, String(count)); });
+    const I = window.KioskI18n; // the count in the visitor's language; kiosk-i18n.js redraws it on a language change
+    document.querySelectorAll('.menu-source').forEach((el) => { el.textContent = I ? I.t('menuCount', count) : `${count} פריטים בתפריט`; });
+    document.querySelectorAll('.decision-menu small').forEach((el) => { el.textContent = I ? I.t('choiceMenuText', count) : el.textContent.replace(/\d+/, String(count)); });
     const published = menu.publishedAt ? new Date(menu.publishedAt) : null;
     if (published && !Number.isNaN(published.getTime())) {
       const two = (n) => String(n).padStart(2, '0');

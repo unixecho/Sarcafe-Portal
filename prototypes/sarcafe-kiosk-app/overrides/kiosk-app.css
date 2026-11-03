@@ -113,3 +113,33 @@ html[data-perf="lite"] .panel:not(.panel-welcome) { animation: panel-in-lite .35
 /* credit line under the welcome footnote (kiosk-app.js): a second, smaller line, kept inside the frame and clear of the start button */
 .panel-welcome .welcome-footnote { bottom: 24px; line-height: 1.35; }
 .panel-welcome .welcome-credit { display: block; margin-top: 2px; font-size: .66rem; line-height: 1.35; color: rgba(255, 255, 255, .78); }
+
+/* ---- languages (kiosk-i18n.js): the switch, English left to right, Arabic set properly ---- */
+.lang-switch { flex: 0 0 auto; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; direction: ltr; }
+.lang-switch button {
+  min-width: 62px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 999px;
+  color: inherit; background: transparent; font: inherit; font-size: .8rem; font-weight: 700; line-height: 1;
+  touch-action: manipulation; transition: background-color .15s ease, color .15s ease;
+}
+.lang-switch button[aria-pressed="true"] { font-weight: 800; }
+/* in the header (every screen but the welcome one) */
+.lang-switch-header { color: var(--espresso); background: #f3ecdc; border: 1px solid var(--line); }
+.lang-switch-header button[aria-pressed="true"] { color: #fff; background: var(--forest); }
+.lang-switch-header button:active { background: #e6dccb; }
+/* on the welcome photo: light on dark, and a little larger for a first tap */
+.welcome-topline > span { margin-inline-start: auto; }
+.lang-switch-welcome { color: #fff8e7; background: rgba(14, 16, 12, .62); border: 1px solid rgba(234, 215, 166, .5); }
+.lang-switch-welcome button { min-height: 44px; min-width: 70px; font-size: .86rem; }
+.lang-switch-welcome button[aria-pressed="true"] { color: var(--espresso); background: var(--brass-light); }
+.lang-switch-welcome button:active { background: rgba(234, 215, 166, .3); }
+.kb-open .lang-switch-header { display: none; }
+
+/* English reads left to right: the "forward" arrows turn around, and the cards align to the start */
+html[dir="ltr"] .start-cta svg, html[dir="ltr"] .decision-arrow svg, html[dir="ltr"] .quick-submit svg { transform: scaleX(-1); }
+html[dir="ltr"] .decision-card { text-align: left; }
+html[dir="ltr"] .kiosk-warning-bar i { transform-origin: left center; }
+
+/* Arabic is joined script: no letter spacing (it would pull the letters apart), and a little more room per line */
+html[lang="ar"] body, html[lang="ar"] body * { letter-spacing: 0 !important; }
+html[lang="ar"] .welcome-copy h1 { line-height: 1.15; }
+html[lang="ar"] .decision-copy strong, html[lang="ar"] .choice-heading h1 { line-height: 1.2; }

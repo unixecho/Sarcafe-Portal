@@ -59,7 +59,25 @@ check('a zero quantity is not shown as a count', K.projectKioskMenu([category('c
 section('what is left out')
 eq('items without a name or a price are dropped', K.projectKioskMenu([category('c', 'ג', [{ he: 'ללא מחיר' }, { price: 5 }, { he: 'ok', price: 5 }])])[0].items.map((i) => i.name), ['ok'])
 eq('an empty category disappears', K.projectKioskMenu([category('c', 'ריקה', []), category('d', 'ג', [{ he: 'a', price: 1 }])]).map((c) => c.id), ['d'])
-eq('English is used when Hebrew is missing', K.projectKioskMenu([{ id: 'e', title: { en: 'Cold' }, items: [{ en: 'Iced', price: 3 }] }])[0], { id: 'e', title: 'Cold', items: [{ name: 'Iced', price: 3 }] })
+eq('English is used when Hebrew is missing', K.projectKioskMenu([{ id: 'e', title: { en: 'Cold' }, items: [{ en: 'Iced', price: 3 }] }])[0], { id: 'e', title: 'Cold', items: [{ name: 'Iced', price: 3, tr: { en: { name: 'Iced' } } }], tr: { en: { title: 'Cold' } } })
+
+section('English and Arabic (the kiosk language switch)')
+const tri = K.projectKioskMenu([{ id: 'hot', title: { he: 'קפה חם', en: 'Hot Coffee', ar: 'قهوة ساخنة' }, items: [
+  { he: 'הפוך', en: 'Latte', ar: 'لاتيه', price: 13, note: { he: 'חלב מוקצף', en: 'Frothed milk' } },
+  { he: 'מאפה', en: 'Pastry', price: 15, types: [{ uid: 't1', he: 'גבינית', en: 'Cheese', ar: 'جبنة' }, { uid: 't2', he: 'שקדים', en: 'Almond', ar: 'لوز', available: false }] },
+  { he: 'שייק', ar: 'شيك', price: 25, available: false },
+  { he: 'סודה', price: 8 },
+] }])[0]
+eq('the category title travels in both languages', tri.tr, { en: { title: 'Hot Coffee' }, ar: { title: 'قهوة ساخنة' } })
+eq('Hebrew fields are unchanged by the translations', [tri.title, tri.items[0].name, tri.items[0].note], ['קפה חם', 'הפוך', 'חלב מוקצף'])
+eq('an item with both names carries both; a missing note translation falls back to the Hebrew note', tri.items[0].tr, { en: { name: 'Latte', note: 'Frothed milk' }, ar: { name: 'لاتيه', note: 'חלב מוקצף' } })
+eq('types line up with the Hebrew ones and sold out is said in the language', [tri.items[1].types, tri.items[1].tr.en.types], [['גבינית', 'שקדים — אזל'], ['Cheese', 'Almond — Sold out']])
+eq('a language the owner did not name the item in is simply absent', [Object.keys(tri.items[1].tr), Object.keys(tri.items[2].tr)], [['en'], ['ar']])
+eq('a sold-out item says so in Arabic', tri.items[2].tr.ar, { name: 'شيك', note: 'نفدت الكمية' })
+check('an item with Hebrew only has no tr at all (the snapshot stays as small as before)', tri.items[3].tr === undefined)
+check('still nothing internal in a translated snapshot', !/uid|image|icon|modifier|available/.test(JSON.stringify(tri)))
+const renamed = JSON.parse(JSON.stringify(published)); renamed[0].items[0].en = 'Espresso'
+check('adding an English name changes the version (the kiosk picks it up)', K.buildKioskSnapshot('x', null, renamed).version !== K.buildKioskSnapshot('x', null, published).version)
 
 section('the version')
 const a = K.buildKioskSnapshot('x', null, published).version

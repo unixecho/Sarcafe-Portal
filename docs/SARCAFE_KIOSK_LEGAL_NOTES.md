@@ -56,6 +56,19 @@ The ids in `kiosk-legal.js` and in `src/lib/kiosk/waitlist.ts` must match; the s
 
 Change all of them together whenever any wording changes (`npm run check:kiosk-waitlist` fails if they drift apart).
 
+**English and Arabic (added 2026-11-03).** The kiosk can show every text in English or Arabic (`docs/SARCAFE_KIOSK_LANGUAGES.md`).
+The English and Arabic notice, consent wording and terms are translations of the Hebrew above, with the same sections and the same
+facts. Each language has its own ids, because a visitor agrees to the words on screen in the language on screen:
+
+- English: `kiosk-privacy-en-v1-2026-11-03`, `kiosk-consent-en-v1-2026-11-03`, `kiosk-terms-en-v1-2026-11-03`
+- Arabic: `kiosk-privacy-ar-v1-2026-11-03`, `kiosk-consent-ar-v1-2026-11-03`, `kiosk-terms-ar-v1-2026-11-03`
+
+The server (`KIOSK_LEGAL_VERSIONS` in `src/lib/kiosk/waitlist.ts`) accepts one language's three ids together and refuses a mix; the
+stored consent event therefore says which language was agreed to. The Hebrew ids did not change (no Hebrew word changed). The
+translations were written by the developer's assistant, not by a lawyer or a native Arabic speaker: have both read before relying on
+them in a dispute. The English and Arabic texts name the business as `businessNameEn` / `businessNameAr` (kiosk-business.js) and keep
+the owner's name as written in Hebrew. A change to the English or Arabic wording bumps only that language's ids.
+
 ## 5. Turning it on (status)
 
 1. DONE 2026-10-28: migration `20261027150000_customer_waitlist.sql` applied to production and recorded in the ledger.

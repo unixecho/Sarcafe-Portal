@@ -37,6 +37,14 @@ check('an unknown field is refused', !W.signupSchema.safeParse({ ...good, isAdmi
 check('the privacy / terms acknowledgement must be literally true', !W.signupSchema.safeParse({ ...good, acknowledged: false }).success && !W.signupSchema.safeParse({ ...good, acknowledged: 'yes' }).success)
 check('marketing is a real boolean, never inferred', !W.signupSchema.safeParse({ ...good, marketing: 'true' }).success && W.signupSchema.safeParse({ ...good, marketing: true }).success)
 check('only the CURRENT notice, consent and terms versions are accepted', ['privacyVersion', 'consentVersion', 'termsVersion'].every((k) => !W.signupSchema.safeParse({ ...good, [k]: 'old-version' }).success))
+for (const lang of ['he', 'en', 'ar']) {
+  const v = W.KIOSK_LEGAL_VERSIONS[lang]
+  check(`the ${lang} notice, consent and terms set is accepted`, W.signupSchema.safeParse({ ...good, privacyVersion: v.privacy, consentVersion: v.consent, termsVersion: v.terms }).success)
+  check(`the ${lang} ids name their language and are dated`, [v.privacy, v.consent, v.terms].every((id) => id.includes(`-${lang}-v`) && /-v[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(id)))
+}
+check('Hebrew stays the ids the server took before (no Hebrew wording changed)', W.KIOSK_LEGAL_VERSIONS.he.privacy === W.KIOSK_PRIVACY_VERSION && W.KIOSK_LEGAL_VERSIONS.he.consent === W.KIOSK_CONSENT_VERSION && W.KIOSK_LEGAL_VERSIONS.he.terms === W.KIOSK_TERMS_VERSION)
+check('a mixed set (Hebrew notice with English terms) is refused', !W.signupSchema.safeParse({ ...good, termsVersion: W.KIOSK_LEGAL_VERSIONS.en.terms }).success && !W.signupSchema.safeParse({ ...good, privacyVersion: W.KIOSK_LEGAL_VERSIONS.ar.privacy }).success)
+check('legalLanguageOf names the set, or null', W.legalLanguageOf(W.KIOSK_LEGAL_VERSIONS.ar.privacy, W.KIOSK_LEGAL_VERSIONS.ar.consent, W.KIOSK_LEGAL_VERSIONS.ar.terms) === 'ar' && W.legalLanguageOf(W.KIOSK_PRIVACY_VERSION, W.KIOSK_CONSENT_VERSION, W.KIOSK_LEGAL_VERSIONS.en.terms) === null)
 check('the request id must be a uuid', !W.signupSchema.safeParse({ ...good, requestId: 'abc' }).success)
 check('an over-long name or e-mail is refused', !W.signupSchema.safeParse({ ...good, firstName: 'א'.repeat(61) }).success && !W.signupSchema.safeParse({ ...good, email: 'a'.repeat(250) + '@b.co' }).success)
 check('the versions are dated ids', [W.KIOSK_PRIVACY_VERSION, W.KIOSK_CONSENT_VERSION, W.KIOSK_TERMS_VERSION].every((v) => /-v[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)))
@@ -89,7 +97,7 @@ const signup = read('prototypes/sarcafe-kiosk-app/overrides/kiosk-signup.js')
 const session = read('prototypes/sarcafe-kiosk-app/overrides/kiosk-session.js')
 const css = read('prototypes/sarcafe-kiosk-app/overrides/kiosk-app.css')
 const perf = read('prototypes/sarcafe-kiosk-app/overrides/kiosk-perf.js')
-check('the versions on the screen are the versions the server accepts', [W.KIOSK_PRIVACY_VERSION, W.KIOSK_CONSENT_VERSION, W.KIOSK_TERMS_VERSION].every((v) => legal.includes(`'${v}'`)))
+check('the versions on the screen are the versions the server accepts (every language)', Object.values(W.KIOSK_LEGAL_VERSIONS).every((set) => Object.values(set).every((v) => legal.includes(`'${v}'`))))
 check('the privacy notice has the s.11 elements: who, what, why, mandatory or not, recipients, retention, rights, spam, minors', ['מי אחראי', 'איזה מידע נאסף', 'למה אנחנו משתמשים', 'האם חייבים למסור', 'למי המידע עשוי להגיע', 'כמה זמן נשמר', 'הזכויות שלכם', 'דברי פרסומת', 'גיל'].every((h) => legal.includes(h)))
 check('the terms exist and say it is not a club, not a promise', /תנאי שימוש ורשימת המתעניינים/.test(legal) && /אין מועדון פעיל, אין חברות/.test(legal))
 check('a business fact that is still missing is a visible placeholder, the screen warns, and the business file lists every field', /legal-fill/.test(legal) && /legal-warning/.test(legal) && ['ownerFirstName','ownerLastName','businessName','phone'].every((k) => read('prototypes/sarcafe-kiosk-app/overrides/kiosk-business.js').includes(k + ':')))
