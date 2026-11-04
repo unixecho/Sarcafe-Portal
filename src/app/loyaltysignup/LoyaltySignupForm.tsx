@@ -151,7 +151,7 @@ export default function LoyaltySignupForm({ initialLang, token }: { initialLang:
         <header className="ls-hero">
           <div className="ls-top">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="ls-logo" src="/sarcafe-logo-white.png" alt="Sarcafe" width={76} height={76} />
+            <span className="ls-logo"><img src="/sarcafe-logo.png" alt="Sarcafe" width={84} height={84} /></span>
             <div className="ls-langs" role="group" aria-label={COPY.he.langAria + ' / ' + COPY.en.langAria + ' / ' + COPY.ar.langAria}>
               {LOYALTY_LANGS.map((code) => (
                 <button
