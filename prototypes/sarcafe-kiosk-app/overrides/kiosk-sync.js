@@ -28,7 +28,7 @@
     const count = menu.categories.reduce((sum, category) => sum + category.items.length, 0);
     const I = window.KioskI18n; // the count in the visitor's language; kiosk-i18n.js redraws it on a language change
     document.querySelectorAll('.menu-source').forEach((el) => { el.textContent = I ? I.t('menuCount', count) : `${count} פריטים בתפריט`; });
-    document.querySelectorAll('.decision-menu small').forEach((el) => { el.textContent = I ? I.t('choiceMenuText', count) : el.textContent.replace(/\d+/, String(count)); });
+    document.querySelectorAll('.decision-menu small').forEach((el) => { el.textContent = I ? I.withBranch(I.t('choiceMenuText', count)) : el.textContent.replace(/\d+/, String(count)); });
     const published = menu.publishedAt ? new Date(menu.publishedAt) : null;
     if (published && !Number.isNaN(published.getTime())) {
       const two = (n) => String(n).padStart(2, '0');
@@ -53,7 +53,9 @@
   async function refresh() {
     state.lastCheck = Date.now();
     try {
-      const url = cfg.api + (cfg.api.includes('?') ? '&' : '?') + 'since=' + encodeURIComponent(state.version || '');
+      // this tablet's name (kiosk-config.js) tells the portal which branch's menu; a tablet that was never named asks as it always did
+      const device = window.KioskConfig && window.KioskConfig.device ? '&device=' + encodeURIComponent(window.KioskConfig.device) : '';
+      const url = cfg.api + (cfg.api.includes('?') ? '&' : '?') + 'since=' + encodeURIComponent(state.version || '') + device;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) { state.lastResult = `http ${res.status}`; return; }
       const snap = await res.json();

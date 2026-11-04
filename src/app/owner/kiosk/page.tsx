@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import OwnerHeader from '@/components/OwnerHeader'
 import KioskContentEditor from '@/components/kiosk-admin/KioskContentEditor'
+import KioskDevicesCard from '@/components/kiosk-admin/KioskDevicesCard'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
 import { loadOwnerKioskContent } from '@/lib/kiosk/content'
+import { loadOwnerDevices } from '@/lib/kiosk/device'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,11 +20,15 @@ export default async function OwnerKioskPage() {
   const { data: me } = await service.from('staff').select('role, badge').eq('auth_user_id', user.id).eq('active', true).maybeSingle()
   if (!isOp(me)) redirect('/no-access')
 
-  const content = await loadOwnerKioskContent().catch(() => null)
+  const [content, devices] = await Promise.all([
+    loadOwnerKioskContent().catch(() => null),
+    loadOwnerDevices().catch(() => null),
+  ])
 
   return (
     <main id="main" tabIndex={-1} style={{ maxWidth: 640, margin: '0 auto', padding: '0 16px 32px' }}>
       <OwnerHeader title="תוכן הקיוסק" backHref="/owner/dashboard" />
+      {devices && <KioskDevicesCard initial={devices} />}
       {content ? (
         <KioskContentEditor initial={content} />
       ) : (

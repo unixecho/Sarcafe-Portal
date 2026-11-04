@@ -24,6 +24,28 @@ body.has-attract .panel-welcome .hero-shade { background: linear-gradient(0deg, 
 }
 .attract-ad.is-active { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .8s ease, visibility 0s; }
 .attract.is-instant .attract-ad { transition: none; }
+
+/* slide mode (the default): the one leaving and the one arriving move with transform (kiosk-attract.js sets it inline), so
+   the slides themselves stay fully opaque and only the active one is visible while at rest */
+.attract-ads[data-mode="slide"] { touch-action: none; }
+.attract-ads[data-mode="slide"] .attract-ad { opacity: 1; transition: none; }
+.attract-ads[data-mode="slide"] .attract-ad.is-active { visibility: visible; }
+
+/* the two arrows, on the sides: the right one points right, the left one points left (physical sides, whatever the language) */
+.attract-arrow {
+  position: absolute; z-index: 4; top: 50%; width: 60px; height: 60px; margin-top: -30px; padding: 0;
+  display: none; place-items: center; border-radius: 50%; border: 1px solid rgba(234, 215, 166, .7);
+  color: #fff; background: rgba(14, 16, 12, .8);
+  touch-action: manipulation; transition: transform .14s var(--ease-out), background-color .14s ease, opacity .2s ease;
+}
+.attract-arrow svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.attract-arrow-right { right: 12px; }
+.attract-arrow-left { left: 12px; }
+.attract-arrow:active { transform: scale(.92); background: rgba(234, 215, 166, .34); }
+.attract-arrow:disabled { opacity: .28; pointer-events: none; }
+.attract-ads.has-arrows .attract-arrow { display: grid; }
+/* room for the arrows: the words never run under them */
+.attract-ads.has-arrows .attract-ad { padding-inline: 86px; }
 .attract-ad.has-media { grid-template-columns: minmax(0, 1fr) auto; }
 .attract-text { min-width: 0; display: grid; gap: 10px; align-content: center; }
 .attract-kicker { color: var(--brass-light); font-size: .8rem; font-weight: 800; letter-spacing: .06em; }
@@ -55,7 +77,7 @@ body.has-attract .panel-welcome .hero-shade { background: linear-gradient(0deg, 
 .attract-dots i.is-active { background: var(--brass-light); }
 
 /* the two permanent buttons */
-.attract-actions { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.attract-actions { flex: 0 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 14px; }
 .attract-btn {
   min-height: 104px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   border: 1px solid rgba(255, 255, 255, .55); border-radius: 24px; color: var(--espresso);

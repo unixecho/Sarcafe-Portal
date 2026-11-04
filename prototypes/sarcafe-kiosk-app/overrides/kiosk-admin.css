@@ -1,0 +1,144 @@
+/*
+ * The staff control panel (kiosk-admin.js): a full-screen sheet above everything, in the kiosk's own colours, with big
+ * touch targets (56 px and up) and nothing that animates layout. Hebrew, right to left.
+ */
+.kx-panel {
+  position: fixed; z-index: 1000; inset: 0; display: flex; flex-direction: column;
+  color: var(--ink, #20231f); background: #f6f1e6;
+  font-family: Rubik, system-ui, sans-serif; -webkit-user-select: none; user-select: none;
+}
+.kx-panel.is-previewing { display: none; }
+.kx-panel input { -webkit-user-select: text; user-select: text; }
+.kx-panel *, .kx-panel *::before, .kx-panel *::after { box-sizing: border-box; }
+.kx-panel button { font-family: inherit; touch-action: manipulation; }
+
+/* ---- top bar ---- */
+.kx-head { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 12px 18px; color: #fff; background: var(--espresso, #171813); }
+.kx-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.kx-title strong { font-size: 1.15rem; font-weight: 800; }
+.kx-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(255, 255, 255, .7); font-size: .78rem; }
+.kx-status { flex: 0 0 auto; padding: 6px 12px; border-radius: 999px; font-size: .78rem; font-weight: 700; background: rgba(255, 255, 255, .14); white-space: nowrap; }
+.kx-status.is-good { background: rgba(90, 138, 113, .5); }
+.kx-status.is-warn { background: rgba(199, 164, 103, .5); color: #fff6dc; }
+.kx-status.is-info { background: rgba(255, 255, 255, .24); }
+.kx-close {
+  flex: 0 0 auto; width: 48px; height: 48px; display: grid; place-items: center; padding: 0;
+  border: 1px solid rgba(255, 255, 255, .4); border-radius: 50%; color: #fff; background: transparent;
+}
+.kx-close svg { width: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.kx-head .kx-btn { min-height: 44px; color: #fff; background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .35); }
+
+/* ---- tabs ---- */
+.kx-tabs { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 14px; overflow-x: auto; background: #ebe3d1; border-bottom: 1px solid #d8ccb4; scrollbar-width: none; }
+.kx-tabs::-webkit-scrollbar { display: none; }
+.kx-tabs button {
+  flex: 0 0 auto; min-height: 48px; padding: 0 18px; border: 1px solid #cfc3a8; border-radius: 999px;
+  color: #4c4638; background: #f9f5ea; font-size: .95rem; font-weight: 700;
+}
+.kx-tabs button.is-on { color: #fff; background: var(--forest, #1f3a30); border-color: var(--forest, #1f3a30); }
+
+/* ---- body ---- */
+.kx-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 16px 40px; }
+.kx-col { width: min(100%, 760px); margin: 0 auto; display: grid; gap: 10px; }
+.kx-sec { margin: 16px 2px 0; font-size: 1.02rem; font-weight: 800; color: var(--forest, #1f3a30); }
+.kx-sec small { display: block; margin-top: 3px; color: #6d6755; font-size: .8rem; font-weight: 500; line-height: 1.45; }
+
+.kx-row {
+  min-height: 64px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  border: 1px solid #e0d6c0; border-radius: 16px; background: #fffdf8;
+}
+.kx-row-stack { flex-direction: column; align-items: stretch; gap: 10px; }
+.kx-text { min-width: 0; display: grid; gap: 3px; }
+.kx-text b { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+.kx-text small { color: #6d6755; font-size: .8rem; line-height: 1.4; }
+.kx-end { flex: 0 0 auto; display: grid; justify-items: end; gap: 6px; }
+.kx-info { min-height: 48px; padding-block: 8px; font-size: .92rem; }
+.kx-info span { color: #6d6755; }
+.kx-info b { font-weight: 700; text-align: end; overflow-wrap: anywhere; }
+
+/* the on/off switch */
+.kx-switch {
+  position: relative; flex: 0 0 auto; width: 68px; height: 40px; padding: 0; border: 0; border-radius: 999px;
+  background: #cfc6b0; transition: background-color .18s ease;
+}
+.kx-switch { direction: ltr; }
+/* the house convention (components/Switch.tsx): on is the knob at the physical right, in every language */
+.kx-switch i { position: absolute; top: 4px; left: 4px; width: 32px; height: 32px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .18s var(--ease-out, ease); }
+.kx-switch[aria-checked="true"] { background: var(--forest, #1f3a30); }
+.kx-switch[aria-checked="true"] i { transform: translateX(28px); }
+
+/* a choice of a few */
+.kx-seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.kx-seg button {
+  flex: 1 1 0; min-width: 96px; min-height: 52px; padding: 8px 14px; border: 1px solid #cfc3a8; border-radius: 14px;
+  color: #4c4638; background: #f9f5ea; font-size: .92rem; font-weight: 700; line-height: 1.25;
+}
+.kx-seg button.is-on { color: #fff; background: var(--forest, #1f3a30); border-color: var(--forest, #1f3a30); }
+
+/* a number with minus and plus */
+.kx-stepper { direction: ltr; display: inline-flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #cfc3a8; border-radius: 16px; background: #f9f5ea; }
+.kx-stepper button { width: 52px; height: 52px; padding: 0; border: 0; border-radius: 12px; color: #fff; background: var(--forest, #1f3a30); font-size: 1.7rem; font-weight: 700; line-height: 1; }
+.kx-stepper button:disabled { opacity: .3; }
+.kx-stepper button:active:not(:disabled) { transform: scale(.94); }
+.kx-num { min-width: 78px; padding: 0 6px; text-align: center; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kx-num small { font-size: .72rem; font-weight: 600; color: #6d6755; }
+.kx-link { min-height: 36px; padding: 0 6px; border: 0; color: var(--forest, #1f3a30); background: none; font-size: .8rem; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.kx-link.is-on { color: #6d6755; text-decoration: none; }
+
+/* a button that does something */
+.kx-action {
+  min-height: 64px; padding: 12px 18px; display: grid; gap: 2px; align-content: center; text-align: start;
+  border: 1px solid #cfc3a8; border-radius: 16px; color: var(--ink, #20231f); background: #fffdf8;
+}
+.kx-action b { font-size: 1rem; font-weight: 800; }
+.kx-action small { color: #6d6755; font-size: .8rem; line-height: 1.4; }
+.kx-action:active { background: #f1e9d6; }
+.kx-action.is-warn { border-color: #d9b6a8; background: #fff6f1; }
+.kx-action.is-warn b { color: #8a3a23; }
+
+.kx-btn { min-height: 52px; padding: 0 20px; border: 1px solid #cfc3a8; border-radius: 14px; color: var(--ink, #20231f); background: #f9f5ea; font-size: .95rem; font-weight: 700; }
+.kx-btn.is-primary { color: #fff; background: var(--forest, #1f3a30); border-color: var(--forest, #1f3a30); }
+
+.kx-note { margin: 0; padding: 12px 14px; border-radius: 14px; color: #4c4638; background: #efe7d3; font-size: .88rem; line-height: 1.5; }
+.kx-note.is-warn { color: #6a4a08; background: #fbe9bf; }
+
+/* the overview cards */
+.kx-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.kx-card { min-width: 0; padding: 14px 16px; display: grid; gap: 6px; align-content: start; border: 1px solid #e0d6c0; border-radius: 18px; background: #fffdf8; }
+.kx-card small { color: #6d6755; font-size: .78rem; font-weight: 700; }
+.kx-card strong { overflow-wrap: anywhere; font-size: clamp(1rem, 4.4vw, 1.35rem); font-weight: 800; line-height: 1.2; }
+.kx-card span { color: #6d6755; font-size: .82rem; }
+.kx-card strong.is-good { color: #2d6a4f; }
+.kx-card strong.is-warn { color: #9a6200; }
+.kx-battery strong { font-size: 2.4rem; font-variant-numeric: tabular-nums; }
+.kx-bar { height: 8px; overflow: hidden; border-radius: 4px; background: #e6dcc6; }
+.kx-bar i { display: block; height: 100%; background: #5a8a71; }
+.kx-battery.is-warn .kx-bar i { background: #d99a1e; }
+.kx-battery.is-bad .kx-bar i { background: #b3261e; }
+.kx-battery.is-bad strong { color: #b3261e; }
+
+/* dialogs inside the panel */
+.kx-shade { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(23, 24, 19, .66); }
+.kx-dialog { width: min(100%, 480px); max-height: 100%; overflow-y: auto; padding: 22px; display: grid; gap: 12px; border-radius: 22px; background: #fffdf8; }
+.kx-dialog h3 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.kx-dialog p { margin: 0; color: #4c4638; font-size: .92rem; line-height: 1.5; }
+.kx-dialog-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.kx-input { width: 100%; min-height: 56px; padding: 0 14px; border: 1px solid #cfc3a8; border-radius: 14px; color: var(--ink, #20231f); background: #fff; font-size: 1.1rem; }
+
+/* the way back from a preview */
+.kx-back {
+  position: fixed; z-index: 1001; top: 14px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 8px;
+  min-height: 52px; padding: 0 22px 0 18px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 999px;
+  color: #fff; background: rgba(23, 24, 19, .92); font: 800 .95rem Rubik, system-ui, sans-serif;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+.kx-back svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+body.kx-previewing .kx-back { display: inline-flex; }
+/* while the panel is up the battery tray stays out of its way */
+body.kx-admin-open .kiosk-tray { display: none; }
+
+@media (orientation: landscape) {
+  .kx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .kx-col { width: min(100%, 880px); }
+}
+@media (max-width: 520px) { .kx-head .kx-btn { display: none; } }

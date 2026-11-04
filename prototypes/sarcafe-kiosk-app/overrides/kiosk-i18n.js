@@ -106,6 +106,10 @@
       btnJoin: 'הצטרפו למועדון',
       adsAria: 'עדכונים משרקפה',
       carousel: 'קרוסלה',
+      adPrev: 'המודעה הקודמת',
+      adNext: 'המודעה הבאה',
+      shiftOn: 'במשמרת',
+      closingAt: 'סגירה ב־',
       qrAria: 'קוד QR',
       today: 'היום ',
       closedToday: 'היום סגור',
@@ -187,6 +191,10 @@
       btnJoin: 'Join the club',
       adsAria: 'News from Sarcafe',
       carousel: 'carousel',
+      adPrev: 'Previous announcement',
+      adNext: 'Next announcement',
+      shiftOn: 'On shift',
+      closingAt: 'Closing at ',
       qrAria: 'QR code',
       today: 'Today ',
       closedToday: 'Closed today',
@@ -268,6 +276,10 @@
       btnJoin: 'انضموا إلى النادي',
       adsAria: 'أخبار من ساركافيه',
       carousel: 'عرض متتابع',
+      adPrev: 'الإعلان السابق',
+      adNext: 'الإعلان التالي',
+      shiftOn: 'في الوردية',
+      closingAt: 'الإغلاق عند ',
       qrAria: 'رمز QR',
       today: 'اليوم ',
       closedToday: 'مغلق اليوم',
@@ -423,6 +435,35 @@
   }
   const each = (selector, fn) => $(selector).forEach(fn);
 
+  // The branch this kiosk belongs to (kiosk-config.js, from the portal). The fixed words below say "Givat Haviva" because that was
+  // the only branch, and for that branch they stay exactly as they are; for any other branch the portal's own name for it (in the
+  // language on screen, else its Hebrew name) is put in their place.
+  const FIXED_BRANCH = 'givat-haviva';
+  const branchLabel = () => {
+    const C = window.KioskConfig;
+    const slug = C && C.branchSlug;
+    if (!slug || slug === FIXED_BRANCH) return t('branch');
+    const names = C.branchNames;
+    return (names && (names[lang] || names.he)) || t('branch');
+  };
+  const withBranch = (text) => {
+    const fixed = t('branch');
+    const label = branchLabel();
+    return label === fixed ? text : text.split(fixed).join(label);
+  };
+  // Which language the kiosk starts in and returns to, and which ones its switch offers (this tablet's settings)
+  const defaultLang = () => {
+    const C = window.KioskConfig;
+    const d = C && C.get('language.default');
+    return LANGS.includes(d) ? d : 'he';
+  };
+  const enabledLangs = () => {
+    const C = window.KioskConfig;
+    const e = C && C.get('language.enabled');
+    const list = Array.isArray(e) ? e.filter((l) => LANGS.includes(l)) : LANGS;
+    return list.length ? list : LANGS;
+  };
+
   function applyStatic() {
     root.lang = lang;
     root.dir = DIR[lang];
@@ -430,7 +471,7 @@
 
     each('.kiosk-header .home-icon', (el) => el.setAttribute('aria-label', t('homeAria')));
     each('.kiosk-header img, .welcome-logo img', (el) => { el.alt = t('logoAlt'); });
-    each('.kiosk-header .branch, .welcome-topline > span', (el) => setOwnText(el, t('branch')));
+    each('.kiosk-header .branch, .welcome-topline > span', (el) => setOwnText(el, branchLabel()));
     each('.menu-source', (el) => { el.textContent = t('menuCount', itemCount()); });
 
     each('.welcome-copy p', (el) => { el.textContent = t('welcomeTagline'); });
@@ -444,7 +485,7 @@
     each('.decision-loyalty .decision-copy strong', (el) => { el.textContent = t('choiceJoinTitle'); });
     each('.decision-loyalty .decision-copy small', (el) => { el.textContent = t('choiceJoinText'); });
     each('.decision-menu .decision-copy strong', (el) => { el.textContent = t('choiceMenuTitle'); });
-    each('.decision-menu .decision-copy small', (el) => { el.textContent = t('choiceMenuText', itemCount()); });
+    each('.decision-menu .decision-copy small', (el) => { el.textContent = withBranch(t('choiceMenuText', itemCount())); });
     each('.menu-peek i', (el) => {
       const node = textNodes(el)[0];
       if (!node) return;
@@ -468,7 +509,7 @@
     each('.numpad [data-key="back"]', (el) => el.setAttribute('aria-label', t('numpadBack')));
 
     each('.menu-head h1', (el) => { el.textContent = t('menuTitle'); });
-    each('.menu-head p', (el) => { el.textContent = t('menuLead'); });
+    each('.menu-head p', (el) => { el.textContent = withBranch(t('menuLead')); });
     each('.join-shortcut', (el) => { el.textContent = t('menuJoin'); });
     each('.category-tabs', (el) => el.setAttribute('aria-label', t('tabsAria')));
     each('.snapshot-note', (el) => {
@@ -529,9 +570,17 @@
     return wrap;
   }
   function syncSwitches() {
+    const C = window.KioskConfig;
+    const enabled = enabledLangs();
+    // one language to choose from (or the switch switched off) is no choice: no switch
+    const offered = (!C || C.get('language.showSwitch') !== false) && enabled.length > 1;
     switches.forEach((wrap) => {
       wrap.setAttribute('aria-label', t('langAria'));
-      wrap.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+      wrap.hidden = !offered;
+      wrap.querySelectorAll('[data-lang]').forEach((b) => {
+        b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+        b.hidden = !enabled.includes(b.dataset.lang);
+      });
     });
   }
   const header = document.querySelector('.kiosk-header');
@@ -551,13 +600,28 @@
     armRevert();
   }
 
-  // A language left on the welcome screen by someone who walked away goes back to Hebrew after the idle time.
+  // A language left on the welcome screen by someone who walked away goes back to the default (Hebrew unless this tablet's
+  // settings say otherwise) after the idle time.
   let revertTimer;
   function armRevert() {
     clearTimeout(revertTimer);
     const S = window.KioskSession;
-    if (lang === 'he' || !S || S.state !== 'ATTRACT') return;
-    revertTimer = setTimeout(() => set('he', 'idle'), S.settings.idleSeconds * 1000 * S.scale);
+    if (lang === defaultLang() || !S || S.state !== 'ATTRACT') return;
+    revertTimer = setTimeout(() => set(defaultLang(), 'idle'), S.settings.idleSeconds * 1000 * S.scale);
+  }
+  // a setting changed: the switch and the branch's name follow now; a changed default is taken at the next reset
+  if (window.KioskConfig) {
+    let lastDefault = defaultLang();
+    window.KioskConfig.onChange(() => {
+      const next = defaultLang();
+      const S = window.KioskSession;
+      const quiet = !S || S.state === 'ATTRACT' || S.state === 'CLEAN';
+      // nobody is using the kiosk: a new default, or a language that was switched off, is taken at once (set() does nothing when it is already the one)
+      if (quiet && (next !== lastDefault || !enabledLangs().includes(lang))) set(next, 'config');
+      lastDefault = next;
+      applyStatic();
+      armRevert();
+    });
   }
   document.addEventListener('pointerdown', armRevert, { capture: true, passive: true });
 
@@ -567,6 +631,9 @@
     get lang() { return lang; },
     langs: LANGS.slice(),
     names: { ...NAMES },
+    defaultLang,
+    enabled: enabledLangs,
+    withBranch,
     dir: (l) => DIR[l || lang],
     t,
     set,
@@ -580,15 +647,16 @@
     itemCount,
     // the session controller comes after this file; it hooks in here (see the end of kiosk-session.js)
     attachSession(S) {
-      // every visit ends in Hebrew; a finished sign-up ('submitted') keeps the language for its confirmation
-      S.registerClearer((why) => { if (why !== 'submitted') set('he', 'reset'); });
+      // every visit ends in the default language (Hebrew); a finished sign-up ('submitted') keeps the language for its confirmation
+      S.registerClearer((why) => { if (why !== 'submitted') set(defaultLang(), 'reset'); });
       S.onChange(armRevert);
     },
   };
 
   // the other layers are drawn after this file runs: put the start language on everything once they are
   window.addEventListener('DOMContentLoaded', () => {
-    if (initial && initial[1] !== 'he') set(initial[1], 'start');
+    const start = initial ? initial[1] : defaultLang();
+    if (start !== 'he') set(start, 'start');
     else { applyStatic(); syncSwitches(); }
   });
 })();

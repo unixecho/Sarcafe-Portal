@@ -41,8 +41,8 @@
     return value > 0 && value <= 1 ? value : 1;
   })();
 
-  const settings = { idleSeconds: 60, graceSeconds: 10 };
-  const SUCCESS_SECONDS = 10;  // the confirmation holds no personal data: it goes home quietly, no warning needed
+  // successSeconds: the confirmation holds no personal data, so it goes home quietly after this long, no warning needed
+  const settings = { idleSeconds: 60, graceSeconds: 10, successSeconds: 10 };
   const FADE_MS = 650;         // matches .kiosk-screen.is-fading in kiosk-app.css
   const LATE_MS = 2000;        // a timer this late means the device slept or the page was hidden
   const HOLD_CAP_MS = 16000;   // the sign-up request aborts itself at 15 s
@@ -165,7 +165,7 @@
 
   function arm() {
     if (state !== 'ACTIVE') return;
-    const seconds = quietScreen() ? Math.min(SUCCESS_SECONDS, settings.idleSeconds) : settings.idleSeconds;
+    const seconds = quietScreen() ? Math.min(settings.successSeconds, settings.idleSeconds) : settings.idleSeconds;
     idleDeadline = now() + seconds * 1000 * scale;
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => check(true), idleDeadline - now());
@@ -303,7 +303,7 @@
   window.KioskSession = {
     get state() { return state; },
     get generation() { return generation; },
-    get settings() { return { idleSeconds: settings.idleSeconds, graceSeconds: settings.graceSeconds }; },
+    get settings() { return { idleSeconds: settings.idleSeconds, graceSeconds: settings.graceSeconds, successSeconds: settings.successSeconds }; },
     scale,
     onChange(fn) {
       listeners.push(fn);
@@ -326,6 +326,7 @@
       if (!next) return;
       settings.idleSeconds = clampSeconds(next.idleSeconds, 30, 300, settings.idleSeconds);
       settings.graceSeconds = clampSeconds(next.graceSeconds, 5, 30, settings.graceSeconds);
+      settings.successSeconds = clampSeconds(next.successSeconds, 5, 60, settings.successSeconds);
       if (state === 'ACTIVE') arm();
     },
   };

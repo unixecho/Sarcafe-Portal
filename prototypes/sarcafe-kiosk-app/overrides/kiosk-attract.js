@@ -3,11 +3,16 @@
  * the announcements are secondary and only ever show while the session controller says ATTRACT (after a completed
  * reset, never over a form that holds someone's details).
  *
- *  - upper part: a bordered panel with rotating announcements (opacity crossfade, ~7 s each; paused while the page
- *    is hidden; instant switch with reduced motion)
+ *  - upper part: a bordered panel with rotating announcements (~7 s each; paused while the page is hidden or a finger
+ *    is down; instant switch with reduced motion). A customer can go back to one they missed: two round arrow buttons
+ *    on the sides (the one on the right points right, the one on the left points left; whichever way the next
+ *    announcement lies in the language on screen) and a drag sideways. Going past the last one comes round to the first.
+ *    Only two announcements move at a time (the one leaving and the one arriving), transform only.
  *  - lower part: two large buttons that never move, "לתפריט שלנו" and "הצטרפו למועדון"; one tap opens the feature
  *  - a tap on an announcement with an action ('join' / 'menu') opens it; a tap anywhere else stops the slideshow and
- *    shows the regular choice screen
+ *    shows the regular choice screen (the arrows and a drag are not taps)
+ *  - what staff tune (arrows, drag, auto-play, loop, slide or fade, what a tap does, which announcements this tablet
+ *    shows, the time on each) comes from KioskConfig (kiosk-config.js, the control panel)
  *
  * Content: GET <portal>/api/kiosk/content[?since=<version>] (derived from the menu endpoint the app already has).
  * Fetched at start, when the menu realtime ping arrives (kiosk-sync.js fires 'kiosk:menu-ping') and every 15 minutes,
@@ -101,6 +106,7 @@
         graceSeconds: clamp(s.graceSeconds, 5, 30, 10),
         slideSeconds: clamp(s.slideSeconds, 4, 30, 7),
       },
+      kiosk: window.KioskConfig ? window.KioskConfig.sanitizeKiosk(c.kiosk) : null, // this tablet's own settings (kiosk-config.js)
       ads: c.ads.slice(0, 20).map(cleanAd).filter(Boolean),
       hours: cleanHours(c.hours),
       highlights: (Array.isArray(c.highlights) ? c.highlights : []).filter((h) => h && isStr(h.name, 80)
@@ -263,6 +269,9 @@
   }
 
   // ---- the layout ----------------------------------------------------------------------------------------------
+  const C = window.KioskConfig;
+  const cget = (path, fallback) => { const v = C ? C.get(path) : undefined; return v === undefined || v === null ? fallback : v; };
+
   const root = el('div', 'attract');
   const adsBox = el('section', 'attract-ads');
   const labelAds = () => {
@@ -273,26 +282,44 @@
   const dots = el('div', 'attract-dots');
   dots.setAttribute('aria-hidden', 'true');
   const actions = el('div', 'attract-actions');
+  const svgOf = (viewBox, d, cls) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', viewBox);
+    svg.setAttribute('aria-hidden', 'true');
+    if (cls) svg.setAttribute('class', cls);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+    return svg;
+  };
   const button = (cls, screenName, label, icon) => {
     const b = el('button', `attract-btn ${cls}`);
     b.type = 'button';
     b.dataset.screen = screenName; // app.js opens the screen; one tap
     b.append(el('span', '', label));
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 32 32');
-    svg.setAttribute('aria-hidden', 'true');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', icon);
-    svg.append(path);
-    b.append(svg);
+    b.append(svgOf('0 0 32 32', icon));
     return b;
   };
   actions.append(
     button('attract-menu', 'menu', tr('btnMenu', 'לתפריט שלנו'), 'M7 5h18v22H7zM11 11h10M11 16h10M11 21h6'),
     button('attract-join', 'join', tr('btnJoin', 'הצטרפו למועדון'), 'M16 3.5 20 12l8.5 1.2-6.2 6 1.5 8.4L16 23.5l-7.8 4.1 1.5-8.4-6.2-6L12 12 16 3.5Z'),
   );
+
+  // the two arrows: physical sides, so the one on the right always points right and the one on the left points left
+  const arrowRight = el('button', 'attract-arrow attract-arrow-right');
+  const arrowLeft = el('button', 'attract-arrow attract-arrow-left');
+  [arrowRight, arrowLeft].forEach((b) => { b.type = 'button'; });
+  arrowRight.append(svgOf('0 0 24 24', 'M9 4.5 16.5 12 9 19.5'));
+  arrowLeft.append(svgOf('0 0 24 24', 'M15 4.5 7.5 12 15 19.5'));
+  const labelArrows = () => {
+    // the side the NEXT announcement lies on depends on the reading direction of the language on screen
+    const rtl = getComputedStyle(adsBox).direction === 'rtl';
+    arrowRight.setAttribute('aria-label', rtl ? tr('adPrev', 'המודעה הקודמת') : tr('adNext', 'המודעה הבאה'));
+    arrowLeft.setAttribute('aria-label', rtl ? tr('adNext', 'המודעה הבאה') : tr('adPrev', 'המודעה הקודמת'));
+  };
+
   root.append(adsBox, actions);
-  adsBox.append(dots);
+  adsBox.append(dots, arrowRight, arrowLeft);
   panel.append(root);
   body.classList.add('has-attract');
 
@@ -300,52 +327,269 @@
   const syncInstant = () => root.classList.toggle('is-instant', reduced.matches);
   syncInstant();
   reduced.addEventListener?.('change', syncInstant);
+  const instant = () => reduced.matches;
 
   let content = DEFAULTS;
   let slides = [];
   let index = 0;
   let slideTimer;
   let renderPending = false;
+  let busy = false;          // a slide is moving
+  let queued = 0;            // one tap that came while it moved (+1 / -1)
+  let moveTimer;
+  let suppressClickUntil = 0;
+
+  // which way "later" lies on screen: +1 to the right (left-to-right text), -1 to the left (Hebrew, Arabic)
+  const END = () => (getComputedStyle(adsBox).direction === 'rtl' ? -1 : 1);
+  const widthOf = () => adsBox.clientWidth || 1;
+  const clearInline = (node) => { node.style.transition = ''; node.style.transform = ''; node.style.visibility = ''; node.style.zIndex = ''; };
+
+  // what this tablet's settings say about the announcements right now
+  const adsOn = () => {
+    const hidden = new Set(cget('ads.hiddenIds', []));
+    const club = cget('display.clubEnabled', true);
+    return content.ads.filter((ad) => !hidden.has(ad.id) && !(ad.kind === 'loyalty' && !club));
+  };
+  const timing = () => {
+    const kiosk = content.settings;
+    return {
+      idleSeconds: cget('timing.idleSeconds', kiosk.idleSeconds),
+      graceSeconds: cget('timing.graceSeconds', kiosk.graceSeconds),
+      slideSeconds: cget('ads.slideSeconds', kiosk.slideSeconds),
+      successSeconds: cget('timing.successSeconds', 10),
+    };
+  };
+  const mode = () => (cget('ads.transition', 'slide') === 'fade' ? 'fade' : 'slide');
+
+  function paintControls() {
+    const many = slides.length > 1;
+    adsBox.dataset.mode = mode();
+    adsBox.classList.toggle('has-arrows', many && !!cget('ads.arrows', true));
+    adsBox.classList.toggle('is-single', !many);
+    adsBox.hidden = slides.length === 0;
+    const loop = !!cget('ads.loop', true);
+    const rightDir = END();    // the button on the right goes toward the right
+    const edge = (dirSign) => !loop && (index + dirSign < 0 || index + dirSign >= slides.length);
+    arrowRight.disabled = edge(rightDir);
+    arrowLeft.disabled = edge(-rightDir);
+    labelArrows();
+  }
 
   function render() {
     renderPending = false;
+    abortMove();
     adsBox.querySelectorAll('.attract-ad').forEach((node) => node.remove());
-    let built = content.ads.map((ad) => buildSlide(ad, content)).filter(Boolean);
-    if (!built.length) built = DEFAULTS.ads.map((ad) => buildSlide(ad, DEFAULTS)).filter(Boolean);
+    let built = adsOn().map((ad) => buildSlide(ad, content)).filter(Boolean);
+    // nothing of the owner's can be shown (all switched off here, or none left): the announcements go away rather than show
+    // the built-in ones the owner did not choose. Only a tablet that has never heard from the portal shows the built-in set.
+    if (!built.length && content.version === 'builtin') built = DEFAULTS.ads.map((ad) => buildSlide(ad, DEFAULTS)).filter(Boolean);
     slides = built;
     slides.forEach((slide) => adsBox.insertBefore(slide, dots));
     dots.replaceChildren(...slides.map(() => el('i')));
     index = 0;
-    show(0);
+    activate(0);
+    paintControls();
   }
 
-  function show(i) {
-    index = slides.length ? i % slides.length : 0;
+  function activate(i) {
+    index = slides.length ? ((i % slides.length) + slides.length) % slides.length : 0;
     slides.forEach((slide, n) => {
+      clearInline(slide);
       slide.classList.toggle('is-active', n === index);
       slide.setAttribute('aria-hidden', String(n !== index));
     });
     [...dots.children].forEach((dot, n) => dot.classList.toggle('is-active', n === index));
   }
 
-  const slideMs = () => content.settings.slideSeconds * 1000 * S.scale;
+  const slideMs = () => timing().slideSeconds * 1000 * S.scale;
   function stopSlides() { clearTimeout(slideTimer); slideTimer = undefined; }
   function runSlides() {
     stopSlides();
-    if (S.state !== 'ATTRACT' || document.hidden || slides.length < 2) return;
-    slideTimer = setTimeout(() => { show(index + 1); runSlides(); }, slideMs());
+    if (S.state !== 'ATTRACT' || document.hidden || slides.length < 2 || !cget('ads.autoPlay', true) || drag.active) return;
+    slideTimer = setTimeout(() => step(1, 'auto'), slideMs());
   }
+
+  const moveMs = () => Math.max(40, (document.documentElement.dataset.perf === 'lite' ? 260 : 380) * S.scale);
+
+  // the index one step on, or -1 when there is none (the end, with going round switched off)
+  function neighbour(dirSign) {
+    const n = slides.length;
+    const i = index + dirSign;
+    if (i >= 0 && i < n) return i;
+    return cget('ads.loop', true) ? ((i % n) + n) % n : -1;
+  }
+
+  function abortMove() {
+    clearTimeout(moveTimer);
+    busy = false;
+    queued = 0;
+    slides.forEach(clearInline);
+  }
+
+  // one step: +1 the next announcement, -1 the one before. reason: 'auto' (the timer) | 'tap' (an arrow)
+  function step(dirSign, reason) {
+    if (slides.length < 2 || S.state !== 'ATTRACT') return;
+    if (busy) { if (reason === 'tap') queued = dirSign; return; }
+    let dir = dirSign;
+    if (reason === 'auto') dir = 1;
+    // the timer always comes round; a tap stops at the end when going round is switched off
+    const target = reason === 'auto' ? (index + 1) % slides.length : neighbour(dir);
+    if (target < 0) return;
+    stopSlides();
+    animateTo(target, dir, 0, widthOf());
+  }
+
+  // Slide `target` in from the side it lies on while the current one leaves; `fromX` is how far the current one already
+  // is from rest (a drag in progress), `w` the width. Fade mode only changes opacity.
+  function animateTo(target, dirSign, fromX, w) {
+    const from = slides[index];
+    const to = slides[target];
+    busy = true;
+    const finish = () => {
+      busy = false;
+      activate(target);
+      paintControls();
+      if (queued) { const q = queued; queued = 0; step(q, 'tap'); return; }
+      runSlides();
+    };
+    if (instant()) { finish(); return; }
+    if (mode() === 'fade') {
+      clearInline(from);
+      clearInline(to);
+      to.classList.add('is-active');
+      from.classList.remove('is-active');
+      moveTimer = setTimeout(finish, 820 * S.scale);
+      return;
+    }
+    const loc = dirSign * END() * w;           // where the arriving one waits
+    to.style.transition = 'none';
+    to.style.visibility = 'visible';
+    to.style.transform = `translate3d(${fromX + loc}px,0,0)`;
+    to.style.zIndex = '2';
+    void adsBox.offsetWidth;                   // start from there
+    const ms = moveMs();
+    const ease = `transform ${ms}ms cubic-bezier(.22,.8,.3,1)`;
+    from.style.transition = ease;
+    to.style.transition = ease;
+    from.style.transform = `translate3d(${-loc}px,0,0)`;
+    to.style.transform = 'translate3d(0,0,0)';
+    moveTimer = setTimeout(finish, ms + 50);
+  }
+
+  // ---- dragging -------------------------------------------------------------------------------------------------------
+  const drag = { id: null, x0: 0, y0: 0, t0: 0, dx: 0, active: false, dir: 0, to: -1 };
+
+  function dragEnd(commit) {
+    if (!drag.active) { drag.id = null; return; }
+    const w = widthOf();
+    const dx = drag.dx;
+    const target = drag.to;
+    const dir = drag.dir;
+    drag.active = false;
+    drag.id = null;
+    suppressClickUntil = Date.now() + 400;       // the tap that ends a drag is not a tap on the screen
+    if (commit && target >= 0) {
+      busy = false;
+      animateTo(target, dir, dx, w);
+      return;
+    }
+    // back where it was
+    const from = slides[index];
+    const other = target >= 0 ? slides[target] : null;
+    const ease = `transform ${moveMs()}ms cubic-bezier(.22,.8,.3,1)`;
+    busy = true;
+    from.style.transition = ease;
+    from.style.transform = 'translate3d(0,0,0)';
+    if (other) {
+      other.style.transition = ease;
+      other.style.transform = `translate3d(${dir * END() * w}px,0,0)`;
+    }
+    moveTimer = setTimeout(() => { busy = false; slides.forEach(clearInline); activate(index); runSlides(); }, moveMs() + 50);
+  }
+
+  function dragMove(event) {
+    if (event.pointerId !== drag.id) return;
+    const dx = event.clientX - drag.x0;
+    const dy = event.clientY - drag.y0;
+    if (!drag.active) {
+      if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) { drag.id = null; runSlides(); return; }   // a vertical gesture is not ours
+      if (Math.abs(dx) < 10) return;
+      drag.active = true;
+      busy = true;
+      try { adsBox.setPointerCapture(event.pointerId); } catch (_) { /* the page still gets the moves */ }
+    }
+    const w = widthOf();
+    // the finger moving right brings in what lies to the left of the current one, and the other way round
+    const dirSign = -Math.sign(dx || 1) * END();
+    if (dirSign !== drag.dir) {
+      // the finger crossed its start: another neighbour
+      if (drag.to >= 0) clearInline(slides[drag.to]);
+      drag.dir = dirSign;
+      drag.to = neighbour(dirSign);
+      if (drag.to >= 0) {
+        const other = slides[drag.to];
+        other.style.visibility = 'visible';
+        other.style.zIndex = '2';
+      }
+    }
+    // with nothing beyond (going round off) the current one only gives a little, like a rubber band
+    const shown = drag.to >= 0 ? dx : dx * 0.25;
+    drag.dx = shown;
+    const from = slides[index];
+    from.style.transition = 'none';
+    from.style.transform = `translate3d(${shown}px,0,0)`;
+    if (drag.to >= 0) {
+      const other = slides[drag.to];
+      other.style.transition = 'none';
+      other.style.transform = `translate3d(${shown + drag.dir * END() * w}px,0,0)`;
+    }
+  }
+
+  adsBox.addEventListener('pointerdown', (event) => {
+    if (!cget('ads.swipe', true) || event.target.closest('.attract-arrow') || S.state !== 'ATTRACT' || slides.length < 2 || busy) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    drag.id = event.pointerId;
+    drag.x0 = event.clientX; drag.y0 = event.clientY; drag.t0 = performance.now(); drag.dx = 0;
+    drag.active = false; drag.dir = 0; drag.to = -1;
+    stopSlides();                                  // a finger on the screen: the show waits
+  });
+  adsBox.addEventListener('pointermove', dragMove);
+  const release = (event) => {
+    if (event.pointerId !== drag.id) return;
+    if (!drag.active) { drag.id = null; runSlides(); return; }   // a plain tap: the click handler below decides
+    const w = widthOf();
+    const dt = Math.max(1, performance.now() - drag.t0);
+    const fast = Math.abs(drag.dx) / dt > 0.45 && Math.abs(drag.dx) > 24;
+    dragEnd(Math.abs(drag.dx) > w * 0.22 || fast);
+  };
+  adsBox.addEventListener('pointerup', release);
+  adsBox.addEventListener('pointercancel', (event) => { if (event.pointerId === drag.id) dragEnd(false); });
+  adsBox.addEventListener('lostpointercapture', (event) => { if (event.pointerId === drag.id && drag.active) release(event); });
+
+  // ---- the arrows -----------------------------------------------------------------------------------------------------
+  arrowRight.addEventListener('click', (event) => { event.stopPropagation(); step(END(), 'tap'); });
+  arrowLeft.addEventListener('click', (event) => { event.stopPropagation(); step(-END(), 'tap'); });
 
   function apply(next) {
     content = next;
-    S.configure(next.settings);
+    if (C && next.kiosk) C.ingest(next.kiosk);
+    S.configure(timing());
     if (S.state === 'ATTRACT') { render(); runSlides(); } else renderPending = true;
+    window.dispatchEvent(new Event('kiosk:content')); // the header's closing time reads the hours
   }
 
   // ---- content: cache, fetch -----------------------------------------------------------------------------------
   let cfg = {};
   try { cfg = JSON.parse((window.SarcafeKiosk && window.SarcafeKiosk.config()) || '{}') || {}; } catch (_) { cfg = {}; }
-  const contentUrl = typeof cfg.api === 'string' && /\/menu(\?.*)?$/.test(cfg.api) ? cfg.api.replace(/\/menu(\?.*)?$/, '/content') : '';
+  const baseContentUrl = typeof cfg.api === 'string' && /\/menu(\?.*)?$/.test(cfg.api) ? cfg.api.replace(/\/menu(\?.*)?$/, '/content') : '';
+  // this tablet's name travels in the address (KioskConfig.device); a tablet that was never given one asks the way it always did
+  const contentUrl = (since) => {
+    if (!baseContentUrl) return '';
+    const parts = [];
+    if (C && C.device) parts.push(`device=${encodeURIComponent(C.device)}`);
+    if (since) parts.push(`since=${encodeURIComponent(since)}`);
+    return baseContentUrl + (parts.length ? `?${parts.join('&')}` : '');
+  };
 
   try {
     const cached = cleanContent(JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'));
@@ -356,17 +600,18 @@
   let fetching = false;
   let pingPending = false;
   let refreshTimer;
+  const refreshMs = () => cget('timing.contentRefreshMinutes', 15) * 60 * 1000;
 
-  async function fetchContent() {
-    if (!contentUrl || fetching || S.state !== 'ATTRACT') return;
+  async function fetchContent(force) {
+    if (!baseContentUrl || fetching || (S.state !== 'ATTRACT' && !force)) return;
     fetching = true;
     lastFetch = Date.now();
     pingPending = false;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 10000);
     try {
-      const since = content.version && content.version !== 'builtin' ? `${contentUrl.includes('?') ? '&' : '?'}since=${encodeURIComponent(content.version)}` : '';
-      const res = await fetch(contentUrl + since, { cache: 'no-store', signal: abort.signal });
+      const since = content.version && content.version !== 'builtin' ? content.version : '';
+      const res = await fetch(contentUrl(since), { cache: 'no-store', signal: abort.signal });
       if (!res.ok) return;
       const data = await res.json();
       if (data && data.unchanged === true) return;
@@ -384,22 +629,29 @@
 
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
-    if (!contentUrl || S.state !== 'ATTRACT') return;
-    refreshTimer = setTimeout(() => { fetchContent(); scheduleRefresh(); }, Math.max(0, lastFetch + REFRESH_MS - Date.now()));
+    if (!baseContentUrl || S.state !== 'ATTRACT') return;
+    refreshTimer = setTimeout(() => { fetchContent(); scheduleRefresh(); }, Math.max(0, lastFetch + refreshMs() - Date.now()));
   }
 
   window.addEventListener('kiosk:menu-ping', () => {
     if (S.state !== 'ATTRACT') { pingPending = true; return; }
     if (Date.now() - lastFetch >= PING_GAP_MS) fetchContent();
   });
+  // the report in kiosk-device.js saw that the portal's settings for this tablet are newer than ours
+  window.addEventListener('kiosk:settings-stale', () => { if (Date.now() - lastFetch >= 1000) fetchContent(true); });
 
   // ---- taps on the welcome screen ------------------------------------------------------------------------------
   const go = (name) => document.querySelector(`.screen-picker [data-screen="${name}"]`)?.click();
   panel.addEventListener('click', (event) => {
     if (S.state !== 'ATTRACT') return;
-    if (event.target.closest('button[data-screen]')) return; // the two buttons: app.js opens them (body has data-screen too)
+    if (Date.now() < suppressClickUntil) return;                  // the end of a drag
+    if (event.target.closest('button[data-screen]')) return;      // the two buttons: app.js opens them (body has data-screen too)
+    if (event.target.closest('.attract-arrow')) return;           // the arrows are not a tap on the screen
+    if (event.target.closest('.lang-switch')) return;
     const ad = event.target.closest('.attract-ad');
-    const action = ad && ad.dataset.action;
+    let action = ad && ad.dataset.action;
+    if (cget('ads.tapAction', 'ad') === 'main') action = 'none'; // always the main screen
+    if (action === 'join' && !cget('display.clubEnabled', true)) action = 'none';
     stopSlides();
     go(action === 'join' ? 'join' : action === 'menu' ? 'menu' : 'choice');
   });
@@ -409,10 +661,11 @@
     if (next === 'ATTRACT') {
       if (renderPending) render();
       runSlides();
-      if (pingPending || Date.now() - lastFetch >= REFRESH_MS) fetchContent();
+      if (pingPending || Date.now() - lastFetch >= refreshMs()) fetchContent();
       scheduleRefresh();
     } else {
       stopSlides();
+      abortMove();
       clearTimeout(refreshTimer);
     }
   }
@@ -427,8 +680,33 @@
     if (S.state === 'ATTRACT') { render(); runSlides(); } else renderPending = true;
   });
 
-  S.configure(content.settings);
+  // a setting changed (the control panel, or the portal's answer): what it touches is redone at once
+  if (C) {
+    let lastLook = JSON.stringify([cget('ads.hiddenIds', []), cget('display.clubEnabled', true)]);
+    C.onChange(() => {
+      S.configure(timing());
+      const now = JSON.stringify([cget('ads.hiddenIds', []), cget('display.clubEnabled', true)]);
+      if (now !== lastLook) {
+        lastLook = now;
+        if (S.state === 'ATTRACT') { render(); runSlides(); } else renderPending = true;
+      } else if (S.state === 'ATTRACT' && !busy) {
+        paintControls();
+        runSlides();
+      }
+    });
+  }
+
+  S.configure(timing());
   render();
   onState(S.state);
-  window.__kioskAttract = { get version() { return content.version; }, get slides() { return slides.length; }, fetchContent };
+  const publicAds = () => content.ads.map((ad) => ({ id: ad.id, kind: ad.kind, title: ad.title }));
+  window.__kioskAttract = {
+    get version() { return content.version; },
+    get slides() { return slides.length; },
+    get index() { return index; },
+    step,
+    fetchContent,
+  };
+  // for the other layers: the header's closing time uses the branch's hours, the control panel lists the announcements
+  window.KioskContent = { get hours() { return content.hours; }, get version() { return content.version; }, get ads() { return publicAds(); } };
 })();

@@ -22,7 +22,7 @@ export function OPTIONS() {
 
 export async function GET(request: NextRequest) {
   try {
-    const snapshot = await getKioskSnapshot()
+    const snapshot = await getKioskSnapshot(request.nextUrl.searchParams.get('device'))
     if (!snapshot) throw NotFound('Menu not found.')
 
     const since = request.nextUrl.searchParams.get('since')

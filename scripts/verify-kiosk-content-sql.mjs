@@ -1,6 +1,7 @@
 // Local database check for the kiosk content + customer poll migration, 2026-10-28. Applies every migration in order to
 // an in-memory Postgres (PGlite), then exercises kiosk_content_save / kiosk_feedback_submit / _set_hidden / _summary and
-// the access rules. Nothing here touches production.
+// the access rules, and (2026-11-04) the kiosk devices: the report with its battery alert (developer only, once per fall,
+// re-armed by a charge or a recovery, off switch, threshold, urgent level, caps) and the test alert. Nothing here touches production.
 //
 //   node scripts/verify-kiosk-content-sql.mjs
 
@@ -245,6 +246,140 @@ check('every table has row level security on', await count(`select count(*) n fr
 check('no browser policy exists on these tables', await count(`select count(*) n from pg_policies where tablename = any($1)`, [tables]) === 0)
 check('no function name in public has two signatures (extension functions aside)', await count(`select count(*) n from (select proname from pg_proc p where pronamespace='public'::regnamespace and prokind='f' and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e') group by proname having count(*)>1) t`) === 0)
 check('every new function is security definer with a fixed search_path', await count(`select count(*) n from pg_proc where proname in ('kiosk_content_save','kiosk_feedback_submit','kiosk_feedback_set_hidden','kiosk_feedback_summary') and prosecdef and proconfig::text like '%search_path=public%'`) === 4)
+
+console.log('\nkiosk devices (20261104120000)')
+const DEVICE = 'givat-haviva-1'
+const deviceRow = async () => one(`select * from public.kiosk_devices where slug = $1`, [DEVICE])
+const batteryNotes = async (staff) => (await db.query(`select kind, title, body, link from public.schedule_notifications where staff_id = $1 and kind = 'dev.kiosk_battery' order by created_at, id`, [staff])).rows
+const report = async (level, charging, extra = {}) => (await one(`select public.kiosk_device_report($1, $2, $3, $4, $5) r`, [extra.slug ?? DEVICE, level, charging, extra.app ?? null, extra.web ?? null])).r
+const setDeviceSettings = (obj) => db.query(`update public.kiosk_devices set settings = $2::jsonb where slug = $1`, [DEVICE, JSON.stringify(obj)])
+const resetDevice = async () => {
+  await db.query(`update public.kiosk_devices set battery_alert_armed = true, critical_alert_armed = true, battery_level = null, battery_charging = null, settings = '{}'::jsonb where slug = $1`, [DEVICE])
+  await db.query(`delete from public.schedule_notifications where kind = 'dev.kiosk_battery'`)
+}
+
+const row0 = await deviceRow()
+check('the tablet that already exists is registered, linked to the Givat Haviva branch', row0 && row0.branch_id === branch && row0.name === 'קיוסק גבעת חביבה' && row0.active === true && row0.settings && Object.keys(row0.settings).length === 0)
+check('re-applying seeds nothing twice', await count(`select count(*) n from public.kiosk_devices`) === 1)
+
+const unknown = await report(50, false, { slug: 'no-such-tablet' })
+check('an unknown tablet is refused', unknown.ok === false && unknown.error === 'unknown_device')
+check('a malformed name is refused without a lookup', (await report(50, false, { slug: 'Bad Name!' })).error === 'unknown_device' && (await one(`select public.kiosk_device_report(null, 50, false, null, null) r`)).r.error === 'unknown_device')
+
+await resetDevice()
+const devId = dev                                                  // the developer (badge developer) of the vote tests above
+const ownerBattery0 = (await batteryNotes(owner)).length
+let res = await report(80, false, { app: 3, web: 'abcdef0123456789' })
+const afterFirst = await deviceRow()
+check('a report is recorded: seen, level, charging, app and page versions', res.ok === true && res.alerted === false && afterFirst.battery_level === 80 && afterFirst.battery_charging === false
+  && afterFirst.last_seen_at !== null && afterFirst.app_version === 3 && afterFirst.web_version === 'abcdef0123456789')
+check('the answer carries the time the settings last changed (so the tablet can notice a change)', res.settingsUpdatedAt !== null && res.settingsUpdatedAt !== undefined)
+check('above the level, nothing is sent', (await batteryNotes(devId)).length === 0)
+
+res = await report(49, false)
+let notes = await batteryNotes(devId)
+check('below 50 % and not charging: the developer gets ONE alert', res.alerted === true && notes.length === 1)
+check('the alert names the level, the tablet and the page it opens', /50%/.test(notes[0].title) && notes[0].body.includes('49%') && notes[0].body.includes('קיוסק גבעת חביבה') && notes[0].link.url === '/owner/kiosk')
+check('owners, managers and employees are never told (developer only)', (await batteryNotes(owner)).length === ownerBattery0 && (await batteryNotes(barista)).length === 0)
+res = await report(47, false)
+check('falling further sends nothing more (once per fall)', res.alerted === false && (await batteryNotes(devId)).length === 1)
+res = await report(52, false)
+await report(49, false)
+check('hovering just above the level does not ring again (needs 5 points of recovery)', (await batteryNotes(devId)).length === 1)
+await report(56, false)
+res = await report(49, false)
+check('after recovering 5 points above the level it can alert again', res.alerted === true && (await batteryNotes(devId)).length === 2)
+await report(60, true)
+res = await report(45, false)
+check('after a charge it can alert again', res.alerted === true && (await batteryNotes(devId)).length === 3)
+res = await report(30, true)
+check('charging is never an alert, however low', res.alerted === false && (await batteryNotes(devId)).length === 3)
+await resetDevice()
+res = await report(10, null)
+check('an unknown charging state never alerts', res.alerted === false && (await batteryNotes(devId)).length === 0)
+res = await report(150, false)
+const kept = await deviceRow()
+check('a level outside 0-100 is treated as unknown: no alert, the stored level is kept', res.ok === true && res.alerted === false && (await batteryNotes(devId)).length === 0 && kept.battery_level === 10)
+res = await report(null, false)
+check('no level at all just records that the tablet is alive', res.ok === true && res.alerted === false && (await deviceRow()).battery_level === 10)
+
+await resetDevice()
+await setDeviceSettings({ battery: { alertEnabled: false } })
+res = await report(10, false)
+check('switched off in the panel: nothing is sent, however low', res.alerted === false && (await batteryNotes(devId)).length === 0)
+await resetDevice()
+await setDeviceSettings({ battery: { alertPercent: 30 } })
+await report(35, false)
+check('the level is the one set in the panel (30 %): 35 % is quiet', (await batteryNotes(devId)).length === 0)
+res = await report(29, false)
+notes = await batteryNotes(devId)
+check('...and 29 % alerts, with the level in the title', res.alerted === true && notes.length === 1 && /30%/.test(notes[0].title))
+await resetDevice()
+await setDeviceSettings({ battery: { alertPercent: 500, criticalPercent: 'x' } })
+res = await report(89, false)
+check('nonsense settings fall back to safe values (threshold limited to 90 %)', res.alerted === true && /90%/.test((await batteryNotes(devId))[0].title))
+
+await resetDevice()
+await setDeviceSettings({ battery: { criticalEnabled: true, criticalPercent: 15 } })
+res = await report(14, false)
+notes = await batteryNotes(devId)
+check('the urgent alert (when switched on) fires once, and instead of the ordinary one', res.alerted === true && notes.length === 1 && /כמעט נגמרה/.test(notes[0].title) && notes[0].body.includes('14%'))
+await report(13, false)
+check('...and not again while it keeps falling', (await batteryNotes(devId)).length === 1)
+res = await report(40, false)
+check('the ordinary alert is disarmed by the urgent one until the tablet recovers', res.alerted === false)
+await report(60, false)
+res = await report(45, false)
+check('after recovering, the ordinary alert works again', res.alerted === true && (await batteryNotes(devId)).length === 2)
+
+await resetDevice()
+await db.query(`update public.staff set active = false where id = $1`, [devId])
+res = await report(20, false)
+check('an inactive developer is not told, and the report still succeeds', res.ok === true && (await batteryNotes(devId)).length === 0)
+await db.query(`update public.staff set active = true where id = $1`, [devId])
+
+await resetDevice()
+for (let i = 0; i < 8; i++) await db.query(`insert into public.schedule_notifications (branch_id, staff_id, kind, title, body) values ($1, $2, 'dev.kiosk_battery', 'x', 'x')`, [branch, devId])
+await report(20, false)
+check('at most 8 battery alerts per person per day', (await batteryNotes(devId)).length === 8)
+
+console.log('\nthe test alert')
+await resetDevice()
+res = (await one(`select public.kiosk_device_alert_test($1) r`, [DEVICE])).r
+notes = await batteryNotes(devId)
+check('a test alert reaches the developer once and says it is a test', res.ok === true && res.sent === 1 && notes.length === 1 && /\(בדיקה\)/.test(notes[0].title))
+check('...and nobody else', (await batteryNotes(owner)).length === 0 && (await batteryNotes(barista)).length === 0)
+for (let i = 0; i < 6; i++) await one(`select public.kiosk_device_alert_test($1) r`, [DEVICE])
+check('at most 5 test alerts per hour', (await batteryNotes(devId)).length === 5)
+check('an unknown tablet gets no test alert', (await one(`select public.kiosk_device_alert_test('nope-nope') r`)).r.error === 'unknown_device')
+await resetDevice()
+
+console.log('\nthe table\'s own rules')
+const refuses = async (sql, params = []) => { try { await db.query(sql, params); return false } catch { return true } }
+check('settings must be an object', await refuses(`update public.kiosk_devices set settings = '[]'::jsonb where slug = $1`, [DEVICE]))
+check('settings stay small (8 KB at most)', await refuses(`update public.kiosk_devices set settings = jsonb_build_object('x', repeat('a', 9000)) where slug = $1`, [DEVICE]))
+check('a name must be a plain slug', await refuses(`insert into public.kiosk_devices (slug, name, branch_id) values ('Bad Slug', 'x', $1)`, [branch]))
+check('a battery level above 100 is refused', await refuses(`update public.kiosk_devices set battery_level = 101 where slug = $1`, [DEVICE]))
+await db.query(`insert into public.kiosk_devices (slug, name, branch_id) values ('maor-1', 'קיוסק מאור', $1)`, [branch])
+check('a second tablet is just another row (linked to any branch)', await count(`select count(*) n from public.kiosk_devices`) === 2)
+check('a report for the second tablet does not touch the first', (await report(33, false, { slug: 'maor-1' })).ok === true && (await deviceRow()).battery_level === null)
+await db.query(`delete from public.schedule_notifications where kind = 'dev.kiosk_battery'`)
+await db.query(`delete from public.kiosk_devices where slug = 'maor-1'`)
+
+console.log('\naccess to the devices')
+for (const role of ['anon', 'authenticated']) {
+  check(`${role} has no grant on kiosk_devices`, !(await one(`select has_table_privilege('${role}', 'public.kiosk_devices', 'select') or has_table_privilege('${role}', 'public.kiosk_devices', 'insert') or has_table_privilege('${role}', 'public.kiosk_devices', 'update') or has_table_privilege('${role}', 'public.kiosk_devices', 'delete') a`)).a)
+  for (const fn of ['kiosk_device_report(text,integer,boolean,integer,text)', 'kiosk_device_alert_test(text)']) {
+    check(`${role} cannot execute ${fn.split('(')[0]}`, !(await one(`select has_function_privilege('${role}', 'public.${fn}', 'execute') a`)).a)
+  }
+}
+for (const fn of ['kiosk_device_report(text,integer,boolean,integer,text)', 'kiosk_device_alert_test(text)']) {
+  check(`service_role can execute ${fn.split('(')[0]}`, (await one(`select has_function_privilege('service_role', 'public.${fn}', 'execute') a`)).a === true)
+}
+check('kiosk_devices has row level security on and no browser policy', await count(`select count(*) n from pg_class where relname = 'kiosk_devices' and relrowsecurity`) === 1
+  && await count(`select count(*) n from pg_policies where tablename = 'kiosk_devices'`) === 0)
+check('both device functions are security definer with a fixed search_path', await count(`select count(*) n from pg_proc where proname in ('kiosk_device_report','kiosk_device_alert_test') and prosecdef and proconfig::text like '%search_path=public%'`) === 2)
+check('still no function name in public with two signatures', await count(`select count(*) n from (select proname from pg_proc p where pronamespace='public'::regnamespace and prokind='f' and not exists (select 1 from pg_depend d where d.objid=p.oid and d.deptype='e') group by proname having count(*)>1) t`) === 0)
 
 console.log(`\n${passed} passed, ${failed.length} failed`)
 if (failed.length) { console.log('FAILED:\n - ' + failed.join('\n - ')); process.exit(1) }

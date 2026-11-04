@@ -283,6 +283,16 @@ final class OtaUpdater {
 
     // ---- status ------------------------------------------------------------------------------
 
+    /** The app's version code and name (the control panel and the report to the portal show them). */
+    int nativeVersionCode() { return nativeCode; }
+    String nativeVersionName() { return nativeName; }
+
+    /** The page bundle in use (its version), or "" when the one built into the app is running. */
+    String activeWebVersion() {
+        String web = state.getString("web_active", null);
+        return web == null ? "" : web;
+    }
+
     /** One line for the staff menu. */
     String summaryLine() {
         String web = state.getString("web_active", null);

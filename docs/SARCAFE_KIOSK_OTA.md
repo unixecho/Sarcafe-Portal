@@ -81,7 +81,10 @@ Code: `prototypes/sarcafe-kiosk-app/src/il/co/sarcafe/kiosk/` (`OtaUpdater`, `Ot
 
 ### What staff and the owner see
 
-- Staff menu (5 taps in the top-left corner, then the PIN):
+- Staff menu (5 taps in the top-left corner, then the PIN). **From app 0.3 the PIN opens the control panel**
+  (`docs/SARCAFE_KIOSK_ADMIN_PANEL.md`), whose "עדכונים" tab shows the page and app versions, the last check and its
+  result, and has **check now** and **undo the last page update**; an update never reloads the page while the panel is
+  open. The older plain menu is one button down in the panel's device tab, and it is what an app older than 0.3 shows:
   - An **"Updates: page …, app …, checked …"** line. Tapping it shows details: the active, previous and staged
     bundle, the app version, the last check and its result, and the update server. The details have
     **Check now** and **Undo page update** buttons.

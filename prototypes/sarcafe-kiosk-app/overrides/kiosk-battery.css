@@ -1,21 +1,42 @@
-/* The battery pill (kiosk-battery.js): bottom corner, above every screen, never takes a touch. */
-.kiosk-battery {
-  position: fixed; z-index: 300; left: 10px; bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
-  height: 26px; padding: 0 10px 0 8px; border-radius: 13px;
-  color: #fff; background: rgba(23, 24, 19, .66);
-  font: 700 .78rem/1 Rubik, system-ui, sans-serif; letter-spacing: 0;
-  pointer-events: none; -webkit-user-select: none; user-select: none;
+/*
+ * The battery for staff (kiosk-battery.js): a tray that drops from the top edge for a few seconds, and an optional small
+ * badge in a corner. Neither takes a touch while hidden; the tray closes on a tap. transform and opacity only.
+ */
+.kiosk-tray, .kiosk-battery {
+  display: flex; align-items: center; gap: 8px;
+  color: #fff; background: rgba(23, 24, 19, .9);
+  font: 700 .86rem/1 Rubik, system-ui, sans-serif; letter-spacing: 0;
+  -webkit-user-select: none; user-select: none;
 }
-.kiosk-battery[hidden] { display: none; }
-.kb-cell { position: relative; width: 20px; height: 10px; border: 1.5px solid rgba(255, 255, 255, .85); border-radius: 3px; }
+.kiosk-tray[hidden], .kiosk-battery[hidden] { display: none; }
+
+.kiosk-tray {
+  position: fixed; z-index: 420; top: 0; left: 50%;
+  height: 40px; padding: 0 16px 0 14px; border-radius: 0 0 20px 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
+  transform: translate(-50%, -110%); opacity: 0;
+  transition: transform .3s cubic-bezier(.22, .8, .3, 1), opacity .2s ease;
+}
+.kiosk-tray.is-open { transform: translate(-50%, 0); opacity: 1; }
+html[data-perf="lite"] .kiosk-tray { transition-duration: .18s; }
+
+/* the corner badge (display: corner): the old pill, small, in the bottom corner */
+.kiosk-battery {
+  position: fixed; z-index: 300; left: 10px; bottom: 44px;
+  height: 24px; padding: 0 9px 0 8px; border-radius: 12px; font-size: .72rem;
+  pointer-events: none;
+}
+
+.kb-cell { position: relative; width: 22px; height: 11px; border: 1.5px solid rgba(255, 255, 255, .85); border-radius: 3px; }
 .kb-cell::after { content: ""; position: absolute; top: 2px; right: -4px; width: 2px; height: 4px; background: rgba(255, 255, 255, .85); border-radius: 0 1px 1px 0; }
 .kb-fill { display: block; height: 100%; background: #9fd18b; border-radius: 1px; }
 .kb-bolt { display: none; width: 8px; height: 11px; fill: #9fd18b; }
-.kiosk-battery.is-charging .kb-bolt { display: block; }
-.kiosk-battery.is-low { background: rgba(176, 112, 8, .92); }
-.kiosk-battery.is-low .kb-fill { background: #ffe29a; }
-.kiosk-battery.is-critical { background: rgba(170, 32, 32, .95); animation: kb-pulse 1.6s ease-in-out infinite; }
-.kiosk-battery.is-critical .kb-fill { background: #fff; }
-@keyframes kb-pulse { 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .kiosk-battery.is-critical { animation: none; } }
+.is-charging .kb-bolt { display: block; }
+.kb-state { color: rgba(255, 255, 255, .82); font-weight: 600; }
+.kb-state:empty { display: none; }
+.kiosk-battery .kb-state { display: none; }
+
+.is-low { background: rgba(176, 112, 8, .95); }
+.is-low .kb-fill { background: #ffe29a; }
+.is-critical { background: rgba(170, 32, 32, .96); }
+.is-critical .kb-fill { background: #fff; }

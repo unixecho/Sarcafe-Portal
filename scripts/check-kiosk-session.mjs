@@ -217,7 +217,7 @@ async function runViewport(label, viewport) {
   check(t('KioskSession.state is a synchronous string'), typeof (await state(page)) === 'string');
   check(t('remote content applied (version test-v1)'), (await page.evaluate(() => window.__kioskAttract.version)) === 'test-v1');
   check(t('KioskNative.ready called once, with the (empty) bundle version'), JSON.stringify(await page.evaluate(() => window.__ready)) === '[""]');
-  check(t('session settings from content'), JSON.stringify(await page.evaluate(() => window.KioskSession.settings)) === JSON.stringify({ idleSeconds: 30, graceSeconds: 10 }));
+  check(t('session settings from content'), JSON.stringify(await page.evaluate(() => window.KioskSession.settings)) === JSON.stringify({ idleSeconds: 30, graceSeconds: 10, successSeconds: 10 }));
   const kinds = await page.evaluate(() => [...document.querySelectorAll('.attract-ad')].map((a) => a.dataset.kind));
   check(t('valid ads shown, unknown kind dropped'), JSON.stringify(kinds) === JSON.stringify(['location', 'feedback', 'loyalty', 'hours', 'menu_highlight', 'custom', 'custom']), kinds);
   const xss = await page.evaluate(() => {
@@ -434,7 +434,7 @@ async function runDefaults(label, viewport) {
   });
   check(t('defaults: QR finder pattern drawn correctly'), qrOk);
   check(t('defaults: menu highlight falls back to recommended items of the cached menu'), (await page.evaluate(() => document.querySelector('.attract-ad[data-kind="menu_highlight"]').textContent)).includes('3 שוקולדים'));
-  check(t('defaults: idle 60 / grace 10'), JSON.stringify(await page.evaluate(() => window.KioskSession.settings)) === JSON.stringify({ idleSeconds: 60, graceSeconds: 10 }));
+  check(t('defaults: idle 60 / grace 10'), JSON.stringify(await page.evaluate(() => window.KioskSession.settings)) === JSON.stringify({ idleSeconds: 60, graceSeconds: 10, successSeconds: 10 }));
   if (SHOTS) await shotOf(page, ['feedback'], label, 'attract-defaults');
   check(t('no page errors'), errors.length === 0, errors);
   await context.close();

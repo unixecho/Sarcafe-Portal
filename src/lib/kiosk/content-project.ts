@@ -2,8 +2,10 @@
 // branch's operating hours and the published menu) into the exact shape GET /api/kiosk/content answers with. The kiosk
 // app is coded against this shape: change nothing in KioskContent without the kiosk.
 //
-// Pure: no imports, no database, no network, no clock unless one is passed. The QR encoder and the hash are handed in
+// Pure: no runtime imports (types only), no database, no network, no clock unless one is passed. The QR encoder and the hash are handed in
 // (lib/kiosk/content.ts gives the real ones), so scripts/check-kiosk-content.mjs can run this file directly.
+
+import type { KioskDeviceSettings } from './device-settings'
 
 export const AD_KINDS = ['location', 'feedback', 'loyalty', 'hours', 'menu_highlight', 'custom'] as const
 export const AD_ACTIONS = ['none', 'join', 'menu'] as const
@@ -36,12 +38,29 @@ export type KioskHoursException = { date: string; closed: boolean; open: string 
 export type KioskHours = { timezone: string; week: KioskHoursDay[]; exceptions: KioskHoursException[] }
 export type KioskHighlight = { name: string; price: number | null; note: string | null }
 
+/** Which kiosk this answer is for, and its own settings (lib/kiosk/device-settings.ts). Absent for the legacy, unnamed kiosk. */
+export type KioskDeviceInfo = {
+  device: string
+  name: string
+  /** false until the kiosk_devices migration has a row for this tablet: the control panel then keeps its changes on the tablet only. */
+  registered: boolean
+  branch: { slug: string; name: { he: string; en: string | null; ar: string | null } }
+  /** The branch's own timings (/owner/kiosk), so the control panel can say "follows the branch (60 s)". */
+  branchTiming: KioskContentSettings
+  /** Every setting, defaults filled in. */
+  settings: KioskDeviceSettings
+  /** When the tablet's settings last changed (the tablet compares it with what its report answers). */
+  settingsUpdatedAt: string | null
+}
+
 export type KioskContent = {
   version: string
+  /** The timings the kiosk runs on: this tablet's own where it has set one, the branch's otherwise. */
   settings: KioskContentSettings
   ads: KioskAd[]
   hours: KioskHours | null
   highlights: KioskHighlight[]
+  kiosk?: KioskDeviceInfo
 }
 
 /** A stored card, as the database row has it (snake_case columns mapped by the loader). */
@@ -83,6 +102,8 @@ export type ContentInput = {
   today: string
   /** The only place a card's picture may come from (our own public storage, see imageAllowed); null = no pictures. */
   imagePrefix: string | null
+  /** The kiosk this is for (device-aware callers only): carried to the tablet and part of the version, so a settings change is never "unchanged". */
+  kiosk?: KioskDeviceInfo
 }
 
 export type ContentDeps = {
@@ -239,5 +260,6 @@ export function projectContent(input: ContentInput, deps: Pick<ContentDeps, 'qr'
 
 export function buildKioskContent(input: ContentInput, deps: ContentDeps): KioskContent {
   const content = projectContent(input, deps)
-  return { version: deps.hash(JSON.stringify(content)), ...content }
+  const body = input.kiosk ? { ...content, kiosk: input.kiosk } : content
+  return { version: deps.hash(JSON.stringify(body)), ...body }
 }

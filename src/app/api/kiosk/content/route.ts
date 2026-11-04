@@ -7,7 +7,8 @@ import { getKioskContent } from '@/lib/kiosk/content'
 // Public on purpose and CORS-open so the page bundled inside the tablet app (file origin) may read it, like
 // /api/kiosk/menu. Read-only (GET and OPTIONS), pinned to the kiosk's branch, and it carries no personal data: only
 // the owner's card texts, the branch's hours, published menu names and prices, and the poll's public link.
-// Shape: lib/kiosk/content-project.ts KioskContent. The kiosk is coded against it; do not change it on one side only.
+// `?device=<slug>` names the tablet: its branch's cards and hours, its own timings and settings (`kiosk` in the answer).
+// Without it the answer is the one for the tablet that already existed. Shape: lib/kiosk/content-project.ts KioskContent. The kiosk is coded against it; do not change it on one side only.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,7 @@ export function OPTIONS() {
 
 export async function GET(request: NextRequest) {
   try {
-    const content = await getKioskContent(request.nextUrl.origin)
+    const content = await getKioskContent(request.nextUrl.origin, new Date(), request.nextUrl.searchParams.get('device'))
     if (!content) {
       return NextResponse.json({ error: { code: 'not_found', message: 'Not found.' } }, { status: 404, headers: UNCACHED })
     }

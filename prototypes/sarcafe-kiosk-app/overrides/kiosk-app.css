@@ -21,6 +21,9 @@ input { -webkit-user-select: text; user-select: text; }
 /* every screen scrolls instead of clipping; the welcome screen is a fixed picture */
 .panel { overflow-y: auto; overscroll-behavior: contain; }
 .panel-welcome { overflow: hidden; }
+/* the panels start under the header, whatever height it has (kiosk-shift.js measures it: a second row in portrait while the
+   shift chips show). Before the keyboard rules below so that .kb-open .panel { inset: 0 } still wins. */
+.panel:not(.panel-welcome) { inset: var(--kx-top, 68px) 0 34px; }
 
 /* when the idle timer ends: fade out, reset while dark, fade back in */
 .kiosk-screen { transition: opacity .9s ease; }
@@ -143,3 +146,40 @@ html[dir="ltr"] .kiosk-warning-bar i { transform-origin: left center; }
 html[lang="ar"] body, html[lang="ar"] body * { letter-spacing: 0 !important; }
 html[lang="ar"] .welcome-copy h1 { line-height: 1.15; }
 html[lang="ar"] .decision-copy strong, html[lang="ar"] .choice-heading h1 { line-height: 1.2; }
+
+/* ---- what staff tune (kiosk-config.js puts these classes on <html>) ---- */
+.lang-switch[hidden], .lang-switch [hidden] { display: none !important; }
+.kx-hide-credit .welcome-credit { display: none; }
+.kx-hide-branch .kiosk-header .branch, .kx-hide-branch .welcome-topline > span { display: none; }
+.kx-hide-count .menu-source { display: none; }
+/* the club switched off: its button, its card, its shortcuts */
+.kx-no-club .attract-join, .kx-no-club .decision-loyalty, .kx-no-club .join-shortcut { display: none !important; }
+.kx-no-club .decision-grid { grid-template-columns: 1fr; }
+
+/* ---- the header says who is on shift and when we close (kiosk-shift.js) ---- */
+.kiosk-info { display: contents; }
+.kiosk-shift { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.kiosk-shift[hidden] { display: none; }
+.ks-chip { min-width: 0; display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 999px; color: #6b6252; background: #f3ecdc; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.ks-chip[hidden] { display: none; }
+.ks-chip b { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--espresso); font-weight: 800; }
+.ks-close { color: #fff; background: var(--forest); border-color: var(--forest); }
+.ks-close b { color: #fff; font-variant-numeric: tabular-nums; }
+/* with the chips showing, the item count steps aside (a wide screen has room for the rest in one row) */
+.kiosk-header.has-shift .menu-source { display: none; }
+@media (orientation: portrait) {
+  /* a second row under the logo and the language switch: the branch, who is on shift, when we close */
+  .kiosk-header.has-shift { height: auto; min-height: 68px; flex-wrap: wrap; row-gap: 4px; padding-block: 8px 9px; }
+  .kiosk-header.has-shift .lang-switch-header { order: 2; margin-inline-start: auto; }
+  .kiosk-header.has-shift .kiosk-info { order: 10; flex: 1 0 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+  .kiosk-header.has-shift .kiosk-info .branch { margin-inline-start: 0; }
+}
+
+/* ---- the choice cards: the words sit in the middle of the card, not stuck to the top above an empty half ---- */
+.decision-loyalty { grid-template-rows: 1fr; align-items: center; align-content: center; }
+.decision-loyalty > * { align-self: center; }
+@media (orientation: portrait) {
+  /* in portrait the menu card has no peek list either, so it gets the same treatment */
+  .decision-menu { grid-template-rows: 1fr; align-items: center; align-content: center; }
+  .decision-menu > * { align-self: center; }
+}

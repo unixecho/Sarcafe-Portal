@@ -4,6 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { fetchMenu } from '@/lib/menu/fetch'
 import { getBranchOpenStates } from '@/lib/shifts/hours'
 import { KIOSK_BRANCH_SLUG } from './menu'
+import { resolveKiosk } from './device'
+import { effective } from './device-settings'
 import {
   FEEDBACK_PATH,
   buildKioskContent,
@@ -108,26 +110,36 @@ async function kioskBranch() {
   return data as { id: string; timezone: string | null } | null
 }
 
-/** The whole public answer. `origin` builds the poll link the feedback card's QR opens. Null when the branch is missing. */
-export async function getKioskContent(origin: string, at: Date = new Date()): Promise<KioskContent | null> {
-  const branch = await kioskBranch()
-  if (!branch) return null
-  const timezone = branch.timezone || 'Asia/Jerusalem'
+/**
+ * The whole public answer for one kiosk. `origin` builds the poll link the feedback card's QR opens; `requestedDevice` is
+ * the tablet's own name (?device=), none meaning the tablet that already existed. The branch, the cards and the hours are
+ * the ones of the branch that device is linked to. Null when that device or its branch does not exist.
+ */
+export async function getKioskContent(origin: string, at: Date = new Date(), requestedDevice: string | null = null): Promise<KioskContent | null> {
+  const kiosk = await resolveKiosk(requestedDevice)
+  if (!kiosk) return null
+  const branch = { id: kiosk.branch.id, timezone: kiosk.branch.timezone }
+  const timezone = kiosk.branch.timezone
   const service = createServiceRoleClient()
   const [settingsRes, adsRes, openStates, menu] = await Promise.all([
     service.from('kiosk_settings').select('idle_seconds, grace_seconds, slide_seconds, hours_exceptions').eq('branch_id', branch.id).maybeSingle(),
     service.from('kiosk_ads').select(AD_COLUMNS).eq('branch_id', branch.id).order('sort_order', { ascending: true }),
     getBranchOpenStates([{ id: branch.id, timezone }], at),
-    fetchMenu(KIOSK_BRANCH_SLUG),
+    fetchMenu(kiosk.branch.slug),
   ])
   if (settingsRes.error || adsRes.error) throw new Error('kiosk content read failed')
   const settings = settingsRes.data as SettingsRow | null
+  const branchTiming = normalizeSettings(settings ? { idleSeconds: settings.idle_seconds, graceSeconds: settings.grace_seconds, slideSeconds: settings.slide_seconds } : null)
+  const device = effective(kiosk.stored)
 
   return buildKioskContent(
     {
-      settings: settings
-        ? { idleSeconds: settings.idle_seconds, graceSeconds: settings.grace_seconds, slideSeconds: settings.slide_seconds }
-        : null,
+      // this tablet's own timing where it set one, the branch's otherwise
+      settings: {
+        idleSeconds: device.timing.idleSeconds ?? branchTiming.idleSeconds,
+        graceSeconds: device.timing.graceSeconds ?? branchTiming.graceSeconds,
+        slideSeconds: device.ads.slideSeconds ?? branchTiming.slideSeconds,
+      },
       ads: ((adsRes.data ?? []) as AdRow[]).map(toStoredAd),
       weeklyHours: openStates[branch.id]?.weeklyHours ?? null,
       exceptions: toExceptions(settings?.hours_exceptions),
@@ -136,6 +148,15 @@ export async function getKioskContent(origin: string, at: Date = new Date()): Pr
       feedbackUrl: `${origin.replace(/\/+$/, '')}${FEEDBACK_PATH}`,
       today: todayIn(timezone, at),
       imagePrefix: imagePrefix(),
+      kiosk: {
+        device: kiosk.slug,
+        name: kiosk.name,
+        registered: !kiosk.legacy,
+        branch: { slug: kiosk.branch.slug, name: kiosk.branch.name },
+        branchTiming,
+        settings: device,
+        settingsUpdatedAt: kiosk.settingsUpdatedAt,
+      },
     },
     { qr: qrModules, hash: sha16 },
   )

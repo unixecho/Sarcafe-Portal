@@ -66,12 +66,13 @@ public class MainActivity extends Activity {
     private long firstTapAt;
     private long staffUntil;
     private OtaUpdater ota;
+    private StaffBridge staff;
 
     /** What the update layer may ask of this screen. */
     private final OtaUpdater.Host otaHost = new OtaUpdater.Host() {
         @Override public void queryIdle(final OtaUpdater.IdleCallback cb) {
-            if (web == null || isFinishing() || System.currentTimeMillis() < staffUntil) {
-                cb.onResult(false); // never while staff have the tablet unlocked
+            if (web == null || isFinishing() || System.currentTimeMillis() < staffUntil || (staff != null && staff.panelOpen())) {
+                cb.onResult(false); // never while staff have the tablet unlocked or the control panel is open
                 return;
             }
             // KioskSession (the session controller) says ATTRACT/CLEAN when no customer is mid-visit; a page without
@@ -106,6 +107,8 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("kiosk", MODE_PRIVATE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         applyOrientation(); // launch extras are ignored: configuration arrives only through KioskConfigReceiver
+        applyBrightness();
+        staff = new StaffBridge(this, prefs);
 
         web = new WebView(this);
         configureWebView();
@@ -165,6 +168,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (staff != null) staff.end();
         ui.removeCallbacksAndMessages(null);
         if (ota != null) ota.onHostGone(otaHost);
         if (KioskConfigReceiver.onChanged == configChanged) KioskConfigReceiver.onChanged = null;
@@ -194,8 +198,18 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** The screen's brightness from the control panel (10-100 %); -1 leaves it to the tablet. Only this window, no system setting. */
+    void applyBrightness() {
+        try {
+            int pct = prefs.getInt("brightness", -1);
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.screenBrightness = pct < 10 || pct > 100 ? WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE : pct / 100f;
+            getWindow().setAttributes(lp);
+        } catch (Exception ignored) { }
+    }
+
     /** auto follows the sensor (both orientations); portrait/landscape pin the tablet to one of them. */
-    private void applyOrientation() {
+    void applyOrientation() {
         String o = prefs.getString("orient", "auto");
         setRequestedOrientation(o.equals("portrait") ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             : o.equals("landscape") ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -216,7 +230,19 @@ public class MainActivity extends Activity {
                 if (!kioskPageOnTop) return;
                 ui.post(new Runnable() { @Override public void run() { if (ota != null) ota.onReady(version); } });
             }
+
+            // Read-only facts for the page's report to the portal (no customer data, nothing that changes anything).
+            // The charge comes from the system's own battery service, which is more reliable than the page's Battery API.
+            @JavascriptInterface public String battery() {
+                if (!kioskPageOnTop) return "null";
+                org.json.JSONObject o = StaffBridge.battery(MainActivity.this);
+                return o == null ? "null" : o.toString();
+            }
+            @JavascriptInterface public int appVersion() { return !kioskPageOnTop || ota == null ? -1 : ota.nativeVersionCode(); }
+            @JavascriptInterface public String webVersion() { return !kioskPageOnTop || ota == null ? "" : ota.activeWebVersion(); }
         }, "KioskNative");
+        // the staff control panel's door: every call needs the one-time token the app hands the page after the PIN
+        web.addJavascriptInterface(staff.js(), "KioskStaff");
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -266,6 +292,12 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (ota != null) ota.onPageFinished(url);
+                // an action in the control panel reloaded the page (the speed setting): the panel comes back by itself
+                if (staff != null && staff.reopen && isKioskPage(url)) {
+                    staff.reopen = false;
+                    String t = staff.current();
+                    if (t != null) openPanelWith(t);
+                }
             }
 
             @Override
@@ -285,6 +317,10 @@ public class MainActivity extends Activity {
     static boolean isKioskPage(String url) {
         return url != null && url.startsWith("https://" + OtaUpdater.VIRTUAL_HOST + "/");
     }
+
+    boolean isKioskPageOnTop() { return kioskPageOnTop; }
+    OtaUpdater updater() { return ota; }
+    void reloadPage() { if (web != null) load(); }
 
     private void load() {
         String saved = prefs.getString("url", null);
@@ -412,7 +448,7 @@ public class MainActivity extends Activity {
             SharedPreferences.Editor e = prefs.edit().remove("pin_failures").remove("pin_locked_until");
             if (stored == null) e.putString("pin_v2", StaffPin.create(pin, new java.security.SecureRandom())).remove("pin_hash");
             e.apply();
-            staffMenu();
+            openPanel();
             return;
         }
         int failures = prefs.getInt("pin_failures", 0) + 1;
@@ -421,7 +457,58 @@ public class MainActivity extends Activity {
             .putLong("pin_locked_until", lock > 0 ? System.currentTimeMillis() + lock : 0).apply();
     }
 
-    private void staffMenu() {
+    // ---- the control panel ---------------------------------------------------------------------------------------
+
+    /**
+     * After a correct PIN: the page's control panel (overrides/kiosk-admin.js) opens with a one-time token. A page that
+     * cannot show it (an older bundle, the offline page, a page that is not ours) falls back to the plain menu below, so
+     * the staff are never locked out of the tablet.
+     */
+    private void openPanel() {
+        if (staff == null || !kioskPageOnTop) { staffMenu(); return; }
+        openPanelWith(staff.begin());
+    }
+
+    private void openPanelWith(String token) {
+        if (web == null) return;
+        web.evaluateJavascript("(function(){try{var a=window.KioskAdmin;"
+            + "if(a&&typeof a.open==='function'){return a.open('" + token + "')===true?'ok':'no'}return 'none'}catch(e){return 'err'}})()",
+            new android.webkit.ValueCallback<String>() {
+                @Override public void onReceiveValue(String v) {
+                    if (!"\"ok\"".equals(v)) {
+                        if (staff != null) staff.end();
+                        staffMenu();
+                    }
+                }
+            });
+    }
+
+    /** The panel was closed (by the staff or by its own three-minute timer). */
+    void panelClosed() {
+        if (staff != null) staff.end();
+    }
+
+    void openWifiSettings() {
+        unlockForStaff();
+        startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    void confirmReboot() {
+        new AlertDialog.Builder(this)
+            .setTitle("Restart the tablet?")
+            .setMessage("The whole tablet restarts and comes back to the kiosk by itself. It takes about a minute.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Restart", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) {
+                    if (!StaffBridge.reboot(MainActivity.this)) {
+                        android.widget.Toast.makeText(MainActivity.this, "Only the device owner app can restart the tablet.",
+                            android.widget.Toast.LENGTH_LONG).show();
+                    }
+                }
+            }).show();
+    }
+
+    void staffMenu() {
         final String perfNow = prefs.getString("perf", "auto");
         final String perfNext = perfNow.equals("auto") ? "lite" : perfNow.equals("lite") ? "full" : "auto";
         final String[] items = {
@@ -474,7 +561,7 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-    private void confirmLeave(final boolean permanent) {
+    void confirmLeave(final boolean permanent) {
         new AlertDialog.Builder(this)
             .setTitle(permanent ? "Remove kiosk completely?" : "Exit kiosk mode?")
             .setMessage(permanent
@@ -517,7 +604,7 @@ public class MainActivity extends Activity {
         goToNormalHome();
     }
 
-    private void unlockForStaff() {
+    void unlockForStaff() {
         staffUntil = System.currentTimeMillis() + STAFF_WINDOW_MS;
         try { stopLockTask(); } catch (Exception ignored) { }
         ui.removeCallbacks(relock);

@@ -17,6 +17,10 @@ The kiosk speaks Hebrew, English and Arabic. Hebrew is the default and every vis
 - **Hebrew comes back by itself:** at every privacy reset (the 60 s timeout, the home button, "סיום ואיפוס") and after a
   finished sign-up's confirmation. A language picked on the welcome screen by someone who then walked away also reverts,
   after the same idle time as a visit (60 s by default).
+- **Staff can change this tablet's languages** in the control panel's "שפות" tab (`docs/SARCAFE_KIOSK_ADMIN_PANEL.md`): which of
+  the three are offered, which one is the default (the kiosk starts in it and "comes back by itself" means back to it, not always
+  Hebrew), and whether the switch shows at all. A new default or a language that was switched off is taken at once when nobody is
+  using the kiosk. With one language the switch disappears.
 - Arabic uses Rubik's Arabic subset, bundled like the Hebrew and Latin ones (`fonts/rubik-arabic.woff2`, SIL OFL), so
   it looks the same offline.
 
