@@ -16,6 +16,8 @@ export type WaitlistContact = {
   phone: string
   email: string | null
   marketing: boolean
+  /** Where the person signed up: the kiosk tablet or the public web page (/loyaltysignup). */
+  source: 'kiosk' | 'web'
   createdAt: string
   lastInterestAt: string
 }
@@ -26,7 +28,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   const service = createServiceRoleClient()
   const { data, error, count } = await service
     .from('customer_waitlist_contacts')
-    .select('id, first_name, normalized_phone, email, current_marketing_consent, created_at, last_interest_at', { count: 'exact' })
+    .select('id, first_name, normalized_phone, email, current_marketing_consent, source, created_at, last_interest_at', { count: 'exact' })
     .order('last_interest_at', { ascending: false })
     .range(offset, offset + PAGE - 1)
   if (error) throw BadRequest('Could not load the list.')
@@ -42,6 +44,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
     phone: row.normalized_phone as string,
     email: (row.email as string | null) ?? null,
     marketing: row.current_marketing_consent as boolean,
+    source: row.source === 'web' ? 'web' : 'kiosk',
     createdAt: row.created_at as string,
     lastInterestAt: row.last_interest_at as string,
   }))

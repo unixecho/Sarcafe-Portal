@@ -10,7 +10,8 @@
 
 /** Customer pages: the portal's front page and the pages a visitor or a customer with an order can reach. */
 // /feedback: the public poll the kiosk's QR opens (2026-10-28)
-export const CUSTOMER_PREFIXES = ['/menu', '/order', '/accessibility', '/privacy', '/board', '/feedback'] as const
+// /loyaltysignup: the public loyalty-club sign-up link (2026-11-04)
+export const CUSTOMER_PREFIXES = ['/menu', '/order', '/accessibility', '/privacy', '/board', '/feedback', '/loyaltysignup'] as const
 
 /** Is this a page a customer sees? The front page (`/`) is, exactly; the others by prefix. */
 export function isCustomerFacing(pathname: string | null | undefined): boolean {

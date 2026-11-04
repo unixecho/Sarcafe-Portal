@@ -45,6 +45,16 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         ],
       },
+      // The public sign-up link (/loyaltysignup, docs/SARCAFE_LOYALTY_SIGNUP_PAGE.md): a form token is stamped into every response and
+      // the address carries nothing private, but it is never cached, kept out of search results, and no Referer leaves it.
+      {
+        source: '/loyaltysignup',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
       // The ONE exception to "never framed": the payslip viewer shows a private document inside our own page. It is the
       // last rule so it wins for this path; only our own origin may frame it, and the route checks who may read the file.
       {

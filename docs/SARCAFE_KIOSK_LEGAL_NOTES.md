@@ -69,6 +69,11 @@ translations were written by the developer's assistant, not by a lawyer or a nat
 them in a dispute. The English and Arabic texts name the business as `businessNameEn` / `businessNameAr` (kiosk-business.js) and keep
 the owner's name as written in Hebrew. A change to the English or Arabic wording bumps only that language's ids.
 
+**Web page (added 2026-11-04).** The public page `/loyaltysignup` has its own wording and ids (`web-privacy|consent|terms-{he|en|ar}-v1-2026-11-04`
+in `src/lib/loyalty/signup-shared.ts`, texts in `src/lib/loyalty/copy.ts`), adapted from the kiosk's: no "kiosk/tablet/truck screen", and
+the notice discloses the Google Fonts request and the visitor's own browser storage. The business facts are the same. See
+`docs/SARCAFE_LOYALTY_SIGNUP_PAGE.md`. Not lawyer-reviewed either.
+
 ## 5. Turning it on (status)
 
 1. DONE 2026-10-28: migration `20261027150000_customer_waitlist.sql` applied to production and recorded in the ledger.

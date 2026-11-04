@@ -7,7 +7,7 @@ import { CSV_BOM, csvLine } from '@/lib/pos/server/export'
 // The sign-up list as a spreadsheet. Full owner only, re-checked on every call, never cached. Cells go through the
 // same formula-injection guard as the order export (a name typed as =HYPERLINK(...) cannot run on the owner's laptop).
 
-const HEADERS = ['שם פרטי', 'טלפון', 'דוא״ל', 'הסכמה לשיווק', 'נרשם/ה', 'התעניינות אחרונה'] as const
+const HEADERS = ['שם פרטי', 'טלפון', 'דוא״ל', 'הסכמה לשיווק', 'נרשם/ה', 'התעניינות אחרונה', 'מקור'] as const
 
 function stamp(iso: string): string {
   const parts = new Intl.DateTimeFormat('sv-SE', {
@@ -21,7 +21,7 @@ export const GET = apiRoute(async () => {
   const service = createServiceRoleClient()
   const { data, error } = await service
     .from('customer_waitlist_contacts')
-    .select('first_name, normalized_phone, email, current_marketing_consent, created_at, last_interest_at')
+    .select('first_name, normalized_phone, email, current_marketing_consent, source, created_at, last_interest_at')
     .order('created_at', { ascending: true })
     .limit(10000)
   if (error) throw BadRequest('Could not export the list.')
@@ -36,6 +36,7 @@ export const GET = apiRoute(async () => {
       row.current_marketing_consent ? 'כן' : 'לא',
       stamp(row.created_at as string),
       stamp(row.last_interest_at as string),
+      row.source === 'web' ? 'אתר' : 'קיוסק',
     ]))
   }
   return new NextResponse(CSV_BOM + lines.join('\r\n') + '\r\n', {

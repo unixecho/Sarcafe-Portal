@@ -17,6 +17,7 @@ const check = (name, okay, detail = '') => {
   if (okay) { passed++; console.log(`  ✓ ${name}`) } else { failed.push(name); console.log(`  ✗ ${name}${detail ? ` — ${detail}` : ''}`) }
 }
 const one = async (sql, params = []) => (await db.query(sql, params)).rows[0]
+const count = async (sql, params = []) => Number((await one(sql, params)).n)
 const reg = async (over = {}) => {
   const a = { name: 'דנה', phone: '054-123 4567', email: null, marketing: false, request: crypto.randomUUID(), key: 'k'.repeat(32), ...over }
   return (await one(`select public.customer_waitlist_register($1,$2,$3,$4,'privacy-v1','consent-v1','terms-v1',$5,$6) r`, [a.name, a.phone, a.email, a.marketing, a.request, a.key])).r
@@ -45,6 +46,7 @@ for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql'
 check('all migrations apply in order (the new one is idempotent: it applies twice)', true)
 await db.exec(readFileSync(migrations + '20261027150000_customer_waitlist.sql', 'utf8'))
 await db.exec(readFileSync(migrations + '20261028150000_customer_waitlist_no_repeat.sql', 'utf8')) // the later function definition goes back on top
+await db.exec(readFileSync(migrations + '20261104150000_customer_waitlist_web_source.sql', 'utf8')) // the web-source version goes on top of both (it drops the 9-argument one)
 check('re-applying the waitlist migrations (in order) changes nothing', true)
 
 const branch = (await one(`select id from public.branches where slug = 'givat-haviva'`)).id
@@ -145,13 +147,36 @@ for (const role of ['anon', 'authenticated']) {
   for (const table of ['customer_waitlist_contacts', 'customer_waitlist_consent_events', 'customer_waitlist_attempts']) {
     check(`${role} has no grant on ${table}`, !(await one(`select has_table_privilege('${role}', 'public.${table}', 'select') or has_table_privilege('${role}', 'public.${table}', 'insert') a`)).a)
   }
-  for (const fn of ['customer_waitlist_register(text,text,text,boolean,text,text,text,uuid,text)', 'customer_waitlist_set_marketing(uuid,boolean)', 'customer_waitlist_erase(uuid)']) {
+  for (const fn of ['customer_waitlist_register(text,text,text,boolean,text,text,text,uuid,text,text)', 'customer_waitlist_set_marketing(uuid,boolean)', 'customer_waitlist_erase(uuid)']) {
     check(`${role} cannot execute ${fn.split('(')[0]}`, !(await one(`select has_function_privilege('${role}', 'public.${fn}', 'execute') a`)).a)
   }
 }
-check('service_role can execute all three', (await one(`select has_function_privilege('service_role','public.customer_waitlist_register(text,text,text,boolean,text,text,text,uuid,text)','execute') a, has_function_privilege('service_role','public.customer_waitlist_set_marketing(uuid,boolean)','execute') b, has_function_privilege('service_role','public.customer_waitlist_erase(uuid)','execute') c`)).a === true)
+check('service_role can execute all three', (await one(`select has_function_privilege('service_role','public.customer_waitlist_register(text,text,text,boolean,text,text,text,uuid,text,text)','execute') a, has_function_privilege('service_role','public.customer_waitlist_set_marketing(uuid,boolean)','execute') b, has_function_privilege('service_role','public.customer_waitlist_erase(uuid)','execute') c`)).a === true)
 check('all three tables have row level security on', Number((await one(`select count(*) n from pg_class where relname in ('customer_waitlist_contacts','customer_waitlist_consent_events','customer_waitlist_attempts') and relrowsecurity`)).n) === 3)
 check('no function name has two signatures', Number((await one(`select count(*) n from (select proname from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname='public' and proname like 'customer_waitlist%' group by proname having count(*)>1) t`)).n) === 0)
 
+
+console.log('web source (20261104150000)')
+const web = async (n, key) => (await one(`select public.customer_waitlist_register('Web', $1, null, true, 'p','c','t', gen_random_uuid(), $2, 'web') r`, [n, key])).r
+const ownerRow = (await one(`select id from public.staff where role = 'owner' or badge = 'owner' limit 1`))
+check('a web sign-up is stored with source web on the contact and its events', (await web('0521230001', 'web-key-aaaaaaaaaaaaaaaa')).ok === true
+  && await count(`select count(*) n from public.customer_waitlist_contacts where normalized_phone = '0521230001' and source = 'web'`) === 1
+  && await count(`select count(*) n from public.customer_waitlist_consent_events e join public.customer_waitlist_contacts c on c.id = e.contact_id where c.normalized_phone = '0521230001' and e.source = 'web'`) === 2)
+check('an unknown source is refused', (await one(`select public.customer_waitlist_register('X','0521230002',null,false,'p','c','t',gen_random_uuid(),'web-key-bbbbbbbbbbbbbbbb','sms') r`)).r.error === 'bad_request')
+let lim = null
+for (let i = 0; i < 9; i++) { const r = await web(`05212301${String(i).padStart(2, '0')}`, 'web-key-cccccccccccccccc'); if (r.error === 'rate_limited') { lim = i; break } }
+check('one web caller is limited after 6 an hour', lim === 6, String(lim))
+check('the kiosk is not affected by a web caller being limited', (await one(`select public.customer_waitlist_register('K','0521230999',null,false,'p','c','t',gen_random_uuid(),'web-key-cccccccccccccccc') r`)).r.ok === true)
+await db.query(`delete from public.customer_waitlist_attempts`)
+for (let i = 0; i < 125; i++) await db.query(`insert into public.customer_waitlist_attempts (key_hash, source) values ($1, 'web')`, ['w' + String(i).padStart(20, '0')])
+check('120 web attempts an hour in total shut the web door only', (await web('0521230500', 'web-key-dddddddddddddddd')).error === 'rate_limited'
+  && (await one(`select public.customer_waitlist_register('K','0521230501',null,false,'p','c','t',gen_random_uuid(),'kiosk-key-eeeeeeeeeeeeee') r`)).r.ok === true)
+await db.query(`delete from public.customer_waitlist_attempts`)
+await db.query(`delete from public.schedule_notifications where kind in ('club.signup','dev.club_signup')`)
+for (let i = 0; i < 30; i++) await db.query(`insert into public.schedule_notifications (branch_id, staff_id, kind, title, body) select branch_id, id, 'club.signup', 'x', 'x' from public.staff where id = $1`, [ownerRow.id])
+const beforeCap = await count(`select count(*) n from public.schedule_notifications where staff_id = $1 and kind in ('club.signup','dev.club_signup')`, [ownerRow.id])
+await web('0521230600', 'web-key-ffffffffffffffff')
+check('a person is told of at most 30 sign-ups an hour, and the sign-up is still stored', await count(`select count(*) n from public.schedule_notifications where staff_id = $1 and kind in ('club.signup','dev.club_signup')`, [ownerRow.id]) === beforeCap
+  && await count(`select count(*) n from public.customer_waitlist_contacts where normalized_phone = '0521230600'`) === 1)
 console.log(`\n${passed} passed, ${failed.length} failed`)
 if (failed.length) { console.log('FAILED:\n - ' + failed.join('\n - ')); process.exit(1) }

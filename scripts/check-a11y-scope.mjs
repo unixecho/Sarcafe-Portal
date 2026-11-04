@@ -30,7 +30,7 @@ check('no path at all is private', S.isCustomerFacing(null) === false && S.isCus
 section('every top-level page of the app is classified (a new one must be decided on purpose)')
 const app = join(ROOT, 'src/app')
 const tops = readdirSync(app).filter((n) => statSync(join(app, n)).isDirectory() && n !== 'api')
-const CUSTOMER = ['accessibility', 'board', 'feedback', 'menu', 'order', 'privacy']
+const CUSTOMER = ['accessibility', 'board', 'feedback', 'loyaltysignup', 'menu', 'order', 'privacy']
 const PRIVATE = ['auth', 'login', 'crew', 'no-access', 'owner', 'pos', 'staff', 'fixture']
 const unknown = tops.filter((n) => !CUSTOMER.includes(n) && !PRIVATE.includes(n))
 check('no unclassified top-level route', unknown.length === 0, unknown.join(', '))

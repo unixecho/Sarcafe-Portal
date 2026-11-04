@@ -106,6 +106,7 @@ export default function WaitlistInbox() {
             <header style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
               <strong style={{ fontSize: '1rem', color: 'var(--text)' }}>{row.firstName}</strong>
               <span style={{ ...pill, color: row.marketing ? 'var(--ok)' : 'var(--text-dim)' }}>{row.marketing ? T.yes : T.no}</span>
+              <span style={{ ...pill, color: 'var(--text-dim)' }}>{row.source === 'web' ? 'מהאתר' : 'מהקיוסק'}</span>
             </header>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.88rem', color: 'var(--text)' }}>
               <a href={`tel:${row.phone}`} dir="ltr" style={{ color: 'inherit', textAlign: 'start', width: 'fit-content' }}>{showPhone(row.phone)}</a>
