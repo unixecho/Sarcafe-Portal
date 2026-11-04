@@ -8,7 +8,7 @@ Link: `https://sarcafe-portal.vercel.app/loyaltysignup` (add `?lang=he`, `?lang=
 
 ## What the visitor sees
 
-- Look: the portal's own illustrated Givat Haviva backdrop (`PublicBackdrop`, the same artwork as the menu and the poll, rotating gently) with the title and language buttons in cream directly on the picture and the form on a paper card below. The backdrop remembers which picture it showed last in the visitor's browser (no personal data); the notice says so.
+- Look: the portal's own illustrated Givat Haviva backdrop (`PublicBackdrop`, the same artwork as the menu and the poll, rotating gently) with the white version of the logo (`public/sarcafe-logo-white.png`: wordmark and tagline solid white, the leaf shapes translucent white), the title and language buttons in cream directly on the picture and the form on a paper card below. The backdrop remembers which picture it showed last in the visitor's browser (no personal data); the notice says so.
 - Language: `?lang=` first, then the browser's language, then Hebrew. A three-button switch changes it in place (the address, the tab
   title, the page language and the direction all follow).
 - Fields: first name, Israeli mobile number (05X; +972 and 972 are accepted), e-mail (optional).

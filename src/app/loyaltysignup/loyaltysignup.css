@@ -42,7 +42,8 @@
 }
 
 .ls-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.ls-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; background: var(--ls-forest); border: 2px solid rgba(253, 246, 236, 0.85); box-shadow: 0 6px 20px rgba(8, 5, 3, 0.45); }
+/* The white version of the logo (public/sarcafe-logo-white.png), straight on the artwork with a soft shadow for contrast. */
+.ls-logo { width: 76px; height: 76px; object-fit: contain; filter: drop-shadow(0 3px 12px rgba(8, 5, 3, 0.65)); }
 
 .ls-langs { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .ls-lang {
