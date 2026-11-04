@@ -11,9 +11,9 @@ export const LOYALTY_LANGS = ['he', 'en', 'ar'] as const
 export type LoyaltyLang = (typeof LOYALTY_LANGS)[number]
 
 export const WEB_LEGAL_VERSIONS: Record<LoyaltyLang, { privacy: string; consent: string; terms: string }> = {
-  he: { privacy: 'web-privacy-he-v1-2026-11-04', consent: 'web-consent-he-v1-2026-11-04', terms: 'web-terms-he-v1-2026-11-04' },
-  en: { privacy: 'web-privacy-en-v1-2026-11-04', consent: 'web-consent-en-v1-2026-11-04', terms: 'web-terms-en-v1-2026-11-04' },
-  ar: { privacy: 'web-privacy-ar-v1-2026-11-04', consent: 'web-consent-ar-v1-2026-11-04', terms: 'web-terms-ar-v1-2026-11-04' },
+  he: { privacy: 'web-privacy-he-v2-2026-11-04', consent: 'web-consent-he-v2-2026-11-04', terms: 'web-terms-he-v2-2026-11-04' },
+  en: { privacy: 'web-privacy-en-v2-2026-11-04', consent: 'web-consent-en-v2-2026-11-04', terms: 'web-terms-en-v2-2026-11-04' },
+  ar: { privacy: 'web-privacy-ar-v2-2026-11-04', consent: 'web-consent-ar-v2-2026-11-04', terms: 'web-terms-ar-v2-2026-11-04' },
 }
 
 export const isLoyaltyLang = (value: unknown): value is LoyaltyLang => typeof value === 'string' && (LOYALTY_LANGS as readonly string[]).includes(value)

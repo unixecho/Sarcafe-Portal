@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import PublicBackdrop from '@/components/PublicBackdrop'
 import { COPY, type LoyaltyCopy } from '@/lib/loyalty/copy'
 import { LOYALTY_LANGS, isEmail, isMobilePhone, normalizePhone, type LoyaltyLang } from '@/lib/loyalty/signup-shared'
 import './loyaltysignup.css'
@@ -9,7 +10,10 @@ import './loyaltysignup.css'
 // the server picks the legal version ids from `lang`, so what is on screen is what is recorded. Nothing is kept in the browser
 // (no cookies, no browser storage), nothing is sent anywhere but /api/loyaltysignup, and a failure always says that nothing was saved.
 
-type Fields = 'firstName' | 'phone' | 'email' | 'acknowledged'
+// The cart's own artwork behind the page, the same illustrated backdrop as the menu and the poll (the cart is at Givat Haviva).
+const BACKDROP_BRANCH = 'givat-haviva'
+
+type Fields ='firstName' | 'phone' | 'email' | 'acknowledged'
 type Errors = Partial<Record<Fields, string>>
 type Status = 'idle' | 'sending' | 'done'
 
@@ -141,38 +145,42 @@ export default function LoyaltySignupForm({ initialLang, token }: { initialLang:
   const err = (key: Fields) => (errors[key] ? <p id={`${ids}-${key}-err`} className="ls-error" role="alert">{errors[key]}</p> : null)
 
   return (
+    <PublicBackdrop branchSlug={BACKDROP_BRANCH}>
     <div className="ls" lang={lang} dir={t.dir}>
-      <main id="main" tabIndex={-1} className="ls-card">
-        <header className="ls-top">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="ls-logo" src="/sarcafe-logo.png" alt="Sarcafe" width={56} height={56} />
-          <div className="ls-langs" role="group" aria-label={COPY.he.langAria + ' / ' + COPY.en.langAria + ' / ' + COPY.ar.langAria}>
-            {LOYALTY_LANGS.map((code) => (
-              <button
-                key={code}
-                type="button"
-                lang={code}
-                className="ls-lang"
-                aria-pressed={code === lang}
-                onClick={() => pickLang(code)}
-              >
-                {COPY[code].name}
-              </button>
-            ))}
+      <main id="main" tabIndex={-1} className="ls-main">
+        <header className="ls-hero">
+          <div className="ls-top">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="ls-logo" src="/sarcafe-logo.png" alt="Sarcafe" width={64} height={64} />
+            <div className="ls-langs" role="group" aria-label={COPY.he.langAria + ' / ' + COPY.en.langAria + ' / ' + COPY.ar.langAria}>
+              {LOYALTY_LANGS.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  lang={code}
+                  className="ls-lang"
+                  aria-pressed={code === lang}
+                  onClick={() => pickLang(code)}
+                >
+                  {COPY[code].name}
+                </button>
+              ))}
+            </div>
           </div>
+          <h1>{t.title}</h1>
+          <p className="ls-lead">{t.lead}</p>
         </header>
 
+        <div className="ls-card">
         {status === 'done' ? (
           <section className="ls-done" aria-live="polite">
             <div className="ls-tick" aria-hidden="true">✓</div>
-            <h1 ref={doneHeading} tabIndex={-1}>{t.successTitle}</h1>
+            <h2 ref={doneHeading} tabIndex={-1}>{t.successTitle}</h2>
             <p>{t.successText}</p>
             <p className="ls-fine">{t.successRepeat}</p>
           </section>
         ) : (
           <>
-            <h1>{t.title}</h1>
-            <p className="ls-lead">{t.lead}</p>
             <ul className="ls-benefits">
               {t.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
             </ul>
@@ -257,7 +265,9 @@ export default function LoyaltySignupForm({ initialLang, token }: { initialLang:
         )}
 
         <footer className="ls-footer">{t.footer}</footer>
+        </div>
       </main>
     </div>
+    </PublicBackdrop>
   )
 }

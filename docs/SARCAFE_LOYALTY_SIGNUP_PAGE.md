@@ -8,6 +8,7 @@ Link: `https://sarcafe-portal.vercel.app/loyaltysignup` (add `?lang=he`, `?lang=
 
 ## What the visitor sees
 
+- Look: the portal's own illustrated Givat Haviva backdrop (`PublicBackdrop`, the same artwork as the menu and the poll, rotating gently) with the title and language buttons in cream directly on the picture and the form on a paper card below. The backdrop remembers which picture it showed last in the visitor's browser (no personal data); the notice says so.
 - Language: `?lang=` first, then the browser's language, then Hebrew. A three-button switch changes it in place (the address, the tab
   title, the page language and the direction all follow).
 - Fields: first name, Israeli mobile number (05X; +972 and 972 are accepted), e-mail (optional).
@@ -48,18 +49,18 @@ neither, the endpoint answers 503. Nothing new has to be configured.
 
 The web texts are their own, not the kiosk's (they never say "kiosk", "tablet" or "truck screen"). Versions stored with every sign-up:
 
-- Hebrew: `web-privacy-he-v1-2026-11-04`, `web-consent-he-v1-2026-11-04`, `web-terms-he-v1-2026-11-04`
-- English: `web-privacy-en-v1-2026-11-04`, `web-consent-en-v1-2026-11-04`, `web-terms-en-v1-2026-11-04`
-- Arabic: `web-privacy-ar-v1-2026-11-04`, `web-consent-ar-v1-2026-11-04`, `web-terms-ar-v1-2026-11-04`
+- Hebrew: `web-privacy-he-v2-2026-11-04`, `web-consent-he-v2-2026-11-04`, `web-terms-he-v2-2026-11-04`
+- English: `web-privacy-en-v2-2026-11-04`, `web-consent-en-v2-2026-11-04`, `web-terms-en-v2-2026-11-04`
+- Arabic: `web-privacy-ar-v2-2026-11-04`, `web-consent-ar-v2-2026-11-04`, `web-terms-ar-v2-2026-11-04`
 
-Change a language's three ids in `signup-shared.ts` whenever any of its wording in `copy.ts` changes. The business facts (owner, business
+The ids were bumped from v1 to v2 on 2026-11-04 (the storage sentence of the notice changed right after the first deploy). Change a language's three ids in `signup-shared.ts` whenever any of its wording in `copy.ts` changes. The business facts (owner, business
 names, phone) are duplicated from `kiosk-business.js`; `check:loyalty-signup` fails if they drift apart. The same facts the kiosk notice
 promises must stay true here: 12-month automatic deletion, owner-only access, a separate marketing consent, no stored IP address.
 Not reviewed by a lawyer or a native Arabic speaker.
 
 **Disclosed on purpose:** the whole site loads the Rubik font from Google Fonts (`globals.css`), so a visitor's IP address reaches
 Google when any page loads. The notice says so. Self-hosting the font would remove it, but it is a site-wide change (a separate task).
-The site's accessibility widget and page transitions keep display preferences and the page address in the visitor's own browser; the
+The site's accessibility widget, page transitions and backdrop keep display preferences, the page address and the last background picture number in the visitor's own browser; the
 notice says that too.
 
 ## Verified how
