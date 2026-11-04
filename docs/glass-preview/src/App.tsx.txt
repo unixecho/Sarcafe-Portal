@@ -1,0 +1,415 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Button, Glass, Menu, Slider, Switch, TabBar, type MenuEntry } from 'glisse'
+import {
+  AlertTriangle, Bell, Building2, CalendarClock, Check, ChevronLeft, CircleCheck, Download, FileEdit, House, LogOut, MoreHorizontal, Package,
+  Palette, Receipt, ShoppingBag, UserRound, Users, UsersRound, X,
+} from 'lucide-react'
+import {
+  BRANCHES, HOME_GROUPS, INDEX, NOTICES, PERIODS, NAMES, nextDays, pendingBadges, rosterFor,
+  type BranchData, type BranchId, type Entry, type Role,
+} from './data'
+import { loadUsage, recordUse, resetUsage, saveUsage, suggest, visibleTo, type Context, type Usage } from './search'
+import ToolSearch from './ToolSearch'
+import QuickMessage from './QuickMessage'
+import { Pill, Seg } from './ui'
+
+// PREVIEW ONLY. Sample data, nothing is fetched. It mirrors OwnerDashboardView / EmployeeDashboardView on glisse components.
+// Style rules for this page live in docs/SARCAFE_GLASS_UI_STYLE.md (menus and popovers always look like the account menu).
+
+declare const LOGO: string
+declare const BACKDROP: string
+
+const LENS_ROLE: Record<string, Role> = { manager: 'owner', employee: 'staff', dev: 'dev' }
+const BRANCH_ITEMS = [{ value: 'givat-haviva', label: 'גבעת חביבה' }, { value: 'maor', label: 'מאור' }]
+const LENSES = [{ value: 'manager', label: 'מנהל' }, { value: 'employee', label: 'עובד' }, { value: 'dev', label: 'מפתח' }]
+const LOOKS = [{ value: 'neon', label: 'ניאון' }, { value: 'glass', label: 'זכוכית' }, { value: 'crema', label: 'קרמה' }]
+const TAB_OF: [RegExp, string][] = [[/^\/(owner|staff)\/schedule/, 'schedule'], [/^\/owner\/staff/, 'staff'], [/^\/(staff\/pos|owner\/pos|pos)/, 'pos']]
+const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const jerusalemHour = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hourCycle: 'h23' }).format(new Date()))
+const REQUESTS = [{ id: 'r1', who: 'דנה', what: 'החלפה עם איתי · יום ה׳ בבוקר' }, { id: 'r2', who: 'נועה', what: 'חופש ביום שישי' }]
+
+/** A time range such as 07:00–14:00 inside Hebrew is flipped by the bidi rules; it is set apart left-to-right (the app does the same, AlertText). */
+const RANGE = /(\d{1,2}[:/]\d{1,2}[–-]\d{1,2}[:/]\d{1,2})/
+const Isolate = ({ text }: { text: string }) => <>{text.split(RANGE).map((p, i) => (i % 2 ? <bdi key={i} dir="ltr">{p}</bdi> : p))}</>
+
+// ─────────────────────────────────────────────── top bar (kept as the owner liked it)
+const TopBar = memo(function TopBar({ branch, onBranch, unread, items, accountItems }: { branch: string; onBranch: (v: string) => void; unread: number; items: MenuEntry[]; accountItems: MenuEntry[] }) {
+  return (
+    <header className="top">
+      <Glass className="top__bar">
+        <img src={LOGO} alt="" className="top__logo" width={40} height={40} />
+        <div className="top__branch"><Seg label="סניף" value={branch} onChange={onBranch} items={BRANCH_ITEMS} /></div>
+        <span className="top__bell notif">
+          <Menu aria-label={unread ? `התראות, ${unread} חדשות` : 'התראות'} align="start" icon={<Bell size={20} />} items={items} />
+          {unread > 0 && <span className="top__dot" aria-hidden="true">{unread}</span>}
+        </span>
+        <Menu aria-label="החשבון שלי" align="start" icon={<UserRound size={20} />} items={accountItems} />
+      </Glass>
+    </header>
+  )
+})
+
+// ─────────────────────────────────────────────── home panels
+const Stat = ({ value, label, warn = false, word = false }: { value: string | number; label: string; warn?: boolean; word?: boolean }) => (
+  <div className={`surf stat${warn ? ' stat--warn' : ''}`}><b className={word ? 'stat__word' : ''}>{value}</b><span>{label}</span></div>
+)
+
+const BranchPanels = memo(function BranchPanels({ data, published, onPublish, onGo }: { data: BranchData; published: boolean; onPublish: () => void; onGo: (href: string) => void }) {
+  const draft = data.unpublished && !published
+  return (
+    <>
+      <section className="stats" aria-label="מצב התפריט">
+        <Stat value={data.categories} label="קטגוריות בתפריט" />
+        <Stat value={data.out.length} label="פריטים אזלו" warn={data.out.length > 0} />
+        <Stat value={draft ? 'טיוטה' : 'עדכני'} label="סטטוס פרסום" word />
+      </section>
+      <section className="signals" aria-label="התראות מהירות">
+        {draft && (
+          <div className="surf signal">
+            <span className="ico"><FileEdit size={20} /></span>
+            <div className="signal__copy"><strong>יש שינויים בתפריט שלא פורסמו</strong><small>לקוחות עדיין רואים את הגרסה הקודמת.</small></div>
+            <Button variant="filled" onClick={onPublish}>פרסום</Button>
+          </div>
+        )}
+        {data.out.length > 0 && (
+          <div className="surf signal">
+            <span className="ico"><Package size={20} /></span>
+            <div className="signal__copy"><strong>{data.out.length} פריטים אזלו במלאי</strong><small>{data.out.join(', ')}</small></div>
+            <Button onClick={() => onGo('/owner/tablet')}>לזמינות</Button>
+          </div>
+        )}
+        {!draft && data.out.length === 0 && <div className="surf signal"><span className="ico ico--ok"><CircleCheck size={20} /></span><div className="signal__copy"><strong>הכול מעודכן</strong><small>אין שינויים שמחכים לפרסום ואין פריטים שאזלו.</small></div></div>}
+      </section>
+      <section className="attention" aria-label="הכי חשוב עכשיו">
+        <button type="button" className={`surf att${data.shortages ? ' att--warn' : ''}`} onClick={() => onGo('/owner/issues')}>
+          <span className="ico">{data.shortages ? <AlertTriangle size={22} /> : <CircleCheck size={22} />}</span>
+          <span className="att__copy"><strong>חוסרים ופערים</strong><small>{data.shortages === 0 ? 'הכול בסדר, אין מה לטפל' : data.shortages === 1 ? 'דבר אחד לטיפול' : `${data.shortages} דברים לטיפול`}</small></span>
+          <ChevronLeft size={18} className="chev" aria-hidden="true" />
+        </button>
+        <button type="button" className="surf att" onClick={() => onGo('/owner/branches')}>
+          <span className="ico"><Building2 size={22} /></span>
+          <span className="att__copy"><strong>ניהול סניפים</strong><small>2 סניפים: הגדרות, צ׳קליסטים וצוות</small></span>
+          <ChevronLeft size={18} className="chev" aria-hidden="true" />
+        </button>
+        <button type="button" className="surf att att--main" onClick={() => onGo('/owner/schedule')}>
+          <span className="ico"><UsersRound size={24} /></span>
+          <span className="att__copy"><strong>מי במשמרת &amp; משמרות</strong><small>עכשיו ב{data.name}: {data.onNow.join(', ')}</small></span>
+          <ChevronLeft size={18} className="chev" aria-hidden="true" />
+        </button>
+      </section>
+    </>
+  )
+})
+
+const Shortcuts = memo(function Shortcuts({ ctx, badges, onOpen }: { ctx: Context; badges: Record<string, string>; onOpen: (e: Entry) => void }) {
+  const hits = useMemo(() => suggest(ctx, 4), [ctx])
+  return (
+    <section aria-label="קיצורים">
+      <h2 className="cat__title">קיצורים שמותאמים לך</h2>
+      <div className="short">
+        {hits.map(({ entry: e }) => (
+          <button key={e.id} type="button" className="surf short__tile" onClick={() => onOpen(e)}>
+            <span className="ico ico--sm"><e.icon size={19} strokeWidth={1.8} /></span>
+            <span className="short__label">{e.label}</span>
+            {badges[e.id] && <span className="pill pill--tiny">{badges[e.id]}</span>}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+})
+
+const ToolGroups = memo(function ToolGroups({ groups, badges, onOpen }: { groups: { title: string; entries: Entry[] }[]; badges: Record<string, string>; onOpen: (e: Entry) => void }) {
+  return (
+    <>
+      {groups.map((c) => (
+        <div key={c.title} className="cat">
+          <h2 className="cat__title">{c.title}</h2>
+          <div className="surf group">
+            {c.entries.map((e) => (
+              <button key={e.id} type="button" className="tool" onClick={() => onOpen(e)}>
+                <span className="ico ico--sm"><e.icon size={21} strokeWidth={1.8} /></span>
+                <span className="tool__copy"><strong>{e.label}</strong><small>{e.hint}</small></span>
+                {badges[e.id] && <Pill>{badges[e.id]}</Pill>}
+                {e.kind === 'action' && !badges[e.id] && <Pill quiet>פעולה</Pill>}
+                <ChevronLeft size={17} className="chev" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  )
+})
+
+// ─────────────────────────────────────────────── other tabs
+const ScheduleView = memo(function ScheduleView({ branch, data, role, toast }: { branch: BranchId; data: BranchData; role: Role; toast: (m: string) => void }) {
+  const days = useMemo(() => nextDays(7), [])
+  const [reqs, setReqs] = useState(REQUESTS.slice(0, data.requests))
+  useEffect(() => { setReqs(REQUESTS.slice(0, data.requests)) }, [data.requests, branch])
+  return (
+    <>
+      <section className="surf card" aria-labelledby="now-t">
+        <h2 className="card__title" id="now-t"><UsersRound size={17} aria-hidden="true" />במשמרת עכשיו · {data.name}</h2>
+        <ul className="people">{data.onNow.map((n) => <li key={n}><span className="avatar" aria-hidden="true">{n[0]}</span><strong>{n}</strong><Pill quiet>עכשיו</Pill></li>)}</ul>
+      </section>
+      <section className="surf card" aria-labelledby="req-t">
+        <h2 className="card__title" id="req-t"><CalendarClock size={17} aria-hidden="true" />{role === 'staff' ? 'הבקשות שלי' : 'בקשות שמחכות להחלטה'}{role !== 'staff' && reqs.length > 0 && <Pill>{reqs.length} בקשות</Pill>}</h2>
+        {role === 'staff' ? (
+          <div className="row"><div className="row__copy"><strong>החלפת משמרת, יום ה׳ בבוקר</strong><small>ממתין לאישור מנהל</small></div><Pill quiet>נשלח</Pill></div>
+        ) : reqs.length === 0 ? <p className="oneline">אין בקשות פתוחות.</p> : reqs.map((r) => (
+          <div className="row" key={r.id}>
+            <div className="row__copy"><strong>{r.who}</strong><small>{r.what}</small></div>
+            <Button variant="filled" icon={<Check size={16} />} aria-label={`אישור הבקשה של ${r.who}`} onClick={() => { setReqs((x) => x.filter((y) => y.id !== r.id)); toast(`הבקשה של ${r.who} אושרה`) }} />
+            <Button destructive icon={<X size={16} />} aria-label={`דחיית הבקשה של ${r.who}`} onClick={() => { setReqs((x) => x.filter((y) => y.id !== r.id)); toast(`הבקשה של ${r.who} נדחתה`) }} />
+          </div>
+        ))}
+      </section>
+      <section className="surf card" aria-labelledby="week-t">
+        <h2 className="card__title" id="week-t">השבוע ב{data.name}</h2>
+        <div className="week" role="table" aria-label="סידור השבוע">
+          <div className="week__row week__row--head" role="row"><span role="columnheader">יום</span><span role="columnheader">בוקר</span><span role="columnheader">ערב</span></div>
+          {days.map((d) => (
+            <div className="week__row" role="row" key={d.index}>
+              <span role="rowheader"><b>{d.short}</b> <small dir="ltr">{d.dm}</small></span>
+              {(['morning', 'evening'] as const).map((p) => { const r = rosterFor(branch, d, p); return <span role="cell" key={p} className={r.length ? '' : 'week__none'}>{r.length ? r.join(', ') : 'סגור'}</span> })}
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  )
+})
+
+const StaffView = memo(function StaffView({ branch, data, role, toast }: { branch: BranchId; data: BranchData; role: Role; toast: (m: string) => void }) {
+  const days = useMemo(() => nextDays(7), [])
+  const people = NAMES.slice(0, data.staffCount)
+  const status = (n: string) => {
+    if (data.onNow.includes(n)) return 'במשמרת עכשיו'
+    const d = days.find((x) => x.index > 0 && (['morning', 'evening'] as const).some((p) => rosterFor(branch, x, p).includes(n)))
+    if (!d) return 'אין משמרת קרובה'
+    const p = (['morning', 'evening'] as const).find((q) => rosterFor(branch, d, q).includes(n))!
+    return `הבאה: ${d.short} ב${PERIODS[p].label}`
+  }
+  return (
+    <section className="surf card" aria-labelledby="staff-t">
+      <h2 className="card__title" id="staff-t"><Users size={17} aria-hidden="true" />הצוות ב{data.name} · {people.length}</h2>
+      <ul className="people people--list">
+        {people.map((n) => <li key={n}><span className="avatar" aria-hidden="true">{n[0]}</span><span className="row__copy"><strong>{n}</strong><small>{status(n)}</small></span>{data.onNow.includes(n) && <Pill quiet>עכשיו</Pill>}</li>)}
+      </ul>
+      {role !== 'staff' && <div className="card__actions"><Button variant="filled" icon={<Users size={16} />} onClick={() => toast('קישור ההצטרפות הועתק')}>קישור הצטרפות לעובד חדש</Button></div>}
+    </section>
+  )
+})
+
+const PosView = memo(function PosView({ data, role, onGo }: { data: BranchData; role: Role; onGo: (h: string) => void }) {
+  const label = { new: 'חדשה', making: 'בהכנה', ready: 'מוכנה' } as const
+  return (
+    <>
+      <section className="surf card" aria-labelledby="pos-t">
+        <h2 className="card__title" id="pos-t"><ShoppingBag size={17} aria-hidden="true" />הזמנות מהירות · {data.name}</h2>
+        <ul className="orders">{data.orders.map((o) => (
+          <li key={o.n}><b dir="ltr">{o.n}</b><span className="row__copy"><strong>{o.what}</strong><small>לפני {o.mins} דק׳</small></span><span className={`state state--${o.state}`}>{label[o.state]}</span></li>
+        ))}</ul>
+      </section>
+      {role !== 'staff' && <button type="button" className="surf att" onClick={() => onGo('/owner/pos')}><span className="ico"><Receipt size={22} /></span><span className="att__copy"><strong>ניהול קופת אירועים</strong><small>עמדות, הזמנות ופעילות באירוע</small></span><ChevronLeft size={18} className="chev" aria-hidden="true" /></button>}
+    </>
+  )
+})
+
+// ─────────────────────────────────────────────── app
+export default function App() {
+  const [tab, setTab] = useState('home')
+  const [branchUi, setBranchUi] = useState<BranchId>('givat-haviva')
+  const [branch, setBranch] = useState<BranchId>('givat-haviva')
+  const [, startTransition] = useTransition()
+  const [lens, setLens] = useState('manager')
+  const [look, setLook] = useState('glass')
+  const [push, setPush] = useState(true)
+  const [shiftAlerts, setShiftAlerts] = useState(true)
+  const [idle, setIdle] = useState(60)
+  const [published, setPublished] = useState<Record<string, boolean>>({})
+  const [read, setRead] = useState<Record<string, boolean>>({})
+  const [toastMsg, setToastMsg] = useState<{ k: number; m: string } | null>(null)
+  const role = LENS_ROLE[lens]!
+  const data = BRANCHES[branch]
+  const hour = useMemo(jerusalemHour, [])
+
+  // usage history (per role, kept on the device); the preview starts from example usage
+  const [usageState, setUsageState] = useState<{ usage: Usage; sample: boolean }>(() => loadUsage('owner'))
+  useEffect(() => { setUsageState(loadUsage(role)) }, [role])
+  const ctx: Context = useMemo(() => ({ role, hour, usage: usageState.usage }), [role, hour, usageState.usage])
+  const badges = useMemo(() => pendingBadges(data, role), [data, role])
+
+  // glisse's refraction filter (Chromium only) is re-run every frame for glass that sits over scrolling content, which is what
+  // made scrolling stutter. While the page scrolls the lens is swapped for plain blur; it comes back 180 ms after it stops.
+  useEffect(() => {
+    const root = document.documentElement; let timer = 0
+    const onScroll = () => { root.classList.add('is-scrolling'); window.clearTimeout(timer); timer = window.setTimeout(() => root.classList.remove('is-scrolling'), 180) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); window.clearTimeout(timer); root.classList.remove('is-scrolling') }
+  }, [])
+
+  // A switch (branch or tab) animates glisse's moving thumb. For the next 0.9 s the glass AROUND it uses plain blur; the thumb keeps its lens.
+  const switching = useRef(0)
+  const settle = useCallback(() => {
+    const root = document.documentElement; root.classList.add('is-switching'); window.clearTimeout(switching.current)
+    switching.current = window.setTimeout(() => root.classList.remove('is-switching'), 900)
+  }, [])
+
+  const toast = useCallback((m: string) => setToastMsg({ k: Date.now(), m }), [])
+  useEffect(() => { if (!toastMsg) return; const t = setTimeout(() => setToastMsg(null), 2800); return () => clearTimeout(t) }, [toastMsg])
+
+  const goTab = useCallback((v: string) => { settle(); setTab(v); window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }) }, [settle])
+  const scrollToId = useCallback((id: string, focus?: string) => {
+    window.setTimeout(() => { document.getElementById(id)?.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' }); if (focus) window.setTimeout(() => document.getElementById(focus)?.focus({ preventScroll: true }), 350) }, 80)
+  }, [])
+  const openPath = useCallback((href: string) => {
+    const hit = TAB_OF.find(([re]) => re.test(href))
+    if (hit) { goTab(hit[1]); return }
+    toast(`בגרסה האמיתית נפתח: ${href}`)
+  }, [goTab, toast])
+
+  const openEntry = useCallback((e: Entry) => {
+    setUsageState((s) => ({ usage: recordUse(role, s.usage, e.id), sample: false }))
+    switch (e.action) {
+      case 'compose': goTab('home'); scrollToId('compose', 'compose-text'); return
+      case 'publish': setPublished((p) => ({ ...p, [branch]: true })); toast('השינויים בתפריט פורסמו'); return
+      case 'look': goTab('home'); scrollToId('look'); return
+      case 'push': goTab('home'); scrollToId('controls'); return
+      case 'install': toast('הוספה למסך הבית (בטלפון אמיתי נפתחת הנחיית ההתקנה)'); return
+      case 'signout': toast('התנתקות (בתצוגה לא מתנתקים)'); return
+    }
+    openPath(e.href)
+  }, [role, branch, goTab, scrollToId, toast, openPath])
+  const resetUsageCb = useCallback(() => { resetUsage(role); setUsageState({ usage: {}, sample: false }); saveUsage(role, {}); toast('היסטוריית השימוש נמחקה') }, [role, toast])
+
+  const onBranch = useCallback((v: string) => { settle(); setBranchUi(v as BranchId); startTransition(() => setBranch(v as BranchId)) }, [settle])
+
+  // notifications: the same morphing glass menu as the account button
+  const notices = useMemo(() => NOTICES.filter((n) => n.role.includes(role)), [role])
+  const unreadOf = (id: string, initial: boolean) => (read[id] ? false : initial)
+  const unread = notices.filter((n) => unreadOf(n.id, n.unread)).length
+  const noticeItems: MenuEntry[] = useMemo(() => {
+    const items: MenuEntry[] = [{
+      label: <span className="nt nt--all"><strong>{unread ? 'סימון הכול כנקרא' : 'הכול נקרא'}</strong><small>{unread ? `${unread} התראות חדשות` : 'אין התראות חדשות'}</small></span>,
+      icon: <Check size={16} />, disabled: unread === 0, onSelect: () => { setRead(Object.fromEntries(notices.map((n) => [n.id, true]))); toast('סומנו כנקראו') },
+    }, 'separator']
+    for (const n of notices) {
+      const u = read[n.id] ? false : n.unread
+      items.push({
+        icon: <Bell size={16} />,
+        label: <span className="nt"><span className="nt__top"><strong>{n.title}</strong>{u && <span className="pill pill--tiny">חדש</span>}</span><small><Isolate text={n.body} /></small><small className="nt__time">{n.time}</small></span>,
+        onSelect: () => { setRead((r) => ({ ...r, [n.id]: true })); openPath(n.path) },
+      })
+    }
+    return items
+  }, [notices, read, unread, openPath, toast])
+  const accountItems: MenuEntry[] = useMemo(() => [
+    { label: 'הפרופיל שלי', icon: <UserRound size={18} />, onSelect: () => toast('בגרסה האמיתית נפתח: /staff/profile') },
+    { label: 'מראה האפליקציה', icon: <Palette size={18} />, onSelect: () => { goTab('home'); scrollToId('look') } },
+    { label: 'התקנה על מסך הבית', icon: <Download size={18} />, onSelect: () => toast('הוספה למסך הבית') },
+    'separator',
+    { label: 'התנתקות', icon: <LogOut size={18} />, destructive: true, onSelect: () => toast('התנתקות (בתצוגה לא מתנתקים)') },
+  ], [goTab, scrollToId, toast])
+
+  const groups = useMemo(() => HOME_GROUPS[role].map((g) => ({ title: g.title, entries: g.ids.map((id) => INDEX.find((e) => e.id === id)!).filter(Boolean) })), [role])
+  const allGroups = useMemo(() => {
+    const m = new Map<string, Entry[]>()
+    for (const e of INDEX) if (visibleTo(e, role)) m.set(e.group, [...(m.get(e.group) ?? []), e])
+    return [...m].map(([title, entries]) => ({ title, entries }))
+  }, [role])
+
+  const date = useMemo(() => new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()), [])
+  const manager = role !== 'staff'
+  const tomorrow = useMemo(() => { const d = nextDays(2)[1]!; return { d, r: rosterFor(branch, d, 'morning') } }, [branch])
+
+  // Hebrew reads right to left, so the first tab sits on the right: the bar is an LTR box with the items reversed.
+  const tabItems = useMemo(() => [
+    { value: 'more', label: 'עוד', icon: <MoreHorizontal size={22} /> },
+    { value: 'pos', label: 'קופה', icon: <Receipt size={22} /> },
+    { value: 'staff', label: 'צוות', icon: <Users size={22} /> },
+    { value: 'schedule', label: 'סידור', icon: <CalendarClock size={22} /> },
+    { value: 'home', label: 'בית', icon: <House size={22} /> },
+  ], [])
+
+  return (
+    <>
+      <div className="bg" aria-hidden="true" style={{ backgroundImage: `linear-gradient(180deg, rgb(21 15 12 / .5), rgb(21 15 12 / .68) 45%, rgb(21 15 12 / .88)), url(${BACKDROP})` }} />
+      <div className="app" dir="rtl" lang="he">
+        <TopBar branch={branchUi} onBranch={onBranch} unread={unread} items={noticeItems} accountItems={accountItems} />
+
+        <main className="page" id="main">
+          <section className="welcome">
+            <div>
+              <h1>שלום, Sarcafe</h1>
+              <p>{role === 'staff' ? 'כל מה שצריך למשמרת שלך.' : 'כל מה שצריך כדי לנהל את היום שלך.'}</p>
+            </div>
+            <span className="welcome__date">{date}</span>
+          </section>
+
+          {/* HOME */}
+          <div hidden={tab !== 'home'} className="view">
+            <div className="lensbox"><Seg label="תצוגה" value={lens} onChange={setLens} items={LENSES} /></div>
+            <Shortcuts ctx={ctx} badges={badges} onOpen={openEntry} />
+            {manager ? (
+              <>
+                <BranchPanels data={data} published={!!published[branch]} onPublish={() => { setPublished((p) => ({ ...p, [branch]: true })); toast('השינויים בתפריט פורסמו') }} onGo={openPath} />
+                <QuickMessage branch={branch} data={data} onSent={toast} />
+              </>
+            ) : (
+              <>
+                <button type="button" className="surf att att--main" onClick={() => openPath('/staff/schedule')}>
+                  <span className="ico"><UsersRound size={24} /></span>
+                  <span className="att__copy"><strong>מי במשמרת &amp; משמרות</strong><small>מי עובד עכשיו בכל סניף, והלוח והאילוצים שלכם</small></span>
+                  <ChevronLeft size={18} className="chev" aria-hidden="true" />
+                </button>
+                <section className="surf card" aria-labelledby="mine-t">
+                  <h2 className="card__title" id="mine-t"><CalendarClock size={17} aria-hidden="true" />המשמרת הבאה שלך</h2>
+                  <div className="row"><div className="row__copy"><strong>{tomorrow.d.short} · <bdi dir="ltr">{PERIODS.morning.hours}</bdi></strong><small>{data.name}{tomorrow.r.length ? ` · עם ${tomorrow.r.slice(0, 2).join(' ו')}` : ''}</small></div><Button onClick={() => openPath('/staff/schedule?tab=requests')}>בקשת החלפה</Button></div>
+                  <div className="row"><div className="row__copy"><strong>צ׳קליסט פתיחה</strong><small>0 מתוך 12 הושלמו</small></div><Button variant="filled" onClick={() => toast('בגרסה האמיתית נפתח: /staff/checklists')}>להתחיל</Button></div>
+                </section>
+              </>
+            )}
+
+            <section className="surf card" id="controls" aria-labelledby="ctl-t">
+              <h2 className="card__title" id="ctl-t">התראות{manager ? ' ושליטה מהירה' : ''}</h2>
+              <div className="row"><div className="row__copy"><strong>התראות לטלפון</strong><small>משמרות, חוסרים והחלפות, גם כשהאפליקציה סגורה</small></div><Switch aria-label="התראות לטלפון" checked={push} onCheckedChange={setPush} /></div>
+              <div className="row"><div className="row__copy"><strong>תזכורת משמרת הבאה ב־19:00</strong><small>הודעה עם המשמרת הבאה שלך</small></div><Switch aria-label="תזכורת משמרת הבאה" checked={shiftAlerts} onCheckedChange={setShiftAlerts} /></div>
+              {manager && <div className="row row--stack"><div className="row__copy"><strong>חזרה למסך הפתיחה בקיוסק</strong><small>אחרי {idle} שניות ללא נגיעה</small></div><div dir="ltr" className="sl"><Slider aria-label="שניות ללא נגיעה בקיוסק" min={20} max={180} step={10} value={idle} onValueChange={setIdle} /></div></div>}
+            </section>
+
+            <section className="tools" aria-label="כלים ופעולות">
+              <ToolSearch ctx={ctx} sample={usageState.sample} badges={badges} onPick={openEntry} onUsageReset={resetUsageCb} />
+              <ToolGroups groups={groups} badges={badges} onOpen={openEntry} />
+            </section>
+
+            <section className="surf card" id="look" aria-labelledby="look-t">
+              <h2 className="card__title" id="look-t"><Palette size={17} aria-hidden="true" />מראה האפליקציה</h2>
+              <Seg fill label="מראה האפליקציה" value={look} onChange={setLook} items={LOOKS} />
+            </section>
+          </div>
+
+          <div hidden={tab !== 'schedule'} className="view"><ScheduleView branch={branch} data={data} role={role} toast={toast} /></div>
+          <div hidden={tab !== 'staff'} className="view"><StaffView branch={branch} data={data} role={role} toast={toast} /></div>
+          <div hidden={tab !== 'pos'} className="view"><PosView data={data} role={role} onGo={openPath} /></div>
+          <div hidden={tab !== 'more'} className="view">
+            <section className="tools" aria-label="כל הכלים">
+              <ToolSearch ctx={ctx} sample={usageState.sample} badges={badges} onPick={openEntry} onUsageReset={resetUsageCb} placeholder="חיפוש בכל הכלים והפעולות…" />
+              <p className="note note--start">{allGroups.reduce((n, g) => n + g.entries.length, 0)} כלים ופעולות · חיפוש לפי שם, מילה נרדפת או שגיאת כתיב</p>
+              <ToolGroups groups={allGroups} badges={badges} onOpen={openEntry} />
+            </section>
+          </div>
+
+          <p className="note">תצוגה מקדימה בלבד · נתוני דוגמה · הקוד המקורי לא שונה</p>
+        </main>
+
+        <nav className="dock" aria-label="ניווט ראשי">
+          <div dir="ltr"><TabBar aria-label="ניווט ראשי" value={tab} onValueChange={goTab} items={tabItems} /></div>
+        </nav>
+
+        <div className="toast" role="status" aria-live="polite">{toastMsg && <span key={toastMsg.k} className="toast__msg">{toastMsg.m}</span>}</div>
+      </div>
+    </>
+  )
+}

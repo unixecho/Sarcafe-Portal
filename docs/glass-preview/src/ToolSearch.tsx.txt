@@ -1,0 +1,166 @@
+import { memo, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { SearchField } from 'glisse'
+import { ChevronLeft, CornerDownLeft, History, Search, Zap } from 'lucide-react'
+import { INDEX, type Entry, type Role } from './data'
+import { completions, didYouMean, highlight, loadQueries, recent, rememberQuery, search, suggest, type Context, type Hit, type Reason } from './search'
+
+// The tool finder: type and it completes, suggests and ranks by what this person uses, their role and the time of day.
+// Opens as the same glass surface as the account menu. ARIA combobox: the input keeps focus, ↑ ↓ move, Enter opens,
+// Tab accepts the completion, Esc closes.
+
+const REASON: Record<Reason, string> = { now: 'מתאים עכשיו', frequent: 'בשימוש תכוף', recent: 'לאחרונה', match: '' }
+const DEFAULT_CHIPS: Record<Role, string[]> = {
+  owner: ['הודעה לצוות', 'אזל', 'החלפה', 'פרסום', 'תלוש'],
+  dev: ['בדיקה', 'הודעה לצוות', 'סידור', 'קיוסק'],
+  staff: ['החלפה', 'אילוץ', 'פתיחה', 'תלוש', 'מי עובד'],
+}
+
+type Row = { key: string; hit: Hit; section?: string }
+
+function Marked({ text, q }: { text: string; q: string }) {
+  return <>{highlight(text, q).map((p, i) => (p.m ? <mark key={i}>{p.t}</mark> : <span key={i}>{p.t}</span>))}</>
+}
+
+function ToolSearch({ ctx, sample, badges, onPick, onUsageReset, placeholder = 'חיפוש כלי…', autoFocus = false }: {
+  ctx: Context; sample: boolean; badges: Record<string, string>; onPick: (entry: Entry, query: string) => void; onUsageReset: () => void; placeholder?: string; autoFocus?: boolean
+}) {
+  const uid = useId().replace(/:/g, '')
+  const wrap = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const [queries, setQueries] = useState<string[]>(() => loadQueries(ctx.role))
+  useEffect(() => { setQueries(loadQueries(ctx.role)) }, [ctx.role])
+  useEffect(() => { if (autoFocus) input.current?.focus() }, [autoFocus])
+
+  // glisse's clear button has an English label; the page is Hebrew.
+  useEffect(() => {
+    const el = wrap.current; if (!el) return
+    const fix = () => el.querySelectorAll('.lg-input-clear').forEach((b) => b.setAttribute('aria-label', 'ניקוי החיפוש'))
+    fix(); const mo = new MutationObserver(fix); mo.observe(el, { childList: true, subtree: true }); return () => mo.disconnect()
+  }, [])
+
+  const trimmed = q.trim()
+  const results = useMemo(() => (trimmed ? search(trimmed, ctx) : []), [trimmed, ctx])
+  const comps = useMemo(() => (trimmed ? completions(trimmed, ctx) : []), [trimmed, ctx])
+  const mean = useMemo(() => (trimmed && !results.length ? didYouMean(trimmed, ctx) : null), [trimmed, results.length, ctx])
+  const empty = useMemo(() => {
+    const top = suggest(ctx, 5), ids = new Set(top.map((h) => h.entry.id))
+    return { top, rec: recent(ctx, 4).filter((h) => !ids.has(h.entry.id)).slice(0, 2) }
+  }, [ctx])
+
+  const rows: Row[] = useMemo(() => {
+    if (trimmed) return results.map((hit) => ({ key: hit.entry.id, hit }))
+    return [
+      ...empty.top.map((hit, i) => ({ key: hit.entry.id, hit, section: i === 0 ? 'מומלץ לך עכשיו' : undefined })),
+      ...empty.rec.map((hit, i) => ({ key: `r-${hit.entry.id}`, hit, section: i === 0 ? 'נפתחו לאחרונה' : undefined })),
+    ]
+  }, [trimmed, results, empty])
+  useEffect(() => { setActive(0) }, [trimmed])
+
+  const chips = trimmed ? [] : (queries.length ? queries : DEFAULT_CHIPS[ctx.role])
+  const listId = `${uid}-list`
+
+  function pick(row: Row | undefined) {
+    if (!row) return
+    if (trimmed) setQueries(rememberQuery(ctx.role, trimmed))
+    onPick(row.hit.entry, trimmed)
+    setQ(''); setOpen(false); input.current?.blur()
+  }
+  function acceptCompletion(text: string) { setQ(text + ' '); setOpen(true); input.current?.focus() }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setActive((i) => Math.min(rows.length - 1, i + 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(0, i - 1)) }
+    else if (e.key === 'Enter') { if (open && rows[active]) { e.preventDefault(); pick(rows[active]) } }
+    else if (e.key === 'Tab' && open && comps[0] && !e.shiftKey) { e.preventDefault(); acceptCompletion(comps[0]) }
+    else if (e.key === 'Escape') { if (open) { e.preventDefault(); e.stopPropagation(); setOpen(false) } }
+  }
+  function onBlur(e: React.FocusEvent) { if (!wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false) }
+  useEffect(() => { const el = document.getElementById(`${uid}-opt-${active}`); el?.scrollIntoView({ block: 'nearest' }) }, [active, uid])
+
+  let lastSection = ''
+  return (
+    <div className="ts" ref={wrap} onBlur={onBlur}>
+      <SearchField
+        ref={input}
+        id={`${uid}-input`}
+        aria-label="חיפוש כלי"
+        placeholder={placeholder}
+        autoComplete="off"
+        enterKeyHint="search"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && rows[active] ? `${uid}-opt-${active}` : undefined}
+        value={q}
+        onValueChange={(v) => { setQ(v); setOpen(true) }}
+        onFocus={() => { setOpen(true); wrap.current?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}
+        onKeyDown={onKeyDown}
+      />
+      {open && (
+        <div className="pop ts__pop" onMouseDown={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') e.preventDefault() }}>
+          {comps.length > 0 && (
+            <div className="ts__comp" aria-label="השלמות">
+              <span className="ts__comp-label"><Zap size={13} aria-hidden="true" />השלמה</span>
+              {comps.slice(0, 3).map((c, i) => (
+                <button key={c} type="button" className="chip chip--soft" onClick={() => acceptCompletion(c)}>
+                  <span className="mk"><Marked text={c} q={trimmed} /></span>{i === 0 && <kbd aria-hidden="true">Tab</kbd>}
+                </button>
+              ))}
+            </div>
+          )}
+          <div role="listbox" id={listId} aria-label="תוצאות" className="ts__list">
+            {rows.map((row, i) => {
+              const e = row.hit.entry, Icon = e.icon, head = row.section && row.section !== lastSection ? row.section : null
+              if (row.section) lastSection = row.section
+              const note = badges[e.id]
+              return (
+                <div key={row.key} role="presentation">
+                  {head && <div className="ts__head">{head}</div>}
+                  <button type="button" role="option" id={`${uid}-opt-${i}`} aria-selected={i === active} tabIndex={-1} className={`lg-menu-item ts__opt${i === active ? ' is-active' : ''}`} onMouseMove={() => setActive(i)} onClick={() => pick(row)}>
+                    <span className="ts__ico"><Icon size={18} strokeWidth={1.8} /></span>
+                    <span className="ts__copy">
+                      <strong><Marked text={e.label} q={trimmed} /></strong>
+                      <small>{e.hint}</small>
+                    </span>
+                    <span className="ts__meta">
+                      {note && <span className="pill">{note}</span>}
+                      {!note && row.hit.reason && REASON[row.hit.reason] && <span className="pill pill--quiet">{REASON[row.hit.reason]}</span>}
+                      {e.kind === 'action' && <span className="pill pill--quiet">פעולה</span>}
+                    </span>
+                    <ChevronLeft size={16} className="ts__go" aria-hidden="true" />
+                  </button>
+                </div>
+              )
+            })}
+            {trimmed && results.length === 0 && (
+              <div className="ts__none" role="status">
+                <Search size={20} aria-hidden="true" />
+                <strong>לא מצאנו כלי בשם ״{trimmed}״</strong>
+                {mean ? <button type="button" className="chip chip--soft" onClick={() => acceptCompletion(mean)}>התכוונת ל־{mean}?</button> : <small>אפשר לנסות מילה אחרת, כמו ״הודעה״, ״אזל״ או ״החלפה״</small>}
+              </div>
+            )}
+          </div>
+          {chips.length > 0 && (
+            <div className="ts__chips">
+              <span className="ts__chips-label"><History size={13} aria-hidden="true" />{queries.length ? 'חיפשת לאחרונה' : 'חיפושים נפוצים'}</span>
+              {chips.map((c) => <button key={c} type="button" className="chip chip--soft" onClick={() => { setQ(c); input.current?.focus() }}>{c}</button>)}
+            </div>
+          )}
+          <div className="ts__foot">
+            <span>{sample ? 'ההמלצות לפי שימוש לדוגמה. בהמשך, לפי מה שאת/ה פותח/ת' : 'ההמלצות לפי מה שפתחת בעבר, התפקיד והשעה'} · נשמר במכשיר בלבד</span>
+            <button type="button" className="ts__reset" onClick={() => { onUsageReset(); setQueries([]) }}>איפוס</button>
+          </div>
+        </div>
+      )}
+      <p className="sr-only" aria-live="polite">{open && trimmed ? `${results.length} תוצאות` : ''}</p>
+    </div>
+  )
+}
+
+export default memo(ToolSearch)
+export { INDEX }
+export const KeyHint = CornerDownLeft

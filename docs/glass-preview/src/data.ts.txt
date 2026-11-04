@@ -1,0 +1,167 @@
+import {
+  Accessibility, Bell, Building2, CalendarClock, ClipboardCheck, ClipboardList, Coffee, Download, FileEdit, FileText, History, KeyRound,
+  Link2, ListChecks, LogOut, Megaphone, MessageCircle, MonitorSmartphone, Package, PackageX, Palette, QrCode, Receipt, Repeat, ShoppingBag,
+  Sparkles, Star, Tablet, UserPlus, UserRound, Users, UsersRound, Wrench, Beaker, TriangleAlert, Clock,
+} from 'lucide-react'
+import type { ComponentType } from 'react'
+
+// PREVIEW DATA. Everything here is sample data. The routes are the real ones from the portal (src/app/owner, src/app/staff),
+// so the index can be wired to them as-is. Names are invented first names, not staff records.
+
+export type Role = 'owner' | 'staff' | 'dev'
+export type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>
+export type Action = 'compose' | 'publish' | 'look' | 'push' | 'install' | 'signout'
+export type Entry = {
+  id: string; label: string; hint: string; href: string; icon: IconType; group: string
+  roles: Role[]               // who sees it (a developer sees everything)
+  kind: 'page' | 'action'
+  keywords: string[]          // what people type: synonyms, slang, English
+  ctx?: 'morning' | 'evening' // more relevant at the start / end of the day
+  base?: number               // how common it is for the role, 0-10, used before there is any usage history
+  action?: Action
+}
+
+const O: Role[] = ['owner'], S: Role[] = ['staff'], OS: Role[] = ['owner', 'staff'], D: Role[] = ['dev']
+
+export const INDEX: Entry[] = [
+  // ── הצוות והמשמרות (manager)
+  { id: 'staff-list', label: 'העובדים שלי', hint: 'קליטה, קישורי הצטרפות, היסטוריה ותלושי שכר', href: '/owner/staff', icon: Users, group: 'הצוות והמשמרות', roles: O, kind: 'page', base: 6, keywords: ['עובדים', 'צוות', 'קליטה', 'הצטרפות', 'תלוש', 'שכר', 'עובד חדש', 'staff', 'employees', 'payroll'] },
+  { id: 'add-staff', label: 'הוספת עובד חדש', hint: 'שליחת קישור הצטרפות לעובד', href: '/owner/staff', icon: UserPlus, group: 'הצוות והמשמרות', roles: O, kind: 'action', base: 3, keywords: ['קליטה', 'עובד חדש', 'קישור הצטרפות', 'גיוס', 'הזמנה', 'add employee', 'invite'] },
+  { id: 'schedule-manage', label: 'סידור עבודה', hint: 'אילוצים, שיבוצים ואישור החלפות', href: '/owner/schedule', icon: CalendarClock, group: 'הצוות והמשמרות', roles: O, kind: 'page', base: 10, keywords: ['משמרות', 'שיבוץ', 'אילוצים', 'החלפה', 'לוח', 'סידור', 'שבוע', 'rota', 'schedule', 'shifts'] },
+  { id: 'approve-swap', label: 'אישור בקשות החלפה וחופש', hint: 'בקשות שמחכות להחלטה של מנהל', href: '/owner/schedule', icon: Repeat, group: 'הצוות והמשמרות', roles: O, kind: 'action', base: 5, keywords: ['החלפה', 'לאשר', 'חופש', 'בקשה', 'בקשות', 'אישור', 'swap', 'approve', 'time off'] },
+  { id: 'checklists-track', label: 'צ׳קליסטים ודיווחים', hint: 'מעקב משמרות ודיווחים. הטפסים עצמם בניהול הסניף', href: '/owner/checklists', icon: ClipboardCheck, group: 'הצוות והמשמרות', roles: O, kind: 'page', base: 7, ctx: 'evening', keywords: ['רשימה', 'פתיחה', 'סגירה', 'מי הגיש', 'דיווח', 'checklist'] },
+  { id: 'compose', label: 'הודעה לצוות או למשמרת', hint: 'התראה לכולם, למשמרת מסוימת או לעובד אחד', href: '#compose', icon: Megaphone, group: 'הצוות והמשמרות', roles: O, kind: 'action', base: 5, action: 'compose', keywords: ['הודעה', 'התראה', 'שלח', 'להודיע', 'משלוח', 'עדכון לצוות', 'notify', 'broadcast', 'message'] },
+  // ── שירות והזמנות
+  { id: 'issues', label: 'חוסרים ופערים', hint: 'מה חסר, מה לא עובד ומה לא הוגש בסניף', href: '/owner/issues', icon: TriangleAlert, group: 'שירות והזמנות', roles: O, kind: 'page', base: 8, ctx: 'morning', keywords: ['חסר', 'תקלה', 'שבור', 'מלאי', 'חוסר', 'לא עובד', 'דווח', 'issues', 'shortage'] },
+  { id: 'pos-quick', label: 'הזמנות מהירות', hint: 'קבלת הזמנות ומעקב בזמן אמת', href: '/staff/pos', icon: ShoppingBag, group: 'שירות והזמנות', roles: OS, kind: 'page', base: 6, keywords: ['הזמנה', 'קופה', 'לקוח', 'קפה', 'order', 'pos'] },
+  { id: 'pos-events', label: 'ניהול קופת אירועים', hint: 'עמדות, הזמנות ופעילות באירוע', href: '/owner/pos', icon: Receipt, group: 'שירות והזמנות', roles: O, kind: 'page', base: 3, keywords: ['אירוע', 'פסטיבל', 'עמדה', 'קופה', 'event'] },
+  { id: 'tablet-avail', label: 'זמינות פריטים', hint: 'עדכון המלאי במהלך השירות', href: '/owner/tablet', icon: Tablet, group: 'שירות והזמנות', roles: OS, kind: 'page', base: 8, keywords: ['אזל', 'מלאי', 'זמין', 'פריט', 'טאבלט', 'נגמר', 'stock', 'sold out', 'availability'] },
+  { id: 'mark-soldout', label: 'סימון פריט כאזל', hint: 'להוריד פריט מהתפריט עד שיחזור למלאי', href: '/owner/tablet', icon: PackageX, group: 'שירות והזמנות', roles: OS, kind: 'action', base: 6, keywords: ['אזל', 'נגמר', 'הורדה מהתפריט', 'אין', 'חלב', 'קרואסון', 'sold out', '86'] },
+  // ── תפריט והעסק
+  { id: 'menu-editor', label: 'התפריט שלי', hint: 'פריטים, מחירים ופרסום שינויים', href: '/owner/editor', icon: ClipboardList, group: 'תפריט והעסק', roles: O, kind: 'page', base: 7, keywords: ['תפריט', 'מחיר', 'פריט', 'קטגוריה', 'מנה', 'שתייה', 'menu', 'price'] },
+  { id: 'publish-menu', label: 'פרסום שינויים בתפריט', hint: 'לקוחות רואים את הגרסה החדשה אחרי הפרסום', href: '/owner/editor', icon: FileEdit, group: 'תפריט והעסק', roles: O, kind: 'action', base: 6, action: 'publish', keywords: ['פרסם', 'טיוטה', 'עדכון תפריט', 'לפרסם', 'publish', 'draft'] },
+  { id: 'reviews', label: 'ביקורות', hint: 'חוויות שהלקוחות משתפים', href: '/owner/reviews', icon: Star, group: 'תפריט והעסק', roles: O, kind: 'page', base: 4, keywords: ['גוגל', 'ביקורת', 'כוכבים', 'דירוג', 'review', 'rating'] },
+  { id: 'feedback', label: 'משוב מלקוחות', hint: 'הודעות והצעות לשיפור', href: '/owner/feedback', icon: MessageCircle, group: 'תפריט והעסק', roles: O, kind: 'page', base: 5, keywords: ['הצעה', 'תלונה', 'הודעה מלקוח', 'פידבק', 'feedback', 'suggestion'] },
+  { id: 'waitlist', label: 'נרשמים למועדון', hint: 'מי נרשם בקיוסק או באתר, בהסכמתו', href: '/owner/waitlist', icon: UserPlus, group: 'תפריט והעסק', roles: O, kind: 'page', base: 4, keywords: ['מועדון', 'מתעניינים', 'נרשם', 'ליד', 'טלפון', 'חברי מועדון', 'loyalty', 'waitlist', 'signup'] },
+  { id: 'export-waitlist', label: 'ייצוא נרשמים לקובץ', hint: 'הורדת רשימת הנרשמים כקובץ CSV', href: '/owner/waitlist', icon: Download, group: 'תפריט והעסק', roles: O, kind: 'action', base: 1, keywords: ['csv', 'אקסל', 'ייצוא', 'הורדה', 'קובץ', 'excel', 'export'] },
+  { id: 'kiosk', label: 'תוכן הקיוסק', hint: 'הכרטיסים, הזמנים, ימים חריגים ותוצאות ההצבעה', href: '/owner/kiosk', icon: MonitorSmartphone, group: 'תפריט והעסק', roles: O, kind: 'page', base: 4, keywords: ['קיוסק', 'טאבלט לקוחות', 'מודעה', 'פרסומת', 'שעות פתיחה', 'יום חריג', 'סגירה', 'סוללה', 'kiosk'] },
+  { id: 'kiosk-closure', label: 'הוספת יום חריג בקיוסק', hint: 'חג, סגירה או שעות מיוחדות שמופיעים בקיוסק', href: '/owner/kiosk', icon: Clock, group: 'תפריט והעסק', roles: O, kind: 'action', base: 1, keywords: ['חג', 'סגור', 'יום חריג', 'שעות מיוחדות', 'holiday', 'closure'] },
+  { id: 'kiosk-poll', label: 'תוצאות סקר הלקוחות', hint: 'הצבעות מקוד ה־QR, כוכבים והצעות כתובות', href: '/owner/kiosk/feedback', icon: QrCode, group: 'תפריט והעסק', roles: O, kind: 'page', base: 3, keywords: ['סקר', 'הצבעה', 'qr', 'כוכבים', 'poll', 'survey'] },
+  { id: 'links', label: 'קישורים ושיתוף', hint: 'הפורטל, תפריטים וקודי QR', href: '/owner/links', icon: Link2, group: 'תפריט והעסק', roles: O, kind: 'page', base: 3, keywords: ['qr', 'קוד', 'פורטל', 'קישור', 'שיתוף', 'אינסטגרם', 'waze', 'וויז', 'link'] },
+  { id: 'audit', label: 'יומן פעילות', hint: 'שינויים שבוצעו במערכת', href: '/owner/audit', icon: History, group: 'תפריט והעסק', roles: O, kind: 'page', base: 2, keywords: ['שינויים', 'היסטוריה', 'מי שינה', 'לוג', 'audit', 'log'] },
+  { id: 'intro', label: 'מסך פתיחה', hint: 'הדלקה וכיבוי, והשורות שמופיעות', href: '/owner/intro', icon: Sparkles, group: 'תפריט והעסק', roles: O, kind: 'page', base: 1, keywords: ['פתיחה', 'אנימציה', 'splash', 'intro', 'לוגו'] },
+  { id: 'a11y', label: 'נגישות', hint: 'הצהרת הנגישות של העסק', href: '/owner/accessibility', icon: Accessibility, group: 'תפריט והעסק', roles: O, kind: 'page', base: 1, keywords: ['הצהרת נגישות', 'תקנות', 'נגיש', 'accessibility', 'a11y'] },
+  { id: 'branches', label: 'ניהול סניפים', hint: 'הגדרות, צ׳קליסטים וצוות לכל סניף', href: '/owner/branches', icon: Building2, group: 'תפריט והעסק', roles: O, kind: 'page', base: 5, keywords: ['סניף', 'הוספת סניף', 'גבעת חביבה', 'מאור', 'עגלה', 'branch'] },
+  // ── המשמרת שלי (employee)
+  { id: 'my-schedule', label: 'משמרות ובקשות', hint: 'מתי אני עובד, אילוצים והחלפות', href: '/staff/schedule', icon: CalendarClock, group: 'המשמרת שלי', roles: S, kind: 'page', base: 10, keywords: ['משמרת', 'מתי אני עובד', 'סידור', 'לוח', 'משמרות', 'שבוע', 'schedule', 'my shifts'] },
+  { id: 'on-shift', label: 'מי במשמרת עכשיו', hint: 'מי עובד עכשיו בכל סניף', href: '/staff/schedule', icon: UsersRound, group: 'המשמרת שלי', roles: S, kind: 'page', base: 7, keywords: ['מי עובד', 'מי איתי', 'משמרת עכשיו', 'מי פה', 'on shift'] },
+  { id: 'constraints', label: 'הגשת אילוצים', hint: 'ימים ושעות שאי אפשר לעבוד בהם', href: '/staff/schedule?tab=availability', icon: CalendarClock, group: 'המשמרת שלי', roles: S, kind: 'action', base: 6, keywords: ['אילוץ', 'חופש', 'יום חופש', 'בקשת חופש', 'לא יכול', 'זמינות', 'חופשה', 'availability', 'time off'] },
+  { id: 'swap', label: 'בקשת החלפת משמרת', hint: 'לבקש מעמית להחליף איתי', href: '/staff/schedule?tab=requests', icon: Repeat, group: 'המשמרת שלי', roles: S, kind: 'action', base: 6, keywords: ['החלפה', 'להחליף', 'מחליף', 'לא יכול להגיע', 'swap', 'cover'] },
+  { id: 'checklist-open', label: 'צ׳קליסט פתיחה', hint: 'בדיקות לפני שפותחים את העגלה', href: '/staff/checklists', icon: ListChecks, group: 'המשמרת שלי', roles: S, kind: 'action', base: 8, ctx: 'morning', keywords: ['פתיחה', 'בוקר', 'רשימה', 'opening', 'checklist'] },
+  { id: 'checklist-close', label: 'צ׳קליסט סגירה', hint: 'בדיקות לפני שסוגרים ומסירה למשמרת הבאה', href: '/staff/checklists', icon: ClipboardCheck, group: 'המשמרת שלי', roles: S, kind: 'action', base: 8, ctx: 'evening', keywords: ['סגירה', 'ערב', 'מסירה', 'סוף משמרת', 'closing', 'handover'] },
+  { id: 'report-issue', label: 'דיווח על תקלה או חוסר', hint: 'מכונה שבורה, חומר שנגמר, משהו שצריך טיפול', href: '/staff/checklists', icon: Wrench, group: 'המשמרת שלי', roles: S, kind: 'action', base: 5, keywords: ['תקלה', 'שבור', 'נגמר', 'חסר', 'דווח', 'מכונה', 'report', 'broken'] },
+  { id: 'my-pos', label: 'העמדה שלי', hint: 'הזמנות האירוע והעמדה שבה עובדים', href: '/pos', icon: Receipt, group: 'המשמרת שלי', roles: S, kind: 'page', base: 1, keywords: ['עמדה', 'אירוע', 'פסטיבל', 'קופה'] },
+  { id: 'workshop', label: 'סדנת קפה מקצועית', hint: 'מדריך לעובדי עגלות הקפה', href: '/staff/workshop', icon: Coffee, group: 'המשמרת שלי', roles: OS, kind: 'page', base: 3, keywords: ['הדרכה', 'קפה', 'אספרסו', 'מצגת', 'למידה', 'workshop', 'barista', 'training'] },
+  // ── החשבון (everyone)
+  { id: 'profile', label: 'הפרופיל שלי', hint: 'פרטי חשבון, קוד כניסה והיסטוריה אישית', href: '/staff/profile', icon: UserRound, group: 'החשבון', roles: OS, kind: 'page', base: 4, keywords: ['חשבון', 'פרטים', 'שם', 'טלפון', 'אימייל', 'גוגל', 'profile', 'account'] },
+  { id: 'payslip', label: 'התלוש שלי', hint: 'תלושי שכר לפי חודש', href: '/staff/profile', icon: FileText, group: 'החשבון', roles: S, kind: 'action', base: 5, keywords: ['תלוש', 'שכר', 'משכורת', 'payslip', 'salary'] },
+  { id: 'login-code', label: 'קוד הכניסה שלי', hint: 'קוד בן שש ספרות לכניסה בלי גוגל', href: '/staff/profile', icon: KeyRound, group: 'החשבון', roles: S, kind: 'action', base: 2, keywords: ['קוד', 'סיסמה', 'כניסה', 'לא מצליח להיכנס', 'pin', 'password'] },
+  { id: 'look', label: 'מראה האפליקציה', hint: 'ניאון, זכוכית, קרמה ועוד', href: '#look', icon: Palette, group: 'החשבון', roles: OS, kind: 'action', base: 2, action: 'look', keywords: ['ערכת נושא', 'כהה', 'בהיר', 'זכוכית', 'עיצוב', 'צבעים', 'theme', 'dark', 'light'] },
+  { id: 'push', label: 'התראות לטלפון', hint: 'משמרות, חוסרים והחלפות גם כשהאפליקציה סגורה', href: '#controls', icon: Bell, group: 'החשבון', roles: OS, kind: 'action', base: 3, action: 'push', keywords: ['התראה', 'הודעות', 'פוש', 'notifications', 'push', 'alerts'] },
+  { id: 'install', label: 'התקנה על מסך הבית', hint: 'האפליקציה כסמל בטלפון', href: '#install', icon: Download, group: 'החשבון', roles: OS, kind: 'action', base: 1, action: 'install', keywords: ['אפליקציה', 'מסך הבית', 'להתקין', 'pwa', 'install', 'add to home'] },
+  { id: 'signout', label: 'התנתקות', hint: 'יציאה מהחשבון במכשיר הזה', href: '#signout', icon: LogOut, group: 'החשבון', roles: OS, kind: 'action', base: 1, action: 'signout', keywords: ['יציאה', 'לצאת', 'להתנתק', 'logout', 'sign out'] },
+  // ── מפתח
+  { id: 'dev-mode', label: 'מצב מפתח', hint: 'בדיקות, בריאות המערכת וכלי מפתח', href: '/staff/dev', icon: Beaker, group: 'כלי מפתח', roles: D, kind: 'page', base: 5, keywords: ['בדיקות', 'בריאות', 'מפתח', 'dev', 'debug', 'health'] },
+  { id: 'dev-alert-test', label: 'שליחת התראת בדיקה', hint: 'בדיקה של כל סוג התראה לטלפון', href: '/staff/dev', icon: Package, group: 'כלי מפתח', roles: D, kind: 'action', base: 2, keywords: ['בדיקה', 'התראה', 'test', 'push test'] },
+]
+
+/** What the home screen's tool lists show per role (a subset of the index, in the order of the real dashboards). */
+export const HOME_GROUPS: Record<Role, { title: string; ids: string[] }[]> = {
+  owner: [
+    { title: 'הצוות והמשמרות', ids: ['staff-list', 'schedule-manage', 'checklists-track'] },
+    { title: 'שירות והזמנות', ids: ['pos-quick', 'pos-events', 'tablet-avail'] },
+    { title: 'תפריט והעסק', ids: ['menu-editor', 'reviews', 'feedback', 'waitlist', 'kiosk', 'links', 'audit', 'intro', 'a11y'] },
+  ],
+  staff: [
+    { title: 'המשמרת שלי', ids: ['my-schedule', 'on-shift', 'constraints', 'swap', 'checklist-open', 'checklist-close'] },
+    { title: 'במהלך השירות', ids: ['tablet-avail', 'report-issue', 'pos-quick', 'my-pos'] },
+    { title: 'לימוד והחשבון', ids: ['workshop', 'payslip', 'profile'] },
+  ],
+  dev: [
+    { title: 'כלי מפתח', ids: ['dev-mode', 'dev-alert-test'] },
+    { title: 'הצוות והמשמרות', ids: ['staff-list', 'schedule-manage', 'checklists-track'] },
+    { title: 'תפריט והעסק', ids: ['menu-editor', 'kiosk', 'audit'] },
+  ],
+}
+
+// ── branches
+export type BranchId = 'givat-haviva' | 'maor'
+export type BranchData = {
+  name: string; categories: number; out: string[]; unpublished: boolean; shortages: number; requests: number; feedback: number; waitlist: number
+  staffCount: number; onNow: string[]; orders: { n: string; what: string; state: 'new' | 'making' | 'ready'; mins: number }[]
+}
+export const BRANCHES: Record<BranchId, BranchData> = {
+  'givat-haviva': { name: 'גבעת חביבה', categories: 12, out: ['קרואסון חמאה', 'שייק תות'], unpublished: true, shortages: 3, requests: 2, feedback: 3, waitlist: 5, staffCount: 8, onNow: ['דנה', 'איתי'],
+    orders: [{ n: '#41', what: 'קפה הפוך, קרואסון', state: 'making', mins: 3 }, { n: '#42', what: 'אייס לאטה ×2', state: 'new', mins: 1 }, { n: '#40', what: 'שקשוקה, מיץ תפוזים', state: 'ready', mins: 6 }] },
+  'maor': { name: 'מאור', categories: 9, out: [], unpublished: false, shortages: 0, requests: 0, feedback: 1, waitlist: 2, staffCount: 5, onNow: ['נועה'],
+    orders: [{ n: '#18', what: 'אספרסו כפול', state: 'ready', mins: 2 }, { n: '#19', what: 'סנדוויץ׳ טוסט, לימונדה', state: 'making', mins: 4 }] },
+}
+
+/** The small pill next to a tool or search result when something is waiting there (the style of the "2 בקשות" badge). */
+export function pendingBadges(b: BranchData, role: Role): Record<string, string> {
+  const m: Record<string, string> = {}
+  if (role !== 'staff') {
+    if (b.requests) { m['schedule-manage'] = `${b.requests} בקשות`; m['approve-swap'] = `${b.requests} בקשות` }
+    if (b.shortages) m.issues = `${b.shortages} לטיפול`
+    if (b.feedback) m.feedback = `${b.feedback} חדשים`
+    if (b.waitlist) m.waitlist = `${b.waitlist} חדשים`
+    if (b.out.length) { m['tablet-avail'] = `${b.out.length} אזלו`; m['mark-soldout'] = `${b.out.length} אזלו` }
+    if (b.unpublished) { m['publish-menu'] = 'טיוטה'; m['menu-editor'] = 'טיוטה' }
+  } else {
+    m['checklist-open'] = '0 מתוך 12'
+    if (b.out.length) m['tablet-avail'] = `${b.out.length} אזלו`
+  }
+  return m
+}
+
+// ── sample shifts
+export const NAMES = ['דנה', 'איתי', 'נועה', 'יונתן', 'מיכל', 'אורי', 'שירה', 'רועי']
+export type Period = 'morning' | 'evening'
+export const PERIODS: Record<Period, { label: string; hours: string }> = { morning: { label: 'בוקר', hours: '07:00–14:00' }, evening: { label: 'ערב', hours: '14:00–22:00' } }
+
+export type Day = { index: number; date: Date; dow: number; short: string; long: string; dm: string }
+export function nextDays(count = 7): Day[] {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number)
+  const base = Date.UTC(parts[0]!, parts[1]! - 1, parts[2]!)
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(base + index * 86400000)
+    const weekday = new Intl.DateTimeFormat('he-IL', { timeZone: 'UTC', weekday: 'long' }).format(date)
+    const dm = `${date.getUTCDate()}/${date.getUTCMonth() + 1}`
+    return { index, date, dow: date.getUTCDay(), short: index === 0 ? 'היום' : index === 1 ? 'מחר' : weekday.replace('יום ', ''), long: weekday, dm }
+  })
+}
+
+const hash = (s: string) => { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) } return h >>> 0 }
+/** Who is on a shift: sample rota, deterministic. Friday evening and Saturday are closed (nobody scheduled). */
+export function rosterFor(branch: BranchId, day: Day, period: Period): string[] {
+  if (day.dow === 6 || (day.dow === 5 && period === 'evening')) return []
+  const seed = hash(`${branch}|${day.index}|${period}`)
+  const size = branch === 'maor' ? 1 + (seed % 2) : 1 + (seed % 3) + (period === 'morning' && seed % 5 === 0 ? 1 : 0)
+  const pool = NAMES.slice(0, branch === 'maor' ? 5 : 8)
+  const out: string[] = []
+  for (let i = 0; out.length < Math.min(size, pool.length); i++) { const n = pool[(seed + i * 3) % pool.length]!; if (!out.includes(n)) out.push(n) }
+  return out
+}
+
+export type Notice = { id: string; kind: string; title: string; body: string; time: string; unread: boolean; path: string; role: Role[] }
+export const NOTICES: Notice[] = [
+  { id: 'n1', kind: 'swap.requested', title: 'בקשת החלפה חדשה', body: 'דנה מבקשת להחליף את משמרת יום ה׳ בבוקר', time: 'לפני 12 דקות', unread: true, path: '/owner/schedule', role: ['owner', 'dev'] },
+  { id: 'n2', kind: 'issues.digest', title: '3 דברים לטיפול בסניף', body: 'מכונת הקפה, חלב, וצ׳קליסט פתיחה שלא נשלח', time: 'לפני שעה', unread: true, path: '/owner/issues', role: ['owner', 'dev'] },
+  { id: 'n3', kind: 'waitlist.new', title: 'נרשם חדש למועדון', body: 'הצטרפות דרך דף האתר', time: 'לפני 3 שעות', unread: true, path: '/owner/waitlist', role: ['owner', 'dev'] },
+  { id: 'n4', kind: 'shift.eve', title: 'המשמרת הבאה שלך: מחר 07:00', body: 'גבעת חביבה, 07:00–14:00', time: 'אתמול ב־19:00', unread: false, path: '/staff/schedule', role: ['owner', 'staff', 'dev'] },
+  { id: 'n5', kind: 'poll.vote', title: 'הצבעה חדשה בסקר הלקוחות', body: '5 כוכבים · הקפה והשירות', time: 'אתמול', unread: false, path: '/owner/kiosk/feedback', role: ['owner', 'dev'] },
+  { id: 'n6', kind: 'timeoff.decided', title: 'בקשת החופש שלך אושרה', body: 'יום שישי הקרוב', time: 'לפני יומיים', unread: true, path: '/staff/schedule?tab=availability', role: ['staff'] },
+]
+
+// icons re-exported for the app
+export { Bell, CalendarClock, Building2, FileEdit, Package, UsersRound, UserRound, Users, Receipt, Tablet, Palette, Download, LogOut, Megaphone }

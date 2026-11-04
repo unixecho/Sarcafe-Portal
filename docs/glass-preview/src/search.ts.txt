@@ -1,0 +1,205 @@
+import { INDEX, type Entry, type Role } from './data'
+
+// Pure search engine for the tool index. No React, no DOM. Hebrew-aware: niqqud and quotes are dropped, final letters fold
+// to regular ones (ם→מ), a leading ה/ב/ל/מ/ש/ו/כ is optional ("בסידור" finds "סידור"), small typos still match, and the
+// ranking mixes how well the text matches with how this person has used the entry, their role, and the time of day.
+
+const FINAL: Record<string, string> = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }
+/** Length-preserving fold, used to highlight matches in the original text. */
+export const fold = (s: string) => s.toLowerCase().replace(/[ךםןףץ]/g, (c) => FINAL[c]!)
+export const norm = (s: string) =>
+  fold(s).replace(/[֑-ׇ]/g, '').replace(/["'׳״`’‘“”]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+const words = (s: string) => norm(s).split(' ').filter(Boolean)
+const PREFIX = /^[והבלמשכ]/
+const stripPrefix = (t: string) => (t.length > 3 && PREFIX.test(t) ? t.slice(1) : t)
+
+/** Optimal string alignment distance (insert, delete, replace, swap two letters). */
+export function distance(a: string, b: string, cap = 3): number {
+  if (Math.abs(a.length - b.length) > cap) return cap + 1
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+  for (let j = 1; j <= b.length; j++) d[0]![j] = j
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1
+    d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost)
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1)
+  }
+  return d[a.length]![b.length]!
+}
+
+type Prepared = { entry: Entry; label: string; labelW: string[]; kw: string[][]; kwNorm: string[]; hintW: string[] }
+const PREPARED: Prepared[] = INDEX.map((entry) => ({
+  entry, label: norm(entry.label), labelW: words(entry.label), kw: entry.keywords.map(words), kwNorm: entry.keywords.map(norm), hintW: words(entry.hint),
+}))
+
+/** How well one query word matches one list of words: 100 exact, 85 starts with, 45 inside, 40 near-miss, 0 none. */
+function wordScore(q: string, list: string[]): number {
+  let best = 0
+  for (const raw of list) {
+    for (const t of raw === stripPrefix(raw) ? [raw] : [raw, stripPrefix(raw)]) {
+      let s = 0
+      if (t === q) s = 100
+      else if (t.startsWith(q)) s = 85
+      else if (q.length >= 3 && t.includes(q)) s = 45
+      else if (q.length >= 4) {
+        const cap = q.length >= 7 ? 2 : 1
+        if (distance(q, t, cap) <= cap || distance(q, t.slice(0, q.length), 1) <= 1) s = 40
+      }
+      if (s > best) best = s
+    }
+  }
+  return best
+}
+
+// ── usage ("based on previous uses"): per person, kept on the device
+export type Usage = Record<string, { n: number; t: number }>
+const KEY = 'sarcafe.index.usage.v1', QKEY = 'sarcafe.index.queries.v1'
+const DAY = 86400000
+const now = () => Date.now()
+/** Example history so the preview shows recommendations on first open. The app would use the person's own. */
+export function sampleUsage(role: Role): Usage {
+  const t = now()
+  return role === 'staff'
+    ? { 'my-schedule': { n: 21, t: t - 3 * 3600e3 }, 'checklist-open': { n: 17, t: t - 26 * 3600e3 }, 'checklist-close': { n: 15, t: t - 20 * 3600e3 }, swap: { n: 4, t: t - 5 * DAY }, constraints: { n: 6, t: t - 2 * DAY }, payslip: { n: 3, t: t - 9 * DAY } }
+    : { 'schedule-manage': { n: 24, t: t - 2 * 3600e3 }, 'tablet-avail': { n: 15, t: t - 5 * 3600e3 }, issues: { n: 12, t: t - 26 * 3600e3 }, 'publish-menu': { n: 7, t: t - 3 * DAY }, compose: { n: 3, t: t - 4 * DAY }, 'menu-editor': { n: 9, t: t - 2 * DAY }, waitlist: { n: 4, t: t - 6 * DAY } }
+}
+export function loadUsage(role: Role): { usage: Usage; sample: boolean } {
+  try {
+    const raw = localStorage.getItem(`${KEY}:${role}`)
+    if (raw) { const v = JSON.parse(raw) as Usage; if (v && typeof v === 'object') return { usage: v, sample: false } }
+  } catch { /* storage can be blocked; the example history is used */ }
+  return { usage: sampleUsage(role), sample: true }
+}
+export function saveUsage(role: Role, usage: Usage) { try { localStorage.setItem(`${KEY}:${role}`, JSON.stringify(usage)) } catch { /* not kept */ } }
+export function recordUse(role: Role, usage: Usage, id: string): Usage {
+  const next = { ...usage, [id]: { n: (usage[id]?.n ?? 0) + 1, t: now() } }
+  saveUsage(role, next)
+  return next
+}
+export function resetUsage(role: Role) { try { localStorage.removeItem(`${KEY}:${role}`); localStorage.removeItem(`${QKEY}:${role}`) } catch { /* nothing to clear */ } }
+export function loadQueries(role: Role): string[] { try { const v = JSON.parse(localStorage.getItem(`${QKEY}:${role}`) ?? '[]') as string[]; return Array.isArray(v) ? v.slice(0, 5) : [] } catch { return [] } }
+export function rememberQuery(role: Role, q: string): string[] {
+  const clean = q.trim(); if (clean.length < 2) return loadQueries(role)
+  const next = [clean, ...loadQueries(role).filter((x) => norm(x) !== norm(clean))].slice(0, 5)
+  try { localStorage.setItem(`${QKEY}:${role}`, JSON.stringify(next)) } catch { /* not kept */ }
+  return next
+}
+
+// ── context
+export type Context = { role: Role; hour: number; usage: Usage }
+export type Reason = 'now' | 'frequent' | 'recent' | 'match'
+export type Hit = { entry: Entry; score: number; reason?: Reason }
+
+export const visibleTo = (e: Entry, role: Role) => role === 'dev' || e.roles.includes(role)
+
+function priors(e: Entry, c: Context): { score: number; reason?: Reason } {
+  const u = c.usage[e.id]
+  let usage = 0, reason: Reason | undefined
+  if (u) {
+    usage = Math.min(28, Math.log2(1 + u.n) * 7)
+    const age = now() - u.t
+    const recent = age < 36 * 3600e3 ? 10 : age < 7 * DAY ? 5 : 0
+    usage += recent
+    reason = u.n >= 8 ? 'frequent' : recent ? 'recent' : undefined
+  }
+  const timely = e.ctx === 'morning' ? (c.hour >= 5 && c.hour < 12) : e.ctx === 'evening' ? (c.hour >= 15 || c.hour < 2) : false
+  const ctx = timely ? 14 : 0
+  if (ctx) reason = 'now'
+  const roleBoost = e.roles.includes(c.role) ? 6 : 0
+  return { score: usage + ctx + roleBoost + (e.base ?? 0), reason }
+}
+
+/** Ranked results for what was typed. Every word typed must match something in the entry. */
+export function search(q: string, c: Context, limit = 7): Hit[] {
+  const tokens = words(q)
+  if (!tokens.length) return []
+  const all = run(tokens, q, c, true)
+  // Nothing matched every word typed ("משלוח חלב"): offer what matches some of them, ranked lower.
+  return (all.length || tokens.length < 2 ? all : run(tokens, q, c, false)).slice(0, limit)
+}
+
+function run(tokens: string[], q: string, c: Context, every: boolean): Hit[] {
+  const phrase = norm(q)
+  const hits: Hit[] = []
+  for (const p of PREPARED) {
+    if (!visibleTo(p.entry, c.role)) continue
+    let sum = 0, ok = true, matched = 0
+    for (const t of tokens) {
+      const inLabel = wordScore(t, p.labelW)
+      let inKw = 0
+      for (const k of p.kw) inKw = Math.max(inKw, wordScore(t, k))
+      const inHint = wordScore(t, p.hintW)
+      const best = Math.max(inLabel * 1, inKw * 0.85, inHint * 0.5)
+      if (best === 0) { if (every) { ok = false; break } continue }
+      sum += best; matched++
+    }
+    if (!ok || matched === 0) continue
+    let text = sum / tokens.length
+    if (p.label.startsWith(phrase)) text += 18
+    else if (p.label.includes(phrase)) text += 8
+    if (p.kwNorm.some((k) => k === phrase)) text += 12
+    const pr = priors(p.entry, c)
+    hits.push({ entry: p.entry, score: text + pr.score * 0.45, reason: pr.reason && c.usage[p.entry.id] ? pr.reason : 'match' })
+  }
+  return hits.sort((a, b) => b.score - a.score)
+}
+
+/** What to offer before anything is typed: timely things, then the most used, then the most recent. */
+export function suggest(c: Context, limit = 6): Hit[] {
+  const hits = INDEX.filter((e) => visibleTo(e, c.role) && (c.role !== 'dev' || e.roles.includes('dev') || e.roles.includes('owner')))
+    .map((entry) => ({ entry, ...priors(entry, c) }))
+    .map((h) => ({ entry: h.entry, score: h.score, reason: h.reason }))
+  return hits.sort((a, b) => b.score - a.score).slice(0, limit)
+}
+export function recent(c: Context, limit = 3): Hit[] {
+  return INDEX.filter((e) => visibleTo(e, c.role) && c.usage[e.id]).sort((a, b) => c.usage[b.id]!.t - c.usage[a.id]!.t).slice(0, limit).map((entry) => ({ entry, score: 0, reason: 'recent' as Reason }))
+}
+
+/** Phrases that start with what was typed, best first: "סיד" → "סידור עבודה". Labels first, then what people call it. */
+export function completions(q: string, c: Context, limit = 4): string[] {
+  const nq = norm(q)
+  if (nq.length < 1) return []
+  const lastTyped = nq.split(' ').pop()!
+  const out: { text: string; score: number }[] = []
+  for (const p of PREPARED) {
+    if (!visibleTo(p.entry, c.role)) continue
+    const pr = priors(p.entry, c).score
+    if (p.label.startsWith(nq)) out.push({ text: p.entry.label, score: 100 + pr })
+    else if (p.labelW.some((w) => w.startsWith(lastTyped) && lastTyped.length >= 2) && nq.split(' ').length === 1) out.push({ text: p.entry.label, score: 60 + pr })
+    p.entry.keywords.forEach((k, i) => { if (p.kwNorm[i]!.startsWith(nq) && p.kwNorm[i] !== nq && !/^[a-z]/.test(p.kwNorm[i]!)) out.push({ text: k, score: 50 + pr * 0.5 }) })
+  }
+  const seen = new Set<string>(), res: string[] = []
+  for (const o of out.sort((a, b) => b.score - a.score)) { const n = norm(o.text); if (n !== nq && !seen.has(n)) { seen.add(n); res.push(o.text) } if (res.length >= limit) break }
+  return res
+}
+
+/** "Did you mean" when nothing matched: the closest label or keyword word. */
+export function didYouMean(q: string, c: Context): string | null {
+  const t = norm(q); if (t.length < 3) return null
+  let best: { text: string; d: number } | null = null
+  for (const p of PREPARED) {
+    if (!visibleTo(p.entry, c.role)) continue
+    for (const cand of [p.entry.label, ...p.entry.keywords]) {
+      const d = distance(t, norm(cand), 3)
+      if (d <= 3 && (!best || d < best.d)) best = { text: cand, d }
+    }
+  }
+  return best && best.d <= Math.max(2, Math.floor(t.length / 3)) ? best.text : null
+}
+
+/** Split a label into plain and matched parts for highlighting. */
+export function highlight(text: string, q: string): { t: string; m: boolean }[] {
+  const f = fold(text), ranges: [number, number][] = []
+  for (const w of fold(q).split(/\s+/).filter((x) => x.length > 0)) {
+    const clean = w.replace(/["'׳״]/g, ''); if (!clean) continue
+    let from = 0
+    for (;;) { const i = f.indexOf(clean, from); if (i < 0) break; ranges.push([i, i + clean.length]); from = i + clean.length; if (ranges.length > 6) break }
+  }
+  if (!ranges.length) return [{ t: text, m: false }]
+  ranges.sort((a, b) => a[0] - b[0])
+  const merged: [number, number][] = []
+  for (const r of ranges) { const last = merged[merged.length - 1]; if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]); else merged.push([...r]) }
+  const parts: { t: string; m: boolean }[] = []; let at = 0
+  for (const [a, b] of merged) { if (a > at) parts.push({ t: text.slice(at, a), m: false }); parts.push({ t: text.slice(a, b), m: true }); at = b }
+  if (at < text.length) parts.push({ t: text.slice(at), m: false })
+  return parts
+}

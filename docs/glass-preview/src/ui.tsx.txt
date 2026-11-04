@@ -1,0 +1,17 @@
+import type { CSSProperties, ReactNode } from 'react'
+import { SegmentedControl } from 'glisse'
+
+// glisse places its selection thumb with physical left/right, so in a right-to-left page the thumb lands on the wrong item.
+// The control gets an LTR box and the items are reversed: it reads exactly like RTL (first item on the right).
+// glisse sizes every segment with --lg-tab-width (84px) and moves the thumb by exactly that width. `fill` sets it so the segments
+// share the container's width (container query units), instead of stretching the box, which would leave the thumb off its segment.
+export function Seg({ label, items, value, onChange, fill = false }: { label: string; items: { value: string; label: ReactNode }[]; value: string; onChange: (v: string) => void; fill?: boolean }) {
+  const style = fill ? ({ '--lg-tab-width': `calc(100cqw / ${items.length})` } as CSSProperties) : undefined
+  return (
+    <div dir="ltr" className={`seg${fill ? ' seg--fill' : ''}`}>
+      <SegmentedControl aria-label={label} items={[...items].reverse()} value={value} onValueChange={onChange} style={style} />
+    </div>
+  )
+}
+
+export const Pill = ({ children, quiet = false }: { children: ReactNode; quiet?: boolean }) => <span className={`pill${quiet ? ' pill--quiet' : ''}`}>{children}</span>

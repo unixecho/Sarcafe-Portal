@@ -16,3 +16,7 @@ Follow what the schema already does. Do not invent a new scheme.
 - **Identifiers that can start with zero are `text`,** never `integer` (`employee_code`, not `employee_no`).
 - **Access:** every new function is `revoke all ... from public, anon, authenticated` then `grant execute ... to service_role` (exact signature). New tables enable RLS; browser roles get nothing unless a policy is deliberate.
 - **Before applying to production:** run `npm run verify:schedule-sql`, `verify:checklist-sql` and `verify:onboarding-sql`, check `pg_proc` for duplicate names, and record the ledger row. Say in `handoff.md` whether it was applied.
+
+# Glass UI style (owner rule, 2026-11-04)
+
+The owner approved, in principle, a glisse "Liquid Glass" rebuild of the dashboards. It is a **preview only until the owner says to apply it** (nothing in `src/` or `package.json` uses glisse yet). The rule applies to anything you build in that style: the account button at the top of the glass top bar is the signature, so **every menu, popover, picker and notification list uses its surface and morph, always**, and one orange pill style marks counts and states. Rules, findings (RTL, tab width, lag, contrast) and the plan to apply it: `docs/SARCAFE_GLASS_UI_STYLE.md`; preview source: `docs/glass-preview/` (the `.ts`/`.tsx` files there end in `.txt` on purpose so `tsc` ignores them).

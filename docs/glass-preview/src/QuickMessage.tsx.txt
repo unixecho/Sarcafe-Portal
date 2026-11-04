@@ -1,0 +1,103 @@
+import { memo, useEffect, useMemo, useState } from 'react'
+import { Button, Input } from 'glisse'
+import { CircleAlert, Megaphone, Send, Users } from 'lucide-react'
+import { PERIODS, nextDays, rosterFor, type BranchData, type BranchId, type Period } from './data'
+import { Seg } from './ui'
+
+// Quick message to the team. Who gets it is one of: everyone at the branch · a specific shift (day + morning/evening) ·
+// one person on that shift (offered only when more than one person is scheduled there).
+
+const TEMPLATES = ['מגיע משלוח חלב בבוקר', 'נא להגיע 10 דקות מוקדם', 'ישיבה קצרה בתחילת המשמרת', 'החליפו מחר ללבוש כהה']
+const list = (names: string[]) => { try { return new Intl.ListFormat('he', { style: 'long', type: 'conjunction' }).format(names) } catch { return names.join(', ') } }
+
+type Sent = { id: number; text: string; to: string; when: string }
+const DAYS = nextDays(7)
+const firstWith = (branch: BranchId, period: Period) => DAYS.find((d) => d.index > 0 && rosterFor(branch, d, period).length > 0)?.index ?? 1
+
+function QuickMessage({ branch, data, onSent }: { branch: BranchId; data: BranchData; onSent: (msg: string) => void }) {
+  const [audience, setAudience] = useState<'all' | 'shift'>('shift')
+  const [period, setPeriod] = useState<Period>('morning')
+  const [dayIdx, setDayIdx] = useState(() => firstWith(branch, 'morning'))
+  const [who, setWho] = useState<string>('*')           // '*' = the whole shift, otherwise a first name
+  const [text, setText] = useState('')
+  const [log, setLog] = useState<Sent[]>([])
+
+  useEffect(() => { setWho('*') }, [branch, dayIdx, period, audience])
+  const day = DAYS[dayIdx]!
+  const roster = useMemo(() => rosterFor(branch, day, period), [branch, day, period])
+  const several = roster.length > 1
+  const person = who !== '*' && roster.includes(who) ? who : '*'
+
+  const recipients = audience === 'all' ? data.staffCount : person === '*' ? roster.length : 1
+  const shiftName = `משמרת ${PERIODS[period].label}, ${day.index === 0 ? 'היום' : day.index === 1 ? 'מחר' : day.long} ${day.dm}`
+  const summary = audience === 'all'
+    ? `יישלח לכל הצוות ב${data.name} (${data.staffCount} עובדים)`
+    : roster.length === 0 ? `אין עובדים משובצים ב${shiftName}`
+    : person !== '*' ? `יישלח רק ל־${person}, ${shiftName}`
+    : `יישלח ${roster.length === 1 ? 'לעובד אחד' : `ל־${roster.length} עובדים`} ב${shiftName}: ${list(roster)}`
+  const canSend = text.trim().length > 0 && recipients > 0
+
+  function send() {
+    if (!canSend) return
+    const to = audience === 'all' ? `כל הצוות ב${data.name}` : person !== '*' ? `${person} · ${shiftName}` : `${shiftName} · ${roster.length === 1 ? roster[0] : `${roster.length} עובדים`}`
+    setLog((l) => [{ id: Date.now(), text: text.trim(), to, when: 'עכשיו' }, ...l].slice(0, 3))
+    onSent(`ההודעה נשלחה ${recipients === 1 ? 'לעובד אחד' : `ל־${recipients} עובדים`}`)
+    setText('')
+  }
+
+  return (
+    <section className="surf card" id="compose" aria-labelledby="compose-title">
+      <h2 className="card__title" id="compose-title"><Megaphone size={17} aria-hidden="true" />הודעה מהירה לצוות</h2>
+
+      <Seg fill label="למי לשלוח" value={audience} onChange={(v) => setAudience(v as 'all' | 'shift')} items={[{ value: 'all', label: 'כל הצוות' }, { value: 'shift', label: 'משמרת מסוימת' }]} />
+
+      {audience === 'shift' && (
+        <div className="qm__shift">
+          <div className="field">
+            <span className="field__label" id="qm-day">יום</span>
+            <div className="days" role="radiogroup" aria-labelledby="qm-day">
+              {DAYS.map((d) => (
+                <button key={d.index} type="button" role="radio" aria-checked={d.index === dayIdx} className={`chip chip--day${d.index === dayIdx ? ' is-on' : ''}`} onClick={() => setDayIdx(d.index)}>
+                  <b>{d.short}</b><small dir="ltr">{d.dm}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <span className="field__label">משמרת</span>
+            <Seg fill label="משמרת" value={period} onChange={(v) => setPeriod(v as Period)} items={(['morning', 'evening'] as const).map((p) => ({ value: p, label: <span>{PERIODS[p].label} <bdi dir="ltr">{PERIODS[p].hours.replace(':00', '').replace(':00', '')}</bdi></span> }))} />
+          </div>
+          <div className="field">
+            <span className="field__label" id="qm-who"><Users size={14} aria-hidden="true" />מי במשמרת</span>
+            {roster.length === 0 && <p className="warnline"><CircleAlert size={16} aria-hidden="true" /><span>אין עובדים משובצים במשמרת הזו. בחרו יום אחר.</span></p>}
+            {roster.length === 1 && <p className="oneline">במשמרת הזו משובץ/ת רק <strong>{roster[0]}</strong>, ולכן ההודעה תישלח אליו/ה.</p>}
+            {several && (
+              <div className="days days--who" role="radiogroup" aria-labelledby="qm-who">
+                <button type="button" role="radio" aria-checked={person === '*'} className={`chip${person === '*' ? ' is-on' : ''}`} onClick={() => setWho('*')}>כל המשמרת · {roster.length}</button>
+                {roster.map((n) => <button key={n} type="button" role="radio" aria-checked={person === n} className={`chip${person === n ? ' is-on' : ''}`} onClick={() => setWho(n)}>{n}</button>)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Input id="compose-text" aria-label="תוכן ההודעה" icon={<Megaphone size={17} />} maxLength={140} placeholder="למשל: מגיע משלוח חלב בבוקר" value={text} onValueChange={setText} onKeyDown={(e) => { if (e.key === 'Enter') send() }} />
+      <div className="days days--tpl" aria-label="תבניות">
+        {TEMPLATES.map((t) => <button key={t} type="button" className="chip chip--soft" onClick={() => setText(t)}>{t}</button>)}
+      </div>
+
+      <p className="summary" aria-live="polite">{summary}</p>
+      <div className="card__actions">
+        <Button variant="filled" icon={<Send size={16} />} disabled={!canSend} onClick={send}>{recipients > 0 ? `שליחה ל־${recipients}` : 'שליחה'}</Button>
+        <span className="count" dir="ltr">{text.length}/140</span>
+      </div>
+
+      {log.length > 0 && (
+        <ul className="sentlog" aria-label="נשלחו לאחרונה">
+          {log.map((s) => <li key={s.id}><strong>{s.text}</strong><small>{s.to} · {s.when}</small></li>)}
+        </ul>
+      )}
+    </section>
+  )
+}
+export default memo(QuickMessage)
