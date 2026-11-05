@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createHash, randomBytes } from 'node:crypto'
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import type { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
@@ -31,7 +32,9 @@ function identity(row: Record<string, unknown>, via: StaffIdentity['via'], quick
   return { ...(rest as Omit<StaffIdentity, 'via' | 'quick'>), employee_no: employee_code == null ? (row.employee_no == null ? null : String(row.employee_no)) : String(employee_code), via, quick }
 }
 
-export async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
+// Once per request (React cache): the layout, the page and the views all ask who is signed in, and each answer is up to four
+// round trips to Supabase (auth, the staff row, the session check). Outside a server render (an API route) it simply runs.
+export const resolveStaffIdentity = cache(async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
   const service = createServiceRoleClient()
   const supabase = await createServerSupabaseClient()
   const {
@@ -62,7 +65,7 @@ export async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
   if (!isStaff(data)) return null
   void service.from('staff_employee_sessions').update({ last_seen_at: new Date().toISOString() }).eq('token_hash', hash)
   return identity(data as Record<string, unknown>, 'employee_code', true)
-}
+})
 
 export async function issueEmployeeSession(response: NextResponse, staffId: string) {
   const token = randomBytes(32).toString('base64url')

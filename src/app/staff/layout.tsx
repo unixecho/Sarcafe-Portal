@@ -10,6 +10,8 @@ import { resolveStaffIdentity } from '@/lib/staff/session'
 import { loadGateState } from '@/lib/staff/gate-state'
 import { gateModeFor } from '@/lib/staff/gate-rules'
 import { isDeveloper } from '@/lib/checklists/developer'
+import DockHost from '@/components/glass/DockHost'
+import { dockPlanFor } from '@/lib/nav/dock'
 
 export const metadata: Metadata = {
   title: 'Sarcafe צוות',
@@ -48,6 +50,8 @@ async function StaffShell({ children }: { children: React.ReactNode }) {
       <NotificationsGate mode={mode}>
         <StaffInstallIntro />
         {children}
+        {/* the dock stays mounted between its tabs (lib/nav/dock.ts); inside the gate, so it never sits on the set-up screen */}
+        <DockHost plan={dockPlanFor(me, 'staff')} />
       </NotificationsGate>
     </ThemedApp>
   )

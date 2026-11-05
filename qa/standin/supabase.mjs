@@ -119,7 +119,7 @@ function project(rows, select) {
 
 // ── the server ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = {}) {
-  const state = { db: {}, tokens: new Map(), limits: new Map(), fault: { mode: 'none' }, missingTables: new Set(), missingFns: new Set(), requests: 0 }
+  const state = { db: {}, tokens: new Map(), limits: new Map(), fault: { mode: 'none' }, missingTables: new Set(), missingFns: new Set(), requests: 0, byPath: new Map() }
   const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set() }
   reset()
   const table = (name) => (state.db[name] ??= [])
@@ -184,10 +184,12 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
         if (req.method === 'DELETE') { state.db[name] = []; return json(res, 200, { ok: true }) }
         return json(res, 200, table(name))
       }
-      if (path === '/__qa/stats') return json(res, 200, { requests: state.requests })
+      // per endpoint ("/auth/v1/user", "/rest/v1/staff", …), so a test can count round trips; POST {clear:true} starts a new count
+      if (path === '/__qa/stats') { if (body && JSON.parse(body).clear) { state.byPath.clear(); state.requests = 0 } return json(res, 200, { requests: state.requests, byPath: Object.fromEntries(state.byPath) }) }
       return json(res, 404, {})
     }
     state.requests++
+    state.byPath.set(path, (state.byPath.get(path) ?? 0) + 1)
     // fault injection (the "database" is down, slow or failing)
     const f = state.fault
     const scoped = !f.tables || f.tables.some((t) => path.includes(`/${t}`))

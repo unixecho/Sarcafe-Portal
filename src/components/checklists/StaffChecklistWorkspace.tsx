@@ -109,6 +109,13 @@ export default function StaffChecklistWorkspace({ branches, initialBranch, openI
   const currentCategory = categories[step]
   const completeCount = items.filter((item) => answerIsComplete(item, answers[item.id])).length
   const issues = items.filter((item) => answers[item.id]?.result === 'issue')
+  // While a checklist is open it has the screen to itself: the app's bottom dock steps aside (glass.css, html[data-task]).
+  const runnerOpen = Boolean(active)
+  useEffect(() => {
+    if (!runnerOpen) return
+    document.documentElement.dataset.task = 'checklist'
+    return () => { delete document.documentElement.dataset.task }
+  }, [runnerOpen])
 
   function open(assignment: ChecklistAssignment) {
     if (lockedAt(assignment)) return setError(`הצ׳קליסט עדיין נעול — ${lockedBecause(lockOf(assignment))}. ${clock ? unlockText(lockOf(assignment), clock) : ''}`)

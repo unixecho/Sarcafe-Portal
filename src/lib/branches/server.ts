@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getBranchOpenStates, type BranchOpenState } from '@/lib/shifts/hours'
 import type { Branch } from '@/lib/branches'
@@ -97,10 +98,14 @@ async function readBranches(slug: string | null, includeEvents: boolean): Promis
  * owner/staff page that must keep seeing events — the menu editor, the schedule, the
  * audit log — passes `{ includeEvents: true }` explicitly. */
 export async function getBranches(opts: { includeEvents?: boolean } = {}): Promise<Branch[]> {
-  const rows = await readBranches(null, opts.includeEvents === true)
+  return branchesOnce(opts.includeEvents === true)
+}
+// Once per request (React cache, keyed by the boolean, not the options object): the dashboard's shell and its body both list them.
+const branchesOnce = cache(async (includeEvents: boolean): Promise<Branch[]> => {
+  const rows = await readBranches(null, includeEvents)
   const openStates = await getBranchOpenStates(rows.map((r) => ({ id: r.id, timezone: r.timezone })))
   return rows.map((row) => toBranch(row, openStates[row.id]))
-}
+})
 
 /** One branch by slug, events INCLUDED on purpose: an event's own menu link
  * (/menu/<slug>, printed on a QR at the stall) must keep working — it is simply never

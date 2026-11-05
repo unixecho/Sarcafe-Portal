@@ -4,19 +4,18 @@ import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import GlassPage from './GlassPage'
 import GlassTopBar, { type TopBarAccount } from './GlassTopBar'
-import GlassDock, { type DockKind } from './GlassDock'
 import { GlassBranchProvider } from './BranchContext'
 
-// Every glass home screen is put together here: backdrop → (branch provider) → top bar → content → dock.
+// Every glass home screen is put together here: backdrop → (branch provider) → top bar → content. The dock is NOT here: the
+// /owner and /staff layouts draw it (components/glass/DockHost.tsx), so it stays mounted from one tab to the next.
 // `branchSwitch`: the person manages several branches (an owner): the top bar shows the switch and everything below follows it.
-export default async function GlassDashboardShell({ title, dock, home, account, branchSwitch = false, branchSlug, children }: {
-  title: string; dock: DockKind; home: string; account: TopBarAccount; branchSwitch?: boolean; branchSlug?: string | null; children: ReactNode
+export default async function GlassDashboardShell({ title, account, branchSwitch = false, branchSlug, children }: {
+  title: string; account: TopBarAccount; branchSwitch?: boolean; branchSlug?: string | null; children: ReactNode
 }) {
   const body = (
     <>
       <GlassTopBar title={title} account={account} />
       <main id="main" tabIndex={-1} className="gl-main">{children}</main>
-      <GlassDock kind={dock} home={home} />
     </>
   )
   if (!branchSwitch) return <GlassPage branchSlug={branchSlug}>{body}</GlassPage>

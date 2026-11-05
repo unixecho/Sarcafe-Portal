@@ -6,7 +6,7 @@ import GlassMotion from './GlassMotion'
 import GlassToaster from './GlassToaster'
 
 // A glass screen: the branch's backdrop, the toaster and the scroll smoothing. Server component; put <GlassTopBar>, the content
-// (<main className="gl-main">) and <GlassDock> inside, or use <GlassDashboardShell>, which does it. Guide: docs/SARCAFE_GLASS_UI.md.
+// (<main className="gl-main">) inside, or use <GlassDashboardShell>, which does it (the dock is drawn by the layouts: DockHost). Guide: docs/SARCAFE_GLASS_UI.md.
 export default function GlassPage({ branchSlug, children }: { branchSlug?: string | null; children: ReactNode }) {
   return (
     <div className="gl-page">

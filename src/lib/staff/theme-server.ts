@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { NUDGE_COOKIE, THEME_COOKIE, resolveTheme, type StaffTheme } from '@/lib/staff/theme'
@@ -8,7 +9,8 @@ import { NUDGE_COOKIE, THEME_COOKIE, resolveTheme, type StaffTheme } from '@/lib
 // 20261017120000); until it exists, or if the read fails, the device's cookie decides and then the default. A failed read must never
 // be the reason a page does not open. The cookie is also what makes the choice instant on THIS device.
 
-export async function loadStaffTheme(staffId: string | null | undefined): Promise<{ theme: StaffTheme; chosen: boolean; nudgeSeen: boolean }> {
+// Once per request and person (React cache): the layout's look and the page's theme row ask the same question.
+export const loadStaffTheme = cache(async function loadStaffTheme(staffId: string | null | undefined): Promise<{ theme: StaffTheme; chosen: boolean; nudgeSeen: boolean }> {
   let db: unknown = null
   if (staffId) {
     try {
@@ -24,7 +26,7 @@ export async function loadStaffTheme(staffId: string | null | undefined): Promis
     nudgeSeen = jar.get(NUDGE_COOKIE)?.value === '1'
   } catch { /* no request scope (a build): default */ }
   return { ...resolveTheme(db, cookie), nudgeSeen }
-}
+})
 
 /** Saves the choice on the person's row. Returns false when the database refused (the column may not exist yet): the caller still
  *  sets the cookie, so the look changes on this device either way. */

@@ -103,6 +103,13 @@ export default function TeamMessage({ branches }: { branches: { slug: string; na
         <p className="gl-note gl-note--bad" role="alert"><CircleAlert size={16} aria-hidden="true" />לא הצלחנו לטעון את המשמרות. <button type="button" className="gl-chip gl-chip--soft" onClick={() => void load(slug)}><RefreshCw size={14} aria-hidden="true" />לנסות שוב</button></p>
       )}
 
+      {/* while the team and the shifts load: the same strip and chips, shimmering (no "loading…" sentence) */}
+      {audience === 'shift' && state === 'loading' && (
+        <div className="gl-inset" aria-hidden="true">
+          <div className="gl-strip">{Array.from({ length: 7 }, (_, i) => <span key={i} className="sk gl-sk-chip gl-sk-chip--day" />)}</div>
+          <div className="gl-wrap">{[0, 1, 2].map((i) => <span key={i} className="sk gl-sk-chip" />)}</div>
+        </div>
+      )}
       {audience === 'shift' && plan && state === 'ready' && (
         <div className="gl-inset">
           <div className="gl-field">
@@ -151,7 +158,9 @@ export default function TeamMessage({ branches }: { branches: { slug: string; na
       <div className="gl-wrap" aria-label="תבניות">
         {TEMPLATES.map((t) => <button key={t} type="button" className="gl-chip gl-chip--soft" onClick={() => setText(t)}>{t}</button>)}
       </div>
-      {state === 'loading' ? <p className="gl-summary" aria-live="polite">טוען את הצוות והמשמרות…</p> : summary && <p className="gl-summary" aria-live="polite">{summary}</p>}
+      {state === 'loading'
+        ? <p className="gl-summary" aria-live="polite"><span className="sk gl-sk-line" aria-hidden="true" /><span className="sr-only">טוען את הצוות והמשמרות…</span></p>
+        : summary && <p className="gl-summary" aria-live="polite">{summary}</p>}
       <div className="gl-card__actions">
         <Button variant="filled" icon={<Send size={16} />} disabled={!canSend} onClick={() => void send()}>{sending ? 'שולח…' : counts.reachable > 0 ? `${label} · ${counts.reachable}` : label}</Button>
         <span className="gl-count" dir="ltr">{text.length}/{MAX_TEXT}</span>

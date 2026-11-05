@@ -76,7 +76,11 @@ export default function GlassTopBar({ title, account, logo = '/sarcafe-logo.png'
 
   const noticeItems: MenuEntry[] = useMemo(() => {
     if (failed && !notices) return [{ label: <span className="gl-nt gl-nt--bad"><span className="gl-nt__top"><strong>לא הצלחנו לטעון את ההתראות</strong></span><small>נסו שוב בעוד רגע</small></span>, icon: <CircleAlert size={16} />, onSelect: () => void load() }]
-    if (!notices) return [{ label: 'טוען…', disabled: true }]
+    // still loading: three shimmering rows shaped like notifications (the words are for screen readers)
+    if (!notices) return [0, 1, 2].map((i) => ({
+      label: <span className="gl-nt">{i === 0 && <span className="sr-only">טוען התראות…</span>}<span className="sk gl-sk-line gl-sk-line--title" aria-hidden="true" /><span className="sk gl-sk-line" aria-hidden="true" /></span>,
+      disabled: true,
+    }))
     const unreadIds = notices.filter((n) => !n.read_at).map((n) => n.id)
     const head: MenuEntry = {
       label: <span className="gl-nt"><span className="gl-nt__top"><strong>{unread ? 'סימון הכול כנקרא' : 'הכול נקרא'}</strong></span><small>{unread ? `${unread} התראות חדשות` : 'אין התראות חדשות'}</small></span>,

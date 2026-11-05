@@ -40,7 +40,7 @@ export default async function StaffIndexPage() {
     branchSlug = (data?.slug as string | undefined) ?? null
   }
   return (
-    <GlassDashboardShell title="Sarcafe צוות" dock="employee" home="/staff" account={{ developer: false, manager: hasAnyMenuEditAccess(me) }} branchSlug={branchSlug}>
+    <GlassDashboardShell title="Sarcafe צוות" account={{ developer: false, manager: hasAnyMenuEditAccess(me) }} branchSlug={branchSlug}>
       <EmployeeDashboardView me={me} />
     </GlassDashboardShell>
   )

@@ -29,7 +29,7 @@ export default async function QaReviewPage() {
   const { latest, history, origin, note } = await loadQaPage()
 
   return (
-    <GlassDashboardShell title="סקירת QA" dock={canManage ? 'manager' : 'employee'} home="/staff/dev" account={{ developer: true, manager: canManage }}>
+    <GlassDashboardShell title="סקירת QA" account={{ developer: true, manager: canManage }}>
       {latest ? <Review report={latest} history={history} origin={origin} note={note} /> : (
         <section className="gl-surf gl-card"><h2 className="gl-card__title">עוד אין דוח QA</h2><p className="gl-note">הריצו <code>npm run qa</code> או חכו לריצה של הבוקר.</p></section>
       )}

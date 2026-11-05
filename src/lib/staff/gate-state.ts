@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { cache } from 'react'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 // What the staff pages need to know about a person beyond who they are: may they use the pages without notifications (the owner
@@ -12,7 +13,8 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export type GateState = { exempt: boolean; onboardingPending: boolean }
 
-export async function loadGateState(staffId: string): Promise<GateState> {
+// Once per request (React cache): the staff layout and the staff home both read it.
+export const loadGateState = cache(async function loadGateState(staffId: string): Promise<GateState> {
   const quiet: GateState = { exempt: false, onboardingPending: false }
   try {
     const service = createServiceRoleClient()
@@ -29,4 +31,4 @@ export async function loadGateState(staffId: string): Promise<GateState> {
   } catch {
     return quiet
   }
-}
+})

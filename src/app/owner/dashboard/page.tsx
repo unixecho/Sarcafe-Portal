@@ -44,7 +44,7 @@ export default async function OwnerDashboardPage() {
 
   // The glass dashboard (docs/SARCAFE_GLASS_UI.md): top bar with the branch switch, notifications and account; the dock below.
   return (
-    <GlassDashboardShell title="לוח הבקרה" dock="manager" home="/owner/dashboard" account={{ developer: false, manager: true }} branchSwitch>
+    <GlassDashboardShell title="לוח הבקרה" account={{ developer: false, manager: true }} branchSwitch>
       <OwnerDashboardView me={{ id: me!.id as string, role: me!.role as string | null, badge: me!.badge as string | null, branch_id: me!.branch_id as string | null, email: me!.email as string | null, first_name: me!.first_name as string | null }} />
     </GlassDashboardShell>
   )

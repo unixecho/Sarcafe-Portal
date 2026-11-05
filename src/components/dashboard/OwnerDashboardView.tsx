@@ -34,12 +34,11 @@ export type OwnerMe = { id: string; role: string | null; badge: string | null; b
 export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
   const service = createServiceRoleClient()
   // Coffee trucks only: an event's register is a subsystem of its truck (branch manager > קופה ואירועים), not a branch of the business.
-  const branches = await getBranches()
-  const cookieStore = await cookies()
+  // In parallel (they do not depend on each other); branches and the look are cached per request (the shell and the layout asked too).
+  const [branches, cookieStore, look] = await Promise.all([getBranches(), cookies(), loadStaffTheme(me.id)])
   const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
   const defaultBranch = branches.find((branch) => branch.slug === currentSlug) ?? branches[0] ?? null
   const developer = isDeveloper(me)
-  const look = await loadStaffTheme(me.id)
   const [stats, signals, shortages, requests] = defaultBranch
     ? await Promise.all([
         readDashboardStats(defaultBranch.id),

@@ -18,19 +18,23 @@ will use the glisse feature"). The owner dashboard, the employee home, the devel
 
 ## Building a screen
 ```tsx
-// a home-like screen (top bar + dock):
-<GlassDashboardShell title="…" dock="manager" | "employee" home="/owner/dashboard" account={{ developer, manager }} branchSwitch?>
+// a home-like screen (top bar; the dock comes from the layout):
+<GlassDashboardShell title="…" account={{ developer, manager }} branchSwitch?>
   …content…
 </GlassDashboardShell>
+// and next to its page.tsx, a loading.tsx shaped like it:
+export default function Loading() { return <GlassSkeleton title="…" kind="owner" | "employee" | "dev" | "qa" /> }
 
 // any other page that wants glass pieces without the shell: import 'glisse/styles.css' and '@/components/glass/glass.css'
 ```
 | Piece | File | Use |
 |---|---|---|
-| `GlassDashboardShell` | `src/components/glass/GlassDashboardShell.tsx` | backdrop → (branch provider) → top bar → `<main className="gl-main">` → dock |
+| `GlassDashboardShell` | `src/components/glass/GlassDashboardShell.tsx` | backdrop → (branch provider) → top bar → `<main className="gl-main">` |
+| `DockHost` | `DockHost.tsx` (in `src/app/owner/layout.tsx` and `src/app/staff/layout.tsx`) | draws the dock from the LAYOUT so it stays mounted between tabs; who gets which tabs and on which pages: `src/lib/nav/dock.ts` |
+| `GlassSkeleton` | `GlassSkeleton.tsx` | a glass page's loading screen (its route's `loading.tsx`): same backdrop and title, shimmering blocks where the cards go |
 | `GlassPage` | `GlassPage.tsx` | the backdrop, toaster and scroll smoothing only |
 | `GlassTopBar` | `GlassTopBar.tsx` | logo, branch switch, notifications `<Menu>`, account `<Menu>` |
-| `GlassDock` | `GlassDock.tsx` | bottom `TabBar` with real links; "עוד" opens the tool finder |
+| `GlassDock` | `GlassDock.tsx` | bottom `TabBar` with real links (prefetched); lights the tapped tab at once; "עוד" opens the tool finder (here or home's) |
 | `Seg` | `Seg.tsx` | the ONLY way to use glisse's `SegmentedControl` in Hebrew (RTL fix, `fill`) |
 | `useGlassBranch()` | `BranchContext.tsx` | the branch chosen in the top bar (null outside a manager dashboard) |
 | `glassToast()` | `toast.ts` | tell the person what happened: `'ok'` green, `'bad'` red, `'neutral'` |
@@ -45,6 +49,22 @@ keywords people would type, optional `ctx` morning/evening) and its icon in `src
 Roles: `OP` owner only, `MGR` owner + general manager, `STAFF` a person's OWN shift tools (their shifts, checklists, payslip: employees
 and general managers, never owners), `ALL`, `DEV`. The QA unit stage
 fails if an owner-only page is offered to anyone else, or if an id is repeated.
+
+## Feeling like an app (owner, 2026-11-05: "the bottom nav bar is constant… skeleton loading… only the server speed itself")
+- **The dock belongs to the layouts, never to a page.** `DockHost` in the /owner and /staff layouts keeps the same element on screen
+  while the person moves between tabs; it has its own view-transition layer (`view-transition-name: gl-dock`), so the page slides and
+  the bar does not. A new tab destination: add its root to `src/lib/nav/dock.ts` (and to `GlassDock`'s tabs) and give it a `loading.tsx`.
+- **Every route has a `loading.tsx` shaped like the page.** Glass pages use `GlassSkeleton`; the older pages `AppPageLoading` /
+  `StaffPageLoading`. Next prefetches the loading screen of every visible link, so a tap shows it at once and only the server's time
+  remains. Inside a page, a part that loads in the browser shows `.sk` blocks (`.gl-sk-chip`, `.gl-sk-line`, …), never "טוען…" text
+  (screen readers get the words in `.sr-only`).
+- **Bars at the bottom of a dock page sit above the dock** (`body:has(.gl-dock) .sch-savebar`) or the dock steps aside for a task
+  that owns the screen (`body:has(.ck-runner)` hides it while a checklist is being filled).
+- **Taps light up immediately.** `PageTransitions` stops link clicks before React sees them (it re-plays them through a view
+  transition) and announces each one (`NAV_START_EVENT`, `src/lib/nav/events.ts`): listen to that to react to the tap itself.
+- **Pages are not served from a cache on revisit (a decision):** Next's `staleTimes` would make a revisit instant but could show a
+  page from before a save made through an API route (a checklist sent, constraints submitted) for up to its lifetime. A skeleton at
+  once, then fresh data, is the rule. Request-level reads are shared with React `cache()` (identity, look, branches, gate state).
 
 ## Rules that are easy to break (each one bit us once)
 - **RTL:** glisse places selection thumbs with physical left/right. Never use `SegmentedControl` or `TabBar` directly: `Seg` and `GlassDock`

@@ -5,21 +5,23 @@ import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { createStage, assert } from '../lib/harness.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
   fs.rmSync(out, { recursive: true, force: true })
   for (const rel of MODULES) {
     const src = fs.readFileSync(path.join(root, rel), 'utf8')
+    // the app's "@/…" path alias, resolved inside this cache (only modules listed above can be required)
     const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText
+      .replace(/require\("@\/([^"]+)"\)/g, (_, rel) => `require(${JSON.stringify(path.join(out, 'src', rel))})`)
     const dest = path.join(out, rel.replace(/\.ts$/, '.js'))
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     fs.writeFileSync(dest, js)
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts') }
 }
 
 export function unitStage(root) {
@@ -49,6 +51,36 @@ export function unitStage(root) {
     const staffSees = m.tools.TOOLS.filter((t) => m.tools.toolVisible(t, ['staff']) && t.href.startsWith('/owner/'))
     assert.deepEqual(staffSees.map((t) => t.id), [], 'employee offered an /owner page:')
     assert.ok(!m.tools.TOOLS.filter((t) => m.tools.toolVisible(t, ['manager', 'staff'])).some((t) => t.roles.length === 1 && t.roles[0] === 'dev'), 'dev tools leak')
+  })
+  // The dock lives in the layouts (DockHost) and shows on tab roots only; src/lib/nav/dock.ts decides who gets which tabs.
+  stage.test('dock-plan', 'הסרגל התחתון: כל אחד מקבל את הלשוניות שלו, רק בעמודי הלשוניות, ואף לשונית של עובד/ת לא מובילה לעמוד בעלים', 'security', async () => {
+    const d = m.dock
+    const pick = (plan) => plan && { kind: plan.kind, home: plan.home }
+    const owner = { role: 'owner', badge: null, via: 'google', quick: false }
+    const gm = { role: 'staff', badge: 'general_manager', via: 'google', quick: false }
+    const emp = { role: 'staff', badge: null, via: 'google', quick: false }
+    const dev = { role: 'owner', badge: 'developer', via: 'google', quick: false }
+    assert.equal(d.dockPlanFor(null, 'staff'), null, 'signed out')
+    assert.equal(d.dockPlanFor({ ...emp, via: 'employee_code', quick: true }, 'staff'), null, 'a six-digit-code sign-in has no dock')
+    assert.equal(d.dockPlanFor({ ...owner, quick: true }, 'owner'), null, 'a quick session has no dock')
+    assert.deepEqual(pick(d.dockPlanFor(owner, 'owner')), { kind: 'manager', home: '/owner/dashboard' })
+    assert.equal(d.dockPlanFor(owner, 'staff'), null, 'an owner visiting a /staff page gets no employee dock')
+    assert.deepEqual(pick(d.dockPlanFor(gm, 'staff')), { kind: 'employee', home: '/staff' })
+    assert.equal(d.dockPlanFor(gm, 'owner'), null, 'a general manager on an /owner page gets no owner dock')
+    assert.deepEqual(pick(d.dockPlanFor(emp, 'staff')), { kind: 'employee', home: '/staff' })
+    assert.deepEqual(pick(d.dockPlanFor(dev, 'staff')), { kind: 'manager', home: '/staff/dev' })
+    const ep = d.dockPlanFor(emp, 'staff')
+    for (const p of ['/staff', '/staff/schedule', '/staff/checklists', '/staff/profile']) assert.ok(d.onDockRoot(ep, p), `employee dock on ${p}`)
+    for (const p of ['/staff/onboarding', '/staff/checklists/abc', '/staff/schedule/givat-haviva', '/staff/pos', '/staff/dev', '/owner/dashboard']) assert.ok(!d.onDockRoot(ep, p), `no employee dock on ${p}`)
+    const op = d.dockPlanFor(owner, 'owner')
+    for (const p of ['/owner/dashboard', '/owner/schedule', '/owner/staff', '/owner/checklists']) assert.ok(d.onDockRoot(op, p), `owner dock on ${p}`)
+    for (const p of ['/owner/kiosk', '/owner/schedule/print', '/owner/checklists/x', '/owner/editor']) assert.ok(!d.onDockRoot(op, p), `no owner dock on ${p}`)
+    // the employee tabs never lead to an owner-only page (the middleware's list)
+    const mw = fs.readFileSync(path.join(root, 'src/middleware.ts'), 'utf8')
+    const opOnly = [...(mw.match(/const OP_ONLY_PREFIXES = \[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1])
+    assert.ok(opOnly.length > 3, 'could not read OP_ONLY_PREFIXES')
+    const roots = ep.roots.map((re) => re.replace(/^\^|\$$/g, ''))
+    assert.deepEqual(roots.filter((r) => opOnly.some((pfx) => r === pfx || r.startsWith(`${pfx}/`))), [], 'employee tab on an owner-only page')
   })
   stage.test('roles-for', 'תפקידים לפי מי שמחובר: בעלים, מנהל/ת סניף, עובד/ת, מפתח', 'unit', async () => {
     assert.deepEqual(m.tools.toolRolesFor({ op: true, manager: true, developer: false }), ['op', 'manager'])

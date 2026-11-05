@@ -44,6 +44,13 @@ export default function ToolFinder({ placeholder = 'חיפוש כלי…' }: { p
     return () => mo.disconnect()
   }, [])
 
+  // The dock's "עוד" on a page without the finder comes home as <home>#tool-finder: arrive with the cursor in the search.
+  useEffect(() => {
+    if (window.location.hash !== `#${FINDER_ID}`) return
+    const t = window.setTimeout(() => { wrap.current?.scrollIntoView({ block: 'start' }); input.current?.focus({ preventScroll: true }) }, 120)
+    return () => window.clearTimeout(t)
+  }, [])
+
   const trimmed = q.trim()
   const results = useMemo(() => (trimmed ? searchTools(trimmed, ctx) : []), [trimmed, ctx])
   const completions = useMemo(() => (trimmed ? completeTools(trimmed, ctx) : []), [trimmed, ctx])

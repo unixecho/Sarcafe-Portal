@@ -74,7 +74,7 @@ export default async function StaffDevPage({ searchParams }: { searchParams: Pro
 
   // The glass dashboard (docs/SARCAFE_GLASS_UI.md). A developer who is also an owner gets the branch switch and the manager's dock.
   return (
-    <GlassDashboardShell title="לוח מפתח" dock={canManage ? 'manager' : 'employee'} home="/staff/dev" account={{ developer: true, manager: canManage }} branchSwitch={canManage}>
+    <GlassDashboardShell title="לוח מפתח" account={{ developer: true, manager: canManage }} branchSwitch={canManage}>
       <div className="lens-greeting">
         <strong>{me.first_name || me.display_name || 'מפתח'}</strong>
         <span className="lens-badge">{badgeLabel(me.badge) || 'מפתח/ת'}</span>

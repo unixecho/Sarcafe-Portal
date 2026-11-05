@@ -209,6 +209,118 @@ export function uiStage(live, metrics) {
     } finally { await s.close() }
   })
 
+  // Owner, 2026-11-05: "make sure the bottom nav bar is constant and the pages don't need to load to switch content". The dock is
+  // drawn by the /owner and /staff layouts (DockHost), so moving between its tabs keeps the SAME element on screen, with no full page
+  // load; the tapped tab lights at once; a quick second tap wins; the destination's skeleton is on screen while the server works.
+  const settle = async (p, from) => {
+    await p.waitForFunction((prev) => location.pathname !== prev, from, { timeout: 15000 })
+    await p.waitForFunction(() => !document.querySelector('[data-glass-skeleton], .app-loading-content') && document.documentElement.dataset.vt !== 'running', null, { timeout: 15000 })
+  }
+  stage.test('dock-constant', 'הסרגל התחתון קבוע: אותו סרגל בין הלשוניות, בלי טעינה מחדש של הדף, הלשונית נדלקת מיד ולחיצה מהירה שנייה מנצחת', 'e2e', async () => {
+    for (const [who, start, tabs] of [
+      ['owner', '/owner/dashboard', [['סידור', '/owner/schedule'], ['צוות', '/owner/staff'], ['צ׳קליסטים', '/owner/checklists'], ['בית', '/owner/dashboard']]],
+      ['dana', '/staff', [['משמרות', '/staff/schedule'], ['פרופיל', '/staff/profile'], ['צ׳קליסט', '/staff/checklists'], ['בית', '/staff']]],
+    ]) {
+      const s = await open(who, start)
+      try {
+        const p = s.page
+        await p.evaluate(() => { window.__sameDocument = true; document.querySelector('.gl-dock').__sameDock = true })
+        for (const [label, path] of tabs) {
+          const from = await p.evaluate(() => location.pathname)
+          await p.locator('.gl-dock .lg-tab', { hasText: label }).first().click()
+          // lit at once (before the page arrives)
+          const lit = await p.evaluate(() => document.querySelector('.gl-dock .lg-tab[data-selected]')?.textContent?.trim())
+          assert.equal(lit, label, `${who}: "${label}" lights at the tap`)
+          await settle(p, from)
+          const m = await p.evaluate(() => ({ path: location.pathname, same: window.__sameDocument === true, dock: document.querySelector('.gl-dock')?.__sameDock === true, n: document.querySelectorAll('.gl-dock').length }))
+          assert.equal(m.path, path, `${who}: "${label}" opens ${path}`)
+          assert.ok(m.same, `${who}: "${label}" reloaded the whole page`)
+          assert.ok(m.dock && m.n === 1, `${who}: "${label}" replaced or doubled the dock`)
+        }
+        // two quick taps: the second one is where you end up
+        const [a, b] = tabs
+        const from = await p.evaluate(() => location.pathname)
+        await p.locator('.gl-dock .lg-tab', { hasText: a[0] }).first().click()
+        await p.waitForTimeout(80)
+        await p.locator('.gl-dock .lg-tab', { hasText: b[0] }).first().click()
+        await settle(p, from)
+        await p.waitForTimeout(400)
+        assert.equal(await p.evaluate(() => location.pathname), b[1], `${who}: a quick second tap wins`)
+        assert.ok(await p.evaluate(() => window.__sameDocument === true && document.querySelector('.gl-dock')?.__sameDock === true), `${who}: quick taps kept the page and the dock`)
+        // the page knows the dock is there (bars at the bottom move above it), and a task that owns the screen (a checklist being
+        // filled sets html[data-task]) makes it step aside
+        assert.equal(await p.evaluate(() => document.documentElement.dataset.dock), '1', `${who}: html[data-dock] while the dock is shown`)
+        const hidden = await p.evaluate(async () => {
+          document.documentElement.dataset.task = 'checklist'
+          await new Promise((r) => requestAnimationFrame(r))
+          const gone = getComputedStyle(document.querySelector('.gl-dock')).display === 'none'
+          delete document.documentElement.dataset.task
+          await new Promise((r) => requestAnimationFrame(r))
+          return gone && getComputedStyle(document.querySelector('.gl-dock')).display !== 'none'
+        })
+        assert.ok(hidden, `${who}: the dock steps aside for a task and comes back after it`)
+        assert.deepEqual(s.errors, [], `${who}: page errors`)
+      } finally { await s.close() }
+    }
+  }, { timeout: 120_000 })
+
+  stage.test('skeleton-fast', 'שרת איטי: הסרגל נשאר והשלד של הדף מופיע מיד, והתוכן מחליף אותו כשהוא מגיע', 'perf', async () => {
+    const s = await open('owner', '/owner/schedule')
+    try {
+      const p = s.page
+      await p.waitForTimeout(800) // the dock's links prefetch their loading screens
+      await live().control('/__qa/fault', { mode: 'slow', ms: 2500, tables: ['branches'] })
+      const t0 = Date.now()
+      await p.locator('.gl-dock .lg-tab', { hasText: 'בית' }).first().click()
+      await p.waitForSelector('[data-glass-skeleton]', { timeout: 4000 })
+      const shown = Date.now() - t0
+      assert.ok(shown < 1200, `the skeleton took ${shown} ms (server answering in 2.5 s)`)
+      assert.equal(await p.locator('.gl-dock').count(), 1, 'the dock stays while the page loads')
+      await p.waitForSelector('[data-glass-skeleton]', { state: 'detached', timeout: 20000 })
+      assert.ok(await p.locator('.gl-welcome').first().isVisible(), 'the real dashboard replaced the skeleton')
+    } finally { await live().control('/__qa/fault', { mode: 'none' }); await s.close() }
+  })
+
+  // Owner, 2026-11-05: "the borders don't look good" — a square dark box behind the two rounded "coming soon" tiles.
+  stage.test('soon-tiles', 'כרטיסי "בקרוב" בבית העובד/ת: שני כרטיסים מעוגלים בלי מלבן כהה מאחוריהם, בכל המראות', 'e2e', async () => {
+    for (const look of LOOKS) {
+      setLook(live, 'dana', look)
+      const s = await open('dana', '/staff', { theme: look })
+      try {
+        const m = await s.page.evaluate(() => {
+          const group = document.querySelector('.app-group:has(> .app-row--soon)')
+          if (!group) return null
+          const g = getComputedStyle(group)
+          const tiles = [...group.querySelectorAll(':scope > .app-row--soon')].map((t) => { const c = getComputedStyle(t); return { radius: parseFloat(c.borderTopLeftRadius), bg: c.backgroundColor } })
+          return { grid: g.display === 'grid', bg: g.backgroundColor, radius: parseFloat(g.borderTopLeftRadius), filter: g.backdropFilter, tiles }
+        })
+        assert.ok(m, `${look}: the coming-soon group is on the page`)
+        if (m.grid) {
+          // the bento looks: the group is only a grid, the tiles are the cards
+          assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(m.bg) && (m.filter === 'none' || !m.filter), `${look}: no box behind the tiles (${m.bg}, ${m.filter})`)
+          for (const t of m.tiles) {
+            assert.ok(t.radius >= 12, `${look}: tile radius ${t.radius}`)
+            assert.ok(!/rgba\(0, 0, 0, 0\)/.test(t.bg), `${look}: the tile has its own surface`)
+          }
+        } else {
+          assert.ok(m.radius >= 12, `${look}: the list card is rounded (${m.radius})`)
+        }
+      } finally { await s.close() }
+    }
+    setLook(live, 'dana', 'neon')
+  })
+
+  // The server work per screen: one sign-in check by the middleware and one shared by the layout and the page (React cache).
+  stage.test('auth-once', 'בדיקת "מי מחובר" פעם אחת לבקשה: הפריסה והדף חולקים אותה (בלי סבב נוסף מול Supabase)', 'perf', async () => {
+    for (const [who, url] of [['dana', '/staff'], ['owner', '/owner/dashboard'], ['dana', '/staff/profile']]) {
+      await live().control('/__qa/stats', { clear: true })
+      const r = await live().call(url, { as: who })
+      assert.equal(r.status, 200, `${url} as ${who}`)
+      const users = (await live().control('/__qa/stats')).byPath['/auth/v1/user'] ?? 0
+      assert.ok(users <= 2, `${url}: asked the auth server ${users} times (middleware + one shared answer)`)
+    }
+  })
+
   stage.test('branch-switch', 'החלפת סניף בשורה העליונה: הנתונים, הרקע והעוגייה מתעדכנים', 'e2e', async () => {
     const s = await open('owner', '/owner/dashboard')
     try {

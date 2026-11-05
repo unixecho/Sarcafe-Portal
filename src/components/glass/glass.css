@@ -272,6 +272,21 @@ button.gl-surf, a.gl-surf { border: 0; font: inherit; text-align: start; cursor:
   padding: 28px max(16px, env(safe-area-inset-left, 0px)) max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px));
   background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 80%, transparent) 30%, color-mix(in srgb, var(--bg) 92%, transparent) 68%, var(--bg) 86%); }
 .gl-dock > div { pointer-events: auto; width: 100%; max-width: 528px; container-type: inline-size; display: flex; justify-content: center; }
+/* The dock across pages (DockHost in the layouts, owner 2026-11-05: "the bottom nav bar is constant"): its own view-transition layer,
+   so while the page slides (PageTransitions) the bar stays exactly where it is. The old snapshot is dropped and the new one shown at
+   once: two translucent copies would ghost. Browsers without view transitions ignore all of this. */
+.gl-dock { view-transition-name: gl-dock; }
+::view-transition-old(gl-dock) { display: none; }
+::view-transition-group(gl-dock), ::view-transition-new(gl-dock) { animation: none; }
+/* room at the end of the older pages the dock now sits on (glass pages have their own) */
+.gl-dock-spacer { height: calc(86px + max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px))); }
+.gl-page ~ .gl-dock-spacer { display: none; }
+/* bars that already live at the bottom of a dock page sit above it: the schedule's unsaved-changes bar. html[data-dock] is set by
+   DockHost while the dock is shown (no body-wide :has(): it would re-check on every change in the page) */
+html[data-dock] .sch-savebar { bottom: calc(max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px)) + 80px); }
+html[data-dock] .sch-savebar-spacer { height: 176px; }
+/* a checklist being filled has the screen to itself: its step buttons sit where the dock would (like a phone hiding its tab bar) */
+html[data-task] :is(.gl-dock, .gl-dock-spacer) { display: none; }
 /* the tabs share the bar: glisse moves the thumb by --lg-tab-width, so the width is set there (never by stretching the box) */
 .gl-dock .lg-tab-bar[data-icons] { --lg-tab-width: calc((100cqw - 8px) / var(--gl-tabs, 5)); }
 
@@ -279,7 +294,31 @@ button.gl-surf, a.gl-surf { border: 0; font: inherit; text-align: start; cursor:
 .native-app .gl-page :is(.app-group, .app-push, .app-workshop, .app-shiftcard, .dev-card, .app-main-link) {
   border-color: var(--gl-edge); background-color: var(--gl-surf); -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4); }
 .native-app .gl-page .app-main-link { background-color: color-mix(in srgb, var(--neon) 54%, #1a0802); color: #fff; }
+/* "Coming soon" is a PAIR OF TILES in neon, crema and latte (staff-themes.css), not a card: its group is a square transparent grid.
+   The rule above painted that square dark (owner, 2026-11-05: "the borders don't look good"). The group stays see-through and each
+   tile gets the glass surface instead (crema/latte keep their dashed edge). QA: ui.soon-tiles */
+.native-app:is([data-staff-theme='neon'], [data-staff-theme='crema'], [data-staff-theme='latte']) .gl-page .app-group:has(> .app-row--soon) {
+  border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.native-app .gl-page .app-row--soon { background-color: var(--gl-surf); -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4); }
+.native-app[data-staff-theme='neon'] .gl-page .app-row--soon { border-color: var(--gl-edge); }
 .native-app .gl-page .app-section__heading h2 { display: inline-block; padding: 4px 12px; border-radius: 99px; background: color-mix(in srgb, var(--bg) 72%, transparent); }
 .native-app .gl-page :is(.app-welcome, .lens-greeting) { padding: 12px 16px; border-radius: 22px; background: color-mix(in srgb, var(--bg) 58%, transparent); }
 
 @media (prefers-reduced-motion: reduce) { .gl-pop, .gl-toast { animation: none; } .gl-chip, .gl-tool { transition: none; } }
+
+/* ── skeletons on glass (the app's .sk shimmer, globals.css, tinted for a photo backdrop) ─────────────────────────────── */
+.gl-page .sk { background: color-mix(in srgb, var(--text) 13%, transparent); border-radius: 14px; }
+.gl-sk-chip { display: inline-block; height: 44px; width: 92px; border-radius: 99px !important; flex: none; }
+.gl-sk-chip--day { width: 64px; height: 52px; border-radius: 16px !important; }
+.gl-sk-line { display: block; height: 14px; width: min(260px, 70%); border-radius: 7px !important; }
+.gl-sk-line--short { width: min(140px, 40%); }
+.gl-sk-line--title { height: 22px; width: min(200px, 55%); border-radius: 9px !important; }
+.gl-sk-tile { height: 88px; border-radius: 20px !important; }
+.gl-sk-row { display: flex; gap: 10px; }
+.gl-sk-row > * { flex: 1; }
+/* stretch: a card's own centring (.gl-welcome) would shrink the column to nothing and the percentage-wide lines with it */
+.gl-sk-card { display: grid; gap: 12px; padding: 16px; border-radius: 24px; justify-content: stretch; align-items: start; }
+.gl-sk-tile--main { background: color-mix(in srgb, var(--neon) 34%, transparent) !important; }
+.gl-sk-ico { width: 40px; height: 40px; border-radius: 50% !important; flex: none; }
+.gl-sk-top { display: flex; align-items: center; gap: 10px; min-height: 56px; }
+.gl-sk-top .gl-top__title { color: var(--text); }

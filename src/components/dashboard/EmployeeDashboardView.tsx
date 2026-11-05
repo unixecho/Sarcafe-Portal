@@ -35,13 +35,14 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   const manager = fullLogin && hasAnyMenuEditAccess(me)
   const scheduleHref = fullLogin ? '/staff/schedule' : '/login?next=/staff/schedule'
   const service = createServiceRoleClient()
-  const [shiftStatus, look, messageable] = await Promise.all([
+  const [shiftStatus, look, messageable, branches] = await Promise.all([
     loadShiftStatus(service, me.id),
     loadStaffTheme(me.id),
     manager ? messageableBranches(service, me).catch(() => []) : Promise.resolve([]),
+    fullLogin && me.branch_id ? getBranches() : Promise.resolve([]),
   ])
   // A general manager edits their own branch's checklists from here (the builder is per branch); an owner is sent to the branches.
-  const ownBranch = fullLogin && me.branch_id ? (await getBranches()).find((branch) => branch.id === me.branch_id) ?? null : null
+  const ownBranch = fullLogin && me.branch_id ? branches.find((branch) => branch.id === me.branch_id) ?? null : null
   // The lists below are the owner's decisions (2026-10-16/17): no separate "my shift" list (the shift card is the one door to the
   // schedule and the checklists); the two service tools stay on the page but are not open yet; managers keep their own tools.
   const categories: DashboardCategory[] = [

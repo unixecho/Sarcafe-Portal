@@ -9,6 +9,7 @@ import {
   recordNavigation,
   settleNavigation,
 } from '@/lib/nav/viewTransition'
+import { NAV_START_EVENT, type NavStartDetail } from '@/lib/nav/events'
 
 // Mounted once in the root layout. Ported near-verbatim from AyekaBar — no
 // app-specific logic. Intercepts same-origin link clicks and re-dispatches
@@ -45,6 +46,8 @@ export default function PageTransitions() {
       event.stopPropagation()
 
       const path = `${url.pathname}${url.search}${url.hash}`
+      // First say it (the dock lights the tapped tab, synchronously), then start the transition: its snapshot then already shows it.
+      window.dispatchEvent(new CustomEvent<NavStartDetail>(NAV_START_EVENT, { detail: { path } }))
       navigateWithTransition(path, directionFor(path), () => router.push(path))
     }
 

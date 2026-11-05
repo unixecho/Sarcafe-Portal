@@ -107,7 +107,23 @@ const measure = () => {
   return { scrollX: window.scrollX, scrollY: window.scrollY, docW: document.documentElement.scrollWidth, winW: window.innerWidth, card: { l: card.left, t: card.top + window.scrollY, w: card.width }, view, slides, centred, dot: dots.findIndex((d) => d.classList.contains('is-on')), arrows, scrollLeft: strip.scrollLeft, renders: window.__shsRenders ?? 0 }
 }
 const whole = (m, i) => { const s = m.slides[i]; return s && s.l >= m.view.l - 0.5 && s.r <= m.view.r + 0.5 && s.t >= m.view.t - 0.5 && s.b <= m.view.b + 0.5 && s.border.every((w) => w > 0) }
-const settle = (page, ms = 650) => page.waitForTimeout(ms)
+// Waits at least `ms`, then until the strip has stopped moving (three still frames, at most 1.5 s more). A fixed wait alone measured a
+// smooth scroll across a 700 px tablet slide mid-way on a busy machine (1 run in 5 at 768x1024, 2026-11-05); a strip that never
+// settles still fails (it is measured where it is after the cap).
+const settle = async (page, ms = 650) => {
+  await page.waitForTimeout(ms)
+  await page.evaluate(() => new Promise((resolve) => {
+    const strip = document.querySelector('.shs__strip')
+    if (!strip) return resolve(true)
+    const end = performance.now() + 1500
+    let last = strip.scrollLeft, still = 0
+    const tick = () => {
+      if (Math.abs(strip.scrollLeft - last) < 0.5) still++; else { still = 0; last = strip.scrollLeft }
+      if (still >= 3 || performance.now() > end) resolve(true); else requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }))
+}
 
 // A real finger as far as the browser can tell: touchStart, twelve moves about a frame apart, touchEnd (CDP touch input goes through
 // the same scrolling pipeline as a phone; synthesizeScrollGesture proved unreliable in headless Edge). dx > 0 drags to the right.

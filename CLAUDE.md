@@ -19,7 +19,7 @@ Follow what the schema already does. Do not invent a new scheme.
 
 # Glass UI (glisse) — LIVE, use it for every new screen (owner, 2026-11-05)
 
-The dashboards are glass (glisse 0.5.0). Every new feature screen uses the shared pieces in `src/components/glass/` — read `docs/SARCAFE_GLASS_UI.md` first. Owner rules: the account button's menu is the signature, so **every menu, popover, picker and notification list looks like it**; one orange pill style for counts and states; **good news green, bad news and errors red**; the top bar stays as it is. Never use glisse's `SegmentedControl`/`TabBar` directly (RTL and width traps): use `Seg` / `GlassDock`.
+The dashboards are glass (glisse 0.5.0). Every new feature screen uses the shared pieces in `src/components/glass/` — read `docs/SARCAFE_GLASS_UI.md` first. Owner rules: the account button's menu is the signature, so **every menu, popover, picker and notification list looks like it**; one orange pill style for counts and states; **good news green, bad news and errors red**; the top bar stays as it is. Never use glisse's `SegmentedControl`/`TabBar` directly (RTL and width traps): use `Seg` / `GlassDock`. The dock is drawn by the /owner and /staff layouts (`DockHost`, plan in `src/lib/nav/dock.ts`), never by a page, so it stays put between tabs; every route gets a `loading.tsx` skeleton shaped like the page (`GlassSkeleton` for glass), and parts that load in the browser show `.sk` blocks, not "טוען…".
 
 # Automatic QA (owner, 2026-11-05) — run it on every change
 
