@@ -1,0 +1,48 @@
+# The automatic QA suite (docs/QA_BLUEPRINT.md): every morning before the day starts, after every push to main, and on demand.
+# It builds the app against a stand-in Supabase (never the real project), runs every stage, and posts the report to the
+# developer's morning review (/staff/dev/qa). Repository secrets: QA_REPORT_URL (https://<site>/api/qa/report) and
+# QA_REPORT_SECRET (the same value as the QA_REPORT_SECRET env var on Vercel). Without them the report is only kept here.
+name: QA
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * *' # 05:17 in Israel in winter, 06:17 in summer
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci || node qa/tools/install-without-widget.mjs
+      - name: Browser
+        run: npx playwright install --with-deps chromium
+      - name: QA suite
+        env:
+          QA_REPORT_URL: ${{ secrets.QA_REPORT_URL }}
+          QA_REPORT_SECRET: ${{ secrets.QA_REPORT_SECRET }}
+        run: npm run qa -- --post
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report-${{ github.run_number }}
+          path: |
+            qa/reports/latest.json
+            qa/reports/latest.md
+          retention-days: 30

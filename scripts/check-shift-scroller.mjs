@@ -136,7 +136,10 @@ const only = (process.env.SHS_ONLY ?? '').split(',').filter(Boolean)
 const isViewport = (key) => /^\d+x\d+$/.test(key)
 const pick = (key) => only.includes(key) || !only.some((o) => isViewport(o) === isViewport(key))
 
-const browser = await chromium.launch({ executablePath: EDGE })
+// OverscrollHistoryNavigation off: headless Chromium in a LANDSCAPE viewport turns a horizontal swipe at a scroller's end into
+// "Back", whatever the page's overscroll-behavior says (shown on a plain test page with no app code, 2026-11-05; never in portrait).
+// A phone's back gesture is the system's edge swipe, not this, so the check would only be measuring the emulator.
+const browser = await chromium.launch({ executablePath: EDGE, args: ['--disable-features=OverscrollHistoryNavigation'] })
 try {
   for (const [width, height] of VIEWPORTS) {
     if (!pick(`${width}x${height}`)) continue
@@ -201,7 +204,10 @@ try {
 
         // A touch swipe from the last (left-most) slide, finger right to left, brings back the slide on its right: one step back in time.
         const before = await page.evaluate(() => [window.__shsRenders, window.__shsScrolls])
-        await swipe(page, cdp, -Math.round(Math.min(width, 600) * 0.5))
+        // A thumb's swipe: half the screen (at most 300 px), and never less than 60% of one slide. Scroll snapping pulls a shorter drag
+        // back, and a landscape phone's slide is 784 px wide (the fixed 300 px swipe there never left the slide in Chromium).
+        const reach = Math.round(Math.max(Math.min(width, 600) * 0.5, (m.view.r - m.view.l) * 0.6))
+        await swipe(page, cdp, -reach)
         await settle(page, 900)
         let mm = await page.evaluate(measure)
         const after = await page.evaluate(() => [window.__shsRenders, window.__shsScrolls])
@@ -210,8 +216,8 @@ try {
         check(after[1] - before[1] >= 4 && after[0] - before[0] <= 2, `${tag}: renders per swipe ${after[0] - before[0]} for ${after[1] - before[1]} scroll events`)
 
         // Two quick swipes still land squarely on a slide.
-        await swipe(page, cdp, Math.round(Math.min(width, 600) * 0.5))
-        await swipe(page, cdp, Math.round(Math.min(width, 600) * 0.5))
+        await swipe(page, cdp, reach)
+        await swipe(page, cdp, reach)
         await settle(page, 1000)
         mm = await page.evaluate(measure)
         steady(mm, 'rapid swipes')

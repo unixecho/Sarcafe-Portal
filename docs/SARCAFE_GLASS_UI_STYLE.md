@@ -1,7 +1,7 @@
 # Sarcafe glass UI (glisse): style rules, preview status, how to apply
 
-**Status (2026-11-04): an approved-in-principle PREVIEW. It is NOT applied to the app.** No dependency was added to
-`package.json`, nothing under `src/` changed. The preview is a private Claude artifact (sample data only) and its source is
+**Status (2026-11-05): APPLIED to the app** — the working guide is now `docs/SARCAFE_GLASS_UI.md`. This file keeps the preview's history,
+measurements and reasons (2026-11-04). The preview is a private Claude artifact (sample data only) and its source is
 kept in `docs/glass-preview/` (the `.ts`/`.tsx` files carry a `.txt` suffix on purpose: `tsconfig.json` type-checks every
 `.ts`/`.tsx` in the repo, and glisse is not installed here, so real extensions would break `npm run typecheck` and the Vercel build).
 

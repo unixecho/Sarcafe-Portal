@@ -213,7 +213,8 @@ check('the checklist alerts name their exact checklist: the employee\'s and the 
 check('a checklist an owner dismissed is not asked for again: the reminder writer skips it before every alert', /manager_resolved_at/.test(rem) && /&& !a\.manager_resolved_at/.test(rem))
 const push = read('src/lib/push/staff.ts')
 check('the phone push resolves its destination per recipient (manager or not), and a digest goes where all its alerts go', /pushPathFor\(r\.kind, r\.link, \{ manager: recipient\.manager, title: r\.title \}\)/.test(push) && /function digestPath/.test(push) && /hasAnyMenuEditAccess/.test(push))
-check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(item\.kind \?\? '', item\.link \?\? null, \{ manager, title: item\.title \}\)/.test(read('src/components/app/DashboardNotifications.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /kind, title, body, link/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
+// Glass (2026-11-05): the notifications are the bell's menu in the top bar (GlassTopBar), fed by the inbox API.
+check('the notification bar uses the same resolver as the push, so a tap on either lands in the same place', /pushPathFor\(n\.kind \?\? '', n\.link \?\? null, \{ manager: account\.manager, title: n\.title \}\)/.test(read('src/components/glass/GlassTopBar.tsx')) && /\/api\/staff\/notifications/.test(read('src/components/glass/GlassTopBar.tsx')) && /kind, title, body, link/.test(read('src/app/api/staff/notifications/route.ts')))
 {
   // A checklist link has to survive sign-in: login's `next` only keeps plain path characters (a query would be dropped).
   const L = await load('src/lib/checklists/links.ts', 'links.mjs')
@@ -277,7 +278,7 @@ check('a test-bench row is the developer’s own business, whatever it imitates;
 check('a digest for the developer opens the notification centre when its alerts do not share a destination', /recipient\.developer \? '\/staff\/dev\?view=alerts'/.test(push))
 check('the new constraint alerts open the managers requests tab', ['timeoff.wish', 'availability.note'].every((k) => R.pushPathFor(k, { tab: 'requests', weekStart: '2030-01-06' }) === '/owner/schedule?tab=requests&week=2030-01-06'))
 const flush = read('src/lib/push/staff.ts')
-check('the phone push, the inbox API and both home pages all apply it', /alertTitle\(r\.kind, r\.title, named\)/.test(flush) && /isDeveloper\(person/.test(flush) && /alertTitle\(/.test(read('src/app/api/staff/notifications/route.ts')) && /alertTitle\(/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && /alertTitle\(/.test(read('src/components/dashboard/OwnerDashboardView.tsx')))
+check('the phone push, the inbox API and both home pages all apply it', /alertTitle\(r\.kind, r\.title, named\)/.test(flush) && /isDeveloper\(person/.test(flush) && /alertTitle\(/.test(read('src/app/api/staff/notifications/route.ts')) && !/<DashboardNotifications/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && !/<DashboardNotifications/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /GlassTopBar/.test(read('src/components/glass/GlassDashboardShell.tsx')))
 
 console.log(`\n${pass} passed, ${failures.length} failed`)
 if (failures.length) process.exit(1)

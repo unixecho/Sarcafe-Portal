@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import OwnerHeader from '@/components/OwnerHeader'
 import EmployeeDashboardView from '@/components/dashboard/EmployeeDashboardView'
 import CodeDashboardView from '@/components/dashboard/CodeDashboardView'
+import GlassDashboardShell from '@/components/glass/GlassDashboardShell'
+import { hasAnyMenuEditAccess } from '@/lib/staff/access'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import { isOp } from '@/lib/staff/access'
 import { isDeveloper } from '@/lib/checklists/developer'
@@ -22,10 +25,23 @@ export default async function StaffIndexPage() {
   if (fullLogin && isOp(me)) redirect('/owner/dashboard')
   // A six-digit-code sign-in (the QR code on the cart) gets the checklist dashboard, not the app's home.
 
+  if (!fullLogin) {
+    return (
+      <main id="main" tabIndex={-1} className="app-page">
+        <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
+        <CodeDashboardView me={me} />
+      </main>
+    )
+  }
+  // The glass home (docs/SARCAFE_GLASS_UI.md): the backdrop is the person's own branch.
+  let branchSlug: string | null = null
+  if (me.branch_id) {
+    const { data } = await createServiceRoleClient().from('branches').select('slug').eq('id', me.branch_id).maybeSingle()
+    branchSlug = (data?.slug as string | undefined) ?? null
+  }
   return (
-    <main id="main" tabIndex={-1} className="app-page">
-      <OwnerHeader title="Sarcafe צוות" homeHref="/staff" />
-      {fullLogin ? <EmployeeDashboardView me={me} /> : <CodeDashboardView me={me} />}
-    </main>
+    <GlassDashboardShell title="Sarcafe צוות" dock="employee" home="/staff" account={{ developer: false, manager: hasAnyMenuEditAccess(me) }} branchSlug={branchSlug}>
+      <EmployeeDashboardView me={me} />
+    </GlassDashboardShell>
   )
 }

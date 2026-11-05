@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { Button } from 'glisse'
 import { ChevronLeft, ChevronRight, Coffee, MapPin } from 'lucide-react'
+import Seg from '@/components/glass/Seg'
 import { initialsOf } from '@/lib/shifts/names'
 import type { OnShiftSlot } from '@/lib/staff/on-shift'
 
@@ -12,6 +14,8 @@ import type { OnShiftSlot } from '@/lib/staff/on-shift'
 // every scrollable ancestor, which slid the whole page sideways (2026-10-28). Moves are the physical distance between a slide's
 // centre and the strip's, handed to scrollBy, so the sign RTL scrollLeft uses (negative today, positive in old engines) never matters.
 const TITLE: Record<OnShiftSlot['kind'], string> = { previous: 'המשמרת הקודמת', now: 'עכשיו', next: 'המשמרת הבאה' }
+// The glass switcher above the strip (owner, 2026-11-05: "use glisse, keep the card and the carousel"): it moves the same strip.
+const SHORT: Record<OnShiftSlot['kind'], string> = { previous: 'הקודמת', now: 'עכשיו', next: 'הבאה' }
 const EMPTY: Record<OnShiftSlot['kind'], string> = { previous: 'אין משמרת קודמת מפורסמת', now: 'אין משמרת פעילה כרגע', next: 'אין משמרת הבאה מפורסמת' }
 
 // The server renders nothing to position, so the layout effect only runs in the browser; this keeps React quiet about it there.
@@ -86,6 +90,10 @@ export default function ShiftScroller({ slots, viewerId, branchName }: { slots: 
 
   return (
     <div className="shs">
+      {slots.length > 1 && (
+        <Seg fill className="shs__seg" label={`המשמרות בסניף ${branchName}`} value={slots[active]?.kind ?? 'now'} onChange={(kind) => goTo(Math.max(0, slots.findIndex((slot) => slot.kind === kind)), true)}
+          items={slots.map((slot) => ({ value: slot.kind, label: SHORT[slot.kind] }))} />
+      )}
       <div ref={strip} className="shs__strip" role="group" aria-label={`המשמרות בסניף ${branchName}: הקודמת, הנוכחית והבאה`} tabIndex={0} onKeyDown={onKey}>
         {slots.map((slot) => (
           <section key={slot.kind} className={`shs__slide shs__slide--${slot.kind}`} aria-label={TITLE[slot.kind]}>
@@ -117,13 +125,9 @@ export default function ShiftScroller({ slots, viewerId, branchName }: { slots: 
       </div>
       {slots.length > 1 && (
         <div className="shs__nav">
-          <button type="button" className="shs__arrow press" onClick={() => goTo(Math.max(0, activeRef.current - 1), true)} disabled={active === 0} aria-label="המשמרת הקודמת">
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
+          <Button className="shs__arrow" onClick={() => goTo(Math.max(0, activeRef.current - 1), true)} disabled={active === 0} aria-label="המשמרת הקודמת" icon={<ChevronRight size={18} aria-hidden="true" />} />
           <div className="shs__dots" aria-hidden="true">{slots.map((slot, index) => <span key={slot.kind} className={index === active ? 'is-on' : ''} />)}</div>
-          <button type="button" className="shs__arrow press" onClick={() => goTo(Math.min(slots.length - 1, activeRef.current + 1), true)} disabled={active === slots.length - 1} aria-label="המשמרת הבאה">
-            <ChevronLeft size={18} aria-hidden="true" />
-          </button>
+          <Button className="shs__arrow" onClick={() => goTo(Math.min(slots.length - 1, activeRef.current + 1), true)} disabled={active === slots.length - 1} aria-label="המשמרת הבאה" icon={<ChevronLeft size={18} aria-hidden="true" />} />
         </div>
       )}
     </div>

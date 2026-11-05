@@ -7,14 +7,15 @@
 .osn__dot--live { background: var(--success, #3ddc84); box-shadow: 0 0 0 0 color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); animation: osn-pulse 2.2s ease-out infinite; }
 
 .osn__grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
-.osn__branch { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 20px; background: var(--bg-elev); }
+.osn__branch { min-width: 0; padding: 14px; border-radius: 22px; }
+.osn__branch:not(.gl-surf) { border: 1px solid var(--line); background: var(--bg-elev); }
 .osn__branch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .osn__branch-head strong { font-size: 1rem; letter-spacing: -.02em; }
 .osn__count { padding: 3px 10px; border-radius: 999px; background: var(--bg-elev-2); color: var(--text-dim); font-size: .74rem; font-weight: 600; white-space: nowrap; }
 .osn__count--on { background: color-mix(in srgb, var(--success, #3ddc84) 18%, transparent); color: var(--success, #3ddc84); }
 
 .osn__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.osn__person { display: flex; align-items: center; gap: 11px; min-height: 52px; padding: 8px 10px; border-radius: 14px; background: var(--bg-elev-2); }
+.osn__person { display: flex; align-items: center; gap: 11px; min-height: 52px; padding: 8px 10px; border-radius: 14px; background: color-mix(in srgb, var(--text) 7%, transparent); }
 .osn__person--me { outline: 1.5px solid var(--neon); background: color-mix(in srgb, var(--neon) 10%, var(--bg-elev-2)); }
 .osn__avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--neon-soft, var(--neon)); color: var(--on-neon, var(--bg)); font-size: .78rem; font-weight: 800; flex: none; }
 .osn__who { display: grid; min-width: 0; gap: 1px; }
@@ -41,8 +42,9 @@
 .shs__when { color: var(--text-dim); font-size: .78rem; }
 .shs__live { margin-inline-start: auto; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--success, #3ddc84) 18%, transparent); color: var(--success, #3ddc84); font-size: .72rem; font-weight: 700; }
 .shs__nav { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.shs__arrow { display: grid; place-items: center; width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-elev-2); color: var(--text); cursor: pointer; }
+.shs__arrow { flex: none; }
 .shs__arrow:disabled { opacity: .35; cursor: default; }
+.shs__seg { margin-bottom: 2px; }
 .shs__dots { display: flex; gap: 6px; }
 .shs__dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong, var(--line)); transition: width .2s ease, background .2s ease; }
 .shs__dots span.is-on { width: 18px; border-radius: 4px; background: var(--neon); }
@@ -50,6 +52,6 @@
 
 /* The live slide is the one that stands out: an accent edge, a tint and a pulsing dot. Same box as the others (only colours change),
    so moving between slides never changes the strip's size. */
-.shs__slide--now { border-color: color-mix(in srgb, var(--success, #3ddc84) 55%, transparent); background: color-mix(in srgb, var(--success, #3ddc84) 6%, transparent); }
+.shs__slide--now { border-color: color-mix(in srgb, var(--gl-ok, #3ddc84) 55%, transparent); background: color-mix(in srgb, var(--gl-ok, #3ddc84) 8%, transparent); }
 .shs__pulse { display: inline-block; width: 8px; height: 8px; margin-inline-end: 7px; border-radius: 50%; background: var(--success, #3ddc84); animation: osn-pulse 2.2s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) { .shs__pulse { animation: none; } }

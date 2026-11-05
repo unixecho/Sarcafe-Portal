@@ -38,7 +38,9 @@
     "check:kiosk-device": "node scripts/check-kiosk-device.mjs",
     "check:kiosk-ui": "node scripts/check-kiosk-ui.mjs",
     "check:shift-scroller": "node scripts/check-shift-scroller.mjs",
-    "check:kiosk-ota": "node scripts/check-kiosk-ota.mjs"
+    "check:kiosk-ota": "node scripts/check-kiosk-ota.mjs",
+    "qa": "node qa/run.mjs",
+    "qa:fast": "node qa/run.mjs --fast"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",
@@ -46,6 +48,7 @@
     "@supabase/supabase-js": "^2.46.1",
     "a11y-widget": "https://github.com/unixecho/a11y-widget/archive/refs/tags/v1.2.1.tar.gz",
     "geist": "1.7.2",
+    "glisse": "0.5.0",
     "gsap": "3.15.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.45.0",

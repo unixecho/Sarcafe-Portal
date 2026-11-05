@@ -1,10 +1,19 @@
 import { redirect } from 'next/navigation'
 import { Beaker, ClipboardCheck, ExternalLink, GitBranch, Database, Triangle } from 'lucide-react'
-import OwnerHeader from '@/components/OwnerHeader'
+import GlassDashboardShell from '@/components/glass/GlassDashboardShell'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import DevPushPanel from '@/components/staff/DevPushPanel'
 import DevNotificationCenter from '@/components/staff/DevNotificationCenter'
 import LensTabs from '@/components/dashboard/LensTabs'
+import ToolFinder from '@/components/glass/tools/ToolFinder'
+import { ToolGroups } from '@/components/glass/tools/ToolLists'
+import { ToolsProvider } from '@/components/glass/tools/ToolsProvider'
+import { HOME_TOOL_GROUPS, toolRolesFor } from '@/lib/tools'
+import { loadQaPage } from '@/lib/qa/server'
+import { passRate } from '@/lib/qa/report'
+import { wallClockNow } from '@/lib/shifts/time'
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import OwnerDashboardView from '@/components/dashboard/OwnerDashboardView'
 import EmployeeDashboardView from '@/components/dashboard/EmployeeDashboardView'
 import { resolveStaffIdentity } from '@/lib/staff/session'
@@ -58,24 +67,27 @@ export default async function StaffDevPage({ searchParams }: { searchParams: Pro
   const problems = health.filter((row) => row.state === 'bad' || row.state === 'warn').length
   const panels: Parameters<typeof LensTabs>[0]['panels'] = {
     employee: <EmployeeDashboardView me={me} />,
-    dev: DevPanel({ health }),
+    dev: DevPanel({ health, qa: await loadQaPage().catch(() => null), staffId: me.id, canManage }),
     alerts: <DevNotificationCenter initial={centre} health={{ problems }} />,
     ...(canManage ? { manager: <OwnerDashboardView me={{ id: me.id, role: me.role ?? null, badge: me.badge ?? null, branch_id: me.branch_id ?? null, email: me.email, first_name: me.first_name }} /> } : {}),
   }
 
+  // The glass dashboard (docs/SARCAFE_GLASS_UI.md). A developer who is also an owner gets the branch switch and the manager's dock.
   return (
-    <main id="main" tabIndex={-1} className="app-page">
-      <OwnerHeader title="לוח מפתח" homeHref="/staff/dev" />
+    <GlassDashboardShell title="לוח מפתח" dock={canManage ? 'manager' : 'employee'} home="/staff/dev" account={{ developer: true, manager: canManage }} branchSwitch={canManage}>
       <div className="lens-greeting">
         <strong>{me.first_name || me.display_name || 'מפתח'}</strong>
         <span className="lens-badge">{badgeLabel(me.badge) || 'מפתח/ת'}</span>
       </div>
       <LensTabs initial={view} lenses={lenses} panels={panels} badges={{ alerts: centre.unread.developer + centre.unread.owner + centre.unread.employee }} />
-    </main>
+    </GlassDashboardShell>
   )
 }
 
-function DevPanel({ health }: { health: HealthRow[] }) {
+function DevPanel({ health, qa, staffId, canManage }: { health: HealthRow[]; qa: Awaited<ReturnType<typeof loadQaPage>> | null; staffId: string; canManage: boolean }) {
+  const report = qa?.latest
+  const qaTone = report ? (report.status === 'pass' ? 'ok' : report.status === 'fail' ? 'bad' : '') : ''
+  const hour = Number(wallClockNow('Asia/Jerusalem').time.slice(0, 2))
   const categories: DashboardCategory[] = [
     { title: 'צ׳קליסט לבדיקה (לא נשמר)', entries: [
       { href: '/staff/checklists?preview=opening', icon: ClipboardCheck, label: 'פתיחת משמרת', description: 'עוברים על הטופס כמו עובד, בלי שיוך למשמרת' },
@@ -84,7 +96,16 @@ function DevPanel({ health }: { health: HealthRow[] }) {
     ] },
   ]
   return (
-    <>
+    <ToolsProvider staffId={staffId} roles={toolRolesFor({ op: canManage, manager: canManage, developer: true })} hour={hour} home="/staff/dev">
+      {/* The morning QA review (docs/QA_BLUEPRINT.md): the newest automatic run, one tap to the full review. */}
+      <Link href="/staff/dev/qa" className={`gl-surf gl-row-card${qaTone ? ` gl-surf--${qaTone}` : ''}`}>
+        <span className={`gl-ico${qaTone ? ` gl-ico--${qaTone}` : ''}`} aria-hidden="true"><ClipboardCheck size={22} /></span>
+        <span className="gl-row-card__copy">
+          <strong>סקירת QA של הבוקר</strong>
+          <small>{report && report.totals.tests > 0 ? `${report.review.headline} · ${passRate(report.totals)}% עברו (${report.totals.passed}/${report.totals.tests - report.totals.skipped})` : 'עוד אין דוח. הבדיקות רצות כל בוקר ואחרי כל פרסום'}</small>
+        </span>
+        <ChevronLeft size={18} className="gl-chev" aria-hidden="true" />
+      </Link>
       <section aria-labelledby="dev-health" className="dev-card rise">
         <h2 id="dev-health">בריאות המערכת</h2>
         <p>נבדק בכל טעינה. מיגרציות נבדקות לפי האובייקטים שהן יוצרות, לא לפי רשימת המיגרציות של Supabase.</p>
@@ -124,7 +145,11 @@ function DevPanel({ health }: { health: HealthRow[] }) {
           ))}
         </div>
       </section>
+      <section className="gl-field" style={{ gap: 14 }} aria-label="כלי מפתח">
+        <ToolFinder placeholder="חיפוש בכל הכלים…" />
+        <ToolGroups groups={HOME_TOOL_GROUPS.dev} />
+      </section>
       <p className="sch-sub" style={{ textAlign: 'center', margin: '18px 0 0' }}><Beaker size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> גרסת מערכת: {process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'מקומית'}</p>
-    </>
+    </ToolsProvider>
   )
 }

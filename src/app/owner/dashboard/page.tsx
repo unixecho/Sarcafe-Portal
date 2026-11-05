@@ -6,6 +6,7 @@ import StaffPushCard from '@/components/staff/StaffPushCard'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
 import DashboardNotifications from '@/components/app/DashboardNotifications'
 import OwnerDashboardView from '@/components/dashboard/OwnerDashboardView'
+import GlassDashboardShell from '@/components/glass/GlassDashboardShell'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isOp } from '@/lib/staff/access'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
@@ -41,10 +42,10 @@ export default async function OwnerDashboardPage() {
   }
   if (isDeveloper(me)) redirect('/staff/dev?view=manager')
 
+  // The glass dashboard (docs/SARCAFE_GLASS_UI.md): top bar with the branch switch, notifications and account; the dock below.
   return (
-    <main id="main" tabIndex={-1} className="app-page">
-      <OwnerHeader title="לוח הבקרה" homeHref="/owner/dashboard" />
+    <GlassDashboardShell title="לוח הבקרה" dock="manager" home="/owner/dashboard" account={{ developer: false, manager: true }} branchSwitch>
       <OwnerDashboardView me={{ id: me!.id as string, role: me!.role as string | null, badge: me!.badge as string | null, branch_id: me!.branch_id as string | null, email: me!.email as string | null, first_name: me!.first_name as string | null }} />
-    </main>
+    </GlassDashboardShell>
   )
 }

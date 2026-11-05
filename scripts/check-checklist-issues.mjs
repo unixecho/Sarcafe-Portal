@@ -105,7 +105,9 @@ check('the scheduled run calls it with everything else', /issuesDigest\(service,
 
 section('where the owner finds it')
 const dashboard = read('src/components/dashboard/OwnerDashboardView.tsx')
-check('the dashboard has its own card, before every category, with the count of everything open (items + gaps)', /<strong>חוסרים ופערים<\/strong>/.test(dashboard) && dashboard.indexOf('<strong>חוסרים ופערים</strong>') < dashboard.indexOf('<DashboardSections') && /loadShortageReport\(service, defaultBranch\.id\)/.test(dashboard) && /shortageCount\(/.test(dashboard))
+// Glass dashboard (2026-11-05): the card lives in DashboardLive (it follows the top bar's branch), which comes before every category.
+const live = read('src/components/DashboardLive.tsx')
+check('the dashboard has its own card, before every category, with the count of everything open (items + gaps)', /<strong>חוסרים ופערים<\/strong>/.test(live) && dashboard.indexOf('<DashboardLive') > 0 && dashboard.indexOf('<DashboardLive') < dashboard.indexOf('<DashboardSections') && /loadShortageReport\(service, defaultBranch\.id\)/.test(dashboard) && /shortageCount\(/.test(dashboard) && /loadShortageReport\(service, branch\.id\)/.test(read('src/app/api/owner/dashboard/route.ts')))
 check('the page and the checklists tab show the same report', read('src/components/checklists/OwnerIssuesWorkspace.tsx').includes('<IssueReport') && read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('<IssueReport'))
 check('the old "one card per checklist with its sum of NO answers" inbox is gone from the tracker', !read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('ck-issue-row') && !read('src/components/checklists/OwnerChecklistWorkspace.tsx').includes('const inbox'))
 const middleware = read('src/middleware.ts')

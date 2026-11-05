@@ -29,3 +29,10 @@ next-env.d.ts
 
 # kiosk OTA web bundle: generated at build time by scripts/publish-kiosk-ota.mjs (apk/ and web-signature.json are committed)
 /public/kiosk-ota/web/
+
+# QA suite (docs/QA_BLUEPRINT.md): build copies, transpiled modules and run history stay local; qa/reports/latest.* is committed
+/qa/.work/
+/qa/.cache/
+/qa/reports/history/
+# screenshots written by scripts/check-app-layout.mjs (test output)
+/.codex/verification/

@@ -1,11 +1,13 @@
 import OnShiftRefresher from '@/components/shifts/OnShiftRefresher'
 import ShiftScroller from '@/components/shifts/ShiftScroller'
 import type { OnShiftBranch } from '@/lib/staff/on-shift'
+import 'glisse/styles.css'
+import '@/components/glass/glass.css'
 import './on-shift.css'
 
 // "מי במשמרת עכשיו": the top of the staff schedule page. One card per branch, and in it a strip to swipe through three slides:
 // the previous shift, NOW (the people whose published shift is running, with hours and station) and the next shift. The viewer's
-// own row is marked. The data is lib/staff/on-shift.ts; <OnShiftRefresher> asks the page to re-read it every minute while open.
+// own row is marked. On glass (docs/SARCAFE_GLASS_UI.md): a glass card per branch, a glass switcher, glass arrows; the carousel is unchanged. The data is lib/staff/on-shift.ts; <OnShiftRefresher> asks the page to re-read it every minute while open.
 export default function OnShiftNow({ branches, viewerId, clock }: { branches: OnShiftBranch[]; viewerId: string; clock: string }) {
   if (!branches.length) return null
   const total = branches.reduce((n, b) => n + b.people.length, 0)
@@ -19,7 +21,7 @@ export default function OnShiftNow({ branches, viewerId, clock }: { branches: On
       </header>
       <div className="osn__grid">
         {branches.map((branch) => (
-          <article key={branch.id} className="osn__branch" aria-label={`סניף ${branch.name}`}>
+          <article key={branch.id} className="osn__branch gl-surf" aria-label={`סניף ${branch.name}`}>
             <div className="osn__branch-head">
               <strong>{branch.name}</strong>
               <span className={`osn__count${branch.people.length > 0 ? ' osn__count--on' : ''}`}>{branch.people.length > 0 ? `${branch.people.length} במשמרת` : 'אין משמרת פעילה'}</span>

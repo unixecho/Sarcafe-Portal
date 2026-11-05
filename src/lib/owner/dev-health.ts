@@ -20,6 +20,9 @@ const PROBES: { id: string; label: string; migration: string; table: string; col
   { id: 'push-outbox', label: 'תור ההתראות לטלפון', migration: '20261012120000', table: 'schedule_notifications', column: 'push_sent_at' },
   { id: 'onboarding-progress', label: 'התקדמות הצטרפות עובדים והיתר כניסה בלי התראות', migration: '20261016140000', table: 'staff', column: 'onboarding_done_at' },
   { id: 'event-parent', label: 'קופות אירועים לפי סניף', migration: '20261016140000', table: 'branches', column: 'parent_branch_id' },
+  { id: 'tool-usage', label: 'היסטוריית החיפוש בכלים (בכל המכשירים)', migration: '20261105090000', table: 'staff_tool_usage' },
+  { id: 'team-messages', label: 'יומן ההודעות לצוות', migration: '20261105090000', table: 'staff_messages' },
+  { id: 'qa-runs', label: 'דוחות ה־QA של הבוקר', migration: '20261105090000', table: 'qa_runs' },
 ]
 
 async function probe(service: Service, table: string, column?: string): Promise<string | null> {

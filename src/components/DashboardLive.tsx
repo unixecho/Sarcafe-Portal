@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Bell, Building2, CalendarDays, CheckCircle2, ChevronDown, ClipboardCheck, FileEdit, MessageCircle, Package, UsersRound } from 'lucide-react'
-import StatStrip from '@/components/StatStrip'
+import { AlertTriangle, Bell, Building2, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ClipboardCheck, FileEdit, MessageCircle, Package, UsersRound, Wrench } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
-import { isDashboardBranchConfirmed, setCurrentBranchCookie, setDashboardBranchConfirmed } from '@/lib/branches/current'
+import Seg from '@/components/glass/Seg'
+import { useGlassBranch } from '@/components/glass/BranchContext'
+import { TOOL_BADGES_EVENT } from '@/components/glass/tools/ToolsProvider'
+import { isDashboardBranchConfirmed, setDashboardBranchConfirmed } from '@/lib/branches/current'
+import { toolBadges } from '@/lib/tools/badges'
 import type { Branch, BranchSlug } from '@/lib/branches'
 import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
@@ -13,228 +16,123 @@ import type { Signal } from '@/lib/owner/signals'
 const POLL_MS = 30_000
 const COLLAPSE_THRESHOLD = 90 // chars — past this, a signal's own detail text starts collapsed
 
-// Signals are keyed by a stable `id` server-side (lib/owner/signals.ts);
-// resolved to an icon here by id rather than trusting the data layer's own
-// `icon` (still a legacy emoji string) to pick the right glyph.
-const SIGNAL_ICONS: Record<string, typeof FileEdit> = {
-  'menu-unpublished': FileEdit,
-  'menu-out-of-stock': Package,
-  'feedback-new': MessageCircle,
-}
+// Signals are keyed by a stable `id` server-side (lib/owner/signals.ts); resolved to an icon (and a tone) here by id.
+const SIGNAL_ICONS: Record<string, typeof FileEdit> = { 'menu-unpublished': FileEdit, 'menu-out-of-stock': Package, 'feedback-new': MessageCircle }
+/** Bad news is red (owner, 2026-11-05). Out of stock is bad news; an unpublished draft and new feedback are just "look at this". */
+const SIGNAL_TONE: Record<string, 'bad' | undefined> = { 'menu-out-of-stock': 'bad' }
 
-type DashboardPayload = { stats: DashboardStats; signals: Signal[] }
+export type DashboardPayload = { stats: DashboardStats; signals: Signal[]; shortages: number | null; requests: number | null }
 
-export default function DashboardLive({
-  branches,
-  initialBranch,
-  initial,
-}: {
-  branches: Branch[]
-  initialBranch: BranchSlug
-  initial: DashboardPayload
-}) {
-  const [branch, setBranch] = useState<BranchSlug>(initialBranch)
+// The live part of the owner's glass dashboard: the menu numbers, the signals, and what needs attention, for the branch chosen in
+// the top bar (components/glass/BranchContext). Polled every 30 s and on refocus; a failed read keeps the last good state on screen.
+export default function DashboardLive({ branches, initialBranch, initial }: { branches: Branch[]; initialBranch: BranchSlug; initial: DashboardPayload }) {
+  const shared = useGlassBranch()
+  const branch = shared?.slug ?? initialBranch
   const [data, setData] = useState<DashboardPayload>(initial)
   const [loading, setLoading] = useState(false)
-  // Prompted once per login (sessionStorage — cleared on sign-out and when
-  // the tab closes), not on every visit: the always-visible BranchSwitcher
-  // right below already covers "which branch am I on" for the rest of the
-  // session, so re-prompting every time was friction without a matching
-  // safety benefit. Starts already-confirmed on the server-rendered first
-  // paint (avoids a flash of the sheet before the mount effect can check
-  // sessionStorage) and the effect below corrects it if this is actually a
-  // fresh login.
+  // Asked once per login (sessionStorage), not on every visit: the top bar always shows which branch this is.
   const [branchConfirmed, setBranchConfirmed] = useState(true)
+  useEffect(() => { if (branches.length > 1 && !isDashboardBranchConfirmed()) setBranchConfirmed(false) }, [branches.length])
+  function confirmBranch() { setDashboardBranchConfirmed(); setBranchConfirmed(true) }
 
-  useEffect(() => {
-    if (branches.length > 1 && !isDashboardBranchConfirmed()) setBranchConfirmed(false)
-  }, [branches.length])
-
-  function confirmBranch() {
-    setDashboardBranchConfirmed()
-    setBranchConfirmed(true)
-  }
-
-  function selectBranch(slug: BranchSlug) {
-    setCurrentBranchCookie(slug)
-    setBranch(slug)
-  }
-
-  const refresh = useCallback(async (forBranch: BranchSlug) => {
-    setLoading(true)
+  const refresh = useCallback(async (forBranch: BranchSlug, quiet: boolean) => {
+    if (!quiet) setLoading(true)
     try {
-      const res = await fetch(`/api/owner/dashboard?branch=${forBranch}`)
+      const res = await fetch(`/api/owner/dashboard?branch=${encodeURIComponent(forBranch)}`, { cache: 'no-store' })
       if (!res.ok) return // last-good state stays on screen; no blank, no error flash
       const payload = (await res.json()) as DashboardPayload
       setData(payload)
+      window.dispatchEvent(new CustomEvent(TOOL_BADGES_EVENT, { detail: toolBadges(payload) }))
     } catch {
       // Network hiccup — keep showing the last-good state.
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    refresh(branch)
-    const interval = window.setInterval(() => refresh(branch), POLL_MS)
+    if (branch !== initialBranch || data !== initial) void refresh(branch, false)
+    const interval = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(branch, true) }, POLL_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(branch, true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', onVisible) }
+  }, [branch, refresh]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    function onVisibilityChange() {
-      if (document.visibilityState === 'visible') refresh(branch)
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [branch, refresh])
+  const { stats, signals, shortages } = data
+  const out = stats.outOfStockCount.known ? Number(stats.outOfStockCount.value) : null
+  const draft = stats.hasUnpublishedChanges.known ? !!stats.hasUnpublishedChanges.value : null
+  const name = branches.find((b) => b.slug === branch)?.name.he ?? ''
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <>
       <SheetShell open={!branchConfirmed} onClose={confirmBranch} labelledBy="branch-confirm-title">
-        <h2 id="branch-confirm-title" style={{ margin: '0 0 4px', fontSize: '1.05rem', fontWeight: 800 }}>
-          איזה סניף?
-        </h2>
-        <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>
-          המספרים והתראות שלמטה יתייחסו לסניף שתבחרו. נשאל שוב רק בכניסה הבאה.
-        </p>
-        <BranchCards branches={branches} value={branch} onChange={selectBranch} disabled={loading} />
-        <button
-          type="button"
-          className="press"
-          onClick={confirmBranch}
-          style={{
-            marginTop: 16,
-            width: '100%',
-            minHeight: 'var(--tap-min)',
-            borderRadius: 999,
-            border: 'none',
-            background: 'var(--neon)',
-            color: 'var(--bg)',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          המשך ל{branches.find((b) => b.slug === branch)?.name.he ?? 'לוח הבקרה'}
+        <h2 id="branch-confirm-title" style={{ margin: '0 0 4px', fontSize: '1.05rem', fontWeight: 800 }}>איזה סניף?</h2>
+        <p style={{ margin: '0 0 14px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>המספרים וההתראות שלמטה יתייחסו לסניף שתבחרו. אפשר להחליף בכל רגע בשורה העליונה.</p>
+        {shared && <Seg fill label="בחירת סניף" value={branch} onChange={shared.select} items={branches.map((b) => ({ value: b.slug, label: b.name.he }))} />}
+        <button type="button" className="press" onClick={confirmBranch} style={{ marginTop: 16, width: '100%', minHeight: 'var(--tap-min)', borderRadius: 999, border: 'none', background: 'var(--neon)', color: 'var(--on-neon, var(--bg))', fontWeight: 700, cursor: 'pointer' }}>
+          המשך ל{name || 'לוח הבקרה'}
         </button>
       </SheetShell>
 
-      <section className="dashboard-branch-hub" aria-labelledby="dashboard-branches-title">
-        <div className="dashboard-branch-hub__head">
-          <span className="dashboard-branch-hub__icon"><Building2 size={22} aria-hidden="true" /></span>
-          <div><p>מרכז שליטה</p><h2 id="dashboard-branches-title">ניהול סניפים</h2></div>
-        </div>
-        <BranchCards branches={branches} value={branch} onChange={selectBranch} disabled={loading} />
-        <nav className="dashboard-branch-actions" aria-label="פעולות בסניף הפעיל">
-          <Link className="press" href={`/owner/schedule?branch=${branch}`}><CalendarDays size={17} aria-hidden="true" />לוח משמרות</Link>
-          <Link className="press" href="/owner/staff"><UsersRound size={17} aria-hidden="true" />עובדים</Link>
-          <Link className="press" href={`/owner/checklists?branch=${branch}`}><ClipboardCheck size={17} aria-hidden="true" />צ׳קליסטים</Link>
-        </nav>
-      </section>
+      {/* Dimmed and inert while a branch switch loads: a tap mid-fetch would act on the previous branch's numbers. */}
+      <div className="gl-field" style={{ gap: 14, opacity: loading ? 0.55 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity .15s' }} aria-busy={loading}>
+        <section className="gl-stats" aria-label={`מצב התפריט${name ? ` ב${name}` : ''}`}>
+          <div className="gl-surf gl-stat"><b className="ltr-isolate">{stats.categoryCount.known ? String(stats.categoryCount.value) : '—'}</b><span>קטגוריות בתפריט</span></div>
+          <div className={`gl-surf gl-stat${out ? ' gl-stat--bad' : out === 0 ? ' gl-stat--ok' : ''}`}><b className="ltr-isolate">{out === null ? '—' : out}</b><span>פריטים אזלו</span></div>
+          <div className={`gl-surf gl-stat${draft === false ? ' gl-stat--ok' : ''}`}><b className="gl-stat__word">{draft === null ? '—' : draft ? 'טיוטה' : 'עדכני'}</b><span>סטטוס פרסום</span></div>
+        </section>
 
-      {/* Dimmed + inert (not just visually opaque) while switching branches
-          — a tap mid-fetch on a signal link or a stat's own affordance
-          would act on whichever branch's data happens to still be on
-          screen, not necessarily the one the chip now shows as selected. */}
-      <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity 0.15s var(--ease)' }} aria-busy={loading}>
-        <StatStrip stats={data.stats} />
+        {signals.length > 0 && <ul className="gl-list">{signals.map((signal) => <SignalRow key={signal.id} signal={signal} />)}</ul>}
 
-        {data.signals.length > 0 && (
-          <ul style={{ listStyle: 'none', margin: '16px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {data.signals.map((signal) => (
-              <SignalRow key={signal.id} signal={signal} />
-            ))}
-          </ul>
-        )}
+        <section className="gl-list" aria-label="הכי חשוב עכשיו">
+          <Link href={`/owner/issues?branch=${encodeURIComponent(branch)}`} className={`gl-surf gl-row-card${shortages ? ' gl-surf--bad' : shortages === 0 ? ' gl-surf--ok' : ''}`}>
+            <span className={`gl-ico${shortages ? ' gl-ico--bad' : shortages === 0 ? ' gl-ico--ok' : ''}`} aria-hidden="true">{shortages ? <AlertTriangle size={22} /> : shortages === 0 ? <CheckCircle2 size={22} /> : <Wrench size={22} />}</span>
+            <span className="gl-row-card__copy"><strong>חוסרים ופערים</strong><small>{shortages === null ? 'לא זמין כרגע. לחצו לנסות שוב' : shortages === 0 ? 'הכול בסדר, אין מה לטפל' : shortages === 1 ? 'דבר אחד לטיפול' : `${shortages} דברים לטיפול`}</small></span>
+            <ChevronLeft size={18} aria-hidden="true" className="gl-chev" />
+          </Link>
+          <Link href="/staff/schedule" className="gl-surf gl-row-card gl-row-card--main">
+            <span className="gl-ico" aria-hidden="true"><UsersRound size={24} /></span>
+            <span className="gl-row-card__copy"><strong>מי במשמרת &amp; משמרות</strong><small>המשמרת הקודמת, הנוכחית והבאה בכל סניף</small></span>
+            <ChevronLeft size={18} aria-hidden="true" className="gl-chev" />
+          </Link>
+          <nav className="gl-wrap" aria-label={`פעולות בסניף ${name}`}>
+            <Link className="gl-chip gl-chip--soft" href={`/owner/schedule?branch=${encodeURIComponent(branch)}`}><CalendarDays size={16} aria-hidden="true" />לוח משמרות</Link>
+            <Link className="gl-chip gl-chip--soft" href={`/owner/checklists?branch=${encodeURIComponent(branch)}`}><ClipboardCheck size={16} aria-hidden="true" />צ׳קליסטים</Link>
+            <Link className="gl-chip gl-chip--soft" href="/owner/branches"><Building2 size={16} aria-hidden="true" />ניהול סניפים</Link>
+          </nav>
+        </section>
       </div>
-    </div>
+    </>
   )
-}
-
-function BranchCards({ branches, value, onChange, disabled = false }: { branches: Branch[]; value: BranchSlug; onChange: (slug: BranchSlug) => void; disabled?: boolean }) {
-  return <div className="dashboard-branch-grid" role="radiogroup" aria-label="בחירת סניף לניהול">
-    {branches.map((item) => {
-      const selected = item.slug === value
-      return <button key={item.slug} type="button" role="radio" aria-checked={selected} disabled={disabled} className="dashboard-branch-card press" onClick={() => onChange(item.slug)}>
-        <span><strong>{item.name.he}</strong><small>{selected ? 'הסניף הפעיל עכשיו' : 'מעבר לניהול הסניף'}</small></span>
-        {selected ? <CheckCircle2 size={20} aria-hidden="true" /> : <Building2 size={20} aria-hidden="true" />}
-      </button>
-    })}
-  </div>
 }
 
 function SignalRow({ signal }: { signal: Signal }) {
   const SignalIcon = SIGNAL_ICONS[signal.id] ?? Bell
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '12px 14px',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--bg-elev)',
-    border: `1px solid ${signal.rank >= 60 ? 'rgba(255,122,69,0.4)' : 'var(--line)'}`,
-    color: 'var(--text)',
-    textDecoration: 'none',
-  }
-  const icon = <SignalIcon aria-hidden="true" size={20} strokeWidth={2} style={{ flexShrink: 0, color: 'var(--neon-soft)' }} />
-
-  // A customer's own written feedback can run long, unlike every other
-  // signal's short, app-composed detail line — collapsed by default past
-  // COLLAPSE_THRESHOLD, with its own expand toggle, rather than either
-  // dumping the full text unconditionally or truncating it with no way to
-  // read the rest.
+  const tone = SIGNAL_TONE[signal.id]
   const [expanded, setExpanded] = useState(false)
+  const icon = <span className={`gl-ico${tone ? ` gl-ico--${tone}` : ''}`} aria-hidden="true"><SignalIcon size={20} strokeWidth={2} /></span>
+  const card = `gl-surf gl-row-card${tone ? ` gl-surf--${tone}` : ''}`
+  // A customer's own written feedback can run long: collapsed past COLLAPSE_THRESHOLD, with its own toggle.
   if (signal.expandable && signal.detail) {
     const long = signal.detail.length > COLLAPSE_THRESHOLD
     return (
-      <li>
-        <div style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-          <button
-            type="button"
-            className="press"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', textAlign: 'start', cursor: long ? 'pointer' : 'default' }}
-            disabled={!long}
-          >
-            {icon}
-            <strong style={{ flex: 1, textAlign: 'start', fontSize: '0.88rem', fontWeight: 700 }}>{signal.title}</strong>
-            {long && (
-              <ChevronDown size={16} aria-hidden="true" style={{ flexShrink: 0, color: 'var(--text-faint)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s var(--ease)' }} />
-            )}
-          </button>
-          <p
-            style={{
-              margin: 0,
-              marginInlineStart: 30,
-              fontSize: '0.8rem',
-              color: 'var(--text-faint)',
-              lineHeight: 1.5,
-              ...(long && !expanded
-                ? { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }
-                : {}),
-            }}
-          >
-            {signal.detail}
-          </p>
-          {signal.href && (
-            <Link href={signal.href} className="press" style={{ marginInlineStart: 30, alignSelf: 'flex-start', fontSize: '0.78rem', color: 'var(--neon-2)', fontWeight: 600 }}>
-              פתיחה בתיבת המשוב ←
-            </Link>
-          )}
-        </div>
+      <li className={card} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+        <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} disabled={!long} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', textAlign: 'start', cursor: long ? 'pointer' : 'default' }}>
+          {icon}
+          <strong style={{ flex: 1, fontSize: '0.92rem' }}>{signal.title}</strong>
+          {long && <ChevronDown size={16} aria-hidden="true" style={{ color: 'var(--text-dim)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />}
+        </button>
+        <p style={{ margin: 0, marginInlineStart: 54, fontSize: '0.82rem', color: 'var(--text-dim)', lineHeight: 1.5, ...(long && !expanded ? { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } : {}) }}>{signal.detail}</p>
+        {signal.href && <Link href={signal.href} className="gl-chip gl-chip--soft" style={{ marginInlineStart: 54, justifySelf: 'start', alignSelf: 'flex-start' }}>פתיחה בתיבת המשוב</Link>}
       </li>
     )
   }
-
   const content = (
     <>
       {icon}
-      <span style={{ flex: 1, textAlign: 'start' }}>
-        <strong style={{ display: 'block', fontSize: '0.88rem' }}>{signal.title}</strong>
-        {signal.detail && <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-faint)' }}>{signal.detail}</span>}
-      </span>
+      <span className="gl-row-card__copy"><strong>{signal.title}</strong>{signal.detail && <small>{signal.detail}</small>}</span>
+      {signal.href && <ChevronLeft size={18} aria-hidden="true" className="gl-chev" />}
     </>
   )
-  return <li>{signal.href ? <Link href={signal.href} style={rowStyle}>{content}</Link> : <div style={rowStyle}>{content}</div>}</li>
+  return <li>{signal.href ? <Link href={signal.href} className={card}>{content}</Link> : <div className={card}>{content}</div>}</li>
 }

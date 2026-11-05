@@ -29,7 +29,8 @@ import { assemble } from './assemble-kiosk-bundle.mjs'
 const require = createRequire(import.meta.url)
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const SHOTS = process.env.KIOSK_SHOTS ? resolve(process.env.KIOSK_SHOTS) : ''
-const EDGE = ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe'].find((p) => existsSync(p))
+// EDGE_PATH lets CI and Linux run this check with Chromium (the QA suite sets it); on the owner's PC it finds Edge as before.
+const EDGE = process.env.EDGE_PATH || ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Microsoft/Edge/Application/msedge.exe'].find((p) => existsSync(p))
 
 let passed = 0
 const failures = []

@@ -1,32 +1,36 @@
 import { cookies } from 'next/headers'
-import Link from 'next/link'
-import { AlertTriangle, Accessibility, Building2, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, ClipboardList, History, Link2, MessageCircle, MonitorSmartphone, Receipt, ShoppingBag, Sparkles, Star, Tablet, UserPlus, Users, Wrench } from 'lucide-react'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import { loadStaffTheme } from '@/lib/staff/theme-server'
 import ThemeRow from '@/components/staff/ThemeRow'
 import DashboardLive from '@/components/DashboardLive'
-import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
-import DashboardNotifications, { type DashboardNotification } from '@/components/app/DashboardNotifications'
+import TeamMessage from '@/components/glass/TeamMessage'
+import ToolFinder from '@/components/glass/tools/ToolFinder'
+import { ToolShortcuts } from '@/components/glass/tools/ToolLists'
+import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
+import { Accessibility, CalendarClock, ClipboardCheck, ClipboardList, History, Link2, MessageCircle, MonitorSmartphone, Receipt, ShoppingBag, Sparkles, Star, Tablet, UserPlus, Users } from 'lucide-react'
+import { ToolsProvider } from '@/components/glass/tools/ToolsProvider'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { readDashboardStats } from '@/lib/owner/dashboard-stats'
 import { readDashboardSignals } from '@/lib/owner/signals'
+import { countPendingDecisions, toolBadges } from '@/lib/owner/dashboard-badges'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { loadShortageReport } from '@/lib/checklists/issues-server'
 import { shortageCount } from '@/lib/checklists/gaps'
-import { alertTitle } from '@/lib/push/staff-rules'
+import { wallClockNow } from '@/lib/shifts/time'
+import { toolRolesFor } from '@/lib/tools'
 
 export type OwnerMe = { id: string; role: string | null; badge: string | null; branch_id: string | null; email: string | null; first_name: string | null }
 
-// The owner's dashboard BODY — everything under the header. It lives here (2026-10-16) because two pages show it: the
-// owner's own /owner/dashboard, and the developer's single dashboard (/staff/dev) as its "manager" view, so the
-// developer sees exactly what an owner sees by construction rather than by two pages kept in step.
+// The owner's dashboard BODY on glass (docs/SARCAFE_GLASS_UI.md). Two pages show it: /owner/dashboard and the developer's /staff/dev
+// ("manager" view), so the developer sees exactly what an owner sees by construction. The page around it draws the glass top bar
+// (branch switch, notifications, account) and the dock; the branch they switch is shared through <GlassBranchProvider>.
 //
-// The order is the order of attention: what is waiting (alerts) → how the day is going (the pulse and signals) → the two
-// things an owner opens most (חוסרים ופערים, ניהול סניפים) → the phone alerts card → everything else, by topic.
+// The order is the order of attention: hello → the shortcuts this person uses most → the day's numbers and what needs attention →
+// the team message → phone alerts → everything else, searchable.
 export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
   const service = createServiceRoleClient()
   // Coffee trucks only: an event's register is a subsystem of its truck (branch manager > קופה ואירועים), not a branch of the business.
@@ -35,21 +39,18 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
   const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
   const defaultBranch = branches.find((branch) => branch.slug === currentSlug) ?? branches[0] ?? null
   const developer = isDeveloper(me)
-  // The look (src/lib/staff/theme.ts) is one choice for the whole panel: the owner picks it in the profile, like everyone.
   const look = await loadStaffTheme(me.id)
-  const [updates, updateCount] = await Promise.all([
-    service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(20),
-    service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),
-  ])
-  const [stats, signals, shortages] = defaultBranch
+  const [stats, signals, shortages, requests] = defaultBranch
     ? await Promise.all([
         readDashboardStats(defaultBranch.id),
         readDashboardSignals(defaultBranch.id),
         // Everything the checklists say needs attention right now: broken or missing things (one per check) plus checklists nobody sent.
         loadShortageReport(service, defaultBranch.id).then((report) => shortageCount(report)).catch(() => null),
+        countPendingDecisions(service, defaultBranch.id).catch(() => null),
       ])
-    : [{ hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } }, [], null]
+    : [{ hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } }, [], null, null] as const
 
+  // The owner's tool lists, unchanged (the order of attention the owner set).
   const categories: DashboardCategory[] = [
     { title: 'הצוות והמשמרות', entries: [
       { href: '/owner/staff', icon: Users, label: 'העובדים שלי', description: 'קליטה, קישורי הצטרפות, היסטוריה ותלושי שכר' },
@@ -74,41 +75,28 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
     ] },
   ]
   const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
-  const issuesHref = `/owner/issues${defaultBranch ? `?branch=${defaultBranch.slug}` : ''}`
-  const notifications = ((updates.data ?? []) as DashboardNotification[]).map((row) => ({ ...row, title: alertTitle(row.kind ?? '', row.title, { developer }) }))
+  const hour = Number(wallClockNow('Asia/Jerusalem').time.slice(0, 2))
+  const roles = toolRolesFor({ op: true, manager: true, developer })
+  const badges = toolBadges({ stats, shortages, requests })
+  const messageable = branches.map((b) => ({ slug: b.slug, name: b.name.he }))
 
   return (
-    <>
-      <div className="app-welcome"><div><h2>שלום, {me.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div><span className="app-date">{date}</span></div>
-      <DashboardNotifications initialNotifications={notifications} initialUnread={updateCount.count ?? 0} initialError={!!updates.error || !!updateCount.error} scheduleHref="/owner/schedule" manager />
-      <DashboardLive branches={branches} initialBranch={defaultBranch?.slug ?? ''} initial={{ stats, signals }} />
-
-      <section className="app-attention" aria-label="הכי חשוב עכשיו">
-        <Link href={issuesHref} className={`app-attention__card press${shortages ? ' app-attention__card--warn' : ''}`}>
-          <span className="app-attention__icon" aria-hidden="true">{shortages ? <AlertTriangle size={22} /> : shortages === 0 ? <CheckCircle2 size={22} /> : <Wrench size={22} />}</span>
-          <span className="app-attention__copy">
-            <strong>חוסרים ופערים</strong>
-            <small>{shortages === null ? 'לא זמין כרגע. לחצו לנסות שוב' : shortages === 0 ? 'הכול בסדר, אין מה לטפל' : shortages === 1 ? 'דבר אחד לטיפול' : `${shortages} דברים לטיפול`}</small>
-          </span>
-          <ChevronLeft size={18} aria-hidden="true" className="app-row__chevron" />
-        </Link>
-        <Link href="/owner/branches" className="app-attention__card press">
-          <span className="app-attention__icon" aria-hidden="true"><Building2 size={22} /></span>
-          <span className="app-attention__copy">
-            <strong>ניהול סניפים</strong>
-            <small>{branches.length === 1 ? 'הגדרות, צ׳קליסטים וצוות' : `${branches.length} סניפים: הגדרות, צ׳קליסטים וצוות`}</small>
-          </span>
-          <ChevronLeft size={18} aria-hidden="true" className="app-row__chevron" />
-        </Link>
+    <ToolsProvider staffId={me.id} roles={roles} hour={hour} badges={badges} home="/owner/dashboard">
+      <section className="gl-welcome">
+        <div><h2>שלום, {me.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div>
+        <span className="gl-welcome__date">{date}</span>
       </section>
-
+      <ToolShortcuts />
+      {defaultBranch && <DashboardLive branches={branches} initialBranch={defaultBranch.slug} initial={{ stats, signals: [...signals], shortages, requests }} />}
+      {messageable.length > 0 && <TeamMessage branches={messageable} />}
       <StaffPushCard />
       <WorkshopCard />
-      <DashboardSections categories={categories} />
+      <ToolFinder />
+      <div data-track-tools><DashboardSections categories={categories} /></div>
       <div className="app-group app-account">
         <ThemeRow theme={look.theme} chosen={look.chosen} />
         <InstallAppButton />
       </div>
-    </>
+    </ToolsProvider>
   )
 }

@@ -72,6 +72,11 @@ export function apiRoute<Args extends unknown[]>(
       return await handler(...args)
     } catch (err) {
       if (err instanceof ApiError) return errorResponse(err)
+      // A body that is not JSON at all (empty, truncated, a form post) is also the caller's mistake: `await request.json()`
+      // throws a SyntaxError, which used to fall through to a 500 (found by the QA suite, 2026-11-05).
+      if (err instanceof SyntaxError && /JSON|Unexpected end|Unexpected token/i.test(err.message)) {
+        return errorResponse(new ApiError(400, 'bad_request', 'Invalid request.'))
+      }
       if (err instanceof ZodError) {
         const fields = Array.from(new Set(err.issues.map((issue) => issue.path.join('.') || '(body)'))).slice(0, 12)
         return errorResponse(new ApiError(400, 'bad_request', 'Invalid request.', { fields }))
