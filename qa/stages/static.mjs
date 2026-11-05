@@ -152,6 +152,44 @@ export function staticStage(root) {
     assert.deepEqual(loose, [], 'unguarded:')
   })
 
+  // A browser component that reaches a Node-only module (node:crypto, server-only, …) breaks the production build — found the hard
+  // way: the kiosk dashboard imported the PIN rules, which then also held the PIN hashing. Followed through every static "@/…" and
+  // relative import (type-only imports are erased, so they are skipped), with the chain in the message.
+  stage.test('client-boundary', 'רכיב דפדפן לא מגיע (גם לא דרך קבצים אחרים) לקוד שרץ רק בשרת (node:… / server-only)', 'static', async () => {
+    const src = path.join(root, 'src')
+    const files = walk(src).filter((f) => /\.(ts|tsx)$/.test(f))
+    const text = new Map(files.map((f) => [f, fs.readFileSync(f, 'utf8')]))
+    const resolve = (from, spec) => {
+      const base = spec.startsWith('@/') ? path.join(src, spec.slice(2)) : path.resolve(path.dirname(from), spec)
+      for (const c of [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts'), path.join(base, 'index.tsx')]) if (text.has(c)) return c
+      return null
+    }
+    const importsOf = (code) => [...code.matchAll(/^\s*(?:import|export)\s+(?!type\b)(?:[^'"]*?\sfrom\s+)?['"]([^'"]+)['"]/gm)].map((m) => m[1])
+    const serverOnly = (code) => importsOf(code).find((s) => s.startsWith('node:') || s === 'server-only')
+    const bad = []
+    for (const [file, code] of text) {
+      if (!/^\s*['"]use client['"]/.test(code)) continue
+      const seen = new Map([[file, null]])
+      const queue = [file]
+      while (queue.length) {
+        const f = queue.shift()
+        const hit = serverOnly(text.get(f))
+        if (hit) {
+          const chain = []
+          for (let x = f; x; x = seen.get(x)) chain.unshift(path.relative(root, x))
+          bad.push(`${chain.join(' → ')} → ${hit}`)
+          break
+        }
+        for (const spec of importsOf(text.get(f))) {
+          if (!spec.startsWith('@/') && !spec.startsWith('.')) continue
+          const next = resolve(f, spec)
+          if (next && !seen.has(next)) { seen.set(next, f); queue.push(next) }
+        }
+      }
+    }
+    assert.deepEqual(bad, [], 'browser code that reaches server-only code:')
+  })
+
   stage.test('npm-audit', 'אין חולשות קריטיות או גבוהות חדשות בספריות של הייצור (npm audit)', 'security', async () => {
     const r = await run('npm', ['audit', '--omit=dev', '--json'], { cwd: root, timeout: 120_000 })
     let data

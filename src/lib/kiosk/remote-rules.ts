@@ -1,9 +1,9 @@
-import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 import { DEVICE_SLUG_PATTERN } from '@/lib/kiosk/device-settings'
 
 // The kiosk managed from the dashboard (owner, 2026-11-05; migration 20261105223000_kiosk_remote_control): the pure rules, so the QA
-// unit stage and the Java side can check them. docs/SARCAFE_KIOSK_REMOTE.md.
+// unit stage and the Java side can check them. docs/SARCAFE_KIOSK_REMOTE.md. The dashboard screen imports this file, so it must stay
+// free of Node modules: the PIN hashing lives in pin-record.ts (server only).
 
 /** What the dashboard can ask a tablet to do at its next report (every 5 minutes). */
 export const KIOSK_COMMANDS = ['reload', 'check_updates'] as const
@@ -16,22 +16,8 @@ export const COMMAND_LABELS: Record<KioskCommandKind, string> = {
 }
 
 /** The staff PIN of a tablet, exactly as the app keeps it (StaffPin.java): "pbkdf2$<iterations>$<salt hex 16 bytes>$<hash hex 32 bytes>",
- *  PBKDF2-HMAC-SHA1. The server keeps ONLY this record, never the PIN. */
-export const PIN_ITERATIONS = 15000
+ *  PBKDF2-HMAC-SHA1 (made in pin-record.ts). The server keeps ONLY this record, never the PIN. */
 export const PIN_RECORD = /^pbkdf2\$[0-9]{4,7}\$[0-9a-f]{32}\$[0-9a-f]{64}$/
-
-export function pinRecord(pin: string, salt: Buffer = randomBytes(16), iterations = PIN_ITERATIONS): string {
-  const hash = pbkdf2Sync(pin, salt, iterations, 32, 'sha1')
-  return `pbkdf2$${iterations}$${salt.toString('hex')}$${hash.toString('hex')}`
-}
-
-/** True when `pin` matches a record (the same rule as StaffPin.verify; used by the tests, never by a route). */
-export function pinMatches(record: string, pin: string): boolean {
-  if (!PIN_RECORD.test(record)) return false
-  const [, iterations, salt, hash] = record.split('$') as [string, string, string, string]
-  const got = pbkdf2Sync(pin, Buffer.from(salt, 'hex'), Number(iterations), 32, 'sha1')
-  return timingSafeEqual(got, Buffer.from(hash, 'hex'))
-}
 
 /** Why a new PIN is refused, or null. The app takes any 6–8 digits; the dashboard also refuses the ones anyone would guess. */
 export function pinProblem(pin: string): string | null {

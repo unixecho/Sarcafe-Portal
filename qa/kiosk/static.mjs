@@ -1,6 +1,6 @@
 // Kiosk suite, stage 1 — what can be checked without running anything: the tablet page's scripts, the bundle the app downloads, and
 // the plain-Java parts of the app (compiled and run with javac). The dashboard-side rules of the remote PIN are checked here against
-// the app's own Java: a record made by the portal's code (src/lib/kiosk/remote-rules.ts) must verify in StaffPin.java.
+// the app's own Java: a record made by the portal's code (src/lib/kiosk/pin-record.ts) must verify in StaffPin.java.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -50,10 +50,10 @@ export function kioskStaticStage(root) {
     if (!compiler) skipTest('no JDK on this machine (javac): GitHub Actions has one')
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'kiosk-java-'))
     try {
-      // the record exactly as the portal makes it (src/lib/kiosk/remote-rules.ts pinRecord: PBKDF2-HMAC-SHA1, 15000, 16-byte salt)
+      // the record exactly as the portal makes it (src/lib/kiosk/pin-record.ts pinRecord: PBKDF2-HMAC-SHA1, 15000, 16-byte salt)
       const salt = randomBytes(16)
       const record = `pbkdf2$15000$${salt.toString('hex')}$${pbkdf2Sync('482915', salt, 15000, 32, 'sha1').toString('hex')}`
-      const portal = fs.readFileSync(path.join(root, 'src/lib/kiosk/remote-rules.ts'), 'utf8')
+      const portal = fs.readFileSync(path.join(root, 'src/lib/kiosk/pin-record.ts'), 'utf8')
       assert.ok(/PIN_ITERATIONS = 15000/.test(portal) && /pbkdf2Sync\(pin, salt, iterations, 32, 'sha1'\)/.test(portal) && /randomBytes\(16\)/.test(portal), 'the portal still makes records this way')
       const test = `package il.co.sarcafe.kiosk;
 public final class RemotePinTest {

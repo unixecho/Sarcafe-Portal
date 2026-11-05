@@ -6,7 +6,8 @@ import { parseBody } from '@/lib/pos/server/guard'
 import { checkCredentialRateLimit } from '@/lib/rate-limit'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { isMissingObject, loadRemoteState } from '@/lib/kiosk/remote'
-import { pinProblem, pinRecord, remoteActionSchema } from '@/lib/kiosk/remote-rules'
+import { pinProblem, remoteActionSchema } from '@/lib/kiosk/remote-rules'
+import { pinRecord } from '@/lib/kiosk/pin-record'
 
 // The kiosk dashboard's actions on one tablet (owner, 2026-11-05: "I want to be able to reset the kiosk pin as well from the
 // dashboard"). Full owner only, same-origin JSON only. docs/SARCAFE_KIOSK_REMOTE.md.
