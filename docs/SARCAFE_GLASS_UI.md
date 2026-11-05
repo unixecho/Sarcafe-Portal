@@ -55,6 +55,14 @@ fails if an owner-only page is offered to anyone else, or if an id is repeated.
   with a `max-height` (the notifications) every row was squeezed to 32 px and the text ran over the next row (owner's iPhone,
   2026-11-05). `glass.css` keeps `flex-shrink: 0` on every menu row; a long menu scrolls. Test lists at real volume, not the seed's
   three rows (QA `ui.notifications-long`). Long items are clamped to two lines (`.gl-nt__top strong`, `.gl-nt__body`).
+- **iPhone edges (safe areas):** `.gl-page` reserves `env(safe-area-inset-top)` and the top bar is sticky at that same height, so at
+  rest the bar sits in its own room; a status-bar strip (`.gl-page::before`) shades cards scrolling under the clock. The dock rests just
+  above the home indicator (`max(10px, safe-area-bottom − 12px)`) over an opaque band, so nothing shows under it. Plain Chromium has no
+  notch: test phone layouts with the QA `iphone: true` page option (QA `ui.iphone-edges`). Before this, the top bar sat 59 px on the
+  first card and the dock floated 46 px up (owner's iPhone, 2026-11-05).
+- **Bars at the bottom of a page:** use `position: fixed` (like the dock), not `position: sticky; bottom`. On the owner's iPhone a
+  sticky save bar was left at its container's top, over the content, after scrolling down and back up. The kiosk editor's save bar is
+  fixed and shows only while the editor is on screen (`IntersectionObserver`; QA `ui.kiosk-save-bar`).
 - **Speed:** every glisse `<Glass>` builds an SVG refraction filter (Chromium only). Use `.gl-surf` for static cards; keep real `<Glass>` for
   the top bar, the dock and controls. `GlassMotion` swaps the lens for plain blur while scrolling and `settleGlass()` for 0.9 s after a switch.
 - **Contrast:** glisse's filled button is white on the fill (2.6:1 on our orange); glass.css makes it dark ink (7.6:1) and keeps the disabled

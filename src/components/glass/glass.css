@@ -81,7 +81,13 @@
 .is-switching .gl-top__bar, .is-switching .gl-main .lg-glass, .is-switching .gl-dock .lg-glass:not(.lg-tab-lens) { --lg-filter: saturate(1.5) !important; }
 
 /* ── page ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
-.gl-page { position: relative; isolation: isolate; min-height: 100dvh; color: var(--text); }
+/* padding-top: the room under an iPhone's status bar and notch. The top bar is sticky at that same height, so at rest it sits in
+   its own space; without this it was pushed 59 px down onto the first card (owner's iPhone, 2026-11-05; QA ui.iphone-edges). */
+.gl-page { position: relative; isolation: isolate; min-height: 100dvh; color: var(--text); padding-top: env(safe-area-inset-top, 0px); }
+/* the status-bar strip: cards scrolling up pass under the clock softly instead of showing through it (no height without a notch) */
+.gl-page::before { content: ""; position: fixed; inset: 0 0 auto; z-index: 29; height: env(safe-area-inset-top, 0px); pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 82%, transparent), color-mix(in srgb, var(--bg) 58%, transparent));
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 .gl-bg { position: fixed; inset: 0; z-index: -1; transform: translateZ(0); background-color: var(--bg); background-size: cover; background-position: center top;
   background-image: linear-gradient(180deg, var(--gl-veil-top), var(--gl-veil-mid) 45%, var(--gl-veil-end)), var(--gl-photo, none); }
 @media (min-width: 760px) { .gl-bg { background-image: linear-gradient(180deg, var(--gl-veil-top), var(--gl-veil-mid) 45%, var(--gl-veil-end)), var(--gl-photo-wide, var(--gl-photo, none)); } }
@@ -260,8 +266,11 @@ button.gl-surf, a.gl-surf { border: 0; font: inherit; text-align: start; cursor:
 .gl-finder__reset { border: 0; background: none; color: var(--neon-soft, var(--neon)); font: inherit; font-size: 0.72rem; font-weight: 700; padding: 6px 8px; cursor: pointer; border-radius: 8px; flex: none; min-height: 32px; }
 
 /* ── dock ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* The dock rests just above the home indicator (it overlaps the safe area a little, like the phone's own tab bars) and the band
+   under it is opaque: at 12 px + the whole safe area with a 78% fade, the page showed through below it and the bar looked lifted. */
 .gl-dock { position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 30; display: flex; justify-content: center; pointer-events: none;
-  padding: 28px max(16px, env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 78%, transparent) 55%); }
+  padding: 28px max(16px, env(safe-area-inset-left, 0px)) max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px));
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 80%, transparent) 30%, color-mix(in srgb, var(--bg) 92%, transparent) 68%, var(--bg) 86%); }
 .gl-dock > div { pointer-events: auto; width: 100%; max-width: 528px; container-type: inline-size; display: flex; justify-content: center; }
 /* the tabs share the bar: glisse moves the thumb by --lg-tab-width, so the width is set there (never by stretching the box) */
 .gl-dock .lg-tab-bar[data-icons] { --lg-tab-width: calc((100cqw - 8px) / var(--gl-tabs, 5)); }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import Switch from '@/components/Switch'
@@ -108,6 +108,18 @@ export default function KioskContentEditor({ initial }: { initial: OwnerKioskCon
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
   const [pickerFor, setPickerFor] = useState<string | null>(null)
+  // The save bar is fixed to the bottom of the screen while this editor is on screen. It was sticky to the end of the editor, and
+  // on the owner's iPhone, scrolling back up after scrolling down left it stuck at the editor's TOP, over the content (2026-11-05).
+  // Fixed is what the dock uses and holds on iOS; it hides while only the tablets card above is in view (that card saves itself).
+  const editorRef = useRef<HTMLDivElement>(null)
+  const [onScreen, setOnScreen] = useState(true)
+  useEffect(() => {
+    const el = editorRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([entry]) => setOnScreen(Boolean(entry?.isIntersecting)), { rootMargin: '0px 0px -96px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   const dirty = fingerprint(draft) !== fingerprint(saved)
   const issues = problems(draft, content.imagePrefix)
@@ -199,7 +211,7 @@ export default function KioskContentEditor({ initial }: { initial: OwnerKioskCon
   const menuById = new Map(content.menuItems.map((item) => [item.id, item]))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingBottom: 96 }}>
+    <div ref={editorRef} style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingBottom: 'calc(110px + env(safe-area-inset-bottom))' }}>
       <div>
         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.55 }}>
           מה הקיוסק בגבעת חביבה מציג כשאף אחד לא משתמש בו. שינויים נשמרים רק בלחיצה על &quot;שמירה&quot;.
@@ -375,7 +387,7 @@ export default function KioskContentEditor({ initial }: { initial: OwnerKioskCon
         </button>
       </Section>
 
-      <div role="region" aria-label="שמירה" style={saveBar}>
+      <div role="region" aria-label="שמירה" data-kiosk-save-bar style={onScreen ? saveBar : { ...saveBar, ...saveBarAway }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           {notice ? (
             <p role={notice.type === 'error' ? 'alert' : 'status'} style={{ margin: 0, fontSize: '0.82rem', color: notice.type === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{notice.text}</p>
@@ -455,8 +467,13 @@ const btn: CSSProperties = {
 }
 const linkBtn: CSSProperties = { background: 'none', border: 0, padding: '0 2px', fontSize: '1rem', cursor: 'pointer', fontFamily: 'inherit', minWidth: 24, minHeight: 24 }
 const switchBtn: CSSProperties = { background: 'none', border: 0, padding: 4, cursor: 'pointer', minHeight: 40, display: 'inline-flex', alignItems: 'center' }
+// Fixed to the screen (see editorRef): centred in the page's 640 px column, above the home indicator.
 const saveBar: CSSProperties = {
-  position: 'sticky', bottom: 'calc(12px + env(safe-area-inset-bottom))', zIndex: 5, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+  position: 'fixed', insetInline: 0, bottom: 'max(10px, calc(env(safe-area-inset-bottom) - 6px))', width: 'min(608px, calc(100% - 32px))', margin: '0 auto',
+  zIndex: 20, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
   background: 'var(--glass-strong)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid var(--line-strong)',
-  borderRadius: 16, padding: '10px 12px', marginTop: 4,
+  borderRadius: 16, padding: '10px 12px', boxShadow: '0 10px 30px rgba(0, 0, 0, .35)',
+  transition: 'opacity .18s ease, transform .18s ease, visibility .18s',
 }
+// While only the content ABOVE the editor is on screen: out of sight, out of reach (visibility keeps it out of the tab order too).
+const saveBarAway: CSSProperties = { opacity: 0, transform: 'translateY(12px)', visibility: 'hidden', pointerEvents: 'none' }

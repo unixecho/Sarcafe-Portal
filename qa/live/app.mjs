@@ -77,7 +77,9 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     return { status: res.status, headers: res.headers, text, json }
   }
   /** A browser page as someone. `askBranch: true` keeps the once-per-login "which branch?" sheet; by default it was already answered. */
-  async function page(who, { width = 390, height = 844, theme, reducedMotion = 'no-preference', askBranch = false } = {}) {
+  // `iphone: true` gives the page an iPhone's safe areas (59 px under the status bar and notch, 34 px over the home indicator), as
+  // on a real phone with viewport-fit=cover. Plain Chromium has none, which is how a top bar sitting 59 px over the first card was missed.
+  async function page(who, { width = 390, height = 844, theme, reducedMotion = 'no-preference', askBranch = false, iphone = false } = {}) {
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, locale: 'he-IL', timezoneId: 'Asia/Jerusalem', reducedMotion })
     // The install sheet ("add to the home screen", shown once in a plain browser) is marked as seen, so it does not cover the screen under test.
     await context.addInitScript(() => { try { localStorage.setItem('sarcafe:staff-install-intro:v1', 'seen') } catch { /* private */ } })
@@ -87,6 +89,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     if (theme) cookies.push({ name: 'sarcafe_staff_theme', value: theme, domain: '127.0.0.1', path: '/' })
     if (cookies.length) await context.addCookies(cookies)
     const p = await context.newPage()
+    if (iphone) await (await context.newCDPSession(p)).send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 59, bottom: 34, left: 0, right: 0 } })
     const errors = []
     p.on('pageerror', (e) => errors.push(String(e).slice(0, 300)))
     p.on('console', (msg) => { if (msg.type() === 'error' && !/favicon|fonts\.g|ERR_|net::|Failed to load resource|hydrat/i.test(msg.text())) errors.push(msg.text().slice(0, 300)) })

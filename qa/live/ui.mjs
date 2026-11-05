@@ -11,9 +11,16 @@ const setLook = (live, who, look) => { const row = live().db('staff').find((s) =
 
 export function uiStage(live, metrics) {
   const stage = createStage('ui', 'המסכים בדפדפן אמיתי: לוחות, תפריטים, הודעה, חיפוש וקריאוּת')
+  // Every page slides in (.page-enter, 0.32 s from translateX(∓3%)). A measurement taken during that slide saw the page 5 px off
+  // to the side (ui.widths, flaky once at 768 px, 2026-11-05), so tests measure the settled page: finite animations are awaited (2 s cap).
+  const settled = (page) => page.evaluate(() => Promise.race([
+    Promise.all(document.getAnimations().filter((a) => { const t = a.effect?.getTiming?.(); return t && t.iterations !== Infinity }).map((a) => a.finished.catch(() => null))),
+    new Promise((resolve) => setTimeout(resolve, 2000)),
+  ])).catch(() => null)
   const open = async (who, url, opts) => {
     const s = await live().page(who, opts)
     const res = await s.page.goto(live().base + url, { waitUntil: 'networkidle' })
+    await settled(s.page)
     return { ...s, status: res?.status() }
   }
   const overflowX = (page) => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -132,6 +139,74 @@ export function uiStage(live, metrics) {
     } finally {
       for (const row of added) { const i = rows.indexOf(row); if (i >= 0) rows.splice(i, 1) }
     }
+  })
+
+  // The owner's iPhone, 2026-11-05: the top bar sat 59 px down on the first card (the status bar's room was not reserved) and the
+  // dock floated 46 px up with the page showing under it. Plain Chromium has no notch: `iphone: true` gives the page an iPhone's
+  // safe areas (59 top, 34 bottom).
+  const isOpaque = (c) => /^rgb\([^,/]+,[^,/]+,[^,/)]+\)$/.test(c) || /^rgba\(.*,\s*1\)$/.test(c) || /\/\s*1\)$/.test(c)
+  stage.test('iphone-edges', 'באייפון: השורה העליונה לא מכסה את הכרטיס הראשון, והסרגל התחתון צמוד לתחתית בלי טקסט מתחתיו, גם בגלילה', 'e2e', async () => {
+    for (const [who, url] of [['owner', '/owner/dashboard'], ['dana', '/staff'], ['dev', '/staff/dev/qa']]) {
+      const s = await open(who, url, { width: 430, height: 932, iphone: true })
+      try {
+        const p = s.page
+        await p.waitForTimeout(400)
+        const at = () => p.evaluate(() => {
+          const bar = document.querySelector('.gl-top__bar').getBoundingClientRect()
+          const first = document.querySelector('.gl-main > *').getBoundingClientRect()
+          const dock = document.querySelector('.gl-dock')
+          const pill = dock.querySelector('.lg-tab-bar').getBoundingClientRect()
+          const stops = getComputedStyle(dock).backgroundImage.match(/rgba?\([^)]*\)|color\([^)]*\)|oklab\([^)]*\)/g) ?? []
+          return { barTop: bar.top, barBottom: bar.bottom, firstTop: first.top, dockBottom: dock.getBoundingClientRect().bottom, gap: innerHeight - pill.bottom, last: stops.at(-1) ?? '', vh: innerHeight }
+        })
+        const a = await at()
+        assert.ok(a.barBottom <= a.firstTop + 0.5, `${url}: the top bar covers the first card by ${Math.round(a.barBottom - a.firstTop)} px`)
+        assert.ok(a.barTop >= 59, `${url}: the top bar sits under the status bar (top ${Math.round(a.barTop)})`)
+        assert.ok(a.gap >= 8 && a.gap <= 26, `${url}: the dock sits ${Math.round(a.gap)} px above the bottom (8–26)`)
+        assert.ok(Math.abs(a.dockBottom - a.vh) < 1, `${url}: the band under the dock reaches the bottom`)
+        assert.ok(isOpaque(a.last), `${url}: the band under the dock ends opaque (${a.last})`)
+        await p.evaluate(() => window.scrollTo(0, 500))
+        await p.waitForTimeout(300)
+        const b = await at()
+        assert.ok(Math.abs(b.barTop - a.barTop) < 1, `${url}: the top bar stays put while scrolling (${Math.round(a.barTop)} → ${Math.round(b.barTop)})`)
+        assert.ok(Math.abs(b.gap - a.gap) < 1, `${url}: the dock stays put while scrolling`)
+        assert.deepEqual(s.errors, [], `${url}: page errors`)
+      } finally { await s.close() }
+    }
+  })
+
+  // The owner's iPhone, 2026-11-05: the kiosk page's save bar (sticky to the end of the editor) was left stuck at the editor's TOP,
+  // over the content, after scrolling down and back up. It is fixed to the screen now, while the editor is on screen.
+  stage.test('kiosk-save-bar', 'תוכן הקיוסק: פס השמירה צמוד לתחתית המסך כל עוד העורך על המסך, בגלילה למטה ובחזרה למעלה, ולא מכסה את הסוף', 'e2e', async () => {
+    const s = await open('owner', '/owner/kiosk', { width: 430, height: 932, iphone: true })
+    try {
+      const p = s.page
+      assert.equal(await p.locator('[data-kiosk-save-bar]').count(), 1, 'the editor and its save bar are on the page')
+      const read = () => p.evaluate(() => {
+        const el = document.querySelector('[data-kiosk-save-bar]')
+        const r = el.getBoundingClientRect(), ed = el.parentElement.getBoundingClientRect(), cs = getComputedStyle(el)
+        const last = el.previousElementSibling?.getBoundingClientRect()
+        return { gap: innerHeight - r.bottom, top: r.top, shown: cs.visibility === 'visible', editorOn: ed.top < innerHeight - 96 && ed.bottom > 0, lastBottom: last?.bottom ?? 0, atEnd: Math.ceil(scrollY + innerHeight) >= document.documentElement.scrollHeight - 1 }
+      })
+      const max = await p.evaluate(() => document.documentElement.scrollHeight - innerHeight)
+      const stops = [max, ...Array.from({ length: Math.ceil(max / 280) }, (_, i) => Math.max(0, max - (i + 1) * 280))]
+      let checked = 0
+      for (const y of stops) {
+        await p.evaluate((yy) => window.scrollTo(0, yy), y)
+        await p.waitForTimeout(260)
+        const m = await read()
+        if (m.editorOn) {
+          assert.ok(m.shown, `scroll ${y}: the bar is shown while the editor is on screen`)
+          assert.ok(m.gap >= 8 && m.gap <= 30, `scroll ${y}: the bar sits at the bottom of the screen (${Math.round(m.gap)} px up)`)
+          if (m.atEnd) assert.ok(m.lastBottom <= m.top + 0.5, `at the end the bar covers the last section by ${Math.round(m.lastBottom - m.top)} px`)
+          checked++
+        } else {
+          assert.ok(!m.shown, `scroll ${y}: the bar is hidden while only the tablets card is on screen`)
+        }
+      }
+      assert.ok(checked >= 2, `checked ${checked} positions with the editor on screen`)
+      assert.deepEqual(s.errors, [], 'page errors')
+    } finally { await s.close() }
   })
 
   stage.test('branch-switch', 'החלפת סניף בשורה העליונה: הנתונים, הרקע והעוגייה מתעדכנים', 'e2e', async () => {
@@ -343,7 +418,12 @@ export function uiStage(live, metrics) {
       for (const width of [360, 768, 1280]) {
         const s = await open(who, url, { width, height: 900 })
         try {
-          assert.ok((await overflowX(s.page)) <= 0, `${who} ${url} @${width}`)
+          const over = await overflowX(s.page)
+          // name what sticks out (a flaky run once said only "@768"): the widest elements past either edge
+          const culprits = over > 0 ? await s.page.evaluate(() => [...document.querySelectorAll('body *')].map((el) => ({ el, r: el.getBoundingClientRect() }))
+            .filter(({ r }) => r.width && (r.right > innerWidth + 0.5 || r.left < -0.5)).sort((a, b) => Math.max(b.r.right - innerWidth, -b.r.left) - Math.max(a.r.right - innerWidth, -a.r.left)).slice(0, 3)
+            .map(({ el, r }) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 2).join('.')} [${Math.round(r.left)}..${Math.round(r.right)}]`).join(', ')) : ''
+          assert.ok(over <= 0, `${who} ${url} @${width}: ${over} px sideways; ${culprits}`)
           assert.deepEqual(s.errors, [], `${who} ${url} @${width} errors:`)
         } finally { await s.close() }
       }

@@ -71,6 +71,9 @@ project's features; keep `static.mjs` (point `PUBLIC_ROUTES` and `ACCEPTED_ADVIS
   `--disable-features=OverscrollHistoryNavigation` for touch tests. It is the emulator, not the app: a phone's back gesture is the system's.
 - **A synthetic swipe must be long enough for scroll snapping:** under about half a slide, snapping pulls it back. Size swipes to the slide
   (`check:shift-scroller` uses at least 60% of one), not to a fixed pixel count.
+- **Plain Chromium has no notch.** With `viewport-fit=cover` an iPhone adds 59 px at the top and 34 px at the bottom
+  (`env(safe-area-inset-*)`); Chromium adds none, so a top bar sitting 59 px on the first card passed every test. `live.page(who,
+  { iphone: true })` sets an iPhone's insets through `Emulation.setSafeAreaInsetsOverride`; test phone layouts with it.
 - **Scope locators by name.** A screen can have two glass segmented controls (the top bar's branch switch and the page's lenses); use
   `getByRole('radiogroup', { name })`, not "the first `.gl-seg`".
 - The Windows-only browser checks (`check:kiosk-*`, `check:shift-scroller`) take `EDGE_PATH`; the suite points it at its Chromium.
