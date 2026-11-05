@@ -1,7 +1,7 @@
 // Kiosk suite, stage 4 — the kiosk dashboard in a real browser (/owner/kiosk/control): the tablet's state, the remote control panel,
 // the PIN reset, the switch between the two dashboards, and that it reads well in all five looks and on a phone.
 import { createStage, assert } from '../lib/harness.mjs'
-import { ID } from '../standin/seed.mjs'
+import { ID, seed } from '../standin/seed.mjs'
 import { auditScreen } from '../live/contrast.mjs'
 
 const LOOKS = ['neon', 'glass', 'pass', 'crema', 'latte']
@@ -16,7 +16,8 @@ export function kioskUiStage(live, metrics) {
     return { ...s, status: res?.status() }
   }
   const device = () => live().db('kiosk_devices').find((d) => d.slug === 'givat-haviva-1')
-  const fresh = () => { live().standin.state.limits.clear(); const d = device(); d.pending_command = null; d.settings = {}; live().db('kiosk_pin_resets').length = 0 }
+  // every test starts from the seeded tablet (41 %, charging, reported 2 minutes ago): the API stage before this one sends reports
+  const fresh = () => { live().standin.state.limits.clear(); Object.assign(device(), seed().kiosk_devices[0], { settings: {} }); live().db('kiosk_pin_resets').length = 0 }
 
   stage.test('dashboard', 'לוח הקיוסק: מצב הטאבלט (מחובר, סוללה, גרסאות), פעולות מרחוק וכל ההגדרות, עם הסרגל התחתון', 'e2e', async () => {
     fresh()
@@ -108,6 +109,8 @@ export function kioskUiStage(live, metrics) {
 
   stage.test('readable', 'לוח הקיוסק קריא בכל חמשת המראות, באייפון ובטאבלט, בלי גלילה לצדדים', 'a11y', async () => {
     fresh()
+    // every status line on screen too: a command waiting for the tablet and the green "the PIN was changed on the tablet"
+    Object.assign(device(), { pending_command: { id: '0b8c1f7e-2a4d-4c3b-9e5f-1a2b3c4d5e6f', kind: 'reload', at: new Date(Date.now() - 60_000).toISOString() }, pin_reset_applied_at: new Date(Date.now() - 60_000).toISOString() })
     const problems = []
     let lowest = 21
     for (const look of LOOKS) {
