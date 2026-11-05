@@ -72,6 +72,68 @@ export function uiStage(live, metrics) {
     } finally { await s.close() }
   })
 
+  // The owner's iPhone, 2026-11-05: with a long list every row was squeezed to 32 px and the text of each notification ran over the
+  // next one. The seed's three notifications never filled the menu, so this test gives the owner a realistic long list.
+  stage.test('notifications-long', 'רשימת התראות ארוכה: כל שורה בגובה שלה, בלי טקסט על טקסט, נגללת באצבע ולא נפתחת בטעות', 'e2e', async () => {
+    const rows = live().db('schedule_notifications')
+    const kinds = ['waitlist.signup', 'kiosk.poll', 'dev.kiosk_battery', 'schedule.published', 'schedule.window_closing', 'shift.today', 'shift.next']
+    const added = Array.from({ length: 24 }, (_, i) => ({
+      id: crypto.randomUUID(), branch_id: ID.gh, staff_id: ID.owner, kind: kinds[i % kinds.length],
+      title: `בעלים · התעניינות חדשה במועדון שרקפה, לקוח מספר ${i + 1} מהקיוסק בגבעת חביבה`,
+      body: 'לקוח חדש הצטרף לרשימת המתעניינים במועדון הלקוחות הדיגיטלי, בהסכמה, מהקיוסק שליד העגלה. גבעת חביבה · 08:00–13:00',
+      link: {}, created_at: new Date(Date.now() - (i + 3) * 3_600_000).toISOString(), read_at: i < 2 ? null : new Date().toISOString(), push_sent_at: new Date().toISOString(),
+    }))
+    rows.push(...added)
+    try {
+      for (const width of [320, 390]) {
+        const s = await open('owner', '/owner/dashboard', { width, height: 700 })
+        try {
+          const p = s.page
+          await p.getByRole('button', { name: /^התראות/ }).click()
+          await p.waitForTimeout(900)
+          const m = await p.evaluate(() => {
+            const items = [...document.querySelectorAll('.gl-notif .lg-menu-content > .lg-menu-item')]
+            const bad = []
+            items.forEach((el, i) => {
+              const r = el.getBoundingClientRect()
+              if (el.scrollHeight > el.clientHeight + 1) bad.push(`row ${i} spills (${el.scrollHeight} > ${el.clientHeight})`)
+              for (const t of el.querySelectorAll('strong, small')) {
+                const tr = t.getBoundingClientRect()
+                if (tr.height && (tr.top < r.top - 0.5 || tr.bottom > r.bottom + 0.5)) { bad.push(`row ${i}: text outside its row`); break }
+              }
+              const title = el.querySelector('.gl-nt__top strong')
+              if (title && title.getBoundingClientRect().height > parseFloat(getComputedStyle(title).lineHeight) * 2 + 2) bad.push(`row ${i}: title over two lines`)
+              const next = items[i + 1]
+              if (next && r.bottom > next.getBoundingClientRect().top + 0.5) bad.push(`rows ${i}/${i + 1} overlap`)
+            })
+            const list = document.querySelector('.gl-notif .lg-menu-content')
+            const lr = list.getBoundingClientRect()
+            return { n: items.length, bad, scrollable: list.scrollHeight - list.clientHeight, at: { x: Math.round(lr.left + lr.width / 2), top: Math.round(lr.top), bottom: Math.round(lr.bottom) } }
+          })
+          assert.ok(m.n >= 15, `${width}px: ${m.n} rows`)
+          assert.deepEqual(m.bad.slice(0, 4), [], `${width}px`)
+          assert.ok(m.scrollable > 200, `${width}px: the list scrolls (${m.scrollable})`)
+          // a finger swipe up scrolls the list, and lifting the finger opens nothing (glisse menus select on release)
+          const cdp = await s.context.newCDPSession(p)
+          await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+          const url = p.url()
+          const x = m.at.x, y0 = m.at.bottom - 40, y1 = m.at.top + 60
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0 }] })
+          for (let i = 1; i <= 12; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y0 + ((y1 - y0) * i) / 12 }] }); await p.waitForTimeout(16) }
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+          await p.waitForTimeout(700)
+          const top = await p.evaluate(() => document.querySelector('.gl-notif .lg-menu-content')?.scrollTop ?? -1)
+          assert.ok(top > 60, `${width}px: a finger swipe scrolled the list (${top})`)
+          assert.equal(p.url(), url, `${width}px: the swipe opened nothing`)
+          assert.ok(await p.locator('.gl-notif .lg-menu-card').isVisible(), `${width}px: the menu is still open after the swipe`)
+          assert.deepEqual(s.errors, [], `${width}px: page errors`)
+        } finally { await s.close() }
+      }
+    } finally {
+      for (const row of added) { const i = rows.indexOf(row); if (i >= 0) rows.splice(i, 1) }
+    }
+  })
+
   stage.test('branch-switch', 'החלפת סניף בשורה העליונה: הנתונים, הרקע והעוגייה מתעדכנים', 'e2e', async () => {
     const s = await open('owner', '/owner/dashboard')
     try {

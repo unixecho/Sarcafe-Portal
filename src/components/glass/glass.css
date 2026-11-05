@@ -101,8 +101,12 @@
 .gl-top__dot { position: absolute; z-index: 2; inset-block-start: -3px; inset-inline-end: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
   background: var(--neon); color: var(--gl-ink); font-size: 11px; font-weight: 800; display: grid; place-items: center; pointer-events: none; transition: opacity 0.12s; }
 .gl-top__bell:has(.lg-menu-card) .gl-top__dot { opacity: 0; }
+/* glisse's menu list is a flex column whose items set min-height: 32px, and that replaces the flex rule "never shrink below the
+   content". In a list with a max-height (the notifications) every row was squeezed to 32px and its text ran over the next row
+   (owner's iPhone, 2026-11-05). Rows keep their own height in every glass menu; the list scrolls instead. QA: ui.notifications-long */
+.lg-menu-content > .lg-menu-item { flex-shrink: 0; }
 .gl-notif .lg-menu-card { width: min(320px, calc(100vw - 100px)); }
-.gl-notif .lg-menu-content { max-height: min(70dvh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+.gl-notif .lg-menu-content { max-height: min(70dvh, 520px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
 .gl-notif .lg-menu-item { align-items: flex-start; padding-block: 9px; }
 .gl-notif .lg-menu-item > svg { margin-top: 3px; }
 .gl-account .lg-menu-card { width: 220px; }
@@ -110,8 +114,10 @@
 /* one notification in the menu: title + pill, body, time; good news green, bad news red */
 .gl-nt { display: grid; gap: 2px; min-width: 0; flex: 1; text-align: start; }
 .gl-nt__top { display: flex; align-items: center; gap: 8px; }
-.gl-nt__top strong { flex: 1; min-width: 0; font-size: 0.88rem; font-weight: 600; }
+.gl-nt__top strong { flex: 1; min-width: 0; font-size: 0.88rem; font-weight: 600; line-height: 1.3; }
 .gl-nt small { font-size: 0.76rem; line-height: 1.4; }
+/* a stream, like the phone's notification centre: at most two lines of title and two of text; tapping opens the whole thing */
+.gl-nt__top strong, .gl-nt__body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .gl-nt__time { font-size: 0.7rem !important; opacity: 0.85; }
 .gl-nt--ok .gl-nt__top strong { color: var(--gl-ok); }
 .gl-nt--bad .gl-nt__top strong { color: var(--gl-bad); }

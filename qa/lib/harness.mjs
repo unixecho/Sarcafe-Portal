@@ -26,7 +26,10 @@ export function createStage(id, title) {
     async run({ log = console.log } = {}) {
       const started = Date.now()
       const results = []
+      // QA_TESTS=ui.reset,ui.notifications-long runs only those tests (while fixing one thing); a full run never sets it
+      const only = (process.env.QA_TESTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)
       for (const t of tests) {
+        if (only.length && !only.includes(t.id)) continue
         if (t.skip) { results.push({ id: t.id, title: t.title, status: 'skip', category: t.category, durationMs: 0, detail: t.skip }); log(`  – ${t.title} (${t.skip})`); continue }
         const once = async () => {
           const t0 = Date.now()

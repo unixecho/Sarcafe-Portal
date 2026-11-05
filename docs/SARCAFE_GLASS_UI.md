@@ -51,6 +51,10 @@ fails if an owner-only page is offered to anyone else, or if an id is repeated.
   put them in an LTR box with the items reversed.
 - **Width:** never stretch a glisse control with `width: 100%`. It sizes segments with `--lg-tab-width` and moves the thumb by exactly that.
   `Seg fill` and the dock set the variable with container units; stretching the box drifted the thumb by up to 96 px.
+- **Menu rows:** glisse's menu items set `min-height: 32px`, which replaces the flex rule "never shrink below the content". In a menu
+  with a `max-height` (the notifications) every row was squeezed to 32 px and the text ran over the next row (owner's iPhone,
+  2026-11-05). `glass.css` keeps `flex-shrink: 0` on every menu row; a long menu scrolls. Test lists at real volume, not the seed's
+  three rows (QA `ui.notifications-long`). Long items are clamped to two lines (`.gl-nt__top strong`, `.gl-nt__body`).
 - **Speed:** every glisse `<Glass>` builds an SVG refraction filter (Chromium only). Use `.gl-surf` for static cards; keep real `<Glass>` for
   the top bar, the dock and controls. `GlassMotion` swaps the lens for plain blur while scrolling and `settleGlass()` for 0.9 s after a switch.
 - **Contrast:** glisse's filled button is white on the fill (2.6:1 on our orange); glass.css makes it dark ink (7.6:1) and keeps the disabled

@@ -92,7 +92,7 @@ export default function GlassTopBar({ title, account, logo = '/sarcafe-logo.png'
         label: (
           <span className={`gl-nt${tone !== 'neutral' ? ` gl-nt--${tone}` : ''}`}>
             <span className="gl-nt__top"><strong><Isolate text={n.title} /></strong>{!n.read_at && <span className={`gl-pill gl-pill--tiny${tone === 'ok' ? ' gl-pill--ok' : tone === 'bad' ? ' gl-pill--bad' : ''}`}>חדש</span>}</span>
-            {n.body && <small><Isolate text={n.body} /></small>}
+            {n.body && <small className="gl-nt__body"><Isolate text={n.body} /></small>}
             <small className="gl-nt__time">{ago(n.created_at)}</small>
           </span>
         ),

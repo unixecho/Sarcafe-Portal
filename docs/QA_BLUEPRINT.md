@@ -12,6 +12,7 @@ a developer's review every morning … a place in the panel for them."
 | `npm run qa -- --only static,unit` | some stages (`static, checks, unit, security, features, ui, survival`) |
 | `npm run qa -- --reuse-build` | keep the last production build (only when no app code changed since) |
 | `npm run qa -- --post` | also send the report to the portal (needs `QA_REPORT_URL` + `QA_REPORT_SECRET`) |
+| `QA_TESTS=ui.reset,ui.notifications-long npm run qa -- --only ui` | only those tests, while fixing one thing (the full run before the push still runs everything) |
 
 **The rule:** every change runs `npm run qa` before it is pushed, and a failing test is fixed or explicitly reviewed, never deleted. A new
 feature adds its tests in the same change (a new endpoint → `qa/live/features.mjs` + it appears in `security.probe-signed-out` automatically).
