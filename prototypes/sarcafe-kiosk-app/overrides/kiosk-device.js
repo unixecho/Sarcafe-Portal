@@ -44,6 +44,21 @@
     return typeof window.SARCAFE_BUNDLE_VERSION === 'string' && window.SARCAFE_BUNDLE_VERSION ? window.SARCAFE_BUNDLE_VERSION.slice(0, 40) : null;
   };
 
+  // The dashboard's command (docs/SARCAFE_KIOSK_REMOTE.md): the answer to a report may carry one ({ id, kind }). Its id is kept
+  // BEFORE it is carried out, so after a reload the next report says it was done (commandDone) and it is never repeated.
+  const DONE_KEY = 'sarcafe:kiosk:command-done';
+  const doneId = () => { try { return localStorage.getItem(DONE_KEY) || null; } catch (_) { return null; } };
+  function carryOut(command) {
+    if (!command || typeof command.id !== 'string') { try { localStorage.removeItem(DONE_KEY); } catch (_) { /* private */ } return; }
+    if (command.id === doneId()) return; // done already: the server clears it with the next report
+    try { localStorage.setItem(DONE_KEY, command.id); } catch (_) { /* without storage it may run twice; harmless */ }
+    if (command.kind === 'reload') { setTimeout(() => window.location.reload(), 600); return; }
+    if (command.kind === 'check_updates') {
+      try { const n = window.KioskNative; if (n && typeof n.checkUpdates === 'function') n.checkUpdates(); } catch (_) { /* an older app */ }
+      setTimeout(() => { report('command'); }, 3000);
+    }
+  }
+
   async function report(reason) {
     const url = C.apiBase ? `${C.apiBase}/device` : '';
     const headers = C.headers();
@@ -57,6 +72,8 @@
     if (app !== null) body.app = app;
     const web = webVersion();
     if (web) body.web = web;
+    const done = doneId();
+    if (done) body.commandDone = done;
     const abort = new AbortController();
     const cut = setTimeout(() => abort.abort(), 10000);
     try {
@@ -69,6 +86,7 @@
         state.ok = true; state.error = '';
         if (data.settingsUpdatedAt && !C.knowsSettingsAt(data.settingsUpdatedAt)) window.dispatchEvent(new Event('kiosk:settings-stale'));
         if (C.sync.pending) C.flush();
+        carryOut(data.command);
         return { ok: true };
       }
       state.ok = false;

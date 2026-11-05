@@ -218,6 +218,8 @@ public class MainActivity extends Activity {
 
     // ---- web view --------------------------------------------------------------------------
 
+    private volatile long lastRemoteCheck = -60000L;
+
     private void configureWebView() {
         WebView.setWebContentsDebuggingEnabled(prefs.getBoolean("debug", false));
         web.addJavascriptInterface(new Object() {
@@ -240,6 +242,15 @@ public class MainActivity extends Activity {
             }
             @JavascriptInterface public int appVersion() { return !kioskPageOnTop || ota == null ? -1 : ota.nativeVersionCode(); }
             @JavascriptInterface public String webVersion() { return !kioskPageOnTop || ota == null ? "" : ota.activeWebVersion(); }
+            // The dashboard's "look for updates now" (docs/SARCAFE_KIOSK_REMOTE.md): starts the same check the app runs every
+            // 10 minutes. Changes nothing by itself; at most once a minute.
+            @JavascriptInterface public void checkUpdates() {
+                if (!kioskPageOnTop || ota == null) return;
+                long now = android.os.SystemClock.elapsedRealtime();
+                if (now - lastRemoteCheck < 60000L) return;
+                lastRemoteCheck = now;
+                ota.checkNow();
+            }
         }, "KioskNative");
         // the staff control panel's door: every call needs the one-time token the app hands the page after the PIN
         web.addJavascriptInterface(staff.js(), "KioskStaff");

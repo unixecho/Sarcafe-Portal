@@ -183,7 +183,8 @@ check('no link at all is fine', R.pushPathFor('swap.open', null) === '/staff/sch
 
 section('wiring')
 const api = read('src/app/api/staff/push/route.ts')
-check('subscribing takes the person from the session, never the body', /resolveStaffIdentity\(\)/.test(api) && /staff_id: me\.id/.test(api) && !/staff_id:\s*input/.test(api))
+// (2026-11-05: requireStaffIdentity is the same session lookup, answering 503 instead of 401 when it cannot be made)
+check('subscribing takes the person from the session, never the body', /(resolve|require)StaffIdentity\(/.test(api) && /staff_id: me\.id/.test(api) && !/staff_id:\s*input/.test(api))
 check('unsubscribe and status are scoped to the signed-in person', (api.match(/\.eq\('staff_id', me\.id\)/g) ?? []).length >= 2)
 check('only https push endpoints on a browser push service are accepted', /refine\(isAllowedPushEndpoint/.test(api) && /url\.protocol !== 'https:'/.test(read('src/lib/push/endpoint.ts')))
 const cron = read('src/app/api/cron/staff-push/route.ts')

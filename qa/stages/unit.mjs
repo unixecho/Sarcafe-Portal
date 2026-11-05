@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { createStage, assert } from '../lib/harness.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/qa/digest.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -21,7 +21,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: get('src/lib/kiosk/remote-rules.ts'), digest: get('src/lib/qa/digest.ts') }
 }
 
 export function unitStage(root) {
@@ -73,7 +73,7 @@ export function unitStage(root) {
     for (const p of ['/staff', '/staff/schedule', '/staff/checklists', '/staff/profile']) assert.ok(d.onDockRoot(ep, p), `employee dock on ${p}`)
     for (const p of ['/staff/onboarding', '/staff/checklists/abc', '/staff/schedule/givat-haviva', '/staff/pos', '/staff/dev', '/owner/dashboard']) assert.ok(!d.onDockRoot(ep, p), `no employee dock on ${p}`)
     const op = d.dockPlanFor(owner, 'owner')
-    for (const p of ['/owner/dashboard', '/owner/schedule', '/owner/staff', '/owner/checklists']) assert.ok(d.onDockRoot(op, p), `owner dock on ${p}`)
+    for (const p of ['/owner/dashboard', '/owner/schedule', '/owner/staff', '/owner/checklists', '/owner/kiosk/control']) assert.ok(d.onDockRoot(op, p), `owner dock on ${p}`)
     for (const p of ['/owner/kiosk', '/owner/schedule/print', '/owner/checklists/x', '/owner/editor']) assert.ok(!d.onDockRoot(op, p), `no owner dock on ${p}`)
     // the employee tabs never lead to an owner-only page (the middleware's list)
     const mw = fs.readFileSync(path.join(root, 'src/middleware.ts'), 'utf8')
@@ -81,6 +81,36 @@ export function unitStage(root) {
     assert.ok(opOnly.length > 3, 'could not read OP_ONLY_PREFIXES')
     const roots = ep.roots.map((re) => re.replace(/^\^|\$$/g, ''))
     assert.deepEqual(roots.filter((r) => opOnly.some((pfx) => r === pfx || r.startsWith(`${pfx}/`))), [], 'employee tab on an owner-only page')
+  })
+  stage.test('kiosk-pin-rules', 'קוד צוות לקיוסק מלוח הבקרה: רק 6–8 ספרות שאי אפשר לנחש, ונשמר רק כרשומה של האפליקציה', 'security', async () => {
+    const r = m.remote
+    for (const bad of ['12345', '123456789', '12a456', '111111', '123456', '654321', '890123', '', '000000']) assert.ok(r.pinProblem(bad), `${bad} refused`)
+    for (const good of ['583917', '1029384', '90817263']) assert.equal(r.pinProblem(good), null, `${good} accepted`)
+    const rec = r.pinRecord('583917')
+    assert.ok(r.PIN_RECORD.test(rec) && !rec.includes('583917'), 'the app\'s record format, without the PIN')
+    assert.ok(r.pinMatches(rec, '583917') && !r.pinMatches(rec, '583918'), 'opens with that PIN only')
+    assert.ok(r.pinRecord('583917') !== rec, 'a new salt every time')
+    assert.ok(!r.remoteActionSchema.safeParse({ action: 'command', slug: 'givat-haviva-1', kind: 'shell' }).success, 'unknown command refused')
+    assert.ok(!r.remoteActionSchema.safeParse({ action: 'pin', slug: '../x', pin: '583917', confirm: '583917' }).success, 'bad tablet name refused')
+    assert.equal(r.readCommand({ id: 'x', kind: 'reload', at: 'now' })?.kind, 'reload')
+    assert.equal(r.readCommand({ id: 'x', kind: 'rm', at: 'now' }), null, 'a stored unknown kind is ignored')
+  })
+  stage.test('qa-digest', 'הודעת 07:00: הודעה אחת, שני דוחות, עבר/נכשל, וקישור לבעיות כשמשהו נכשל; דוח שלא הגיע = כישלון', 'unit', async () => {
+    const d = m.digest
+    const pass = { id: 'a', status: 'pass', passed: 100, tests: 101, failed: 0, skipped: 1 }
+    const fail = { id: 'b', status: 'fail', passed: 40, tests: 43, failed: 3, skipped: 0 }
+    const ok = d.composeDigest({ dashboard: pass, kiosk: { ...pass, id: 'c' } })
+    assert.equal(ok.status, 'pass'); assert.equal(ok.kind, 'dev.qa_digest_pass'); assert.equal(ok.url, '/staff/dev/qa')
+    assert.ok(ok.body.includes('לוח הבקרה: עבר 100/100') && ok.body.includes('הקיוסק: עבר'), ok.body)
+    const k = d.composeDigest({ dashboard: pass, kiosk: fail })
+    assert.equal(k.status, 'fail'); assert.equal(k.kind, 'dev.qa_digest_fail')
+    assert.equal(k.url, '/staff/dev/qa?suite=kiosk&focus=problems', 'opens the failing suite at its problems')
+    assert.ok(k.title.includes('הקיוסק נכשל') && k.body.includes('3 בדיקות'), `${k.title} / ${k.body}`)
+    const missing = d.composeDigest({ dashboard: null, kiosk: pass })
+    assert.equal(missing.status, 'fail', 'a report that did not arrive is a failure')
+    assert.ok(missing.body.includes('הדוח לא הגיע'))
+    assert.ok(/^\/(?!\/)[A-Za-z0-9/_\-?=&%.]*$/.test(k.url), 'the link survives the push link filter (no #)')
+    assert.equal(d.israelDay(new Date('2026-11-05T23:30:00Z')), '2026-11-06', 'the day is Israel\'s')
   })
   stage.test('roles-for', 'תפקידים לפי מי שמחובר: בעלים, מנהל/ת סניף, עובד/ת, מפתח', 'unit', async () => {
     assert.deepEqual(m.tools.toolRolesFor({ op: true, manager: true, developer: false }), ['op', 'manager'])

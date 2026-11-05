@@ -11,7 +11,8 @@ export type DockKind = 'manager' | 'employee'
 export type DockPlan = { kind: DockKind; home: string; roots: string[] }
 type Person = Pick<AccessRow, 'role' | 'badge'> & { email?: string | null; via?: string; quick?: boolean }
 
-const MANAGER_ROOTS = ['^/owner/dashboard$', '^/owner/schedule$', '^/owner/staff$', '^/owner/checklists$']
+// /owner/kiosk/control is the second dashboard (the kiosk's): the bar stays there too, and its switch leads back.
+const MANAGER_ROOTS = ['^/owner/dashboard$', '^/owner/schedule$', '^/owner/staff$', '^/owner/checklists$', '^/owner/kiosk/control$']
 const EMPLOYEE_ROOTS = ['^/staff$', '^/staff/schedule$', '^/staff/checklists$', '^/staff/profile$']
 const DEV_ROOTS = ['^/staff/dev$', '^/staff/dev/qa$']
 

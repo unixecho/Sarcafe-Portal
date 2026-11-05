@@ -35,8 +35,15 @@ export const QaReview = z.object({
   next: z.array(text(300)).max(10),
 }).strict()
 
+/** Two reports per run (owner, 2026-11-05): the portal ("לוח הבקרה") and the kiosk (the tablet: its page, APIs and app). */
+export const QA_SUITES = ['dashboard', 'kiosk'] as const
+export type QaSuite = (typeof QA_SUITES)[number]
+export const SUITE_LABELS: Record<QaSuite, string> = { dashboard: 'לוח הבקרה', kiosk: 'הקיוסק' }
+
 export const QaReport = z.object({
   version: z.literal(1),
+  /** Reports from before the kiosk suite have none: they are the dashboard's. */
+  suite: z.enum(QA_SUITES).default('dashboard'),
   run: z.object({
     startedAt: z.string().datetime(),
     finishedAt: z.string().datetime(),

@@ -5,7 +5,8 @@ import { resolveStaffIdentity } from '@/lib/staff/session'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { isOp } from '@/lib/staff/access'
 import { loadQaPage } from '@/lib/qa/server'
-import { passRate, type QaReport, type QaRunSummary, type QaStage } from '@/lib/qa/report'
+import { passRate, QA_SUITES, SUITE_LABELS, type QaReport, type QaRunSummary, type QaStage, type QaSuite } from '@/lib/qa/report'
+import QaSuiteSwitch, { FocusProblems } from './QaSuiteSwitch'
 import './qa.css'
 
 export const dynamic = 'force-dynamic'
@@ -21,15 +22,19 @@ const fmtDuration = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)} ש�
 const fmtDate = (iso: string) => new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(iso))
 const fmtTime = (iso: string) => new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 
-export default async function QaReviewPage() {
+export default async function QaReviewPage({ searchParams }: { searchParams: Promise<{ suite?: string | string[]; focus?: string | string[] }> }) {
+  const params = await searchParams
+  const suite: QaSuite = QA_SUITES.includes(params.suite as QaSuite) ? (params.suite as QaSuite) : 'dashboard'
   const me = await resolveStaffIdentity()
   if (!me) redirect('/login?next=/staff/dev/qa&quick=1')
   if (!isDeveloper(me)) redirect('/staff')
   const canManage = me.via === 'google' && !me.quick && isOp(me)
-  const { latest, history, origin, note } = await loadQaPage()
+  const { latest, history, origin, note, suites } = await loadQaPage(suite)
 
   return (
     <GlassDashboardShell title="סקירת QA" account={{ developer: true, manager: canManage }}>
+      <QaSuiteSwitch suite={suite} suites={suites} />
+      <FocusProblems on={params.focus === 'problems'} />
       {latest ? <Review report={latest} history={history} origin={origin} note={note} /> : (
         <section className="gl-surf gl-card"><h2 className="gl-card__title">עוד אין דוח QA</h2><p className="gl-note">הריצו <code>npm run qa</code> או חכו לריצה של הבוקר.</p></section>
       )}
@@ -109,7 +114,7 @@ function Review({ report, history, origin, note }: { report: QaReport; history: 
     <>
       <section className={`gl-surf qa-hero qa-hero--${s.tone}`} aria-labelledby="qa-title">
         <div className="qa-hero__copy">
-          <p className="qa-eyebrow">סקירת QA · {fmtDate(report.run.finishedAt)} · {fmtTime(report.run.finishedAt)}</p>
+          <p className="qa-eyebrow">{SUITE_LABELS[report.suite]} · {fmtDate(report.run.finishedAt)} · {fmtTime(report.run.finishedAt)}</p>
           <h1 id="qa-title">{report.review.headline}</h1>
           <p className="qa-verdict">{report.review.verdict}</p>
           <span className={`gl-pill${s.tone === 'ok' ? ' gl-pill--ok' : s.tone === 'bad' ? ' gl-pill--bad' : ''}`}>{s.label}</span>
@@ -117,6 +122,7 @@ function Review({ report, history, origin, note }: { report: QaReport; history: 
         <Ring value={Math.round(rate)} tone={s.tone} />
       </section>
       {note && <p className="gl-summary">{note}</p>}
+      <Problems report={report} />
 
       <section className="qa-tiles" aria-label="במספרים">
         {tile(<CircleCheck size={18} aria-hidden="true" />, `${report.totals.passed}/${report.totals.tests - report.totals.skipped}`, 'בדיקות עברו', report.totals.failed ? undefined : 'ok')}
@@ -184,5 +190,27 @@ function Review({ report, history, origin, note }: { report: QaReport; history: 
         {' · '}<Clock size={14} aria-hidden="true" /> {fmtDuration(report.run.durationMs)} · {origin === 'stored' ? 'מהריצה האחרונה' : 'הדוח שנשלח עם הקוד'}
       </p>
     </>
+  )
+}
+
+/** Everything that failed or was unstable, first and in red, with the stage it belongs to and what it said (the 07:00 notification
+ *  opens the report here when something failed: ?focus=problems). */
+function Problems({ report }: { report: QaReport }) {
+  const bad = report.stages.flatMap((stage) => stage.tests.filter((t) => t.status === 'fail' || t.status === 'flaky').map((t) => ({ ...t, stage: stage.title })))
+  if (bad.length === 0) return null
+  const failed = bad.filter((t) => t.status === 'fail').length
+  return (
+    <section className="gl-surf gl-card qa-problems" id="problems" aria-labelledby="qa-problems-title">
+      <h2 className="gl-card__title" id="qa-problems-title"><CircleAlert size={17} aria-hidden="true" />{failed ? `${failed === 1 ? 'בעיה אחת' : `${failed} בעיות`} לתקן` : 'בדיקות לא יציבות'}</h2>
+      <ul className="qa-problems__list">
+        {bad.map((t) => (
+          <li key={t.id} className={`qa-problem qa-problem--${t.status}`}>
+            <span className="qa-problem__head">{t.status === 'fail' ? <CircleAlert size={15} aria-hidden="true" /> : <TriangleAlert size={15} aria-hidden="true" />}<strong>{t.title}</strong></span>
+            <span className="qa-problem__where">{t.stage} · {CATEGORY[t.category] ?? t.category}</span>
+            {t.detail && <code className="qa-problem__detail">{t.detail}</code>}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

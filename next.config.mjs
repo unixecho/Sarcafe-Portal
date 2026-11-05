@@ -5,6 +5,12 @@ const nextConfig = {
   transpilePackages: ['a11y-widget'],
   // No `X-Powered-By: Next.js` on every response: it tells a scanner which framework (and so which advisories) to try.
   poweredByHeader: false,
+  // Revisits are instant (owner, 2026-11-05): a page seen in the last 3 minutes is shown from the router's cache with nothing
+  // loading; its live parts re-read their own numbers, and after any save the next page shown refreshes once
+  // (components/app/RouterFreshness.tsx). First visits still show the page's skeleton, then stream its fields.
+  experimental: {
+    staleTimes: { dynamic: 180, static: 300 },
+  },
   images: {
     remotePatterns: [
       {

@@ -1,48 +1,105 @@
-# The automatic QA suite (docs/QA_BLUEPRINT.md): every morning before the day starts, after every push to main, and on demand.
-# It builds the app against a stand-in Supabase (never the real project), runs every stage, and posts the report to the
-# developer's morning review (/staff/dev/qa). Repository secrets: QA_REPORT_URL (https://<site>/api/qa/report) and
-# QA_REPORT_SECRET (the same value as the QA_REPORT_SECRET env var on Vercel). Without them the report is only kept here.
+# The automatic QA suite (docs/QA_BLUEPRINT.md): every night, after every push to main, and on demand. It builds the app against a
+# stand-in Supabase (never the real project), runs both suites — the dashboard and the kiosk — and posts the two reports to the
+# developer's morning review (/staff/dev/qa). At 07:00 Israel time a second job asks the portal to send the developer ONE notification
+# with both results (pass / fail; a failure opens that report with its problems highlighted).
+#
+# No stored secret is needed: the jobs prove who they are with GitHub's own short-lived identity token (OIDC, audience "sarcafe-qa"),
+# which the portal accepts only for THIS repository, THIS file and the main branch (src/lib/qa/auth.ts). Optional repository secrets:
+# QA_REPORT_URL (another portal address) and QA_REPORT_SECRET (the shared secret, used only when no identity token is available).
 name: QA
 
 on:
   push:
     branches: [main]
   schedule:
-    - cron: '17 3 * * *' # 05:17 in Israel in winter, 06:17 in summer
+    - cron: '41 2 * * *' # the suites: 04:41 in Israel in winter, 05:41 in summer — both reports are in long before 07:00
+    - cron: '47 3 * * *' # the digest in summer (06:47 Israel; waits for 07:00). In winter this firing is an hour early and stops.
+    - cron: '47 4 * * *' # the digest in winter (06:47 Israel; waits for 07:00). In summer the portal answers "already sent".
   workflow_dispatch:
+    inputs:
+      digest:
+        description: 'Also send the developer the digest now (once a day at most)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-concurrency:
-  group: qa-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   qa:
+    if: github.event_name != 'schedule' || github.event.schedule == '41 2 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # GitHub's identity token, to post the reports
+    concurrency:
+      group: qa-suite-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-java@v4 # the kiosk app's plain-Java parts are compiled and run (qa/kiosk/static.mjs)
+        with:
+          distribution: temurin
+          java-version: 17
       - name: Install
         run: npm ci || node qa/tools/install-without-widget.mjs
-      - name: Browser
+      - name: Browser (Playwright Chromium)
         run: npx playwright install --with-deps chromium
-      - name: QA suite
+      - name: QA suites (dashboard + kiosk)
         env:
           QA_REPORT_URL: ${{ secrets.QA_REPORT_URL }}
           QA_REPORT_SECRET: ${{ secrets.QA_REPORT_SECRET }}
         run: npm run qa -- --post
-      - name: Keep the report
+      - name: Keep the reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qa-report-${{ github.run_number }}
+          name: qa-reports-${{ github.run_number }}
           path: |
             qa/reports/latest.json
             qa/reports/latest.md
+            qa/reports/kiosk-latest.json
+            qa/reports/kiosk-latest.md
           retention-days: 30
+
+  digest:
+    # always(): on the digest firings the qa job is skipped, and on a manual run the digest goes out even when QA failed
+    if: always() && ((github.event_name == 'schedule' && github.event.schedule != '41 2 * * *') || (github.event_name == 'workflow_dispatch' && inputs.digest))
+    needs: [qa]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # GitHub's identity token, to ask for the digest
+    concurrency:
+      group: qa-digest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: qa
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Wait for 07:00 in Israel
+        id: clock
+        run: |
+          now=$(date +%s)
+          target=$(TZ=Asia/Jerusalem date -d 'today 07:00' +%s)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$now" -lt $((target - 3600)) ]; then
+            echo "It is $(TZ=Asia/Jerusalem date +%H:%M) in Israel: this is the other season's firing, the next one sends."
+            echo "send=no" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$now" -lt "$target" ]; then sleep $((target - now)); fi
+          echo "send=yes" >> "$GITHUB_OUTPUT"
+      - name: Send the digest
+        if: steps.clock.outputs.send == 'yes'
+        env:
+          QA_REPORT_URL: ${{ secrets.QA_REPORT_URL }}
+          QA_REPORT_SECRET: ${{ secrets.QA_REPORT_SECRET }}
+        run: node qa/tools/send-digest.mjs

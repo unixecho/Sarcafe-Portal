@@ -8,7 +8,8 @@
 --      were skipped because they never turned notifications on). Its primary key is the sender's request id, so the same send
 --      can never go out twice. The message itself reaches people as ordinary schedule_notifications rows (kind 'staff.message').
 --   3. qa_runs: the reports of the automatic QA suite (GitHub Actions, every morning and on every push to main), read by the
---      developer's morning review page /staff/dev/qa.
+--      developer's morning review page /staff/dev/qa. Two suites, two reports per run: 'dashboard' (the portal) and 'kiosk' (the
+--      tablet, its page, its APIs and its app). qa_digests: the 07:00 notification to the developer, at most one per day.
 --
 -- Additive and idempotent. Nothing here is reachable from a browser role: RLS on, every grant revoked, service role only.
 -- The app works before this is applied: the finder keeps its history on the device, the team message sends without the audit
@@ -153,6 +154,7 @@ grant all on public.staff_messages to service_role;
 create table if not exists public.qa_runs (
   id          uuid primary key default gen_random_uuid(),
   created_at  timestamptz not null default now(),
+  suite       text not null default 'dashboard' check (suite in ('dashboard', 'kiosk')),
   source      text not null check (source in ('schedule', 'push', 'manual', 'local')),
   commit_sha  text check (commit_sha is null or commit_sha ~ '^[0-9a-f]{7,40}$'),
   ref         text check (ref is null or char_length(ref) <= 120),
@@ -162,15 +164,30 @@ create table if not exists public.qa_runs (
   report      jsonb not null,
   check (octet_length(report::text) < 600000)
 );
+-- in case an earlier draft of this table exists without the suite column
+alter table public.qa_runs add column if not exists suite text not null default 'dashboard' check (suite in ('dashboard', 'kiosk'));
 create index if not exists qa_runs_recent_idx on public.qa_runs (created_at desc);
+create index if not exists qa_runs_suite_recent_idx on public.qa_runs (suite, created_at desc);
 alter table public.qa_runs enable row level security;
 revoke all on public.qa_runs from public, anon, authenticated;
 grant all on public.qa_runs to service_role;
+
+-- The 07:00 digest (POST /api/qa/digest): one row per Israel day, so the developer gets ONE notification however often it is asked.
+create table if not exists public.qa_digests (
+  day         date primary key,
+  sent_at     timestamptz not null default now(),
+  status      text not null check (status in ('pass', 'fail')),
+  runs        jsonb not null default '{}'::jsonb check (jsonb_typeof(runs) = 'object' and pg_column_size(runs) <= 4096)
+);
+alter table public.qa_digests enable row level security;
+revoke all on public.qa_digests from public, anon, authenticated;
+grant all on public.qa_digests to service_role;
 
 -- Check after applying (all must be true / 0):
 --   select to_regclass('public.staff_tool_usage') is not null as usage_table,
 --          to_regclass('public.staff_messages') is not null as messages_table,
 --          to_regclass('public.qa_runs') is not null as qa_table,
+--          to_regclass('public.qa_digests') is not null as digest_table,
 --          (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 --            where n.nspname = 'public' and p.proname in ('staff_tool_usage_record','staff_tool_usage_merge','staff_tool_usage_reset')) as functions_3,
 --          (select count(*) from (select proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'

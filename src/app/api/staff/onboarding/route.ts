@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ApiError } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
-import { EMPLOYEE_SESSION_COOKIE, resolveStaffIdentity } from '@/lib/staff/session'
+import { EMPLOYEE_SESSION_COOKIE, requireStaffIdentity, resolveStaffIdentity } from '@/lib/staff/session'
 import { credentialRoute, limitInvitation, newToken, ONBOARDING_HEADERS, setLinkCookie, tokenHash } from '@/lib/staff/invitations'
 import { staffDisplayName } from '@/lib/shifts/names'
 
@@ -40,8 +40,7 @@ async function staffOfInvite(service: Service, linkToken: string): Promise<strin
 }
 
 export const GET = credentialRoute(async () => {
-  const identity = await resolveStaffIdentity()
-  if (!identity) throw new ApiError(401, 'unauthorized', 'יש להתחבר כדי לקשר Google לחשבון.')
+  const identity = await requireStaffIdentity(() => new ApiError(401, 'unauthorized', 'יש להתחבר כדי לקשר Google לחשבון.'))
   // Tolerant on purpose: if the progress column is not there (a database that has not had the migration), the person is treated as done.
   const { data: mine } = await createServiceRoleClient().from('staff').select('avatar_emoji, onboarding_done_at').eq('id', identity.id).maybeSingle()
   const done = mine ? (mine as { onboarding_done_at?: string | null }).onboarding_done_at !== null || !('onboarding_done_at' in mine) : true

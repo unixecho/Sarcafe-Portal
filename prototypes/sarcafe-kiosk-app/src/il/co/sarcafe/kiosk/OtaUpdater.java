@@ -375,6 +375,11 @@ final class OtaUpdater {
                 ok = false;
                 result.append("; app: ").append(shortError(e));
             }
+            try {
+                result.append("; ").append(checkPinReset());
+            } catch (Exception e) {
+                result.append("; pin: ").append(shortError(e)); // never counts as an update failure
+            }
             finish(result.toString(), ok);
         } finally {
             worker.removeCallbacks(periodic);
@@ -776,6 +781,62 @@ final class OtaUpdater {
             });
         } catch (Exception e) {
             Log.w(TAG, "no network callback: " + e);
+        }
+    }
+
+    /**
+     * A new staff PIN chosen on the dashboard (docs/SARCAFE_KIOSK_REMOTE.md): GET /api/kiosk/device/pin on the update host with the
+     * kiosk key; the answer is the PIN's record (never the PIN), adopted exactly where the PIN dialog reads it ("pin_v2", the
+     * failures and the lockout cleared), then confirmed with POST so the portal deletes it. Checked with every update check.
+     */
+    private String checkPinReset() throws Exception {
+        String key = config.getString("key", null);
+        String base = updateBase();
+        if (key == null || key.isEmpty() || base == null) return "pin: not configured";
+        Uri b = Uri.parse(base);
+        String origin = "https://" + b.getHost() + (b.getPort() > 0 ? ":" + b.getPort() : "");
+        String device = PinReset.deviceOrDefault(config.getString("device", null));
+        HttpURLConnection c = open(origin + "/api/kiosk/device/pin?device=" + device);
+        String id;
+        String record;
+        try {
+            c.setRequestProperty("X-Kiosk-Key", key);
+            int code = c.getResponseCode();
+            if (code == 503) return "pin: portal not ready";
+            if (code != 200) return "pin: HTTP " + code;
+            InputStream in = c.getInputStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try {
+                byte[] buf = new byte[1024];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (out.size() > 2048) throw new IOException("response too large");
+                }
+            } finally {
+                in.close();
+            }
+            JSONObject reset = new JSONObject(out.toString("UTF-8")).optJSONObject("reset");
+            if (reset == null) return "pin: none waiting";
+            id = reset.optString("id", null);
+            record = reset.optString("record", null);
+        } finally {
+            c.disconnect();
+        }
+        if (!PinReset.acceptableId(id) || !PinReset.acceptableRecord(record)) return "pin: refused a malformed record";
+        config.edit().putString("pin_v2", record).remove("pin_hash").remove("pin_failures").remove("pin_locked_until").commit();
+        HttpURLConnection p = open(origin + "/api/kiosk/device/pin");
+        try {
+            p.setRequestMethod("POST");
+            p.setDoOutput(true);
+            p.setRequestProperty("Content-Type", "application/json");
+            p.setRequestProperty("X-Kiosk-Key", key);
+            JSONObject ack = new JSONObject().put("device", device).put("id", id);
+            OutputStream o = p.getOutputStream();
+            try { o.write(ack.toString().getBytes("UTF-8")); } finally { o.close(); }
+            return "pin: new PIN adopted (confirmed " + p.getResponseCode() + ")";
+        } finally {
+            p.disconnect();
         }
     }
 

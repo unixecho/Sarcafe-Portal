@@ -1,8 +1,9 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Beaker, CalendarClock, ChevronLeft, ClipboardCheck, ClipboardList, Receipt, ShoppingBag, UserRound, UsersRound } from 'lucide-react'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
 import StaffPushCard from '@/components/staff/StaffPushCard'
-import ShiftStatusCard from '@/components/staff/ShiftStatusCard'
+import ShiftStatusCard, { ShiftStatusSkeleton } from '@/components/staff/ShiftStatusCard'
 import GoogleLinkPrompt from '@/components/staff/GoogleLinkPrompt'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
 import ThemeNudge from '@/components/staff/ThemeNudge'
@@ -35,11 +36,13 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
   const manager = fullLogin && hasAnyMenuEditAccess(me)
   const scheduleHref = fullLogin ? '/staff/schedule' : '/login?next=/staff/schedule'
   const service = createServiceRoleClient()
-  const [shiftStatus, look, messageable, branches] = await Promise.all([
-    loadShiftStatus(service, me.id),
+  // The page appears at once; the shift card and a manager's team message stream in behind their own skeletons (owner,
+  // 2026-11-05: "only skeleton load the fields… everything else should load gradually"). Not awaited here:
+  const shiftStatus = loadShiftStatus(service, me.id)
+  const messageable = manager ? messageableBranches(service, me).catch(() => []) : null
+  const [look, branches] = await Promise.all([
     loadStaffTheme(me.id),
-    manager ? messageableBranches(service, me).catch(() => []) : Promise.resolve([]),
-    fullLogin && me.branch_id ? getBranches() : Promise.resolve([]),
+    manager && me.branch_id ? getBranches() : Promise.resolve([]),
   ])
   // A general manager edits their own branch's checklists from here (the builder is per branch); an owner is sent to the branches.
   const ownBranch = fullLogin && me.branch_id ? branches.find((branch) => branch.id === me.branch_id) ?? null : null
@@ -76,9 +79,9 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
       </Link>
       {!me.auth_user_id && <GoogleLinkPrompt />}
       <StaffPushCard />
-      <ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} />
+      <Suspense fallback={<ShiftStatusSkeleton />}><ShiftStatusCard status={shiftStatus} scheduleHref={scheduleHref} developer={developer} /></Suspense>
       <ToolShortcuts />
-      {manager && messageable.length > 0 && <TeamMessage branches={messageable} />}
+      {messageable && <Suspense fallback={null}><ManagerTeamMessage branches={messageable} /></Suspense>}
       <WorkshopCard />
       <ToolFinder />
       <div data-track-tools><DashboardSections categories={categories} staff /></div>
@@ -95,4 +98,10 @@ export default async function EmployeeDashboardView({ me }: { me: StaffIdentity 
       {!look.chosen && !look.nudgeSeen && <ThemeNudge />}
     </ToolsProvider>
   )
+}
+
+/** A general manager's team message, once their branches are known (streams in; nothing to show for a manager with none). */
+async function ManagerTeamMessage({ branches }: { branches: Promise<{ slug: string; name: string }[]> }) {
+  const list = await branches
+  return list.length > 0 ? <TeamMessage branches={list} /> : null
 }

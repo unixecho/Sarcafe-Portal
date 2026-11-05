@@ -1,14 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { ApiError, Forbidden, NotFound, Unauthorized } from '@/lib/http/errors'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { ApiError, Forbidden, NotFound } from '@/lib/http/errors'
+import { requireStaffIdentity } from '@/lib/staff/session'
 import { isOp } from '@/lib/staff/access'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { PAYSLIP_BUCKET, privateStaffRoute } from '@/lib/staff/records'
 
 export const GET = privateStaffRoute(async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
-  const me = await resolveStaffIdentity()
-  if (!me) throw Unauthorized()
+  const me = await requireStaffIdentity()
   if (me.quick || me.via !== 'google') throw Forbidden('כדי לפתוח תלוש שכר צריך להתחבר עם Google')
   const id = z.string().uuid().parse((await params).id)
   const service = createServiceRoleClient()

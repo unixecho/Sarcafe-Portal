@@ -3,6 +3,7 @@ import StaffInstallIntro from '@/components/staff/StaffInstallIntro'
 import ThemedApp from '@/components/app/ThemedApp'
 import { resolveStaffIdentity } from '@/lib/staff/session'
 import DockHost from '@/components/glass/DockHost'
+import RouterFreshness from '@/components/app/RouterFreshness'
 import { dockPlanFor } from '@/lib/nav/dock'
 import { GeistSans } from 'geist/font/sans'
 
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 // The bottom dock lives HERE (not in the pages) so it stays mounted between its tabs; lib/nav/dock.ts decides who gets it and where.
 export default async function OwnerLayout({ children }: { children: React.ReactNode }) {
   const me = await resolveStaffIdentity().catch(() => null)
-  return <ThemedApp staffId={me?.id} className={GeistSans.variable}><StaffInstallIntro />{children}<DockHost plan={dockPlanFor(me, 'owner')} /></ThemedApp>
+  return <ThemedApp staffId={me?.id} className={GeistSans.variable}><StaffInstallIntro />{children}<DockHost plan={dockPlanFor(me, 'owner')} /><RouterFreshness /></ThemedApp>
 }

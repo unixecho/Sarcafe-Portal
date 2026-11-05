@@ -62,9 +62,21 @@ fails if an owner-only page is offered to anyone else, or if an id is repeated.
   that owns the screen (`body:has(.ck-runner)` hides it while a checklist is being filled).
 - **Taps light up immediately.** `PageTransitions` stops link clicks before React sees them (it re-plays them through a view
   transition) and announces each one (`NAV_START_EVENT`, `src/lib/nav/events.ts`): listen to that to react to the tap itself.
-- **Pages are not served from a cache on revisit (a decision):** Next's `staleTimes` would make a revisit instant but could show a
-  page from before a save made through an API route (a checklist sent, constraints submitted) for up to its lifetime. A skeleton at
-  once, then fresh data, is the rule. Request-level reads are shared with React `cache()` (identity, look, branches, gate state).
+- **A revisited tab is instant; only its data refreshes (owner, 2026-11-05: "make revisited tabs instant and only skeleton load the
+  fields that will need to be updated").** `next.config.mjs` keeps a visited page in the router cache (`staleTimes`: 3 minutes dynamic,
+  5 static), so going back to a tab shows it at once, with no request. What keeps it honest:
+  - `RouterFreshness` (in the /owner and /staff layouts) notes every successful save through an API route (any non-GET `/api/*` except the
+    tool-usage counter) and refreshes the router once on the next tab change, and when the app comes back after more than a minute
+    away. A save is therefore never shown stale.
+  - The live numbers refresh by themselves: `DashboardLive` gets `renderedAt`, and a copy older than 10 seconds asks for fresh numbers
+    quietly on mount (the page stays, the numbers update in place).
+- **Only the fields that need data wait.** A page renders its frame (titles, links, buttons, the dock) at once and streams the parts that
+  read the database behind `<Suspense>` with a skeleton shaped like that part: the owner dashboard's numbers (`DashboardLiveSkeleton`),
+  the employee's shift card (`ShiftStatusSkeleton`, the promise is handed to the client card and read with `use()`), the manager's team
+  message. Never put a whole-page `await` before the frame when only one card needs it.
+- Request-level reads are shared with React `cache()` (identity, look, branches, gate state).
+- **Two dashboards, one switch.** The owner dashboard and the kiosk dashboard (`/owner/kiosk/control`) share the `DashboardSwitch` at the
+  top ("לוח הבקרה | הקיוסק"); both are dock roots, so moving between them keeps the dock and does not reload the page.
 
 ## Rules that are easy to break (each one bit us once)
 - **RTL:** glisse places selection thumbs with physical left/right. Never use `SegmentedControl` or `TabBar` directly: `Seg` and `GlassDock`

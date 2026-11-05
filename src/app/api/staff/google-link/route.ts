@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { ApiError } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { requireStaffIdentity } from '@/lib/staff/session'
 import { credentialRoute, GOOGLE_LINK_COOKIE, limitInvitation, newToken, ONBOARDING_HEADERS, setBackCookie, setLinkCookie, tokenHash } from '@/lib/staff/invitations'
 
 const schema = z.discriminatedUnion('action', [
@@ -16,8 +16,7 @@ export const POST = credentialRoute(async (request: NextRequest) => {
   const body = await parseBody(request, schema)
   const service = createServiceRoleClient()
   if (body.action === 'prepare') {
-    const identity = await resolveStaffIdentity()
-    if (!identity) throw new ApiError(401, 'unauthorized', 'יש להתחבר לפני קישור Google.')
+    const identity = await requireStaffIdentity(() => new ApiError(401, 'unauthorized', 'יש להתחבר לפני קישור Google.'))
     await limitInvitation(request, 'google-pin', identity.id)
     const proof = newToken()
     const { data, error } = await service.rpc('staff_prepare_google_link', { p_staff: identity.id, p_pin: body.passcode, p_link_hash: tokenHash(proof) })

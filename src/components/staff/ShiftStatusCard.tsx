@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { use, useEffect, useRef, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { Beaker, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, Lock, MapPin, Radio } from 'lucide-react'
 import { advanceClock, clockAbs, dayLabel, isChecklistLocked, shiftEndAbs, shiftStartAbs, unlockText, type LockInput, type WallClock } from '@/lib/checklists/window'
@@ -35,7 +35,21 @@ const lockFor = (shift: ShiftBrief, item: ShiftChecklistBrief): LockInput => ({ 
  *  needs the app installed (`scheduleHref` is /login?next=/staff/schedule there). */
 const CODE_NOTE = 'הסידור המלא זמין רק בכניסה דרך האפליקציה. לחיצה על הכרטיס תעביר לכניסה.'
 
-export default function ShiftStatusCard({ status, scheduleHref, developer, codeMode = false }: { status: ShiftStatus; scheduleHref: string; developer: boolean; codeMode?: boolean }) {
+/** The card while the shift is being read (it streams in after the rest of the home page): its shape, shimmering. */
+export function ShiftStatusSkeleton() {
+  return (
+    <div className="gl-surf gl-sk-card" style={{ minHeight: 150 }} aria-busy="true" data-shift-skeleton="">
+      <p className="sr-only" role="status">טוען את המשמרת שלך…</p>
+      <span className="sk gl-sk-line gl-sk-line--title" aria-hidden="true" />
+      <span className="sk gl-sk-line" aria-hidden="true" />
+      <span className="sk gl-sk-line gl-sk-line--short" aria-hidden="true" />
+    </div>
+  )
+}
+
+/** `status` may be the promise of it: the home page hands it over unread and the card waits inside its own Suspense. */
+export default function ShiftStatusCard({ status: given, scheduleHref, developer, codeMode = false }: { status: ShiftStatus | Promise<ShiftStatus>; scheduleHref: string; developer: boolean; codeMode?: boolean }) {
+  const status = typeof (given as Promise<ShiftStatus>)?.then === 'function' ? use(given as Promise<ShiftStatus>) : (given as ShiftStatus)
   const loadedAt = useRef(Date.now())
   const [, setTick] = useState(0)
   const [sim, setSim] = useState(false)

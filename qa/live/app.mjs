@@ -11,7 +11,9 @@ import { browserPath } from '../stages/checks.mjs'
 const require = createRequire(import.meta.url)
 export const STANDIN_PORT = 54399
 export const APP_PORT = 3399
-export const SECRETS = { CRON_SECRET: 'qa-cron-secret-0123456789', QA_REPORT_SECRET: 'qa-report-secret-0123456789' }
+export const SECRETS = { CRON_SECRET: 'qa-cron-secret-0123456789', QA_REPORT_SECRET: 'qa-report-secret-0123456789', KIOSK_SIGNUP_KEY: 'qa-kiosk-key-0123456789' }
+// GitHub's token signer, played by the stand-in (lib/qa/auth.ts reads <issuer>/.well-known/jwks): tests sign with signToken()
+export const OIDC_ISSUER = `http://127.0.0.1:54399/__qa`
 
 const SKIP = new Set(['node_modules', '.next', '.git', 'qa', '.vercel'])
 function copyTree(from, to, top = true) {
@@ -31,6 +33,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${STANDIN_PORT}`,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: 'qa-anon-key',
     SUPABASE_SERVICE_ROLE_KEY: 'qa-service-role-key',
+    QA_OIDC_ISSUER: OIDC_ISSUER,
     RATE_LIMIT_KEY_SECRET: 'qa-rate-limit-secret',
     NEXT_TELEMETRY_DISABLED: '1',
     ...SECRETS,
@@ -42,7 +45,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     fs.rmSync(work, { recursive: true, force: true })
     copyTree(root, work)
     fs.mkdirSync(path.join(work, 'qa/reports'), { recursive: true })
-    fs.copyFileSync(path.join(root, 'qa/reports/latest.json'), path.join(work, 'qa/reports/latest.json'))
+    for (const f of ['latest.json', 'kiosk-latest.json']) fs.copyFileSync(path.join(root, 'qa/reports', f), path.join(work, 'qa/reports', f))
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(work, 'node_modules'), 'dir')
     // the carousel's own browser check needs its throwaway fixture page: only ever in this scratch copy
     await run('node', [path.join(root, 'scripts/check-shift-scroller.mjs'), '--write-fixture', work], { cwd: root, timeout: 30_000 })

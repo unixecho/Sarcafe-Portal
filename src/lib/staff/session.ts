@@ -2,10 +2,12 @@ import 'server-only'
 
 import { createHash, randomBytes } from 'node:crypto'
 import { cache } from 'react'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { isStaff, type AccessRow } from '@/lib/staff/access'
+import { ApiError, Unauthorized } from '@/lib/http/errors'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 
 export const EMPLOYEE_SESSION_COOKIE = 'sarcafe_staff_session'
@@ -34,38 +36,66 @@ function identity(row: Record<string, unknown>, via: StaffIdentity['via'], quick
 
 // Once per request (React cache): the layout, the page and the views all ask who is signed in, and each answer is up to four
 // round trips to Supabase (auth, the staff row, the session check). Outside a server render (an API route) it simply runs.
-export const resolveStaffIdentity = cache(async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
+// `failed`: the check itself could not be made (the auth server or the database did not answer). That is not "nobody is signed
+// in": requireStaffIdentity answers it with 503, so nobody is told to sign in again because of an outage.
+type IdentityLookup = { me: StaffIdentity | null; failed: boolean }
+const authFailed = (error: unknown) => {
+  if (!error) return false
+  const status = (error as { status?: unknown }).status
+  return isAuthRetryableFetchError(error) || (typeof status === 'number' && status >= 500)
+}
+
+const lookupIdentity = cache(async function lookupIdentity(): Promise<IdentityLookup> {
   const service = createServiceRoleClient()
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
+  let failed = authFailed(authError)
 
   if (user) {
-    const { data } = await service.from('staff').select(STAFF_COLUMNS).eq('auth_user_id', user.id).eq('active', true).maybeSingle()
+    const { data, error } = await service.from('staff').select(STAFF_COLUMNS).eq('auth_user_id', user.id).eq('active', true).maybeSingle()
+    if (error) failed = true
     if (isStaff(data)) {
       const quick = await validatedSessionId(supabase).then(isQuickSessionId).catch(() => true)
-      return identity(data as Record<string, unknown>, 'google', quick)
+      return { me: identity(data as Record<string, unknown>, 'google', quick), failed: false }
     }
   }
 
   const token = (await cookies()).get(EMPLOYEE_SESSION_COOKIE)?.value
-  if (!token) return null
+  if (!token) return { me: null, failed }
   const hash = employeeSessionHash(token)
-  const { data: session } = await service
+  const { data: session, error: sessionError } = await service
     .from('staff_employee_sessions')
     .select('staff_id, expires_at, revoked_at')
     .eq('token_hash', hash)
     .is('revoked_at', null)
     .gt('expires_at', new Date().toISOString())
     .maybeSingle()
-  if (!session) return null
+  if (sessionError) return { me: null, failed: true }
+  if (!session) return { me: null, failed }
 
-  const { data } = await service.from('staff').select(STAFF_COLUMNS).eq('id', session.staff_id).eq('active', true).maybeSingle()
-  if (!isStaff(data)) return null
+  const { data, error } = await service.from('staff').select(STAFF_COLUMNS).eq('id', session.staff_id).eq('active', true).maybeSingle()
+  if (error) return { me: null, failed: true }
+  if (!isStaff(data)) return { me: null, failed }
   void service.from('staff_employee_sessions').update({ last_seen_at: new Date().toISOString() }).eq('token_hash', hash)
-  return identity(data as Record<string, unknown>, 'employee_code', true)
+  return { me: identity(data as Record<string, unknown>, 'employee_code', true), failed: false }
 })
+
+/** Who is signed in, or null (also null when it could not be checked: pages then send to sign in, as before). */
+export const resolveStaffIdentity = cache(async function resolveStaffIdentity(): Promise<StaffIdentity | null> {
+  return (await lookupIdentity()).me
+})
+
+/** For API routes: the person, or 503 when it could not be checked (an outage is not a sign-out), or `missing()` (default 401)
+ *  when nobody is signed in — each route keeps its own words for that. */
+export async function requireStaffIdentity(missing: () => Error = () => Unauthorized()): Promise<StaffIdentity> {
+  const { me, failed } = await lookupIdentity()
+  if (me) return me
+  if (failed) throw new ApiError(503, 'unavailable', 'לא הצלחנו לבדוק את ההרשאה כרגע. נסו שוב בעוד רגע.')
+  throw missing()
+}
 
 export async function issueEmployeeSession(response: NextResponse, staffId: string) {
   const token = randomBytes(32).toString('base64url')

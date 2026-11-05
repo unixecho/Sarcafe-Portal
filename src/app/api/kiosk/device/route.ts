@@ -10,6 +10,8 @@ import {
   mergeStored,
 } from '@/lib/kiosk/device-settings'
 import { keysMatch, readLimitedText } from '@/lib/kiosk/waitlist'
+import { isMissingObject } from '@/lib/kiosk/remote'
+import { readCommand, type KioskCommand } from '@/lib/kiosk/remote-rules'
 
 // What the kiosk tablet says about itself, and what its control panel saves. Two calls, both with the kiosk's shared key
 // (the same one the sign-up uses; without KIOSK_SIGNUP_KEY in the host's environment both answer 503):
@@ -82,7 +84,8 @@ export async function POST(request: NextRequest) {
     if (error || !data) return reply(502, { ok: false, error: 'unavailable' })
     const result = data as { ok: boolean; error?: string; alerted?: boolean; settingsUpdatedAt?: string | null }
     if (!result.ok) return reply(result.error === 'unknown_device' ? 404 : 502, { ok: false, error: result.error ?? 'unavailable' })
-    return reply(200, { ok: true, settingsUpdatedAt: result.settingsUpdatedAt ?? null })
+    const command = await exchangeCommand(report.device ?? DEFAULT_KIOSK_DEVICE, report.commandDone)
+    return reply(200, { ok: true, settingsUpdatedAt: result.settingsUpdatedAt ?? null, ...(command ? { command } : {}) })
   } catch {
     return reply(502, { ok: false, error: 'unavailable' })
   }
@@ -123,4 +126,20 @@ export async function PUT(request: NextRequest) {
   } catch {
     return reply(502, { ok: false, error: 'unavailable' })
   }
+}
+
+/** The dashboard's command waiting for this tablet (kiosk_devices.pending_command): cleared when the tablet says it carried it out
+ *  (only that same command: a newer one set meanwhile stays), otherwise handed over with every report until it is. Before the
+ *  migration (no column) there is never one. */
+async function exchangeCommand(slug: string, done: string | undefined): Promise<KioskCommand | null> {
+  const service = createServiceRoleClient()
+  const { data, error } = await service.from('kiosk_devices').select('pending_command').eq('slug', slug).maybeSingle()
+  if (error) { if (isMissingObject(error)) return null; throw error }
+  const pending = readCommand((data as { pending_command?: unknown } | null)?.pending_command)
+  if (!pending) return null
+  if (done && done === pending.id) {
+    await service.from('kiosk_devices').update({ pending_command: null }).eq('slug', slug).eq('pending_command->>id', done)
+    return null
+  }
+  return pending
 }

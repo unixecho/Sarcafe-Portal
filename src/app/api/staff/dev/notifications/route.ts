@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { ApiError, Forbidden, Unauthorized } from '@/lib/http/errors'
+import { ApiError, Forbidden } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { loadDevCentre, CENTRE_LIMIT } from '@/lib/push/dev-centre'
 import { privateStaffRoute } from '@/lib/staff/records'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { requireStaffIdentity } from '@/lib/staff/session'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
@@ -13,8 +13,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 const headers = { 'Cache-Control': 'private, no-store' }
 
 async function requireDeveloper() {
-  const me = await resolveStaffIdentity()
-  if (!me) throw Unauthorized()
+  const me = await requireStaffIdentity()
   if (!isDeveloper(me)) throw Forbidden('Developer access required.')
   return me
 }

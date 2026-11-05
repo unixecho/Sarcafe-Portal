@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { apiRoute, ApiError, BadRequest, NotFound } from '@/lib/http/errors'
-import { requireMenuEditor } from '@/lib/owner/guard'
+import { apiRoute, ApiError, BadRequest, Forbidden, NotFound } from '@/lib/http/errors'
+import { requireAnyMenuEditor, requireMenuEditor } from '@/lib/owner/guard'
+import { canEditMenu } from '@/lib/staff/access'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { loadShortageReport, ISSUE_REPORT_DAYS, GAP_REPORT_DAYS } from '@/lib/checklists/issues-server'
 
@@ -15,12 +16,16 @@ const bodySchema = z.discriminatedUnion('action', [
 // was about) and the checklists nobody sent. Owners see every branch; a general manager sees the branch they run
 // (requireMenuEditor is the same per-branch rule the menu editor uses).
 export const GET = apiRoute(async (request: NextRequest) => {
+  // Who is asking first (a signed-out caller learns nothing about which branches exist), then the branch: a failed read is
+  // "unavailable" (503), never "not found".
+  const me = await requireAnyMenuEditor()
   const slug = request.nextUrl.searchParams.get('branch')
   if (!slug) throw BadRequest('בחרו סניף.')
   const service = createServiceRoleClient()
-  const { data: branch } = await service.from('branches').select('id, slug, name').eq('slug', slug).eq('active', true).maybeSingle()
+  const { data: branch, error } = await service.from('branches').select('id, slug, name').eq('slug', slug).eq('active', true).maybeSingle()
+  if (error) throw new ApiError(503, 'unavailable', 'לא הצלחנו לטעון את הנתונים כרגע. נסו שוב בעוד רגע.')
   if (!branch) throw NotFound('הסניף לא נמצא.')
-  await requireMenuEditor(branch.id as string)
+  if (!canEditMenu(me, branch.id as string)) throw Forbidden('Menu-editor access required for this branch.')
   const report = await loadShortageReport(service, branch.id as string)
   return NextResponse.json(
     { branch: { id: branch.id, slug: branch.slug, name: branch.name }, days: ISSUE_REPORT_DAYS, gapDays: GAP_REPORT_DAYS, serverTime: new Date().toISOString(), ...report },

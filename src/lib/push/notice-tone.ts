@@ -8,12 +8,12 @@ export type Tone = 'ok' | 'bad' | 'neutral'
 
 const OK_KINDS = new Set([
   'schedule.published', 'swap.accepted', 'swap.accept', 'swap.approved', 'swap.approve', 'request.approved', 'request.approve',
-  'timeoff.approve', 'availability.submitted', 'dev.club_signup', 'waitlist.new', 'staff.onboard', 'staff.reactivate',
+  'timeoff.approve', 'availability.submitted', 'dev.club_signup', 'waitlist.new', 'staff.onboard', 'staff.reactivate', 'dev.qa_digest_pass',
 ])
 const BAD_KINDS = new Set([
   'swap.declined', 'swap.decline', 'swap.rejected', 'swap.reject', 'swap.cancelled', 'swap.cancel', 'request.reject', 'request.cancelled',
   'request.cancel', 'timeoff.decline', 'timeoff.cancelled', 'schedule.unpublish', 'checklist.late', 'checklist.gap', 'issues.digest',
-  'dev.kiosk_battery', 'staff.deactivate',
+  'dev.kiosk_battery', 'staff.deactivate', 'dev.qa_digest_fail',
 ])
 const OK_WORDS = /(אושר|אושרה|אושרו|פורסם|פורסמה|התקבל|הושלם|הצליח|נשלח בהצלחה)/
 const BAD_WORDS = /(נדח|בוטל|בוטלה|לא הוגש|לא נשלח|נכשל|תקלה|חסר|אזל|באיחור|סוללה חלשה)/

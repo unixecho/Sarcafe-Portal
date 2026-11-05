@@ -11,6 +11,8 @@ export function survivalStage(live) {
   const fault = (body) => live().control('/__qa/fault', body)
   const ok = () => fault({ mode: 'none' })
   const apis = ['/api/owner/team-message?branch=givat-haviva', '/api/staff/notifications', '/api/staff/tool-usage', '/api/owner/dashboard?branch=givat-haviva']
+  // every owner / manager route that answers a plain GET (requireOwner / requireMenuEditor / requireAnyMenuEditor)
+  const ownerApis = ['/api/owner/feedback', '/api/owner/intro', '/api/owner/issues?branch=givat-haviva', '/api/owner/kiosk/content', '/api/owner/kiosk/devices', '/api/owner/staff', '/api/owner/waitlist', `/api/owner/staff/${ID.dana}`]
 
   stage.test('reset', 'מתחילים ממצב נקי', 'e2e', async () => { live().reset() }, { retry: false })
 
@@ -27,11 +29,14 @@ export function survivalStage(live) {
   stage.test('db-down', 'מסד הנתונים לא עונה: ה־API מחזיר שגיאה מסודרת והעמודים לא קורסים עם פרטים', 'survival', async () => {
     await fault({ mode: 'down' })
     try {
-      for (const url of apis) {
+      // a signed-in owner is never told "sign in" (401) because the database is down: the answer is "unavailable" (5xx)
+      for (const url of [...apis, ...ownerApis]) {
         const res = await live().call(url, { as: 'owner' })
-        assert.ok(res.status >= 400, `${url} → ${res.status}`)
+        assert.ok(res.status >= 500, `${url} → ${res.status} while the database is down (must be 5xx, not 4xx)`)
         assert.notMatch(res.text, LEAK, `${url} leaks`)
       }
+      // and someone signed out is still told to sign in
+      assert.status(await live().call('/api/owner/staff', {}), 401, 'signed out during the outage')
       for (const url of ['/owner/dashboard', '/staff']) {
         const res = await live().call(url, { as: 'owner' })
         assert.notMatch(res.text, LEAK, `${url} leaks`)
@@ -40,7 +45,7 @@ export function survivalStage(live) {
   }, { timeout: 120_000 })
   stage.test('recover', 'אחרי שמסד הנתונים חוזר: הכול עובד שוב בלי הפעלה מחדש', 'recovery', async () => {
     await ok()
-    for (const url of apis) assert.status(await live().call(url, { as: 'owner' }), 200, url)
+    for (const url of [...apis, ...ownerApis]) assert.status(await live().call(url, { as: 'owner' }), 200, url)
     assert.status(await live().call('/owner/dashboard', { as: 'owner' }), 200, 'dashboard')
   })
   stage.test('retry-after-outage', 'הודעה שנשלחה בזמן תקלה: נכשלת בלי לשלוח חלקית, ואותה בקשה מצליחה פעם אחת אחרי ההתאוששות', 'recovery', async () => {

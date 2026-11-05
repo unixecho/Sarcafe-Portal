@@ -18,7 +18,8 @@ import java.security.SecureRandom;
  *   adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es ota_check now
  *
  * Extras: url (https://... | asset), orient (auto|portrait|landscape), debug (on|off), pin (6-8 digits), api, rt,
- * rt_key, rt_channel, key (sign-up key), perf (auto|lite|full), ota (update server base), ota_check (now).
+ * rt_key, rt_channel, key (sign-up key), perf (auto|lite|full), ota (update server base), ota_check (now), device (this tablet's
+ * name in the portal, e.g. givat-haviva-1: where a PIN reset set on the dashboard is fetched for).
  * An empty value removes api / rt / rt_key / key / ota.
  */
 public class KioskConfigReceiver extends BroadcastReceiver {
@@ -58,6 +59,13 @@ public class KioskConfigReceiver extends BroadcastReceiver {
             prefs.edit().putBoolean("debug", debug.equals("on")).apply();
             changed = true;
         }
+        String device = intent.getStringExtra("device"); // the tablet's portal name: where a dashboard PIN reset is fetched for
+        if (device != null) {
+            if (device.isEmpty()) prefs.edit().remove("device").apply();
+            else if (PinReset.deviceOrDefault(device).equals(device)) prefs.edit().putString("device", device).apply();
+            else Log.w(OtaUpdater.TAG, "device not changed: not a tablet name");
+        }
+
         String pin = intent.getStringExtra("pin");
         if (pin != null) {
             if (StaffPin.isAcceptableNewPin(pin)) {

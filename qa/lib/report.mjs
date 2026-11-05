@@ -6,7 +6,10 @@ import path from 'node:path'
 const CAT = { static: 'בדיקה סטטית', unit: 'לוגיקה', sql: 'מסד נתונים', security: 'אבטחה', e2e: 'מקצה לקצה', regression: 'רגרסיה', survival: 'שרידות', recovery: 'התאוששות', a11y: 'נגישות וקריאות', perf: 'ביצועים' }
 const dur = (ms) => (ms < 60_000 ? `${Math.round(ms / 1000)} שניות` : `${Math.floor(ms / 60_000)} דקות ו־${Math.round((ms % 60_000) / 1000)} שניות`)
 
-export function buildReport({ stages, startedAt, source, commit, ref, host, metrics, previous }) {
+const SUITE_NAME = { dashboard: 'לוח הבקרה', kiosk: 'הקיוסק' }
+const SUITE_FILE = { dashboard: 'latest', kiosk: 'kiosk-latest' }
+
+export function buildReport({ suite = 'dashboard', stages, startedAt, source, commit, ref, host, metrics, previous }) {
   const all = stages.flatMap((s) => s.tests)
   const totals = {
     tests: all.length,
@@ -20,6 +23,7 @@ export function buildReport({ stages, startedAt, source, commit, ref, host, metr
   const finishedAt = new Date().toISOString()
   const report = {
     version: 1,
+    suite,
     run: { startedAt, finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), source, commit, ref, host },
     status,
     totals,
@@ -87,11 +91,12 @@ function writeReview(report, previous) {
 export function writeReport(dir, report) {
   fs.mkdirSync(path.join(dir, 'history'), { recursive: true })
   const stamp = report.run.finishedAt.replace(/[:.]/g, '-')
-  fs.writeFileSync(path.join(dir, 'history', `${stamp}.json`), JSON.stringify(report, null, 2))
-  fs.writeFileSync(path.join(dir, 'latest.json'), JSON.stringify(report, null, 2))
+  const file = SUITE_FILE[report.suite] ?? 'latest'
+  fs.writeFileSync(path.join(dir, 'history', `${report.suite}-${stamp}.json`), JSON.stringify(report, null, 2))
+  fs.writeFileSync(path.join(dir, `${file}.json`), JSON.stringify(report, null, 2))
   const r = report.review
   const md = [
-    `# סקירת QA · ${new Date(report.run.finishedAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`,
+    `# סקירת QA · ${SUITE_NAME[report.suite] ?? ''} · ${new Date(report.run.finishedAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`,
     '', `**${r.headline}**`, '', r.verdict, '',
     r.highlights.length ? '## מה טוב\n' + r.highlights.map((h) => `- ${h}`).join('\n') : '',
     r.risks.length ? '\n## סיכונים\n' + r.risks.map((h) => `- ${h}`).join('\n') : '',
@@ -99,6 +104,6 @@ export function writeReport(dir, report) {
     '\n## הצעדים הבאים\n' + r.next.map((h, i) => `${i + 1}. ${h}`).join('\n'),
     '\n## שלבים\n' + report.stages.map((s) => `- ${s.status === 'pass' ? '✅' : s.status === 'warn' ? '⚠️' : '❌'} ${s.title}: ${s.tests.filter((t) => t.status === 'pass').length}/${s.tests.length}`).join('\n'),
   ].filter(Boolean).join('\n')
-  fs.writeFileSync(path.join(dir, 'latest.md'), md + '\n')
+  fs.writeFileSync(path.join(dir, `${file}.md`), md + '\n')
   return md
 }

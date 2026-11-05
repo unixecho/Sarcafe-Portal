@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { RateLimited, Unauthorized } from '@/lib/http/errors'
+import { RateLimited } from '@/lib/http/errors'
 import { parseBody } from '@/lib/pos/server/guard'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { privateStaffRoute } from '@/lib/staff/records'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { requireStaffIdentity } from '@/lib/staff/session'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { TOOL_IDS } from '@/lib/tools'
 import { cleanQuery, MAX_USAGE_ENTRIES } from '@/lib/tools/search'
@@ -23,14 +23,12 @@ const Body = z.discriminatedUnion('op', [
 ])
 
 export const GET = privateStaffRoute(async () => {
-  const me = await resolveStaffIdentity()
-  if (!me) throw Unauthorized()
+  const me = await requireStaffIdentity()
   return NextResponse.json(await readToolUsage(createServiceRoleClient(), me.id))
 })
 
 export const POST = privateStaffRoute(async (request: NextRequest) => {
-  const me = await resolveStaffIdentity()
-  if (!me) throw Unauthorized()
+  const me = await requireStaffIdentity()
   const body = await parseBody(request, Body)
   if (!(await checkRateLimit(`tool-usage:${me.id}`, 240, 3600))) throw RateLimited()
   const service = createServiceRoleClient()

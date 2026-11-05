@@ -20,7 +20,9 @@ export type StaffRow = AccessRow & {
 // `quick`: the session was opened with an employee number + passcode, not Google. Such
 // a session is floor-work-only (blueprint §1a.5), so both guards below refuse it.
 // `failed` says the check itself could not be made (the auth server or the database did not answer), which is not the same as
-// "not signed in". requireAnyMenuEditor answers it with 503; the older guards keep their answer (no user → 401).
+// "not signed in": every guard below answers it with 503, so a signed-in owner is never told to sign in during an outage (a
+// client that treats 401 as "signed out" would send them to the login page). A missing or rejected session is still 401.
+const cannotCheck = () => new ApiError(503, 'unavailable', 'לא הצלחנו לבדוק את ההרשאה כרגע. נסו שוב בעוד רגע.')
 async function resolveStaff(): Promise<{ staff: StaffRow | null; quick: boolean; failed: boolean }> {
   const supabase = await createServerSupabaseClient()
   const {
@@ -52,7 +54,8 @@ async function resolveStaff(): Promise<{ staff: StaffRow | null; quick: boolean;
  * service-role client, independent of whatever middleware already decided —
  * defense in depth. Never trust a client-supplied role. */
 export async function requireOwner(): Promise<StaffRow> {
-  const { staff, quick } = await resolveStaff()
+  const { staff, quick, failed } = await resolveStaff()
+  if (failed) throw cannotCheck()
   if (!staff) throw Unauthorized()
   if (quick) throw Forbidden('quick_session')
   if (!isOp(staff)) throw Forbidden('Owner access required.')
@@ -63,7 +66,8 @@ export async function requireOwner(): Promise<StaffRow> {
  * general_manager only their own (or every branch if their branch_id is
  * null). */
 export async function requireMenuEditor(branchId: string): Promise<StaffRow> {
-  const { staff, quick } = await resolveStaff()
+  const { staff, quick, failed } = await resolveStaff()
+  if (failed) throw cannotCheck()
   if (!staff) throw Unauthorized()
   if (quick) throw Forbidden('quick_session')
   if (!canEditMenu(staff, branchId)) throw Forbidden('Menu-editor access required for this branch.')
@@ -75,7 +79,7 @@ export async function requireMenuEditor(branchId: string): Promise<StaffRow> {
  * (canEditMenu) follows once the branch is known. */
 export async function requireAnyMenuEditor(): Promise<StaffRow> {
   const { staff, quick, failed } = await resolveStaff()
-  if (failed) throw new ApiError(503, 'unavailable', 'לא הצלחנו לבדוק את ההרשאה כרגע. נסו שוב בעוד רגע.')
+  if (failed) throw cannotCheck()
   if (!staff) throw Unauthorized()
   if (quick) throw Forbidden('quick_session')
   if (!hasAnyMenuEditAccess(staff)) throw Forbidden('Menu-editor access required.')

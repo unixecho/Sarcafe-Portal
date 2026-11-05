@@ -6,6 +6,7 @@ import { fakeJwt } from './supabase.mjs'
 export const ID = {
   gh: '11111111-1111-4111-8111-111111111111',
   maor: '22222222-2222-4222-8222-222222222222',
+  kioskTablet: '33333333-3333-4333-8333-333333333333',
   owner: 'a0000000-0000-4000-8000-000000000001',
   dev: 'a0000000-0000-4000-8000-000000000002',
   gm: 'a0000000-0000-4000-8000-000000000003',
@@ -98,5 +99,12 @@ export function seed() {
     staff_tool_searches: [],
     staff_messages: [],
     qa_runs: [],
+    qa_digests: [],
+    // the kiosk: one tablet at Givat Haviva, reporting a moment ago (the kiosk suite, qa/kiosk/)
+    kiosk_devices: [{ id: ID.kioskTablet, slug: 'givat-haviva-1', name: 'קיוסק גבעת חביבה', branch_id: ID.gh, active: true, settings: {}, settings_updated_at: new Date(Date.now() - 86_400_000).toISOString(), settings_updated_by: null, last_seen_at: new Date(Date.now() - 120_000).toISOString(), battery_level: 41, battery_charging: true, battery_reported_at: new Date(Date.now() - 120_000).toISOString(), battery_alert_armed: true, battery_alert_step: null, app_version: 3, web_version: 'fb9352034d3229cb', pending_command: null, pin_reset_applied_at: null, created_at: new Date(Date.now() - 7 * 86_400_000).toISOString(), updated_at: new Date().toISOString() }],
+    kiosk_pin_resets: [],
+    kiosk_settings: [],
+    kiosk_ads: [],
+    kiosk_feedback_options: [],
   }
 }

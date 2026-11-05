@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { apiRoute, ApiError, BadRequest, Forbidden, NotFound, Unauthorized } from '@/lib/http/errors'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { requireStaffIdentity, resolveStaffIdentity } from '@/lib/staff/session'
 import { coveredMessage, ensureChecklistTemplates, flattenDefinition, loadStaffChecklistAssignments, syncPublishedChecklists } from '@/lib/checklists/server'
 import { KIND_LABELS, type ChecklistAnswer, type ChecklistDefinition } from '@/lib/checklists/types'
 import { isDeveloper } from '@/lib/checklists/developer'
@@ -37,8 +37,7 @@ async function branchForRequest(request: NextRequest, staff: NonNullable<Awaited
 }
 
 export const GET = apiRoute(async (request: NextRequest) => {
-  const staff = await resolveStaffIdentity()
-  if (!staff) throw Unauthorized('יש להתחבר כדי לראות צ׳קליסטים.')
+  const staff = await requireStaffIdentity(() => Unauthorized('יש להתחבר כדי לראות צ׳קליסטים.'))
   const service = createServiceRoleClient()
   const branch = await branchForRequest(request, staff)
   await ensureChecklistTemplates(service, branch, staff.id)

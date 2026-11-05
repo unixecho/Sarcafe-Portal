@@ -281,6 +281,81 @@ export function uiStage(live, metrics) {
     } finally { await live().control('/__qa/fault', { mode: 'none' }); await s.close() }
   })
 
+  // Owner, 2026-11-05: "make revisited tabs instant and only skeleton load the fields that will need to be updated". Pages seen in
+  // the last 3 minutes come from the router's cache (next.config staleTimes); their live parts re-read only their own numbers; after
+  // a save the next page shown asks the server once (RouterFreshness). First visits stream: the page first, the fields after.
+  const watchRevisit = (p) => p.evaluate(() => {
+    window.__sawSkeleton = false
+    new MutationObserver(() => { if (document.querySelector('[data-glass-skeleton], .app-loading-content, [data-live-skeleton], [data-shift-skeleton]')) window.__sawSkeleton = true }).observe(document.body, { childList: true, subtree: true })
+  })
+  const pageRequests = (p, path) => { const seen = []; p.on('request', (r) => { const u = new URL(r.url()); if (u.pathname === path && r.headers()['rsc'] === '1') seen.push(Date.now()) }); return seen }
+  stage.test('revisit-instant', 'חזרה ללשונית שכבר ביקרתם בה: מוצגת מיד, בלי שלד ובלי בקשה לשרת', 'perf', async () => {
+    for (const [who, home, other] of [['owner', '/owner/dashboard', ['סידור', '/owner/schedule']], ['dana', '/staff', ['פרופיל', '/staff/profile']]]) {
+      const s = await open(who, home)
+      try {
+        const p = s.page
+        await p.locator('.gl-dock .lg-tab', { hasText: other[0] }).first().click()
+        await settle(p, home)
+        await watchRevisit(p)
+        const asked = pageRequests(p, home)
+        const t0 = Date.now()
+        await p.locator('.gl-dock .lg-tab', { hasText: 'בית' }).first().click()
+        await p.waitForFunction((h) => location.pathname === h && !!document.querySelector('.gl-welcome:not(.gl-sk-card)'), home, { timeout: 5000 })
+        const ms = Date.now() - t0
+        await p.waitForTimeout(600)
+        assert.ok(!(await p.evaluate(() => window.__sawSkeleton)), `${who}: a skeleton appeared on a revisit`)
+        assert.equal(asked.length, 0, `${who}: the revisit asked the server for the page`)
+        assert.ok(ms < 1200, `${who}: the revisit took ${ms} ms`)
+      } finally { await s.close() }
+    }
+  })
+  stage.test('revisit-numbers', 'חזרה אחרי יותר מ־10 שניות: רק המספרים של הלוח נקראים מחדש, במקום, בלי שלד', 'perf', async () => {
+    const s = await open('owner', '/owner/dashboard')
+    try {
+      const p = s.page
+      await p.locator('.gl-dock .lg-tab', { hasText: 'סידור' }).first().click()
+      await settle(p, '/owner/dashboard')
+      await p.waitForTimeout(10_500)
+      await watchRevisit(p)
+      const numbers = []; p.on('request', (r) => { if (r.url().includes('/api/owner/dashboard')) numbers.push(r.url()) })
+      await p.locator('.gl-dock .lg-tab', { hasText: 'בית' }).first().click()
+      await p.waitForFunction(() => location.pathname === '/owner/dashboard', null, { timeout: 5000 })
+      await p.waitForTimeout(2000)
+      assert.ok(numbers.length >= 1, 'the live numbers were not re-read on a revisit of an older copy')
+      assert.ok(!(await p.evaluate(() => window.__sawSkeleton)), 'a skeleton appeared while only the numbers refreshed')
+    } finally { await s.close() }
+  }, { timeout: 60_000 })
+  stage.test('refresh-after-save', 'אחרי שמירה: הדף הבא שמוצג נקרא מהשרת פעם אחת (לא מוצג מצב ישן)', 'e2e', async () => {
+    const s = await open('owner', '/owner/dashboard')
+    try {
+      const p = s.page
+      await p.locator('.gl-dock .lg-tab', { hasText: 'סידור' }).first().click()
+      await settle(p, '/owner/dashboard')
+      const id = live().db('schedule_notifications').find((n) => n.staff_id === ID.owner)?.id
+      assert.ok(id, 'a notification to mark as read')
+      const status = await p.evaluate(async (nid) => (await fetch('/api/staff/notifications', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: [nid] }) })).status, id)
+      assert.equal(status, 200, 'the save itself')
+      const asked = pageRequests(p, '/owner/dashboard')
+      await p.locator('.gl-dock .lg-tab', { hasText: 'בית' }).first().click()
+      await p.waitForFunction(() => location.pathname === '/owner/dashboard', null, { timeout: 5000 })
+      await p.waitForTimeout(2000)
+      assert.ok(asked.length >= 1, 'after a save, the page shown next was not read again from the server')
+    } finally { await s.close() }
+  })
+  stage.test('fields-stream', 'כניסה ראשונה עם מסד נתונים איטי: הדף מופיע, ורק השדות של המספרים מנצנצים עד שהם מגיעים', 'perf', async () => {
+    const s = await live().page('owner')
+    try {
+      const p = s.page
+      await live().control('/__qa/fault', { mode: 'slow', ms: 3000, tables: ['shift_requests'] })
+      await p.goto(live().base + '/owner/dashboard', { waitUntil: 'commit' })
+      await p.waitForSelector('.gl-welcome:not(.gl-sk-card)', { timeout: 8000 })
+      assert.ok(await p.locator('[data-live-skeleton]').count() === 1, 'the page was shown before its numbers, with the numbers shimmering')
+      assert.ok(await p.locator('.gl-dock').count() === 1, 'the dock is there while the numbers load')
+      await p.waitForSelector('[data-live-skeleton]', { state: 'detached', timeout: 15000 })
+      assert.ok(await p.locator('.gl-stats .gl-stat').count() >= 3, 'the numbers arrived')
+    } finally { await live().control('/__qa/fault', { mode: 'none' }); await s.close() }
+  })
+
   // Owner, 2026-11-05: "the borders don't look good" — a square dark box behind the two rounded "coming soon" tiles.
   stage.test('soon-tiles', 'כרטיסי "בקרוב" בבית העובד/ת: שני כרטיסים מעוגלים בלי מלבן כהה מאחוריהם, בכל המראות', 'e2e', async () => {
     for (const look of LOOKS) {

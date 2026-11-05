@@ -69,3 +69,18 @@
 .qa-history__bar--fail { fill: var(--gl-bad); }
 .qa-meta { margin: 4px 0 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; font-size: 0.74rem; color: var(--text-dim); text-align: center;
   padding: 6px 12px; border-radius: 99px; background: color-mix(in srgb, var(--bg) 72%, transparent); justify-self: center; }
+
+/* ── the problems: what failed, first and in red (the 07:00 notification opens here with ?focus=problems) ─────────────── */
+.qa-problems { border: 1px solid color-mix(in srgb, var(--gl-bad) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gl-bad) 18%, transparent), 0 14px 34px rgba(0, 0, 0, .3); scroll-margin-top: 96px; }
+.qa-problems .gl-card__title { color: var(--gl-bad); }
+.qa-problems__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.qa-problem { display: grid; gap: 4px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--gl-bad) 12%, transparent); }
+.qa-problem--flaky { background: color-mix(in srgb, #f5b041 14%, transparent); }
+.qa-problem__head { display: flex; align-items: flex-start; gap: 8px; font-size: 0.88rem; }
+.qa-problem__head svg { flex: none; margin-top: 2px; color: var(--gl-bad); }
+.qa-problem--flaky .qa-problem__head svg { color: #f5b041; }
+.qa-problem__where { font-size: 0.74rem; color: var(--text-dim); }
+.qa-problem__detail { display: block; font-size: 0.74rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; direction: ltr; text-align: left; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.qa-problems--focus { animation: qa-glow 1.6s ease-out 2; }
+@keyframes qa-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gl-bad) 60%, transparent); } 70% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--gl-bad) 0%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .qa-problems--focus { animation: none; outline: 2px solid var(--gl-bad); } }

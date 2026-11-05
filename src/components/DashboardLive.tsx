@@ -14,6 +14,9 @@ import type { DashboardStats } from '@/lib/owner/dashboard-stats'
 import type { Signal } from '@/lib/owner/signals'
 
 const POLL_MS = 30_000
+// A copy older than this when the block appears came from the router's cache (a revisit): its numbers are re-read at once,
+// quietly, in place (no skeleton, nothing else on the page reloads).
+const STALE_MS = 10_000
 const COLLAPSE_THRESHOLD = 90 // chars — past this, a signal's own detail text starts collapsed
 
 // Signals are keyed by a stable `id` server-side (lib/owner/signals.ts); resolved to an icon (and a tone) here by id.
@@ -25,7 +28,7 @@ export type DashboardPayload = { stats: DashboardStats; signals: Signal[]; short
 
 // The live part of the owner's glass dashboard: the menu numbers, the signals, and what needs attention, for the branch chosen in
 // the top bar (components/glass/BranchContext). Polled every 30 s and on refocus; a failed read keeps the last good state on screen.
-export default function DashboardLive({ branches, initialBranch, initial }: { branches: Branch[]; initialBranch: BranchSlug; initial: DashboardPayload }) {
+export default function DashboardLive({ branches, initialBranch, initial, renderedAt }: { branches: Branch[]; initialBranch: BranchSlug; initial: DashboardPayload; renderedAt?: number }) {
   const shared = useGlassBranch()
   const branch = shared?.slug ?? initialBranch
   const [data, setData] = useState<DashboardPayload>(initial)
@@ -50,8 +53,15 @@ export default function DashboardLive({ branches, initialBranch, initial }: { br
     }
   }, [])
 
+  // the shortcut pills ("2 בקשות") come from these numbers: hand them over as soon as the block is on screen
+  // (a tick later: when both mount together, a child's effect runs before the provider's listener exists)
+  useEffect(() => {
+    const t = window.setTimeout(() => window.dispatchEvent(new CustomEvent(TOOL_BADGES_EVENT, { detail: toolBadges(initial) })), 0)
+    return () => window.clearTimeout(t)
+  }, [initial])
   useEffect(() => {
     if (branch !== initialBranch || data !== initial) void refresh(branch, false)
+    else if (renderedAt && Date.now() - renderedAt > STALE_MS) void refresh(branch, true)
     const interval = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(branch, true) }, POLL_MS)
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh(branch, true) }
     document.addEventListener('visibilitychange', onVisible)
@@ -103,6 +113,38 @@ export default function DashboardLive({ branches, initialBranch, initial }: { br
         </section>
       </div>
     </>
+  )
+}
+
+/** The block while its numbers are on their way (first visit, streamed): the same cards, labels and links, only the values shimmer. */
+export function DashboardLiveSkeleton({ branch }: { branch: BranchSlug }) {
+  const value = <span className="sk gl-sk-num" aria-hidden="true" />
+  return (
+    <div className="gl-field" style={{ gap: 14 }} data-live-skeleton="" aria-busy="true">
+      <p className="sr-only" role="status">טוען את מצב הסניף…</p>
+      <section className="gl-stats" aria-hidden="true">
+        <div className="gl-surf gl-stat"><b>{value}</b><span>קטגוריות בתפריט</span></div>
+        <div className="gl-surf gl-stat"><b>{value}</b><span>פריטים אזלו</span></div>
+        <div className="gl-surf gl-stat"><b>{value}</b><span>סטטוס פרסום</span></div>
+      </section>
+      <section className="gl-list" aria-label="הכי חשוב עכשיו">
+        <Link href={`/owner/issues?branch=${encodeURIComponent(branch)}`} className="gl-surf gl-row-card">
+          <span className="gl-ico" aria-hidden="true"><Wrench size={22} /></span>
+          <span className="gl-row-card__copy"><strong>חוסרים ופערים</strong><small><span className="sk gl-sk-line gl-sk-line--short" aria-hidden="true" /></small></span>
+          <ChevronLeft size={18} aria-hidden="true" className="gl-chev" />
+        </Link>
+        <Link href="/staff/schedule" className="gl-surf gl-row-card gl-row-card--main">
+          <span className="gl-ico" aria-hidden="true"><UsersRound size={24} /></span>
+          <span className="gl-row-card__copy"><strong>מי במשמרת &amp; משמרות</strong><small>המשמרת הקודמת, הנוכחית והבאה בכל סניף</small></span>
+          <ChevronLeft size={18} aria-hidden="true" className="gl-chev" />
+        </Link>
+        <nav className="gl-wrap" aria-label="פעולות בסניף">
+          <Link className="gl-chip gl-chip--soft" href={`/owner/schedule?branch=${encodeURIComponent(branch)}`}><CalendarDays size={16} aria-hidden="true" />לוח משמרות</Link>
+          <Link className="gl-chip gl-chip--soft" href={`/owner/checklists?branch=${encodeURIComponent(branch)}`}><ClipboardCheck size={16} aria-hidden="true" />צ׳קליסטים</Link>
+          <Link className="gl-chip gl-chip--soft" href="/owner/branches"><Building2 size={16} aria-hidden="true" />ניהול סניפים</Link>
+        </nav>
+      </section>
+    </div>
   )
 }
 

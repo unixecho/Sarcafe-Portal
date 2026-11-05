@@ -3,6 +3,9 @@
 import { randomUUID } from 'node:crypto'
 import { createStage, assert } from '../lib/harness.mjs'
 import { ID } from '../standin/seed.mjs'
+import { signToken } from '../standin/supabase.mjs'
+import { OIDC_ISSUER } from './app.mjs'
+import fs from 'node:fs'
 
 const STAFF_IDS = Object.entries(ID).filter(([k]) => !/^(gh|maor|week|shift)/.test(k)).map(([, v]) => v)
 const noLeak = (text) => { assert.ok(!STAFF_IDS.some((id) => text.includes(id)), 'a staff id leaked'); assert.notMatch(text, /@qa\.sarcafe|p256dh|fcm\.googleapis|endpoint/i, 'private data leaked') }
@@ -196,5 +199,65 @@ export function featuresStage(live) {
     const get = (await live().call('/api/staff/tool-usage', { as: 'owner' })).json
     assert.deepEqual(get.usage, {}); assert.deepEqual(get.queries, [])
   })
+
+  // ── the QA reports and the 07:00 digest (owner, 2026-11-05): GitHub posts with its own short-lived token (OIDC, lib/qa/auth.ts) —
+  // only THIS repository's QA workflow on main, for our audience, unexpired, signed by the issuer's key (the stand-in plays GitHub)
+  const now = () => Math.floor(Date.now() / 1000)
+  const claims = (over = {}) => ({ iss: OIDC_ISSUER, aud: 'sarcafe-qa', repository: 'unixecho/Sarcafe-Portal', ref: 'refs/heads/main', workflow_ref: 'unixecho/Sarcafe-Portal/.github/workflows/qa.yml@refs/heads/main', iat: now(), nbf: now() - 5, exp: now() + 300, ...over })
+  const shipped = () => JSON.parse(fs.readFileSync(new URL('../reports/latest.json', import.meta.url), 'utf8'))
+  const post = (path, token, body) => live().call(path, { method: 'POST', body: body ?? {}, headers: token ? { authorization: `Bearer ${token}` } : {} })
+
+  stage.test('qa-auth', 'דוח QA מתקבל רק מ־GitHub של הפרויקט הזה (OIDC) או עם הסוד; אסימון מזויף, של מאגר אחר, ענף אחר, זרימה אחרת או שפג — נדחה', 'security', async () => {
+    const report = { ...shipped(), suite: 'dashboard' }
+    assert.status(await post('/api/qa/report', null, report), 401, 'nothing')
+    assert.status(await post('/api/qa/report', 'not-the-secret', report), 401, 'a wrong secret')
+    for (const [why, token] of [
+      ['forged (another key)', signToken(claims(), { forge: true })],
+      ['another repository', signToken(claims({ repository: 'someone/else' }))],
+      ['another branch', signToken(claims({ ref: 'refs/heads/feature' }))],
+      ['another workflow', signToken(claims({ workflow_ref: 'unixecho/Sarcafe-Portal/.github/workflows/other.yml@refs/heads/main' }))],
+      ['another audience', signToken(claims({ aud: 'sts.amazonaws.com' }))],
+      ['expired', signToken(claims({ exp: now() - 120 }))],
+      ['another issuer', signToken(claims({ iss: 'https://evil.example' }))],
+    ]) assert.status(await post('/api/qa/report', token, report), 401, why)
+    assert.status(await post('/api/qa/report', signToken(claims()), report), 201, 'GitHub\'s token')
+    assert.status(await post('/api/qa/report', signToken(claims()), { ...report, suite: 'kiosk' }), 201, 'the kiosk\'s report')
+    const runs = live().db('qa_runs')
+    assert.ok(runs.some((r) => r.suite === 'dashboard') && runs.some((r) => r.suite === 'kiosk'), 'both suites stored, each with its name')
+    assert.status(await post('/api/qa/report', signToken(claims()), { ...report, suite: 'other' }), 400, 'an unknown suite')
+  })
+
+  stage.test('qa-digest', 'הודעת 07:00: אחת ביום, רק למפתח, עם שני הדוחות; כשמשהו נכשל — קישור לבעיות; דוח שלא הגיע = כישלון', 'e2e', async () => {
+    const token = signToken(claims())
+    assert.status(await post('/api/qa/digest', null), 401, 'nothing')
+    live().db('qa_digests').length = 0
+    const runs = live().db('qa_runs')
+    runs.length = 0
+    const base = { created_at: new Date().toISOString(), source: 'schedule', commit_sha: null, ref: 'main', review: {}, report: {} }
+    runs.push({ ...base, id: randomUUID(), suite: 'dashboard', status: 'pass', totals: { tests: 120, passed: 119, failed: 0, flaky: 0, skipped: 1 } })
+    runs.push({ ...base, id: randomUUID(), suite: 'kiosk', status: 'fail', totals: { tests: 40, passed: 37, failed: 3, flaky: 0, skipped: 0 } })
+    const dry = await post('/api/qa/digest?dry=1', token)
+    assert.status(dry, 200)
+    assert.equal(dry.json.digest.status, 'fail')
+    assert.equal(dry.json.digest.url, '/staff/dev/qa?suite=kiosk&focus=problems')
+    assert.equal(live().db('qa_digests').length, 0, 'a dry run sends and records nothing')
+    const before = live().db('schedule_notifications').length
+    const sent = await post('/api/qa/digest', token)
+    assert.status(sent, 201)
+    const rows = live().db('schedule_notifications').slice(before)
+    assert.ok(rows.length >= 1 && rows.every((r) => r.staff_id === ID.dev), `only the developer (${rows.map((r) => r.staff_id)})`)
+    assert.equal(rows[0].kind, 'dev.qa_digest_fail')
+    assert.ok(rows[0].body.includes('לוח הבקרה: עבר 119/119') && rows[0].body.includes('הקיוסק: נכשל, 3 בדיקות'), rows[0].body)
+    assert.equal(rows[0].link.url, '/staff/dev/qa?suite=kiosk&focus=problems')
+    const again = await post('/api/qa/digest', token)
+    assert.ok(again.status === 200 && again.json.already === true, 'a second call the same day sends nothing')
+    assert.equal(live().db('schedule_notifications').length, before + rows.length, 'still one notification')
+    live().db('qa_digests').length = 0
+    runs.splice(runs.findIndex((r) => r.suite === 'kiosk'), 1)
+    const missing = await post('/api/qa/digest?dry=1', token)
+    assert.equal(missing.json.digest.status, 'fail', 'a report that did not arrive is a failure')
+    assert.ok(missing.json.digest.body.includes('הקיוסק: הדוח לא הגיע'))
+  })
+
   return stage
 }

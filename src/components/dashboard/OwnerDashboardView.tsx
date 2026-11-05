@@ -1,11 +1,13 @@
+import { Suspense } from 'react'
 import { cookies } from 'next/headers'
 import InstallAppButton from '@/components/app/InstallAppButton'
 import { loadStaffTheme } from '@/lib/staff/theme-server'
 import ThemeRow from '@/components/staff/ThemeRow'
-import DashboardLive from '@/components/DashboardLive'
+import DashboardLive, { DashboardLiveSkeleton } from '@/components/DashboardLive'
 import StaffPushCard from '@/components/staff/StaffPushCard'
 import WorkshopCard from '@/components/workshop/WorkshopCard'
 import TeamMessage from '@/components/glass/TeamMessage'
+import DashboardSwitch from '@/components/glass/DashboardSwitch'
 import ToolFinder from '@/components/glass/tools/ToolFinder'
 import { ToolShortcuts } from '@/components/glass/tools/ToolLists'
 import DashboardSections, { type DashboardCategory } from '@/components/app/DashboardSections'
@@ -14,7 +16,7 @@ import { ToolsProvider } from '@/components/glass/tools/ToolsProvider'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { readDashboardStats } from '@/lib/owner/dashboard-stats'
 import { readDashboardSignals } from '@/lib/owner/signals'
-import { countPendingDecisions, toolBadges } from '@/lib/owner/dashboard-badges'
+import { countPendingDecisions } from '@/lib/owner/dashboard-badges'
 import { getBranches } from '@/lib/branches/server'
 import { BRANCH_COOKIE, resolveCurrentBranchSlug } from '@/lib/branches/current'
 import { isDeveloper } from '@/lib/checklists/developer'
@@ -39,15 +41,6 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
   const currentSlug = resolveCurrentBranchSlug(branches, cookieStore.get(BRANCH_COOKIE)?.value)
   const defaultBranch = branches.find((branch) => branch.slug === currentSlug) ?? branches[0] ?? null
   const developer = isDeveloper(me)
-  const [stats, signals, shortages, requests] = defaultBranch
-    ? await Promise.all([
-        readDashboardStats(defaultBranch.id),
-        readDashboardSignals(defaultBranch.id),
-        // Everything the checklists say needs attention right now: broken or missing things (one per check) plus checklists nobody sent.
-        loadShortageReport(service, defaultBranch.id).then((report) => shortageCount(report)).catch(() => null),
-        countPendingDecisions(service, defaultBranch.id).catch(() => null),
-      ])
-    : [{ hasUnpublishedChanges: { known: false, value: false }, outOfStockCount: { known: false, value: 0 }, categoryCount: { known: false, value: 0 } }, [], null, null] as const
 
   // The owner's tool lists, unchanged (the order of attention the owner set).
   const categories: DashboardCategory[] = [
@@ -76,17 +69,25 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
   const date = new Intl.DateTimeFormat('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())
   const hour = Number(wallClockNow('Asia/Jerusalem').time.slice(0, 2))
   const roles = toolRolesFor({ op: true, manager: true, developer })
-  const badges = toolBadges({ stats, shortages, requests })
   const messageable = branches.map((b) => ({ slug: b.slug, name: b.name.he }))
 
   return (
-    <ToolsProvider staffId={me.id} roles={roles} hour={hour} badges={badges} home="/owner/dashboard">
+    // The page appears at once; only the live numbers wait for the database, each behind its own shimmering field (owner,
+    // 2026-11-05: "only skeleton load the fields… everything else should load gradually"). The shortcut pills fill in when the
+    // numbers arrive (DashboardLive hands them over).
+    <ToolsProvider staffId={me.id} roles={roles} hour={hour} badges={{}} home="/owner/dashboard">
+      {/* the two dashboards, one tap apart (owner, 2026-11-05): this one and the kiosk's */}
+      <DashboardSwitch current="business" home={developer ? '/staff/dev?view=manager' : '/owner/dashboard'} />
       <section className="gl-welcome">
         <div><h2>שלום, {me.first_name || 'Sarcafe'}</h2><p>כל מה שצריך כדי לנהל את היום שלך.</p></div>
         <span className="gl-welcome__date">{date}</span>
       </section>
       <ToolShortcuts />
-      {defaultBranch && <DashboardLive branches={branches} initialBranch={defaultBranch.slug} initial={{ stats, signals: [...signals], shortages, requests }} />}
+      {defaultBranch && (
+        <Suspense fallback={<DashboardLiveSkeleton branch={defaultBranch.slug} />}>
+          <LiveNumbers service={service} branches={branches} branch={defaultBranch} />
+        </Suspense>
+      )}
       {messageable.length > 0 && <TeamMessage branches={messageable} />}
       <StaffPushCard />
       <WorkshopCard />
@@ -98,4 +99,17 @@ export default async function OwnerDashboardView({ me }: { me: OwnerMe }) {
       </div>
     </ToolsProvider>
   )
+}
+
+// The live numbers of one branch, read on the server and handed to DashboardLive (which re-reads them itself when it is shown from
+// the router's cache, and every 30 s). Streams in after the rest of the page.
+async function LiveNumbers({ service, branches, branch }: { service: ReturnType<typeof createServiceRoleClient>; branches: Awaited<ReturnType<typeof getBranches>>; branch: Awaited<ReturnType<typeof getBranches>>[number] }) {
+  const [stats, signals, shortages, requests] = await Promise.all([
+    readDashboardStats(branch.id),
+    readDashboardSignals(branch.id),
+    // Everything the checklists say needs attention right now: broken or missing things (one per check) plus checklists nobody sent.
+    loadShortageReport(service, branch.id).then((report) => shortageCount(report)).catch(() => null),
+    countPendingDecisions(service, branch.id).catch(() => null),
+  ])
+  return <DashboardLive branches={branches} initialBranch={branch.slug} initial={{ stats, signals: [...signals], shortages, requests }} renderedAt={Date.now()} />
 }

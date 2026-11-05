@@ -6,7 +6,7 @@ import { createStage, assert } from '../lib/harness.mjs'
 import { run } from '../lib/exec.mjs'
 
 // Every route must name one of these guards, or be on PUBLIC with its reason. A new unguarded route fails the suite.
-const GUARDS = /requireOwner|requireMenuEditor|resolveStaffIdentity|requireSchedule\w*|requirePublishedScheduleViewer|bearerMatches|privateStaffRoute|messengerFor|resolveTabletWrite|requireOrderStaff|performOrderDispatch|performDispatch|keysMatch|requirePos\w*|requireStaff\w*|getUser\(\)/
+const GUARDS = /requireOwner|requireMenuEditor|requireAnyMenuEditor|resolveStaffIdentity|requireStaffIdentity|qaCallerAllowed|requireSchedule\w*|requirePublishedScheduleViewer|bearerMatches|privateStaffRoute|messengerFor|resolveTabletWrite|requireOrderStaff|performOrderDispatch|performDispatch|keysMatch|requirePos\w*|requireStaff\w*|getUser\(\)/
 export const PUBLIC_ROUTES = {
   'auth/quick-login': 'the six-digit sign-in itself: credential rate limit, fails closed',
   'board/[token]': 'the cart board, opened by its secret token',
@@ -172,7 +172,7 @@ export function staticStage(root) {
   }, { retry: false, timeout: 140_000 })
 
   stage.test('docs', 'המסמכים שהעבודה העתידית נשענת עליהם קיימים', 'static', async () => {
-    const need = ['docs/SARCAFE_GLASS_UI.md', 'docs/QA_BLUEPRINT.md', 'docs/SARCAFE_TEAM_MESSAGE.md', 'handoff.md', 'CLAUDE.md']
+    const need = ['docs/SARCAFE_GLASS_UI.md', 'docs/QA_BLUEPRINT.md', 'docs/SARCAFE_TEAM_MESSAGE.md', 'docs/SARCAFE_KIOSK_REMOTE.md', 'handoff.md', 'CLAUDE.md']
     assert.deepEqual(need.filter((p) => !fs.existsSync(path.join(root, p))), [], 'missing:')
   })
   return stage

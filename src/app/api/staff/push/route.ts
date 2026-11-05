@@ -6,7 +6,7 @@ import { DEV_TEMPLATE_IDS, devPushStatus, devSendTemplate, isPushDeveloper } fro
 import { sendStaffTest } from '@/lib/push/staff'
 import { isAllowedPushEndpoint } from '@/lib/push/endpoint'
 import { privateStaffRoute } from '@/lib/staff/records'
-import { resolveStaffIdentity } from '@/lib/staff/session'
+import { requireStaffIdentity } from '@/lib/staff/session'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 // A signed-in staff member (Google OR employee number + code) registers, checks, tests and removes
@@ -34,8 +34,7 @@ const body = z.discriminatedUnion('action', [
 ])
 
 export const POST = privateStaffRoute(async (request: NextRequest) => {
-  const me = await resolveStaffIdentity()
-  if (!me) throw Unauthorized('צריך להתחבר כדי להפעיל התראות.')
+  const me = await requireStaffIdentity(() => Unauthorized('צריך להתחבר כדי להפעיל התראות.'))
   const input = await parseBody(request, body)
   const service = createServiceRoleClient()
 

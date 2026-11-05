@@ -7,7 +7,19 @@
 //                               POST /__qa/missing { tables: [...], functions: [...] }   (a migration that is not applied)
 //                               GET  /__qa/db/<table>        POST /__qa/reset
 import http from 'node:http'
-import { randomUUID, createHash } from 'node:crypto'
+import { randomUUID, createHash, generateKeyPairSync, sign as signBytes } from 'node:crypto'
+
+// A test RSA key standing in for GitHub Actions' token signer (lib/qa/auth.ts; the app is pointed at it with QA_OIDC_ISSUER): the
+// stand-in serves its public half at /.well-known/jwks and the tests sign tokens with signToken(). Never used outside the suite.
+const OIDC = generateKeyPairSync('rsa', { modulusLength: 2048 })
+const OIDC_KID = 'qa-test-key'
+/** A GitHub-style OIDC token (RS256) with `claims`, signed by the stand-in's key (or `{ forge: true }`: by a different key). */
+export function signToken(claims, { forge = false } = {}) {
+  const key = forge ? generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey : OIDC.privateKey
+  const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const head = `${enc({ alg: 'RS256', typ: 'JWT', kid: OIDC_KID })}.${enc(claims)}`
+  return `${head}.${signBytes('RSA-SHA256', Buffer.from(head), key).toString('base64url')}`
+}
 
 const json = (res, status, body, headers = {}) => {
   const text = body === undefined ? '' : JSON.stringify(body)
@@ -123,7 +135,7 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
   const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set() }
   reset()
   const table = (name) => (state.db[name] ??= [])
-  const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], ...keys }
+  const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_devices: [['id'], ['slug']], ...keys }
 
   const RPC = {
     check_rate_limit({ p_key, p_max, p_window_seconds }) {
@@ -155,6 +167,18 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
       }
       return null
     },
+    // the tablet's report (migrations 20261104120000 + 20261105140000): records what it says; the alert ladder is verified in SQL
+    // by verify:kiosk-content-sql, so here only the recording and the answer the route relies on
+    kiosk_device_report({ p_slug, p_level, p_charging, p_app_version, p_web_version }) {
+      const row = table('kiosk_devices').find((d) => d.slug === p_slug && d.active)
+      if (!row) return { ok: false, error: 'unknown_device' }
+      const now = new Date().toISOString()
+      Object.assign(row, { last_seen_at: now, battery_level: p_level ?? row.battery_level, battery_charging: p_charging ?? row.battery_charging, battery_reported_at: p_level == null ? row.battery_reported_at : now, app_version: p_app_version ?? row.app_version, web_version: p_web_version ?? row.web_version })
+      return { ok: true, alerted: false, settingsUpdatedAt: row.settings_updated_at }
+    },
+    kiosk_device_alert_test({ p_slug }) {
+      return table('kiosk_devices').some((d) => d.slug === p_slug) ? { ok: true } : { ok: false, error: 'unknown_device' }
+    },
     staff_tool_usage_reset({ p_staff_id }) {
       state.db.staff_tool_usage = table('staff_tool_usage').filter((r) => r.staff_id !== p_staff_id)
       state.db.staff_tool_searches = table('staff_tool_searches').filter((r) => r.staff_id !== p_staff_id)
@@ -185,6 +209,7 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
         return json(res, 200, table(name))
       }
       // per endpoint ("/auth/v1/user", "/rest/v1/staff", …), so a test can count round trips; POST {clear:true} starts a new count
+      if (path === '/__qa/jwks' || path === '/__qa/.well-known/jwks') return json(res, 200, { keys: [{ ...OIDC.publicKey.export({ format: 'jwk' }), kid: OIDC_KID, alg: 'RS256', use: 'sig' }] })
       if (path === '/__qa/stats') { if (body && JSON.parse(body).clear) { state.byPath.clear(); state.requests = 0 } return json(res, 200, { requests: state.requests, byPath: Object.fromEntries(state.byPath) }) }
       return json(res, 404, {})
     }
