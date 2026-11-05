@@ -91,6 +91,14 @@ export function featuresStage(live) {
   stage.test('tm-roles', 'עובד/ת ומי שלא מחובר לא יכולים לשלוח', 'security', async () => { fresh();
     assert.status(await send('dana', { branch: 'givat-haviva', audience: 'all', text: 'x' }), 403)
     assert.status(await send(null, { branch: 'givat-haviva', audience: 'all', text: 'x' }), 401)
+    // Who is asking is decided before anything is looked up: a real branch and a made-up one get the same answer (no probing of names).
+    for (const [who, status] of [[null, 401], ['dana', 403]]) {
+      for (const branch of ['givat-haviva', 'no-such-branch']) {
+        const read = await live().call(`/api/owner/team-message?branch=${branch}`, { as: who ?? undefined })
+        assert.status(read, status, `${who ?? 'signed out'} reading ${branch}`)
+        assert.status(await send(who, { branch, audience: 'all', text: 'x' }), status, `${who ?? 'signed out'} sending to ${branch}`)
+      }
+    }
   })
   stage.test('tm-shifts', 'משמרת לא מפורסמת, ישנה, רחוקה, של סניף אחר או מומצאת: נדחית באותה תשובה', 'security', async () => { fresh();
     for (const shiftId of [ID.shiftDraft, ID.shiftOld, ID.shiftFar, ID.shiftMaorTomorrow, randomUUID()]) {

@@ -18,7 +18,8 @@ person; the server skips them and says how many were skipped. The sender never r
 ## Threat model and the rules that answer it
 | Risk | Answer (src/lib/team-message/server.ts, src/app/api/owner/team-message/route.ts) |
 |---|---|
-| An employee or another branch's manager sends | `requireMenuEditor(branch.id)`: owner anywhere, general manager only their own branch, Google sign-in only (the six-digit code session is refused) |
+| An employee or another branch's manager sends | `requireAnyMenuEditor()` then `canEditMenu(me, branch.id)`: owner anywhere, general manager only their own branch, Google sign-in only (the six-digit code session is refused) |
+| Someone signed out (or an employee) probes which branch names exist | who is asking is checked BEFORE the branch is looked up: the same 401 / 403 for a real branch and a made-up one, on both GET and POST (found live on 2026-11-05, fixed the same day; QA `tm-roles`). If the sign-in check itself cannot be made (auth server or database down) the answer is 503, never "sign in" (QA `retry-after-outage`) |
 | The browser picks the recipients | It cannot: it names a branch, a shift and an assignment; each is checked to belong to the one before it, and the people are read here |
 | Messaging a draft, past or far shift, or another branch's shift | 404, the same answer for all of them; only published weeks, from yesterday to 14 days ahead |
 | Cross-site request forgery | JSON only, same-origin (`parseBody` + the middleware's cross-site write block), SameSite cookies |

@@ -52,6 +52,9 @@ export function survivalStage(live) {
     try {
       const failed = await live().call('/api/owner/team-message', { method: 'POST', as: 'owner', origin: true, body })
       assert.ok(failed.status >= 500, `during outage → ${failed.status}`)
+      // "could not check who you are" is a 503, never "please sign in" (that would send a signed-in owner to the login page)
+      const plan = await live().call('/api/owner/team-message?branch=givat-haviva', { as: 'owner' })
+      assert.ok(plan.status >= 500, `plan during outage → ${plan.status}`)
     } finally { await ok() }
     assert.equal(count(), before, 'partial send')
     assert.status(await live().call('/api/owner/team-message', { method: 'POST', as: 'owner', origin: true, body }), 200, 'retry')

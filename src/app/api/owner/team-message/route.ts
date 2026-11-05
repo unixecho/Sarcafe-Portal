@@ -10,7 +10,7 @@ import { loadMessagePlan, messengerFor, sendTeamMessage } from '@/lib/team-messa
 // The team message (docs/SARCAFE_TEAM_MESSAGE.md).
 //   GET  ?branch=<slug>  → the composer's plan: the branch team's size and reach, and the next 7 days of published shifts.
 //   POST { branch, audience: 'all' | 'shift', shiftId?, assignmentId?, text, requestId } → sends; answers { sent, skipped, names }.
-// Owner anywhere, a general manager only their own branch, Google sign-in only (requireMenuEditor). Same-origin JSON only
+// Owner anywhere, a general manager only their own branch, Google sign-in only (who is asking is checked before the branch is looked up). Same-origin JSON only
 // (parseBody), strict schema, nothing private cached.
 
 const headers = { 'Cache-Control': 'private, no-store' }

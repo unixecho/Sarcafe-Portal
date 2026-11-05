@@ -1,6 +1,7 @@
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
-import { Unauthorized, Forbidden } from '@/lib/http/errors'
-import { isOp, canEditMenu, type AccessRow } from '@/lib/staff/access'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
+import { ApiError, Unauthorized, Forbidden } from '@/lib/http/errors'
+import { isOp, canEditMenu, hasAnyMenuEditAccess, type AccessRow } from '@/lib/staff/access'
 import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-login'
 
 // email/display_name/first_name/last_name are carried here (not just
@@ -18,16 +19,22 @@ export type StaffRow = AccessRow & {
 
 // `quick`: the session was opened with an employee number + passcode, not Google. Such
 // a session is floor-work-only (blueprint §1a.5), so both guards below refuse it.
-async function resolveStaff(): Promise<{ staff: StaffRow | null; quick: boolean }> {
+// `failed` says the check itself could not be made (the auth server or the database did not answer), which is not the same as
+// "not signed in". requireAnyMenuEditor answers it with 503; the older guards keep their answer (no user → 401).
+async function resolveStaff(): Promise<{ staff: StaffRow | null; quick: boolean; failed: boolean }> {
   const supabase = await createServerSupabaseClient()
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
 
-  if (!user) return { staff: null, quick: false }
+  if (!user) {
+    const status = (authError as { status?: unknown } | null)?.status
+    return { staff: null, quick: false, failed: Boolean(authError) && (isAuthRetryableFetchError(authError) || (typeof status === 'number' && status >= 500)) }
+  }
 
   const service = createServiceRoleClient()
-  const [{ data: row }, quick] = await Promise.all([
+  const [{ data: row, error: rowError }, quick] = await Promise.all([
     service
       .from('staff')
       .select('id, auth_user_id, role, badge, branch_id, active, email, display_name, first_name, last_name')
@@ -38,7 +45,7 @@ async function resolveStaff(): Promise<{ staff: StaffRow | null; quick: boolean 
     validatedSessionId(supabase).then(isQuickSessionId),
   ])
 
-  return { staff: (row as StaffRow) ?? null, quick }
+  return { staff: (row as StaffRow) ?? null, quick, failed: Boolean(rowError) }
 }
 
 /** Full admin only. Re-resolves the caller's role server-side via the
@@ -60,5 +67,17 @@ export async function requireMenuEditor(branchId: string): Promise<StaffRow> {
   if (!staff) throw Unauthorized()
   if (quick) throw Forbidden('quick_session')
   if (!canEditMenu(staff, branchId)) throw Forbidden('Menu-editor access required for this branch.')
+  return staff
+}
+
+/** Someone who manages at least one branch (an owner, or a general manager), signed in fully. For a route that must say who may
+ * call it BEFORE it looks anything up (so a signed-out caller learns nothing, e.g. which branch names exist); the per-branch check
+ * (canEditMenu) follows once the branch is known. */
+export async function requireAnyMenuEditor(): Promise<StaffRow> {
+  const { staff, quick, failed } = await resolveStaff()
+  if (failed) throw new ApiError(503, 'unavailable', 'לא הצלחנו לבדוק את ההרשאה כרגע. נסו שוב בעוד רגע.')
+  if (!staff) throw Unauthorized()
+  if (quick) throw Forbidden('quick_session')
+  if (!hasAnyMenuEditAccess(staff)) throw Forbidden('Menu-editor access required.')
   return staff
 }

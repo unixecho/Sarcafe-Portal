@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { ApiError, Forbidden, NotFound, RateLimited } from '@/lib/http/errors'
-import { requireMenuEditor, type StaffRow } from '@/lib/owner/guard'
+import { requireAnyMenuEditor, type StaffRow } from '@/lib/owner/guard'
+import { canEditMenu } from '@/lib/staff/access'
 import { wallClockNow } from '@/lib/shifts/time'
 import type { createServiceRoleClient } from '@/lib/supabase/server'
 import { SLUG_PATTERN } from '@/lib/branches'
@@ -10,7 +11,7 @@ import { addDays, dayLabel, inBranchTeam, LIMITS, messageTitle, PLAN_DAYS, shift
 
 // The team message (owner, 2026-11-05): an owner or a branch's general manager sends a short note to everyone at the branch, to one
 // shift, or to one person on that shift. Design and threat model: docs/SARCAFE_TEAM_MESSAGE.md. The load-bearing rules:
-//   - who may send is decided here, on the server, for THIS branch (requireMenuEditor: owner anywhere, a general manager only their own);
+//   - who may send is decided here, on the server, for THIS branch (requireAnyMenuEditor first, then canEditMenu for the branch: owner anywhere, a general manager only their own);
 //   - who receives it is resolved here from the published schedule and the staff table: the browser only names a branch, a shift and
 //     an assignment, and each is checked to belong to the one before it;
 //   - only people with at least one registered notification device receive it (owner: "only workers who enabled notifications");
@@ -26,12 +27,14 @@ const firstName = (s: Pick<StaffLite, 'first_name' | 'display_name'> | undefined
 
 /** The branch by its slug, and the caller allowed to message it. 404 for an unknown or closed branch (same answer either way). */
 export async function messengerFor(service: Service, slug: string): Promise<{ me: StaffRow; branch: BranchRow; today: string }> {
+  // Who is asking comes first: a signed-out caller or an employee gets the same 401 / 403 for every branch name, real or not.
+  const me = await requireAnyMenuEditor()
   if (!SLUG_PATTERN.test(slug)) throw NotFound('הסניף לא נמצא')
   const { data, error } = await service.from('branches').select('id, slug, name, timezone, active').eq('slug', slug).maybeSingle()
   if (error) throw unavailable()
   const branch = data as BranchRow | null
   if (!branch || !branch.active) throw NotFound('הסניף לא נמצא')
-  const me = await requireMenuEditor(branch.id)
+  if (!canEditMenu(me, branch.id)) throw Forbidden('Menu-editor access required for this branch.')
   return { me, branch, today: wallClockNow(branch.timezone || 'Asia/Jerusalem').date }
 }
 

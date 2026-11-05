@@ -33,7 +33,8 @@ export function checksStage(root) {
   const browser = browserPath()
   for (const name of scripts) {
     const category = name.startsWith('verify:') ? 'sql' : /security/.test(name) ? 'security' : 'regression'
-    if (NEEDS[name] && !process.env.QA_ALL) { stage.skip(name, `${name}`, category, NEEDS[name]); continue }
+    // Run in another stage (named in NEEDS), so not listed here: a "skipped" line would read as a risk in every morning review.
+    if (NEEDS[name] && !process.env.QA_ALL) continue
     if (name === 'check:a11y-scope' && widgetStandIn(root)) { stage.skip(name, name, category, 'the real a11y-widget package is not installed on this machine (stand-in); GitHub Actions runs it'); continue }
     stage.test(name, name, category, async () => {
       const r = await run('npm', ['run', '-s', name], { cwd: root, timeout: 600_000, env: { TEST_BROWSER: browser ?? '', EDGE_PATH: browser ?? '', CI: '1' } })
