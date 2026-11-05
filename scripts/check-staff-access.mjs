@@ -66,7 +66,8 @@ const access = load('src/lib/staff/access.ts')
 const overrides = {
   '@/lib/http/errors': errors,
   '@/lib/supabase/server': { createServiceRoleClient: () => service },
-  '@/lib/staff/session': { resolveStaffIdentity: async () => me },
+  // requireStaffIdentity as in src/lib/staff/session.ts: the person, or missing() when there is none (503 only when the lookup failed)
+  '@/lib/staff/session': { resolveStaffIdentity: async () => me, requireStaffIdentity: async (missing = () => errors.Unauthorized()) => { if (me) return me; throw missing() } },
   '@/lib/staff/access': access,
   '@/lib/checklists/links': load('src/lib/checklists/links.ts'),
   '@/lib/staff/zip': load('src/lib/staff/zip.ts'),

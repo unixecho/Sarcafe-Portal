@@ -97,7 +97,7 @@ check('the owner can exempt one employee, and it is logged', /pushGateExempt: z\
 const mig = readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('_onboarding_progress_event_parent.sql')).map((f) => read(`supabase/migrations/${f}`)).join('\n')
 check('the migration backfills everyone existing as done ONCE (only when the column is created), so nobody working is sent through a wizard', /if not exists \(select 1 from information_schema\.columns[^;]*onboarding_done_at'\) then[\s\S]*alter table public\.staff add column onboarding_done_at[\s\S]*update public\.staff set onboarding_done_at = now\(\)/.test(mig))
 check('the exemption defaults to off', /push_gate_exempt boolean not null default false/.test(mig))
-check('the staff notifications API still takes the person from the session only (nobody can file a phone under someone else)', /const me = await resolveStaffIdentity\(\)/.test(read('src/app/api/staff/push/route.ts')) && /staff_id: me\.id,/.test(read('src/app/api/staff/push/route.ts')))
+check('the staff notifications API still takes the person from the session only (nobody can file a phone under someone else)', /const me = await (resolveStaffIdentity\(\)|requireStaffIdentity\()/.test(read('src/app/api/staff/push/route.ts')) && /staff_id: me\.id,/.test(read('src/app/api/staff/push/route.ts')))
 
 console.log(`\n${pass > 0 && failures.length === 0 ? '✓' : '✗'} ${pass} passed, ${failures.length} failed`)
 if (failures.length) { for (const f of failures) console.log(`  - ${f}`); process.exit(1) }

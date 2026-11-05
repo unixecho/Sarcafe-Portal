@@ -110,8 +110,9 @@ check('the suggested emoji is the least used one and is always a real avatar', (
   return P.suggestEmoji(used, () => 0) === A.STAFF_AVATARS[0] && A.STAFF_AVATARS.includes(P.suggestEmoji([], Math.random))
 })())
 const api = read('src/app/api/staff/profile/route.ts')
-check('the details route edits only the signed-in person, only these fields', /resolveStaffIdentity\(\)/.test(api) && /\.eq\('id', staff\.id\)/.test(api) && /validateProfile\(/.test(api) && /\.update\(result\.value\)/.test(api) && (api.match(/\.update\(/g) ?? []).length === 1)
-check('...and refuses a session-less caller', /if \(!staff\) throw Forbidden/.test(api))
+check('the details route edits only the signed-in person, only these fields', /(resolveStaffIdentity\(\)|requireStaffIdentity\()/.test(api) && /\.eq\('id', staff\.id\)/.test(api) && /validateProfile\(/.test(api) && /\.update\(result\.value\)/.test(api) && (api.match(/\.update\(/g) ?? []).length === 1)
+// requireStaffIdentity(missing) throws missing() when there is no session (503 only when sign-in cannot be checked)
+check('...and refuses a session-less caller', /if \(!staff\) throw Forbidden/.test(api) || /requireStaffIdentity\(\(\) => Forbidden\(/.test(api))
 
 section('the tour matches the real home screen')
 const home = read('src/components/dashboard/EmployeeDashboardView.tsx')
