@@ -69,7 +69,7 @@ export type KioskDeviceSettings = {
   battery: {
     /** Where the charge shows for staff: pulled down from the top edge, a small badge in a corner, or nowhere (the panel still shows it). */
     display: (typeof BATTERY_DISPLAYS)[number]
-    /** The developer is told when the charge falls below `alertPercent` while not charging. */
+    /** The developer is told at `alertPercent` and then at every 5 % below it (down to 5 %), once per rung per fall, while not charging. */
     alertEnabled: boolean
     alertPercent: number
     /** A second, urgent alert. */

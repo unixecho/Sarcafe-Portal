@@ -137,11 +137,11 @@ function DeviceItem({ device, branches, onSave }: { device: OwnerDevice; branche
       <Row label="הטאבלט פעיל" hint="כבוי: נשאר ברשימה, בלי עדכון הגדרות אישיות.">
         <button type="button" role="switch" aria-checked={active} aria-label="הטאבלט פעיל" onClick={() => setActive(!active)} style={switchBtn}><Switch on={active} /></button>
       </Row>
-      <Row label="התראה למפתח כשהסוללה יורדת" hint="נשלחת למפתח בלבד, כשהטאבלט לא בטעינה, פעם אחת לכל ירידה.">
+      <Row label="התראה למפתח כשהסוללה יורדת" hint="נשלחת למפתח בלבד, כשהטאבלט לא בטעינה: התראה אחת בכל ירידה של 5%, מהרמה שנקבעה כאן ועד 5%.">
         <button type="button" role="switch" aria-checked={alertOn} aria-label="התראת סוללה" onClick={() => setAlertOn(!alertOn)} style={switchBtn}><Switch on={alertOn} /></button>
       </Row>
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.88rem', color: 'var(--text)' }}>להתריע מתחת ל־(%)</span>
+        <span style={{ fontSize: '0.88rem', color: 'var(--text)' }}>להתחיל להתריע מ־(%)</span>
         <input type="number" inputMode="numeric" min={10} max={90} step={5} value={Number.isFinite(alertAt) ? alertAt : ''} disabled={!alertOn}
           onChange={(e) => setAlertAt(e.target.value === '' ? NaN : Number(e.target.value))} style={{ ...input, width: 84, textAlign: 'center', opacity: alertOn ? 1 : 0.5 }} />
       </label>

@@ -20,6 +20,10 @@
 # misc
 .DS_Store
 *.pem
+# signing keys and their password files (the kiosk's live outside the repo, in android-tools)
+*.keystore
+*.jks
+kiosk-signing.env
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

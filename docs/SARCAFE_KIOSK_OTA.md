@@ -186,6 +186,25 @@ If you push without signing, the kiosk ignores that page and keeps the last sign
 A bundle that needs the new native code: raise `MIN_NATIVE_VERSION` in `scripts/publish-kiosk-ota.mjs`. The kiosk
 waits for the APK, then takes the page.
 
+## The APK signing key (changed 2026-11-05)
+
+The first keystore (`sarcafe-kiosk.keystore`) had a password nobody could recall, so no APK could be signed with it any more. Android only
+accepts an update signed with the key of the installed app, so the tablet was taken out of Device Owner through the old staff menu ("Remove
+kiosk completely"), the app was uninstalled, app 0.3 was installed over adb signed with a NEW key, Device Owner was set again
+(`dpm set-device-owner il.co.sarcafe.kiosk/.KioskAdminReceiver`) and the tablet's connection settings (api, rt, rt_key, rt_channel, the sign-up key)
+were put back with `am broadcast`, plus a new staff PIN. Wi-Fi survived (it is a system setting). The old keystore file is still in
+`android-tools\`, unused.
+
+- **Where the new key lives:** `C:\Users\Johnathan\android-tools\sarcafe-kiosk-v2.keystore` and its password file `kiosk-signing.env` (same folder,
+  outside the repo, ignored by git: `*.keystore`, `*.jks`, `kiosk-signing.env`). `build.ps1` reads the env file by itself when
+  `SARCAFE_KIOSK_KS_PASS` is not set, so `powershell -File prototypes/sarcafe-kiosk-app/build.ps1 -VersionCode N -VersionName X` just works.
+  **Back up both files together** (password manager or a private drive): losing either one means another uninstall and re-provision.
+  The password is not written in any document.
+- **Updating without the PC:** the app looks for updates every 10 minutes (also with the screen off), downloads, verifies and installs
+  silently as Device Owner (on Android 12+ it also says `USER_ACTION_NOT_REQUIRED`). It waits for an idle moment, but an app update that found
+  none for 3 hours is installed anyway (the kiosk restarts and clears itself like a privacy reset). A version that failed 3 times is left alone
+  for 6 hours and then tried again, never given up for good.
+
 ## Rollback
 
 - **Automatic:** a page that does not start, crashes, or restarts the app twice is rolled back and never taken again.

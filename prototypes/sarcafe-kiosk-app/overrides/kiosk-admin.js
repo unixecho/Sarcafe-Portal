@@ -8,7 +8,8 @@
  *   מודעות     arrows, drag, auto-play, going round, slide or fade, what a tap does, the time on each, which ads this tablet shows
  *   זמנים      the time before the privacy reset warning, the warning, the confirmation, how often the content refreshes
  *   שפות       which languages are offered, the default one, the switch
- *   סוללה      where the charge shows, the alert to the developer (on or off, the level), the urgent alert, a test alert
+ *   סוללה      where the charge shows, the alerts to the developer (on or off, where the ladder starts: one alert per 5 % from
+ *              there down to 5 %), the urgent title for the low rungs, a test alert
  *   מכשיר      (the app) rotation, speed, brightness, Wi-Fi, unlock, restart, exit the kiosk, a new PIN
  *   עדכונים    (the app) which page and app versions run, check now, undo
  *   אבחון      what the tablet knows about itself, clear the cache, everything back to the defaults
@@ -149,6 +150,18 @@
     ['overview', 'סקירה'], ['display', 'מסכים'], ['ads', 'מודעות'], ['timing', 'זמנים'], ['lang', 'שפות'],
     ['battery', 'סוללה'], ['device', 'מכשיר'], ['updates', 'עדכונים'], ['diag', 'אבחון'],
   ];
+  // one 24-px outline icon per tab (stroke styled in kiosk-admin.css); the button text stays the label alone
+  const TAB_ICONS = {
+    overview: 'M4 11 12 4l8 7v9H4zM10 20v-6h4v6',
+    display: 'M3 5h18v11H3zM8 20h8M12 16v4',
+    ads: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M16 9.5h.01',
+    timing: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+    lang: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3.2 3.4 3.2 14.6 0 18M12 3c-3.2 3.4-3.2 14.6 0 18',
+    battery: 'M3 8h15v8H3zM18 10.5h3v3h-3zM6 11v2M9 11v2',
+    device: 'M6 3h12v18H6zM11 18h2',
+    updates: 'M20 12a8 8 0 1 0-2.4 5.7M20 4.5V10h-5.5',
+    diag: 'M3 12h4l2.5-6 4 12 2.5-6H21',
+  };
 
   // pieces that change by themselves (the charge, the connection) are redrawn on their own every two seconds, so a tap on a
   // control is never lost to a redraw of the whole tab
@@ -159,13 +172,16 @@
       const D = window.KioskDevice;
       const level = B ? B.level : null;
       const charging = B ? B.charging : null;
-      const tone = level === null ? '' : charging ? 'good' : level <= 15 ? 'bad' : level <= 30 ? 'warn' : '';
+      // green = fine or charging, orange = 30 % or less, red = 15 % or less; the state is always also written out
+      const tone = level === null ? '' : charging ? 'good' : level <= 15 ? 'bad' : level <= 30 ? 'warn' : 'good';
+      const state = level === null ? 'אין נתון מהמכשיר' : charging ? 'בטעינה' : charging === false ? 'לא בטעינה' : '';
       return h('div', { class: 'kx-cards', 'data-live': 'cards' },
         h('div', { class: `kx-card kx-battery ${tone ? `is-${tone}` : ''}` },
-          h('small', null, 'סוללה'),
-          h('strong', { dir: 'ltr' }, level === null ? '—' : `${level}%`),
-          h('div', { class: 'kx-bar' }, h('i', { style: `width:${level === null ? 0 : level}%` })),
-          h('span', null, level === null ? 'אין נתון מהמכשיר' : charging ? 'בטעינה' : charging === false ? 'לא בטעינה' : '')),
+          h('div', { class: 'kx-ring', style: `--p:${level === null ? 0 : level}%` }, h('strong', { dir: 'ltr' }, level === null ? '—' : `${level}%`)),
+          h('div', { class: 'kx-battery-copy' },
+            h('small', null, 'סוללה'),
+            state ? h('span', { class: `kx-pill${level === null ? ' is-quiet' : ''}` }, state) : null,
+            h('span', null, level === null ? 'אין קריאה מהמכשיר' : level <= 15 && !charging ? 'כמעט ריקה, חברו למטען' : level <= 30 && !charging ? 'נמוכה' : 'תקינה'))),
         h('div', { class: 'kx-card' },
           h('small', null, 'חיבור לשרת'),
           h('strong', { class: D && D.ok ? 'is-good' : 'is-warn' }, navigator.onLine === false ? 'אין רשת' : D && D.ok ? 'מחובר' : D && D.error === 'not_ready' ? 'ממתין לעדכון שרת' : 'לא ידוע'),
@@ -178,6 +194,21 @@
           h('small', null, 'הטאבלט'),
           h('strong', null, C.deviceName),
           h('span', null, C.branchName('he') ? `סניף ${C.branchName('he')}` : 'הסניף עוד לא ידוע')));
+    },
+    // the alert ladder of the battery tab: one chip per 5 % from the level where the alerts start; lit = already reached
+    ladder() {
+      const B = window.KioskBattery;
+      const level = B ? B.level : null;
+      const charging = B ? B.charging : null;
+      const start = Math.floor(cget('battery.alertPercent') / 5) * 5;
+      const here = level === null ? null : Math.max(5, Math.ceil(level / 5) * 5);
+      const steps = [];
+      for (let p = start; p >= 5; p -= 5) steps.push(p);
+      return h('div', { class: 'kx-row kx-row-stack', 'data-live': 'ladder' },
+        textOf('סולם ההתראות', steps.length ? `${steps.length} התראות, מ־${steps[0]}% ועד 5%, אחת לכל 5%. כל שלב מצלצל פעם אחת בכל ירידה.` : 'אין שלבים'),
+        h('div', { class: 'kx-ladder', role: 'list', 'aria-label': 'שלבי ההתראה' }, steps.map((p) => h('span', {
+          role: 'listitem', class: `kx-step${level !== null && charging !== true && level <= p ? ' is-hit' : ''}${p === here && charging !== true ? ' is-here' : ''}`,
+        }, `${p}%`))));
     },
     reading() {
       const B = window.KioskBattery;
@@ -291,10 +322,11 @@
       section('איפה הטעינה מוצגת', 'הטעינה מיועדת לצוות, לא ללקוחות.'),
       segment('תצוגה', 'מגירה = החלקה מהקצה העליון כלפי מטה. פינה = תג קטן תמיד על המסך (לבדיקות).', 'battery.display', [['tray', 'מגירה מלמעלה'], ['corner', 'תג בפינה'], ['hidden', 'מוסתר']]),
       LIVE.reading(),
-      section('התראה למפתח', 'ההתראה נשלחת למפתח בלבד (לא לבעלים) ורק כשהטאבלט לא בטעינה. פעם אחת לכל ירידה, ושוב רק אחרי שנטען.'),
+      section('התראה למפתח', 'ההתראה נשלחת למפתח בלבד (לא לבעלים) ורק כשהטאבלט לא בטעינה. התראה בכל ירידה של 5%, החל מהרמה שנקבעה כאן, ושוב מההתחלה אחרי טעינה.'),
       toggle('להתריע כשהטעינה יורדת', null, 'battery.alertEnabled'),
-      stepper('להתריע מתחת ל־', 'באחוזים.', 'battery.alertPercent', { min: 10, max: 90, step: 5, unit: '%', fallback: () => 50 }),
-      toggle('התראה דחופה נוספת', 'הודעה שנייה, כשהסוללה כמעט נגמרת.', 'battery.criticalEnabled'),
+      stepper('להתחיל להתריע מ־', 'באחוזים. ההתראה הראשונה בדיוק ברמה הזאת, ואחריה כל 5% למטה.', 'battery.alertPercent', { min: 10, max: 90, step: 5, unit: '%', fallback: () => 50 }),
+      LIVE.ladder(),
+      toggle('התראה דחופה נוספת', 'השלבים הנמוכים נשלחים עם כותרת דחופה, כשהסוללה כמעט נגמרת.', 'battery.criticalEnabled'),
       critOn ? stepper('התראה דחופה מתחת ל־', `חייב להיות נמוך מ־${alertAt}%.`, 'battery.criticalPercent', { min: 5, max: Math.max(5, Math.min(40, alertAt - 5)), step: 5, unit: '%', fallback: () => 15 }) : null,
       !alertOn ? note('ההתראה כבויה: המפתח לא יקבל הודעה על סוללה נמוכה.', 'warn') : null,
       action('שליחת התראת בדיקה למפתח', 'כך תיראה ההתראה בטלפון. דורש חיבור לשרת.', async () => {
@@ -346,6 +378,7 @@
     const n = native || {};
     const lines = String(n.updates || '').split('\n').filter(Boolean);
     return [
+      note('האפליקציה בודקת עדכונים בעצמה כל 10 דקות ומתקינה אותם בלי לבקש אישור, ברגע שאין לקוח מול המסך. עדכון שלא מצא רגע פנוי מותקן בכל זאת אחרי 3 שעות.'),
       section('גרסאות'),
       info('גרסת האפליקציה', n.appName ? `${n.appName} (${n.appCode})` : null),
       info('גרסת המסכים (העדכון האחרון)', n.webVersion || 'מובנית באפליקציה'),
@@ -448,16 +481,35 @@
     statusEl.className = `kx-status ${cls}`;
   }
 
+  // each titled section becomes one glass card holding its rows (and the notes under them); cards, notes and the like stand alone
+  function groups(nodes) {
+    const out = [];
+    let box = null;
+    nodes.flat(2).forEach((node) => {
+      if (!node) return;
+      const cls = node.classList;
+      if (cls && cls.contains('kx-sec')) { box = h('section', { class: 'kx-group' }, node); out.push(box); return; }
+      if (cls && (cls.contains('kx-row') || cls.contains('kx-action') || cls.contains('kx-note')) && box) { box.append(node); return; }
+      if (cls && (cls.contains('kx-row') || cls.contains('kx-action'))) { box = h('section', { class: 'kx-group' }, node); out.push(box); return; }
+      box = null;
+      out.push(node);
+    });
+    return out;
+  }
+
   function render() {
     if (!root) return;
     const scroller = root.querySelector('.kx-body');
     const top = scroller ? scroller.scrollTop : 0;
-    const rows = { overview, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]();
+    const rows = groups([{ overview, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]()]);
     const tabs = h('nav', { class: 'kx-tabs', role: 'tablist' }, TABS.map(([id, label]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': String(id === tab), class: id === tab ? 'is-on' : '',
       onclick: () => { tab = id; if (id === 'device' || id === 'updates' || id === 'diag') loadInfo(); render(); const b = root.querySelector('.kx-body'); if (b) b.scrollTop = 0; },
-    }, label)));
+    }, svg(TAB_ICONS[id]), label)));
+    const logo = h('img', { src: 'sarcafe-logo.png', alt: '', width: '38', height: '38', draggable: 'false' });
+    logo.addEventListener('error', () => { logo.hidden = true; });
     const head = h('header', { class: 'kx-head' },
+      h('span', { class: 'kx-logo', 'aria-hidden': 'true' }, logo),
       h('div', { class: 'kx-title' }, h('strong', null, 'לוח בקרה'), h('small', null, `${C.deviceName}${C.branchName('he') ? ` · ${C.branchName('he')}` : ''}`)),
       (statusEl = h('span', { class: 'kx-status', role: 'status' })),
       h('button', { type: 'button', class: 'kx-btn', onclick: () => setPreview(true) }, 'תצוגה מקדימה'),
@@ -465,6 +517,9 @@
     const bodyEl = h('main', { class: 'kx-body' }, h('div', { class: 'kx-col' }, rows));
     root.replaceChildren(head, tabs, bodyEl);
     bodyEl.scrollTop = top;
+    // the chosen tab is always in view in the strip (nine tabs do not fit a narrow screen)
+    const chosen = tabs.querySelector('.is-on');
+    if (chosen && chosen.scrollIntoView) { try { chosen.scrollIntoView({ block: 'nearest', inline: 'center' }); } catch (_) { /* the strip just stays where it is */ } }
     paintStatus();
   }
 

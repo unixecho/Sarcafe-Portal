@@ -79,6 +79,10 @@ final class OtaUpdater {
     static final int BUFFER = 16 * 1024;
     static final long SPARE_BYTES = 20L * 1024 * 1024;
     static final int MAX_APK_FAILURES = 3;
+    /** After MAX_APK_FAILURES the same version is left alone for this long, then tried again (a failed update is never given up for good). */
+    static final long APK_RETRY_AFTER_MS = 6L * 60 * 60 * 1000;
+    /** An app update that found no idle moment this long is installed anyway: the kiosk restarts and clears itself like any privacy reset. */
+    static final long FORCE_APK_AFTER_MS = 3L * 60 * 60 * 1000;
 
     /** What the updater needs from the screen. Called on the main thread. */
     interface Host {
@@ -115,6 +119,7 @@ final class OtaUpdater {
     private boolean applyLoopRunning;
     private File pendingApk;         // downloaded and checked, waiting for an idle moment
     private int pendingApkCode;
+    private long pendingApkSince;    // elapsedRealtime when the pending APK was first ready (0 = none)
     private boolean started;
 
     private final Runnable periodic = new Runnable() {
@@ -161,7 +166,7 @@ final class OtaUpdater {
             if (state.getInt("native_code", 0) != nativeCode) {
                 int installing = state.getInt("apk_installing", 0);
                 state.edit().putInt("native_code", nativeCode).remove("etag_manifest").remove("etag_apk")
-                    .remove("apk_installing").remove("apk_fail_code").remove("apk_fail_count")
+                    .remove("apk_installing").remove("apk_fail_code").remove("apk_fail_count").remove("apk_fail_at")
                     .putString("last_result", installing != 0 && nativeCode >= installing
                         ? "app updated to " + nativeName + " (" + nativeCode + ")" : state.getString("last_result", ""))
                     .commit();
@@ -344,7 +349,8 @@ final class OtaUpdater {
     private void check(boolean manual) {
         worker.removeCallbacks(periodic);
         try {
-            if (!manual && !screenOn()) return; // finally reschedules; nothing is fetched with the screen off
+            // updates are looked for every few minutes whatever the screen is doing: a tablet whose screen went to sleep
+            // must still wake up to the newest version (the install itself waits for an idle moment, see applyWhenIdle)
             lastCheckAt = SystemClock.elapsedRealtime();
             String base = updateBase();
             if (base == null) {
@@ -536,7 +542,10 @@ final class OtaUpdater {
             return "app: up to date";
         }
         if (state.getInt("apk_fail_code", 0) == code && state.getInt("apk_fail_count", 0) >= MAX_APK_FAILURES) {
-            return "app: " + code + " failed " + MAX_APK_FAILURES + " times, skipped";
+            if (System.currentTimeMillis() - state.getLong("apk_fail_at", 0) < APK_RETRY_AFTER_MS) {
+                return "app: " + code + " failed " + MAX_APK_FAILURES + " times, waiting to try again";
+            }
+            state.edit().remove("apk_fail_code").remove("apk_fail_count").remove("apk_fail_at").commit();
         }
         File dir = new File(app.getCacheDir(), "ota");
         dir.mkdirs();
@@ -557,6 +566,7 @@ final class OtaUpdater {
             throw new IOException("downloaded APK is not the expected package/version");
         }
         synchronized (this) {
+            if (pendingApk == null || pendingApkCode != code) pendingApkSince = SystemClock.elapsedRealtime();
             pendingApk = apk;
             pendingApkCode = code;
         }
@@ -570,13 +580,18 @@ final class OtaUpdater {
     private void applyWhenIdle() {
         ui.removeCallbacks(applyLoop);
         boolean apk;
-        synchronized (this) { apk = pendingApk != null; }
+        boolean overdue;
+        synchronized (this) {
+            apk = pendingApk != null;
+            overdue = apk && pendingApkSince != 0 && SystemClock.elapsedRealtime() - pendingApkSince > FORCE_APK_AFTER_MS;
+        }
         final boolean web = state.getString("web_staged", null) != null && config.getString("url", null) == null;
+        final boolean force = overdue;
         if (!apk && !web) return;
         if (host == null) return; // the next onAppStart switches a staged bundle in; the APK waits for the next check
         host.queryIdle(new IdleCallback() {
             @Override public void onResult(boolean idle) {
-                if (!idle) {
+                if (!idle && !force) {
                     ui.postDelayed(applyLoop, IDLE_POLL_MS);
                     return;
                 }
@@ -586,6 +601,7 @@ final class OtaUpdater {
                     f = pendingApk;
                     code = pendingApkCode;
                     pendingApk = null;
+                    pendingApkSince = 0;
                 }
                 if (f != null) {
                     final File apkFile = f;
@@ -690,6 +706,8 @@ final class OtaUpdater {
             PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             p.setAppPackageName(app.getPackageName());
             p.setSize(apk.length());
+            // never ask anyone: the device owner installs silently, and on Android 12+ this says so explicitly
+            if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
             session = pi.openSession(pi.createSession(p));
             OutputStream out = session.openWrite("kiosk.apk", 0, apk.length());
             InputStream in = new FileInputStream(apk);
@@ -736,7 +754,7 @@ final class OtaUpdater {
 
     private void recordApkFailure(int code, String why) {
         int count = state.getInt("apk_fail_code", 0) == code ? state.getInt("apk_fail_count", 0) + 1 : 1;
-        state.edit().putInt("apk_fail_code", code).putInt("apk_fail_count", count).remove("apk_installing")
+        state.edit().putInt("apk_fail_code", code).putInt("apk_fail_count", count).putLong("apk_fail_at", System.currentTimeMillis()).remove("apk_installing")
             .putString("last_result", "app " + code + " not installed: " + why).commit();
         Log.w(TAG, "app " + code + " install failed (" + count + "): " + why);
     }

@@ -24,7 +24,7 @@ puts the panel away so the kiosk can be seen as a customer sees it; one tap on t
 | מודעות | Arrows, dragging, auto-play, going round, slide or fade, what a tap on an ad does, the time on each ad, which ads this tablet shows. |
 | זמנים | Time without a touch before the privacy-reset warning, the warning's length, how long the sign-up confirmation stays, how often the content refreshes. |
 | שפות | Which of Hebrew / English / Arabic are offered, the default one (the kiosk starts in it and returns to it after every visit), the language switch. |
-| סוללה | Where the charge shows (tray, corner, hidden), the alert to the developer (on/off, the level), an optional urgent alert, a test alert. |
+| סוללה | Where the charge shows (tray, corner, hidden), the alerts to the developer (on/off, where the 5 % ladder starts), an optional urgent title for the low rungs, a test alert. |
 | מכשיר | (app 0.3+) Rotation, speed mode, brightness, Wi-Fi, unlock for 5 minutes, restart the app, restart the tablet, a new PIN, leave kiosk mode. |
 | עדכונים | (app 0.3+) The page and app versions, check now, undo the last page update. |
 | אבחון | What the tablet knows about itself, clear the saved ads, rename the tablet in the portal, everything back to the defaults. |
@@ -80,12 +80,21 @@ to**: published weeks only, on the branch's own clock. It answers only what the 
   tablet being tested on a desk; "מוסתר" shows nothing (the panel still does).
 * The reading comes from the app's battery service (app 0.3+), else from the page's Battery Status API, which the tablet's WebView
   156 supports (seen on the real tablet on 2026-11-04). With neither, nothing is claimed.
-* **The alert to the developer.** The tablet reports every 5 minutes while its screen is on (and soon after plugging in or a
-  5-point move). The database function `kiosk_device_report` writes ONE `dev.kiosk_battery` alert for each active developer
-  (`staff.badge = 'developer'`, never an owner) when the level is below the tablet's alert level (default 50 %) **and it is not
-  charging**. It is armed again by charging, or by the level rising 5 points above the level; at most 8 per person per day. An
-  unknown charging state never alerts. Switchable and adjustable in the panel and on the owner's page. An optional urgent alert
-  (default off, 15 %) replaces the ordinary one when the charge is that low. "שליחת התראת בדיקה" sends one alert marked "(בדיקה)".
+* **The alerts to the developer (one per 5 %, since 2026-11-05).** The tablet reports every 5 minutes while its screen is on (and soon after plugging in or a
+  5-point move). The database function `kiosk_device_report` writes a `dev.kiosk_battery` alert for each active developer
+  (`staff.badge = 'developer'`, never an owner) at the tablet's alert level (default 50 %) **and at every 5 % below it** (45, 40 ... 5),
+  only while the tablet is **not charging**, each rung once per fall (`kiosk_devices.battery_alert_step` keeps the lowest rung told). The ladder
+  starts again after a charge, or when the level rises 5 points above where it starts. A report that skips a rung rings once, with the real
+  charge in the title. At most 30 per person per day. An unknown charging state never alerts. Switchable and adjustable in the panel and on
+  the owner's page. The optional urgent level (default off, 15 %) no longer sends a second alert: a rung at or under it is sent with the urgent
+  title. "שליחת התראת בדיקה" sends one alert marked "(בדיקה)". Migration `20261105140000_kiosk_battery_step_alerts.sql`.
+
+* **The look (2026-11-05): the dashboards' glass ("glisse", docs/SARCAFE_GLASS_UI.md).** Warm near-black scene with soft light pools, frosted cards
+  (each titled section is one card, hairlines between its rows), the glass top bar pill with the logo tile, orange chips for the tabs (one icon each),
+  the translucent segmented control, a switch that is green when on, round +/- steppers, a battery ring that fills (green / orange at 30 % / red at 15 %),
+  one status pill (green saved, orange waiting), red for risky actions, the account menu's surface for dialogs. It is drawn in plain CSS
+  (`overrides/kiosk-admin.css`, tokens copied from `src/components/glass/glass.css`): real glisse is a React library and this page has none, and no
+  `backdrop-filter` is used so the cheap tablet is never slowed. The class names did not change, so `check:kiosk-ui` still drives it.
 
 ## Several tablets, several branches
 
@@ -119,8 +128,8 @@ open. Read-only facts without the PIN are on `KioskNative`: `battery()`, `appVer
 1. Apply `supabase/migrations/20261104120000_kiosk_devices.sql` in the Supabase SQL editor, then
    `insert into supabase_migrations.schema_migrations (version, name) values ('20261104120000','kiosk_devices') on conflict do nothing;`
 2. The page (everything except the panel's entrance and the device/updates tabs) travels by the usual signed OTA.
-3. The panel's entrance and the device tabs need the new app: `build.ps1 -VersionCode 3 -VersionName 0.3` (needs the keystore
-   password in `SARCAFE_KIOSK_KS_PASS`), `node scripts/publish-kiosk-ota.mjs apk`, commit `public/kiosk-ota/apk/`, push. The tablet
+3. The panel's entrance and the device tabs need the new app: `build.ps1 -VersionCode 3 -VersionName 0.3` (the signing password is read from
+   `android-tools\kiosk-signing.env`, see docs/SARCAFE_KIOSK_OTA.md; done 2026-11-05), `node scripts/publish-kiosk-ota.mjs apk`, commit `public/kiosk-ota/apk/`, push. The tablet
    installs it itself at an idle moment. (`MIN_NATIVE_VERSION` stays 2: the page works without it.)
 
 ## Checks

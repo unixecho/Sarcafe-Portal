@@ -3,11 +3,11 @@
  *
  *   POST <portal>/api/kiosk/device   { device, battery: { level, charging }, app, web }   (the kiosk's shared key)
  *
- * The portal records it (when the tablet was last seen, its charge, its versions) and decides about the alert: when the
- * charge falls below this tablet's alert level (battery.alertPercent, 50 % unless changed in the control panel) while it
- * is NOT charging, the developer is told once for that fall, and again only after the tablet has been charged or has risen
- * back above the level (all in the database function kiosk_device_report; the owners are not told, and nothing is sent
- * when the alert is switched off in the panel). The tablet only reports; it never decides.
+ * The portal records it (when the tablet was last seen, its charge, its versions) and decides about the alerts: while the
+ * tablet is NOT charging, the developer is told at the alert level (battery.alertPercent, 50 % unless changed in the control
+ * panel) and then at every 5 % below it (45, 40 ... 5), each rung once per fall; the ladder starts again after the tablet has
+ * been charged or has risen 5 points above its start (all in the database function kiosk_device_report; the owners are not
+ * told, and nothing is sent when the alerts are switched off in the panel). The tablet only reports; it never decides.
  *
  * The answer carries the time the tablet's settings last changed on the portal. A newer time than the one this tablet
  * knows (the owner changed something on their page) makes it fetch the content again, so the change arrives within one
