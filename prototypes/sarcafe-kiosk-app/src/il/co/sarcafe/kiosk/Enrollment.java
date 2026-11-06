@@ -97,6 +97,13 @@ final class Enrollment {
         while ((n = in.read(chunk)) > 0 && buf.size() < 16384) buf.write(chunk, 0, n);
         in.close();
         JSONObject cfg = new JSONObject(new String(buf.toByteArray(), StandardCharsets.UTF_8)).getJSONObject("config");
+        if (!applyConfig(prefs, cfg)) return 0;
+        prefs.edit().remove(CODE).remove(PORTAL).commit();
+        return 200;
+    }
+
+    /** Stores a portal's settings answer exactly as KioskConfigReceiver would. False (nothing stored) when any field is off. */
+    static boolean applyConfig(SharedPreferences prefs, JSONObject cfg) {
         String api = cfg.optString("api"), ota = cfg.optString("ota"), rt = cfg.optString("rt"), rtKey = cfg.optString("rtKey");
         String channel = cfg.optString("rtChannel"), key = cfg.optString("key"), device = cfg.optString("device");
         String pin = cfg.isNull("pinRecord") ? null : cfg.optString("pinRecord", null);
@@ -104,17 +111,107 @@ final class Enrollment {
             || rtKey.isEmpty() || rtKey.length() > 400 || !EnrollRules.acceptableChannel(channel) || !EnrollRules.acceptableKey(key)
             || !PinReset.deviceOrDefault(device).equals(device)) {
             Log.w(OtaUpdater.TAG, "enrollment answer refused");
-            return 0;
+            return false;
         }
         SharedPreferences.Editor e = prefs.edit()
             .putString("api", api).putString("ota", ota).putString("rt", rt).putString("rt_key", rtKey)
-            .putString("rt_channel", channel).putString("signup_key", key).putString("device", device)
-            .remove(CODE).remove(PORTAL);
+            .putString("rt_channel", channel).putString("signup_key", key).putString("device", device);
         if (pin != null && PinReset.acceptableRecord(pin)) {
             e.putString("pin_v2", pin).remove("pin_hash").remove("pin_failures").remove("pin_locked_until");
         }
         e.commit();
         Log.i(OtaUpdater.TAG, "enrolled as " + device);
-        return 200;
+        return true;
+    }
+
+    // ---- pairing by the short code on the setup screen (an app installed from a link, with no settings) ----------------------------
+    // POST {portal}/api/kiosk/pair → a 6-character code to show + the app's own secret token; then GET ?token= every few seconds until
+    // the owner typed the code in the dashboard's install wizard → the settings, once. docs/SARCAFE_KIOSK_INSTALL.md.
+
+    static volatile String pairStatus = "idle";   // idle | asking | waiting | done | offline | error
+    static volatile String pairCode = null;
+    static volatile String pairExpires = null;
+    private static volatile boolean pairing;
+
+    static boolean configured(SharedPreferences prefs) {
+        String key = prefs.getString("signup_key", null), api = prefs.getString("api", null);
+        return key != null && !key.isEmpty() && api != null && api.startsWith("https://");
+    }
+
+    /** Starts (once) the pairing loop when the app has no settings and no install code; `done` runs on the main thread. */
+    static void startPairing(final Context context, final Runnable done) {
+        final SharedPreferences prefs = context.getSharedPreferences("kiosk", Context.MODE_PRIVATE);
+        if (configured(prefs) || pending(prefs) || pairing) return;
+        pairing = true;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    String portal = "https://" + EnrollRules.PORTAL_HOSTS[0];
+                    while (!configured(prefs) && !pending(prefs)) {
+                        String token = prefs.getString("pair_token", null);
+                        if (token == null) {
+                            pairStatus = "asking";
+                            JSONObject made = call(portal + "/api/kiosk/pair", "POST");
+                            if (made == null) { pairStatus = "offline"; Thread.sleep(10000); continue; }
+                            token = made.optString("token");
+                            if (!EnrollRules.acceptableCode(token)) { pairStatus = "error"; Thread.sleep(30000); continue; }
+                            pairCode = made.optString("code");
+                            pairExpires = made.optString("expiresAt");
+                            prefs.edit().putString("pair_token", token).apply();
+                        }
+                        JSONObject state = call(portal + "/api/kiosk/pair?token=" + token, "GET");
+                        if (state == null) { pairStatus = "offline"; Thread.sleep(8000); continue; }
+                        if (state.optBoolean("gone")) { prefs.edit().remove("pair_token").apply(); pairCode = null; continue; } // expired: a new code
+                        if ("ready".equals(state.optString("status")) && state.optJSONObject("config") != null) {
+                            if (applyConfig(prefs, state.getJSONObject("config"))) {
+                                prefs.edit().remove("pair_token").commit();
+                                pairStatus = "done";
+                                pairCode = null;
+                                if (done != null) new Handler(Looper.getMainLooper()).post(done);
+                                return;
+                            }
+                            pairStatus = "error";
+                            prefs.edit().remove("pair_token").apply();
+                            continue;
+                        }
+                        pairCode = state.optString("code", pairCode);
+                        pairExpires = state.optString("expiresAt", pairExpires);
+                        pairStatus = "waiting";
+                        Thread.sleep(4000);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    pairStatus = "error";
+                    Log.w(OtaUpdater.TAG, "pairing failed: " + e.getClass().getSimpleName());
+                } finally {
+                    pairing = false;
+                }
+            }
+        }, "kiosk-pair").start();
+    }
+
+    /** One JSON call to the portal; null when offline or the portal is busy; {"gone":true} for 404 (expired or unknown). */
+    private static JSONObject call(String url, String method) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+            c.setInstanceFollowRedirects(false);
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setRequestMethod(method);
+            if ("POST".equals(method)) { c.setDoOutput(true); c.setRequestProperty("Content-Type", "application/json"); OutputStream o = c.getOutputStream(); o.write("{}".getBytes(StandardCharsets.UTF_8)); o.close(); }
+            int status = c.getResponseCode();
+            if (status == 404) return new JSONObject().put("gone", true);
+            if (status != 200 && status != 201) return null;
+            InputStream in = c.getInputStream();
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int n;
+            while ((n = in.read(chunk)) > 0 && buf.size() < 16384) buf.write(chunk, 0, n);
+            in.close();
+            return new JSONObject(new String(buf.toByteArray(), StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

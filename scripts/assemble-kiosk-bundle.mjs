@@ -28,9 +28,9 @@ const PUBLIC = join(repo, 'public');
 //             announcements, the sign-up, menu updates, the header's who-is-on-shift, the battery for staff and its
 //             report to the portal, the staff control panel, and last the "page booted" signal to the app
 export const LAYERS = {
-  head: ['kiosk-perf.js', 'rubik.css', 'kiosk-app.css', 'kiosk-attract.css', 'kiosk-battery.css', 'kiosk-admin.css'],
+  head: ['kiosk-perf.js', 'rubik.css', 'kiosk-app.css', 'kiosk-attract.css', 'kiosk-battery.css', 'kiosk-admin.css', 'kiosk-setup.css'],
   afterMenu: ['kiosk-menu-cache.js'],
-  body: ['kiosk-config.js', 'kiosk-menu-i18n.js', 'kiosk-i18n.js', 'kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-shift.js', 'kiosk-battery.js', 'kiosk-device.js', 'kiosk-admin.js', 'kiosk-ready.js'],
+  body: ['kiosk-config.js', 'kiosk-menu-i18n.js', 'kiosk-i18n.js', 'kiosk-app.js', 'kiosk-business.js', 'kiosk-session.js', 'kiosk-legal.js', 'kiosk-attract.js', 'kiosk-signup.js', 'kiosk-sync.js', 'kiosk-shift.js', 'kiosk-battery.js', 'kiosk-device.js', 'kiosk-admin.js', 'kiosk-setup.js', 'kiosk-ready.js'],
 };
 
 const tag = (file) => (file.endsWith('.css')

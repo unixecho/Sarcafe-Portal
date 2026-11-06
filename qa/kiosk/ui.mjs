@@ -173,6 +173,24 @@ export function kioskUiStage(live, metrics) {
         await p.locator('[data-installed]').waitFor({ timeout: 12000 })
         assert.deepEqual(s.errors, [], 'page errors')
       } finally { await s.close() }
+      { // the second way: the 6-character code on the setup screen of an app installed from a link
+        live().db('kiosk_pairings').length = 0
+        live().db('kiosk_pairings').push({ id: '55555555-5555-4555-8555-555555555555', code: 'K7Q2MP', token_hash: 'a'.repeat(64), device_id: null, pin_record: null, paired_by: null, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 600_000).toISOString(), paired_at: null, claimed_at: null })
+        const s3 = await open('owner', '/owner/kiosk/install')
+        try {
+          const p = s3.page
+          await p.getByText(/מוכן להתקנה/).waitFor({ timeout: 8000 })
+          await p.getByRole('radiogroup', { name: 'דרך ההתקנה' }).getByText('קוד ממסך הטאבלט').click()
+          await p.getByLabel('הקוד שמופיע בטאבלט').fill('k7q 2mp')
+          await p.getByLabel('קוד חדש (6 עד 8 ספרות)').fill('583917')
+          await p.getByLabel('שוב, לאישור').fill('583917')
+          await p.getByRole('button', { name: 'חיבור הטאבלט' }).click()
+          await p.locator('[data-paired]').waitFor({ timeout: 10000 })
+          const row = live().db('kiosk_pairings')[0]
+          assert.ok(row.paired_at && row.device_id && row.pin_record && !JSON.stringify(row).includes('583917'), 'paired to the tablet, the PIN only as a record')
+          assert.deepEqual(s3.errors, [], 'page errors')
+        } finally { await s3.close() }
+      }
       const problems = []
       for (const look of LOOKS) {
         const row = live().db('staff').find((x) => x.id === ID.owner); if (row) row.ui_theme = look

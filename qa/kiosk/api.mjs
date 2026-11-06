@@ -336,6 +336,49 @@ export function kioskApiStage(live) {
     live().standin.state.limits.clear()
   })
 
+  // pairing by the code on the setup screen of an app installed from a link (src/app/api/kiosk/pair + the wizard's "code" mode)
+  const pair = (method, query = '', opts = {}) => live().call(`/api/kiosk/pair${query}`, { method, ...(method === 'POST' ? { body: {}, headers: { 'content-type': 'application/json' } } : {}), ...opts })
+
+  stage.test('pair-roundtrip', 'חיבור בקוד: אפליקציה בלי הגדרות מקבלת קוד, הבעלים מקליד אותו באשף, והאפליקציה מקבלת פעם אחת את כל ההגדרות', 'e2e', async () => {
+    freshInstall(); live().db('kiosk_pairings').length = 0
+    const made = await pair('POST')
+    assert.status(made, 201, 'a pairing')
+    assert.ok(/^[A-HJ-NP-Z2-9]{6}$/.test(made.json.code) && /^[A-Za-z0-9_-]{43}$/.test(made.json.token), 'a short code to show, a long token to keep')
+    assert.ok(!JSON.stringify(live().db('kiosk_pairings')).includes(made.json.token), 'the token is stored only as a hash')
+    const waiting = await pair('GET', `?token=${made.json.token}`)
+    assert.equal(waiting.json.status, 'waiting', 'waiting for the owner')
+    const typed = made.json.code.slice(0, 3).toLowerCase() + ' ' + made.json.code.slice(3)
+    const r = await install('owner', { branchId: ID.gh, slug: 'givat-haviva-4', name: 'קיוסק רביעי', pin: '583917', confirm: '583917', pairCode: typed })
+    assert.status(r, 201, 'the owner types the code (any case, with a space): paired, no QR needed')
+    assert.equal(r.json.paired, true)
+    const ready = await pair('GET', `?token=${made.json.token}`)
+    assert.equal(ready.json.status, 'ready', 'the app gets its settings')
+    assert.equal(ready.json.config.device, 'givat-haviva-4'); assert.equal(ready.json.config.key, SECRETS.KIOSK_SIGNUP_KEY)
+    assert.ok(matches(ready.json.config.pinRecord, '583917'), 'the PIN as the app\'s record')
+    assert.status(await pair('GET', `?token=${made.json.token}`), 404, 'once')
+  })
+
+  stage.test('pair-rules', 'חיבור בקוד — כללים: הקוד אינו סיסמה (רק בעלים מחובר משתמש בו), פג אחרי 15 דקות, פעם אחת, אסימון שגוי לא מקבל כלום, הצפה נחסמת', 'security', async () => {
+    freshInstall(); live().db('kiosk_pairings').length = 0
+    const made = await pair('POST')
+    const body = { branchId: ID.gh, slug: 'givat-haviva-5', name: 'קיוסק חמישי', pin: '583917', confirm: '583917', pairCode: made.json.code }
+    for (const who of ['gm', 'dana']) assert.ok([401, 403].includes((await install(who, body)).status), `${who} cannot pair`)
+    assert.status(await install('owner', { ...body, pairCode: 'ZZZZZZ' }), 404, 'an unknown code')
+    assert.status(await install('owner', { ...body, pairCode: 'abc' }), 400, 'not a code')
+    assert.status(await pair('GET', '?token=short'), 400, 'not a token')
+    assert.status(await pair('GET', `?token=${'A'.repeat(43)}`), 404, 'a made-up token gets nothing')
+    live().db('kiosk_pairings')[0].expires_at = new Date(Date.now() - 1000).toISOString()
+    assert.status(await install('owner', body), 404, 'expired after 15 minutes')
+    assert.status(await pair('GET', `?token=${made.json.token}`), 404, 'and the app is told to ask for a new one')
+    const second = await pair('POST')
+    assert.status(await install('owner', { ...body, pairCode: second.json.code }), 201)
+    assert.status(await install('owner', { ...body, pairCode: second.json.code }), 404, 'a code pairs once')
+    live().standin.state.limits.clear()
+    for (let i = 0; i < 5; i++) await pair('POST')
+    assert.status(await pair('POST'), 429, 'asking for codes is limited')
+    live().standin.state.limits.clear()
+  })
+
   stage.test('outage', 'מסד הנתונים לא עונה: ה־API של הקיוסק עונה בשגיאה מסודרת בלי פרטים פנימיים, וחוזר לעבוד', 'survival', async () => {
     fresh()
     await live().control('/__qa/fault', { mode: 'down' })

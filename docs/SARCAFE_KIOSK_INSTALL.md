@@ -35,3 +35,21 @@ Later: a suite that prepares any tablet for the kiosk, until an approved APK is 
 - Not tried on a real factory-reset tablet from this session (no tablet here); the first real install is the proof.
 - Some tablets' welcome screens need the 6 taps on the very first screen only; a few Android builds have no QR setup at all
   (then: adb, `docs/SARCAFE_KIOSK_OTA.md`).
+
+## The device owner: why a kiosk can or cannot be left (2026-11-06, learned on the owner's tablet)
+Kiosk mode (no way out without the staff PIN) works only when the app is the tablet's **device owner**. Android allows that only:
+(1) during the setup screens right after a factory reset — 6 taps on the welcome screen open ANDROID'S OWN QR scanner (not the camera
+app; Google Lens only reads the QR's text, and installing the APK from that link makes an ordinary app), or (2) from a PC:
+`adb shell dpm set-device-owner il.co.sarcafe.kiosk/.KioskAdminReceiver` (only when no account is on the tablet). No app may make itself
+the device owner. "Remove kiosk completely" in the old staff menu gives it up.
+
+## Pairing by code + the setup screen inside the app (app 0.7+; migration 20261107000000_kiosk_pairings)
+- **Setup screen** (`overrides/kiosk-setup.js|css`): when the app has no settings, or is not the device owner, it shows four steps
+  (network, settings from the portal, the lock, the menu) with rotating light-hearted lines, then "הקיוסק מוכן! ☕" once. It reads
+  `KioskNative.setupState()` (configured, owner, locked, pairing code); nothing secret is shown. Not locked: it says how to lock, and
+  staff can carry on unlocked.
+- **Pairing:** an app without settings asks `POST /api/kiosk/pair` for a pairing — a 6-character code (no look-alikes) to show, and
+  its own long token (stored as SHA-256) — and polls `GET /api/kiosk/pair?token=`. The owner types the code in the wizard
+  (`/owner/kiosk/install` → "קוד ממסך הטאבלט", with branch, name, PIN); the app receives its settings once (`Enrollment.applyConfig`,
+  the same as a QR install). The code is not a credential (only a signed-in owner uses it); 15 minutes; claimed once; 5 pairings per
+  address per hour. Tests: `kiosk-api.pair-roundtrip|pair-rules`, `kiosk-ui.install-wizard` (code mode), `check:kiosk-ui` (setup screen).

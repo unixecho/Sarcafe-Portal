@@ -56,6 +56,10 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
   const [ssid, setSsid] = useState('')
   const [wifiPass, setWifiPass] = useState('')
   const [busy, setBusy] = useState(false)
+  // two ways: a QR for a factory-reset tablet, or the 6-character code on the setup screen of a kiosk app that is already installed
+  const [mode, setMode] = useState<'qr' | 'code'>('qr')
+  const [pairCode, setPairCode] = useState('')
+  const [paired, setPaired] = useState<{ name: string } | null>(null)
   const [made, setMade] = useState<Made | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
 
@@ -82,7 +86,8 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
   const pinError = pin ? pinProblem(pin) : null
   const slugOk = DEVICE_SLUG_PATTERN.test(slug)
   const canQr = !!status?.app?.qr && status.ready
-  const ready = canQr && !!branchId && name.trim().length >= 2 && slugOk && !pinError && pin.length > 0 && pin === confirm && (!wifiOn || ssid.trim().length > 0)
+  const codeOk = /^[A-HJ-NP-Z2-9]{6}$/.test(pairCode.replace(/[\s-]/g, '').toUpperCase())
+  const ready = (mode === 'code' ? codeOk && !!status?.ready : canQr) && !!branchId && name.trim().length >= 2 && slugOk && !pinError && pin.length > 0 && pin === confirm && (!wifiOn || ssid.trim().length > 0)
   const used = useMemo(() => (made ? status?.recent.find((r) => r.slug === made.slug && r.usedAt && Date.parse(r.usedAt) >= made.madeAt - 60_000) : null), [made, status])
 
   async function create() {
@@ -91,10 +96,11 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
     try {
       const res = await fetch('/api/owner/kiosk/install', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId, slug, name: name.trim(), pin, confirm, ...(wifiOn ? { wifi: { ssid: ssid.trim(), password: wifiPass || undefined, security: wifiPass ? 'WPA' : 'NONE' } } : {}) }),
+        body: JSON.stringify({ branchId, slug, name: name.trim(), pin, confirm, ...(mode === 'code' ? { pairCode } : {}), ...(mode === 'qr' && wifiOn ? { wifi: { ssid: ssid.trim(), password: wifiPass || undefined, security: wifiPass ? 'WPA' : 'NONE' } } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { glassToast(data?.error?.message || 'לא הצלחנו ליצור קוד התקנה.', 'bad'); return }
+      if (data.paired) { setPaired({ name: name.trim() }); setPin(''); setConfirm(''); setPairCode(''); glassToast('הטאבלט חובר. הוא מקבל את ההגדרות תוך כמה שניות.', 'ok'); void load(); return }
       const image = await QRCode.toDataURL(data.qr, { errorCorrectionLevel: 'M', margin: 2, width: 420 })
       setMade({ qr: data.qr, image, expiresAt: data.expiresAt, slug, name: name.trim(), app: data.app, madeAt: Date.now() })
       setPin(''); setConfirm(''); setWifiPass('')
@@ -103,6 +109,22 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
     } catch {
       glassToast('אין חיבור. נסו שוב.', 'bad')
     } finally { setBusy(false) }
+  }
+
+  if (paired) {
+    return (
+      <div className="ki" data-kiosk-install="paired">
+        <section className="gl-surf gl-card ki-qr">
+          <h2 className="gl-card__title"><CheckCircle2 size={17} aria-hidden="true" />{paired.name} חובר</h2>
+          <p className="gl-summary gl-tone-ok" data-paired>הטאבלט מקבל עכשיו את ההגדרות (תוך כמה שניות) ועובר למסך הקיוסק לבד.</p>
+          <p className="gl-note">אם מסך ההתקנה בטאבלט אומר שהקיוסק לא נעול: נעילה מלאה (שאי אפשר לצאת ממנה) אפשרית רק אחרי איפוס יצרן וסריקת QR, או בחיבור למחשב. ההוראות מופיעות במסך ההתקנה בטאבלט.</p>
+          <div className="ki-actions">
+            <Button variant="filled" onClick={() => setPaired(null)}>חיבור של טאבלט נוסף</Button>
+            <Link className="gl-chip gl-chip--soft" href="/owner/kiosk/control">ללוח הקיוסק</Link>
+          </div>
+        </section>
+      </div>
+    )
   }
 
   if (made) {
@@ -148,6 +170,18 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
       </section>
 
       <section className="gl-surf gl-card ki-form">
+        <h3 className="gl-card__title">איך מתקינים</h3>
+        <Seg label="דרך ההתקנה" value={mode} onChange={(v) => setMode(v as 'qr' | 'code')} items={[{ value: 'qr', label: 'QR (טאבלט אחרי איפוס)' }, { value: 'code', label: 'קוד ממסך הטאבלט' }]} fill />
+        {mode === 'code'
+          ? <>
+              <p className="gl-note">כשאפליקציית הקיוסק כבר מותקנת ואין לה הגדרות, היא מציגה מסך התקנה עם קוד של 6 תווים. מקלידים אותו כאן.</p>
+              <label className="gl-field"><span className="gl-field__label">הקוד שמופיע בטאבלט</span>
+                <input className="ki-input ki-input--pin" dir="ltr" value={pairCode} onChange={(e) => setPairCode(e.target.value.toUpperCase().slice(0, 8))} maxLength={8} autoComplete="off" autoCapitalize="characters" aria-invalid={pairCode.length > 0 && !codeOk} /></label>
+            </>
+          : <p className="gl-note">טאבלט אחרי איפוס יצרן (או חדש): סורקים QR במסך הפתיחה, והטאבלט מוריד את הקיוסק, ננעל ומתחבר לבד. זו הדרך היחידה (חוץ ממחשב) לנעילה מלאה.</p>}
+      </section>
+
+      <section className="gl-surf gl-card ki-form">
         <h3 className="gl-card__title">1 · לאיזה סניף ואיך קוראים לטאבלט</h3>
         {branches.length > 1 && <Seg label="סניף" value={branchId} onChange={pick} items={branches.map((b) => ({ value: b.id, label: b.name }))} fill />}
         <label className="gl-field"><span className="gl-field__label">שם הטאבלט (מופיע בלוח הקיוסק)</span>
@@ -168,17 +202,17 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
         <p className="gl-note">הקוד לא נשמר בשום מקום: רק ״טביעה״ שלו, שהטאבלט מקבל פעם אחת.</p>
       </section>
 
-      <section className="gl-surf gl-card ki-form">
+      {mode === 'qr' && <section className="gl-surf gl-card ki-form">
         <h3 className="gl-card__title"><Wifi size={16} aria-hidden="true" />3 · רשת (לא חובה)</h3>
         <label className="ki-check"><input type="checkbox" checked={wifiOn} onChange={(e) => setWifiOn(e.target.checked)} /> להכניס את רשת ה־Wi‑Fi לקוד, כדי שהטאבלט יתחבר לבד</label>
         {wifiOn && <>
           <label className="gl-field"><span className="gl-field__label">שם הרשת</span><input className="ki-input ki-input--ltr" dir="ltr" value={ssid} onChange={(e) => setSsid(e.target.value)} maxLength={32} /></label>
           <label className="gl-field"><span className="gl-field__label">סיסמה (ריק לרשת פתוחה). נמצאת רק בתוך ה־QR, לא נשמרת</span><input className="ki-input ki-input--ltr" dir="ltr" type="password" value={wifiPass} onChange={(e) => setWifiPass(e.target.value)} maxLength={63} /></label>
         </>}
-      </section>
+      </section>}
 
       <div className="ki-actions">
-        <Button variant="filled" onClick={() => { void create() }} disabled={!ready || busy}>{busy ? 'יוצר…' : 'יצירת קוד QR להתקנה'}</Button>
+        <Button variant="filled" onClick={() => { void create() }} disabled={!ready || busy}>{busy ? (mode === 'code' ? 'מחבר…' : 'יוצר…') : mode === 'code' ? 'חיבור הטאבלט' : 'יצירת קוד QR להתקנה'}</Button>
         {apkFile && <a className="gl-chip gl-chip--soft" href={`/kiosk-ota/apk/${apkFile}`} download><Download size={16} aria-hidden="true" />הורדת האפליקציה (התקנה ידנית)</a>}
       </div>
 

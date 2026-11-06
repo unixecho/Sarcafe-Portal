@@ -52,10 +52,19 @@ export const POST = apiRoute(async (request: NextRequest) => {
   if (problem) throw BadRequest(problem)
   if (body.pin !== body.confirm) throw BadRequest('שני הקודים לא זהים.')
   const app = latestApp()
-  if (!app?.certSha256) throw new ApiError(409, 'no_app', 'עוד אין גרסה של האפליקציה שאפשר להתקין ב־QR. היא נבנית עם השינוי הבא בקיוסק.')
+  if (!body.pairCode && !app?.certSha256) throw new ApiError(409, 'no_app', 'עוד אין גרסה של האפליקציה שאפשר להתקין ב־QR. היא נבנית עם השינוי הבא בקיוסק.')
   if (!(await checkCredentialRateLimit(`kiosk-install:${me.id}`, 10, 3600))) throw RateLimited('יותר מדי התקנות בשעה האחרונה. נסו שוב מאוחר יותר.')
 
   const service = createServiceRoleClient()
+  // pairing by the code on the tablet's own setup screen: the pairing must exist, be fresh and not yet taken
+  let pairingId: string | null = null
+  if (body.pairCode) {
+    const { data: pairing, error: pairError } = await service.from('kiosk_pairings').select('id, expires_at, paired_at').eq('code', body.pairCode).maybeSingle()
+    if (pairError) throw isMissingObject(pairError) ? new ApiError(503, 'not_ready', 'עדכון מסד הנתונים של החיבור בקוד עדיין לא הוחל (20261107000000).') : new Error('kiosk pairing read failed')
+    const p = pairing as { id: string; expires_at: string; paired_at: string | null } | null
+    if (!p || p.paired_at || p.expires_at < new Date().toISOString()) throw new ApiError(404, 'unknown_pairing', 'הקוד לא נמצא או שפג תוקפו. בטאבלט מופיע קוד חדש כל 15 דקות.')
+    pairingId = p.id
+  }
   const { data: branch } = await service.from('branches').select('id').eq('id', body.branchId).maybeSingle()
   if (!branch) throw BadRequest('הסניף לא נמצא.')
 
@@ -73,6 +82,15 @@ export const POST = apiRoute(async (request: NextRequest) => {
     deviceId = (created as { id: string }).id
   }
 
+  if (pairingId) {
+    const { data: paired, error: pairWrite } = await service.from('kiosk_pairings')
+      .update({ device_id: deviceId, pin_record: pinRecord(body.pin), paired_by: me.id, paired_at: new Date().toISOString() })
+      .eq('id', pairingId).is('paired_at', null).select('id')
+    if (pairWrite) throw new Error('kiosk pairing write failed')
+    if (!paired || paired.length === 0) throw new ApiError(404, 'unknown_pairing', 'הקוד כבר שימש.')
+    return NextResponse.json({ paired: true, slug: body.slug }, { status: 201, headers: NO_STORE })
+  }
+
   const code = randomBytes(32).toString('base64url')
   const expiresAt = new Date(Date.now() + ENROLL_HOURS * 3_600_000).toISOString()
   const { error: enrollError } = await service.from('kiosk_enrollments').insert({
@@ -85,6 +103,6 @@ export const POST = apiRoute(async (request: NextRequest) => {
   if (enrollError) throw isMissingObject(enrollError) ? notReady() : new Error('kiosk enrollment write failed')
 
   const origin = request.nextUrl.origin
-  const qr = provisioningPayload({ apkUrl: `${origin}/kiosk-ota/apk/${app.url}`, certSha256: app.certSha256, code, portal: origin, wifi: body.wifi })
-  return NextResponse.json({ qr, expiresAt, app: app.versionName, slug: body.slug }, { status: 201, headers: NO_STORE })
+  const qr = provisioningPayload({ apkUrl: `${origin}/kiosk-ota/apk/${app!.url}`, certSha256: app!.certSha256!, code, portal: origin, wifi: body.wifi })
+  return NextResponse.json({ qr, expiresAt, app: app!.versionName, slug: body.slug }, { status: 201, headers: NO_STORE })
 })

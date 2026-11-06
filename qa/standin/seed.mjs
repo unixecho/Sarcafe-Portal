@@ -111,6 +111,7 @@ export function seed() {
     menus: [{ id: ID.ghMenu, slug: 'givat-haviva', branch_id: ID.gh, draft: ghMenu(), published: ghMenu(), updated_at: '2026-01-01T00:00:00Z' }],
     menu_audit: [],
     kiosk_enrollments: [],
+    kiosk_pairings: [],
   }
 }
 

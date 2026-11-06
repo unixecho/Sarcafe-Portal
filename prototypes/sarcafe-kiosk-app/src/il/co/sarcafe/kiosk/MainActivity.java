@@ -133,6 +133,7 @@ public class MainActivity extends Activity {
         KioskConfigReceiver.onChanged = configChanged;
         load();
         Enrollment.start(this, configChanged); // a QR-installed kiosk fetches its settings once (docs/SARCAFE_KIOSK_INSTALL.md)
+        Enrollment.startPairing(this, configChanged); // no settings and no code (installed from a link): the setup screen's pairing code
     }
 
     /** After an adb configuration broadcast (main thread): apply what can change while running and reload. */
@@ -155,6 +156,7 @@ public class MainActivity extends Activity {
         super.onResume();
         if (System.currentTimeMillis() >= staffUntil) lockIfPermitted();
         Enrollment.start(this, configChanged); // tried again when the Wi-Fi was not up at the first start
+        Enrollment.startPairing(this, configChanged);
     }
 
     @Override
@@ -247,6 +249,26 @@ public class MainActivity extends Activity {
             @JavascriptInterface public String webVersion() { return !kioskPageOnTop || ota == null ? "" : ota.activeWebVersion(); }
             // The dashboard's "look for updates now" (docs/SARCAFE_KIOSK_REMOTE.md): starts the same check the app runs every
             // 10 minutes. Changes nothing by itself; at most once a minute.
+            // the setup screen (overrides/kiosk-setup.js): has the app its settings, is it the device owner (locked kiosk), the pairing
+            // code to show while it has none. Nothing secret: no key, no token. docs/SARCAFE_KIOSK_INSTALL.md
+            @JavascriptInterface public String setupState() {
+                try {
+                    JSONObject o = new JSONObject();
+                    o.put("configured", Enrollment.configured(prefs));
+                    o.put("enrolling", Enrollment.pending(prefs));
+                    android.app.admin.DevicePolicyManager d = (android.app.admin.DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
+                    o.put("owner", d != null && d.isDeviceOwnerApp(getPackageName()));
+                    ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                    o.put("locked", am != null && am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE);
+                    o.put("pairStatus", Enrollment.pairStatus);
+                    o.put("pairCode", Enrollment.pairCode == null ? JSONObject.NULL : Enrollment.pairCode);
+                    o.put("pairExpires", Enrollment.pairExpires == null ? JSONObject.NULL : Enrollment.pairExpires);
+                    o.put("device", prefs.getString("device", ""));
+                    return o.toString();
+                } catch (Exception e) {
+                    return "{}";
+                }
+            }
             @JavascriptInterface public void checkUpdates() {
                 if (!kioskPageOnTop || ota == null) return;
                 long now = android.os.SystemClock.elapsedRealtime();

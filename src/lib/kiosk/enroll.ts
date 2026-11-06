@@ -11,6 +11,15 @@ export const KIOSK_ADMIN_COMPONENT = 'il.co.sarcafe.kiosk/.KioskAdminReceiver'
 /** The install code: 32 random bytes, base64url (43 characters). */
 export const ENROLL_CODE = /^[A-Za-z0-9_-]{43}$/
 
+/** The short code a fresh kiosk shows on its setup screen: 6 characters without look-alikes (no I, O, 0, 1). */
+export const PAIR_CODE = /^[A-HJ-NP-Z2-9]{6}$/
+export const PAIR_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+export const PAIR_MINUTES = 15
+/** The tablet's secret for its own pairing: 32 random bytes, base64url. */
+export const PAIR_TOKEN = /^[A-Za-z0-9_-]{43}$/
+/** "abc 234" as typed by the owner → "ABC234" (spaces and dashes dropped, upper case). */
+export const normalizePairCode = (s: string) => s.replace(/[\s-]/g, '').toUpperCase()
+
 export const installRequestSchema = z
   .object({
     branchId: z.string().uuid(),
@@ -18,11 +27,13 @@ export const installRequestSchema = z
     name: z.string().trim().min(2).max(60),
     pin: z.string().max(16),
     confirm: z.string().max(16),
+    pairCode: z.string().max(12).transform(normalizePairCode).pipe(z.string().regex(PAIR_CODE)).optional(),
     wifi: z.object({ ssid: z.string().min(1).max(32), password: z.string().max(63).optional(), security: z.enum(['WPA', 'WEP', 'NONE']).default('WPA') }).strict().optional(),
   })
   .strict()
 
 export const enrollRequestSchema = z.object({ code: z.string().regex(ENROLL_CODE) }).strict()
+
 
 /** "a1b2…" (64 hex) → URL-safe base64 of the bytes: the form Android wants for PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM. */
 export function certChecksum(hex: string): string | null {

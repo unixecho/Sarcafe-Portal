@@ -135,7 +135,7 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
   const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set() }
   reset()
   const table = (name) => (state.db[name] ??= [])
-  const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_enrollments: [['code_hash']], kiosk_devices: [['id'], ['slug']], ...keys }
+  const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_enrollments: [['code_hash']], kiosk_pairings: [['code'], ['token_hash']], kiosk_devices: [['id'], ['slug']], ...keys }
 
   const RPC = {
     // supabase/migrations 012 + 014: one item's (or type's) available / quantity in draft, and in published when p_publish;

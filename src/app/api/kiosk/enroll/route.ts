@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { readLimitedText } from '@/lib/kiosk/waitlist'
 import { isMissingObject } from '@/lib/kiosk/remote'
-import { enrollRequestSchema, type EnrollConfig } from '@/lib/kiosk/enroll'
-import { menuChannelName } from '@/lib/menu/realtime'
+import { enrollRequestSchema } from '@/lib/kiosk/enroll'
+import { enrollConfig } from '@/lib/kiosk/enroll-server'
 import { checkCredentialRateLimit, clientIp, credentialFingerprint } from '@/lib/rate-limit'
 
 // A newly installed kiosk asks for its settings ONCE (docs/SARCAFE_KIOSK_INSTALL.md). The tablet holds a one-time install code that
@@ -18,10 +18,7 @@ const reply = (status: number, body: Record<string, unknown>) => NextResponse.js
 
 export async function POST(request: NextRequest) {
   if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) return reply(415, { ok: false, error: 'bad_request' })
-  const key = process.env.KIOSK_SIGNUP_KEY
-  const rt = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const rtKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!key || !rt || !rtKey) return reply(503, { ok: false, error: 'not_configured' })
+  if (!process.env.KIOSK_SIGNUP_KEY) return reply(503, { ok: false, error: 'not_configured' })
   const text = await readLimitedText(request, 512)
   if (text === null) return reply(413, { ok: false, error: 'too_large' })
   let json: unknown
@@ -42,20 +39,9 @@ export async function POST(request: NextRequest) {
     const row = (claimed ?? [])[0] as { device_id: string; pin_record: string | null } | undefined
     if (!row) return reply(404, { ok: false, error: 'unknown_code' })
 
-    const { data: device } = await service.from('kiosk_devices').select('slug, name, branch_id').eq('id', row.device_id).maybeSingle()
-    const d = device as { slug: string; name: string; branch_id: string } | null
-    if (!d) return reply(404, { ok: false, error: 'unknown_code' })
-    const { data: branch } = await service.from('branches').select('slug').eq('id', d.branch_id).maybeSingle()
-    const branchSlug = (branch as { slug: string } | null)?.slug
-    if (!branchSlug) return reply(502, { ok: false, error: 'unavailable' })
-
-    const origin = request.nextUrl.origin
-    const config: EnrollConfig = {
-      device: d.slug, name: d.name, branch: branchSlug,
-      api: `${origin}/api/kiosk/menu`, ota: `${origin}/kiosk-ota/`,
-      rt, rtKey, rtChannel: menuChannelName(branchSlug), key,
-      pinRecord: row.pin_record,
-    }
+    const config = await enrollConfig(row.device_id, row.pin_record, request.nextUrl.origin)
+    if (config === 'not_configured') return reply(503, { ok: false, error: 'not_configured' })
+    if (!config) return reply(404, { ok: false, error: 'unknown_code' })
     return reply(200, { ok: true, config })
   } catch {
     return reply(502, { ok: false, error: 'unavailable' })
