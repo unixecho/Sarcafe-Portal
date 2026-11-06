@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-11-07 (after midnight): the tablet was no longer locked; setup screen inside the app; pairing by code
+
+- **Owner report:** removed the app ("Remove kiosk completely"), reinstalled it (APK link found with Google Lens: the tablet's camera has no QR reader), and could exit it again. Asks: make the app "override the tablet"; a little install wizard inside the app with quirky lines.
+- **Cause (inspected):** kiosk lock needs the app to be the DEVICE OWNER; only the post-reset setup (6 taps → Android's own QR scanner) or adb `dpm set-device-owner` can make it so. The reinstall from a link is an ordinary app. The tablet still reports as givat-haviva-1 (app 6), unlocked. Gave the owner the adb re-lock (remove accounts first). Recorded in `docs/SARCAFE_KIOSK_INSTALL.md`.
+- **Built:** setup screen `overrides/kiosk-setup.js|css` (4 steps, rotating Hebrew lines, lock warning + "continue unlocked", "הקיוסק מוכן! ☕" once), `KioskNative.setupState()`; pairing by a 6-character code: app `Enrollment.startPairing` + `applyConfig` (shared with QR), API `src/app/api/kiosk/pair` (public, token-hashed, 15 min, once, 5/h per address fingerprint; on PUBLIC_ROUTES), wizard mode "קוד ממסך הטאבלט" (`pairCode` in `installRequestSchema`), `src/lib/kiosk/enroll-server.ts` (shared settings builder). Migration `20261107000000_kiosk_pairings` — NOT applied yet (sent to the owner).
+- **QA:** dashboard 120/120; kiosk first run 37/38 (my new wizard test's locator matched 3 elements inside glisse's switch → role-based), re-run on the same build 38/38. check:kiosk-ui 231/231.
+- **Next step:** owner applies the migration; this push builds app 0.7 on GitHub (setup screen needs it); owner re-locks over adb. Then AyekaBar: see where ChatGPT left off.
+
 ## Claude addendum, 2026-11-06 (night): expected vs actual in Sarcafe's QA reports; the install code over adb (QR wizard fallback)
 
 - **Owner asks:** expected and actual results in Sarcafe's QA too; test the QR wizard on the ONLY tablet (owner has no spare); ChatGPT ran out of credits on the AyekaBar prompt — after this, see where it left off and implement it here.

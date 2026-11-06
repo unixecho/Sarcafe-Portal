@@ -2,18 +2,18 @@
   "version": 1,
   "suite": "kiosk",
   "run": {
-    "startedAt": "2026-11-06T18:08:53.338Z",
-    "finishedAt": "2026-11-06T18:28:09.442Z",
-    "durationMs": 1156104,
+    "startedAt": "2026-11-06T22:54:19.059Z",
+    "finishedAt": "2026-11-06T23:01:38.206Z",
+    "durationMs": 439147,
     "source": "local",
-    "commit": "53ebb8a397b6ffe302b484ca7cb3221bb38baa8c",
+    "commit": "0106cda2afdfc5cffd0c387ee61d21a25470ae73",
     "ref": "claude/youthful-euler-x2gvqa",
     "host": "local"
   },
   "status": "pass",
   "totals": {
-    "tests": 36,
-    "passed": 36,
+    "tests": 38,
+    "passed": 38,
     "failed": 0,
     "flaky": 0,
     "skipped": 0
@@ -23,17 +23,17 @@
       "id": "kiosk-static",
       "title": "הקיוסק: הקוד של הדף, החבילה והאפליקציה (Java)",
       "status": "pass",
-      "durationMs": 3388,
+      "durationMs": 3457,
       "tests": [
         {
           "id": "kiosk-static.page-scripts",
           "title": "כל הסקריפטים של דף הקיוסק תקינים (node --check)",
           "status": "pass",
           "category": "static",
-          "durationMs": 434,
+          "durationMs": 526,
           "checks": [
             {
-              "what": "only 17 scripts",
+              "what": "only 18 scripts",
               "expected": "כן",
               "actual": "כן",
               "ok": true
@@ -51,7 +51,7 @@
           "title": "חבילת הדף נבנית: כל הקבצים, כל אחד במקום, בלי קובץ ריק",
           "status": "pass",
           "category": "static",
-          "durationMs": 18,
+          "durationMs": 13,
           "checks": [
             {
               "what": "index.html",
@@ -60,7 +60,7 @@
               "ok": true
             },
             {
-              "what": "37 files",
+              "what": "39 files",
               "expected": "כן",
               "actual": "כן",
               "ok": true
@@ -84,7 +84,7 @@
           "title": "האפליקציה (Java): קוד שנקבע בלוח הבקרה נבדק אצל הטאבלט כמו קוד שהוקלד בו, ורשומה פגומה נדחית",
           "status": "pass",
           "category": "unit",
-          "durationMs": 987,
+          "durationMs": 910,
           "checks": [
             {
               "what": "the portal still makes records this way",
@@ -144,7 +144,7 @@
           "title": "עורך התפריט — הפונקציה במסד הנתונים (Postgres אמיתי): שם ומחיר לפריט ולסוג, ניקוי מחיר, טיוטה בלבד כשסגור, שם ריק נדחה, נעולה לדפדפנים",
           "status": "pass",
           "category": "sql",
-          "durationMs": 1946,
+          "durationMs": 2006,
           "checks": [
             {
               "what": "ערך",
@@ -178,14 +178,14 @@
       "id": "kiosk-checks",
       "title": "בדיקות הרגרסיה של הקיוסק (check:kiosk-* ו־verify:kiosk-*)",
       "status": "pass",
-      "durationMs": 361821,
+      "durationMs": 374330,
       "tests": [
         {
           "id": "kiosk-checks.check:kiosk-content",
           "title": "check:kiosk-content",
           "status": "pass",
           "category": "regression",
-          "durationMs": 703,
+          "durationMs": 764,
           "checks": [
             {
               "what": "exit 0. 66 passed, 0 failed",
@@ -200,7 +200,7 @@
           "title": "check:kiosk-device",
           "status": "pass",
           "category": "regression",
-          "durationMs": 596,
+          "durationMs": 757,
           "checks": [
             {
               "what": "exit 0.   ✓ a real read failure is an outage (it throws), not \"no such tablet\" | 92 passed, 0 failed",
@@ -215,7 +215,7 @@
           "title": "check:kiosk-i18n",
           "status": "pass",
           "category": "regression",
-          "durationMs": 83647,
+          "durationMs": 83979,
           "checks": [
             {
               "what": "exit 0. check-kiosk-i18n: 233 passed, 0 failed",
@@ -230,7 +230,7 @@
           "title": "check:kiosk-menu",
           "status": "pass",
           "category": "regression",
-          "durationMs": 541,
+          "durationMs": 661,
           "checks": [
             {
               "what": "exit 0. 33 passed, 0 failed",
@@ -245,7 +245,7 @@
           "title": "check:kiosk-ota",
           "status": "pass",
           "category": "regression",
-          "durationMs": 2463,
+          "durationMs": 3000,
           "checks": [
             {
               "what": "exit 0. broken bundles are never published, and never fail the portal build |   ✓ signature fails for another version / seq |   ✓ java: wrong PIN fails |   ✓ j…",
@@ -260,7 +260,7 @@
           "title": "check:kiosk-session",
           "status": "pass",
           "category": "regression",
-          "durationMs": 100053,
+          "durationMs": 100293,
           "checks": [
             {
               "what": "exit 0. check-kiosk-session: 132 passed, 0 failed",
@@ -275,10 +275,10 @@
           "title": "check:kiosk-ui",
           "status": "pass",
           "category": "regression",
-          "durationMs": 160444,
+          "durationMs": 170975,
           "checks": [
             {
-              "what": "exit 0. check-kiosk-ui: 222 passed, 0 failed",
+              "what": "exit 0. check-kiosk-ui: 231 passed, 0 failed",
               "expected": "כן",
               "actual": "כן",
               "ok": true
@@ -290,7 +290,7 @@
           "title": "check:kiosk-waitlist",
           "status": "pass",
           "category": "regression",
-          "durationMs": 515,
+          "durationMs": 679,
           "checks": [
             {
               "what": "exit 0. 52 passed, 0 failed",
@@ -305,7 +305,7 @@
           "title": "verify:kiosk-content-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 12859,
+          "durationMs": 13220,
           "checks": [
             {
               "what": "exit 0. 161 passed, 0 failed",
@@ -321,14 +321,14 @@
       "id": "kiosk-api",
       "title": "הקיוסק: ה־API של הטאבלט ושליטה מרחוק מלוח הבקרה",
       "status": "pass",
-      "durationMs": 8222,
+      "durationMs": 8832,
       "tests": [
         {
           "id": "kiosk-api.report-key",
           "title": "הדיווח של הטאבלט: בלי מפתח או עם מפתח שגוי — 401; סוג תוכן שגוי, גוף גדול או לא תקין — נדחה; תקין — נרשם",
           "status": "pass",
           "category": "security",
-          "durationMs": 59,
+          "durationMs": 127,
           "checks": [
             {
               "what": "no key",
@@ -361,7 +361,7 @@
           "title": "הטאבלט שומר רק את ההגדרות שלו, בתוך הגבולות; לא את הסניף, השם או המפתח",
           "status": "pass",
           "category": "security",
-          "durationMs": 26,
+          "durationMs": 38,
           "checks": [
             {
               "what": "out of bounds",
@@ -394,7 +394,7 @@
           "title": "פקודה מלוח הבקרה: מגיעה לטאבלט עם הדיווח, נשארת עד שהוא מאשר אותה, ומתנקה רק עם המזהה שלה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 82,
+          "durationMs": 127,
           "checks": [
             {
               "what": "the owner sends a reload",
@@ -410,14 +410,14 @@
             },
             {
               "what": "handed over with the report",
-              "expected": "0ccb0104-7dc3-4b51-8f42-712ed25da053",
-              "actual": "0ccb0104-7dc3-4b51-8f42-712ed25da053",
+              "expected": "cc4ed729-c2bd-42fe-90e9-31dc707a5da7",
+              "actual": "cc4ed729-c2bd-42fe-90e9-31dc707a5da7",
               "ok": true
             },
             {
               "what": "another id does not clear it",
-              "expected": "0ccb0104-7dc3-4b51-8f42-712ed25da053",
-              "actual": "0ccb0104-7dc3-4b51-8f42-712ed25da053",
+              "expected": "cc4ed729-c2bd-42fe-90e9-31dc707a5da7",
+              "actual": "cc4ed729-c2bd-42fe-90e9-31dc707a5da7",
               "ok": true
             }
           ]
@@ -427,7 +427,7 @@
           "title": "איפוס קוד מלוח הבקרה: נשמרת רק \"טביעה\", הטאבלט מושך אותה עם המפתח, מאשר, והיא נמחקת",
           "status": "pass",
           "category": "security",
-          "durationMs": 69,
+          "durationMs": 92,
           "checks": [
             {
               "what": "no key",
@@ -460,7 +460,7 @@
           "title": "קוד חדש: 6–8 ספרות, לא רצף ולא ספרה חוזרת, שני הקודים זהים; בעלים בלבד, מאותו אתר; 5 בשעה",
           "status": "pass",
           "category": "security",
-          "durationMs": 265,
+          "durationMs": 299,
           "checks": [
             {
               "what": "12345: too short",
@@ -493,7 +493,7 @@
           "title": "הבעלים משנה כל הגדרה של הטאבלט מלוח הבקרה, בתוך הגבולות, וכלל צולב נאכף",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 47,
+          "durationMs": 54,
           "checks": [
             {
               "what": "two sections at once",
@@ -526,7 +526,7 @@
           "title": "מלאי מהקיוסק: רק עם המפתח; מציג בדיוק את הקטגוריות של המלאי החי בלוח הבקרה (כריכים, מאפים, שייקים), עם כל הסוגים",
           "status": "pass",
           "category": "security",
-          "durationMs": 28,
+          "durationMs": 32,
           "checks": [
             {
               "what": "no key",
@@ -559,7 +559,7 @@
           "title": "עדכון מלאי מהקיוסק: נכנס לטיוטה ולתפריט שמוצג ללקוחות מיד, כמות 0 = אזל, ונרשם ביומן \"מהקיוסק\"",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 68,
+          "durationMs": 73,
           "checks": [
             {
               "what": "count down",
@@ -592,7 +592,7 @@
           "title": "מלאי מהקיוסק — כללי לוח הבקרה: רק בשעות הפעילות, רק פריטים של המלאי החי, רק עם המפתח, קלט לא תקין נדחה",
           "status": "pass",
           "category": "security",
-          "durationMs": 76,
+          "durationMs": 80,
           "checks": [
             {
               "what": "no key",
@@ -625,7 +625,7 @@
           "title": "אשף ההתקנה: הבעלים יוצר QR, טאבלט שאופס מקבל פעם אחת את כל ההגדרות שלו (כתובת, ערוץ, מפתח, שם, קוד הצוות כטביעה)",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 57,
+          "durationMs": 67,
           "checks": [
             {
               "what": "QR made",
@@ -658,7 +658,7 @@
           "title": "אשף ההתקנה — כללים: בעלים בלבד ומאותו אתר, קוד צוות חזק, קוד התקנה פג אחרי 24 שעות, קוד שגוי = 404, הצפה נחסמת, בלי אפליקציה חתומה אין QR",
           "status": "pass",
           "category": "security",
-          "durationMs": 195,
+          "durationMs": 259,
           "checks": [
             {
               "what": "no QR before an app with its certificate digest is published",
@@ -691,7 +691,7 @@
           "title": "עורך התפריט בקיוסק: רק עם המפתח; כל הקטגוריות, הפריטים והסוגים עם שם ומחיר",
           "status": "pass",
           "category": "security",
-          "durationMs": 12,
+          "durationMs": 18,
           "checks": [
             {
               "what": "no key",
@@ -724,7 +724,7 @@
           "title": "עורך התפריט בקיוסק: שינוי שם ומחיר, הוספה ומחיקה של פריט וסוג — בטיוטה ובתפריט שמוצג ללקוחות, ונרשם ביומן \"מהקיוסק\"",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 108,
+          "durationMs": 117,
           "checks": [
             {
               "what": "rename + reprice",
@@ -757,7 +757,7 @@
           "title": "עורך התפריט — כללי לוח הבקרה: רק בשעות הפעילות, רק התפריט של הסניף של הטאבלט, קלט לא תקין נדחה, הצפה נחסמת",
           "status": "pass",
           "category": "security",
-          "durationMs": 86,
+          "durationMs": 120,
           "checks": [
             {
               "what": "no key",
@@ -786,11 +786,77 @@
           ]
         },
         {
+          "id": "kiosk-api.pair-roundtrip",
+          "title": "חיבור בקוד: אפליקציה בלי הגדרות מקבלת קוד, הבעלים מקליד אותו באשף, והאפליקציה מקבלת פעם אחת את כל ההגדרות",
+          "status": "pass",
+          "category": "e2e",
+          "durationMs": 80,
+          "checks": [
+            {
+              "what": "a pairing",
+              "expected": "HTTP 201",
+              "actual": "HTTP 201",
+              "ok": true
+            },
+            {
+              "what": "a short code to show, a long token to keep",
+              "expected": "כן",
+              "actual": "כן",
+              "ok": true
+            },
+            {
+              "what": "the token is stored only as a hash",
+              "expected": "כן",
+              "actual": "כן",
+              "ok": true
+            },
+            {
+              "what": "waiting for the owner",
+              "expected": "waiting",
+              "actual": "waiting",
+              "ok": true
+            }
+          ]
+        },
+        {
+          "id": "kiosk-api.pair-rules",
+          "title": "חיבור בקוד — כללים: הקוד אינו סיסמה (רק בעלים מחובר משתמש בו), פג אחרי 15 דקות, פעם אחת, אסימון שגוי לא מקבל כלום, הצפה נחסמת",
+          "status": "pass",
+          "category": "security",
+          "durationMs": 196,
+          "checks": [
+            {
+              "what": "gm cannot pair",
+              "expected": "כן",
+              "actual": "כן",
+              "ok": true
+            },
+            {
+              "what": "dana cannot pair",
+              "expected": "כן",
+              "actual": "כן",
+              "ok": true
+            },
+            {
+              "what": "an unknown code",
+              "expected": "HTTP 404",
+              "actual": "HTTP 404",
+              "ok": true
+            },
+            {
+              "what": "not a code",
+              "expected": "HTTP 400",
+              "actual": "HTTP 400",
+              "ok": true
+            }
+          ]
+        },
+        {
           "id": "kiosk-api.outage",
           "title": "מסד הנתונים לא עונה: ה־API של הקיוסק עונה בשגיאה מסודרת בלי פרטים פנימיים, וחוזר לעבוד",
           "status": "pass",
           "category": "survival",
-          "durationMs": 7043,
+          "durationMs": 7051,
           "checks": [
             {
               "what": "/api/kiosk/device → 502",
@@ -824,14 +890,14 @@
       "id": "kiosk-ui",
       "title": "הקיוסק: לוח הקיוסק בדפדפן אמיתי",
       "status": "pass",
-      "durationMs": 46873,
+      "durationMs": 50260,
       "tests": [
         {
           "id": "kiosk-ui.dashboard",
           "title": "לוח הקיוסק: מצב הטאבלט (מחובר, סוללה, גרסאות), פעולות מרחוק וכל ההגדרות, עם הסרגל התחתון",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 1435,
+          "durationMs": 1778,
           "checks": [
             {
               "what": "the control panel",
@@ -864,7 +930,7 @@
           "title": "מעבר בין הלוחות בשני הכיוונים, בלי טעינה מחדש של הדף ועם אותו סרגל תחתון (בעלים ומפתח)",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 5168,
+          "durationMs": 5188,
           "checks": [
             {
               "what": "owner: no full page load",
@@ -885,7 +951,7 @@
           "title": "שינוי הגדרה: פס השמירה מופיע, שמירה מעדכנת את הטאבלט, ביטול מחזיר",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 1971,
+          "durationMs": 1990,
           "checks": [
             {
               "what": "cancel removes the bar",
@@ -912,7 +978,7 @@
           "title": "פקודה מרחוק ואיפוס קוד מהמסך: נשלחים, מוצגים כ\"ממתין לטאבלט\" וניתנים לביטול; קוד חלש נדחה במקום",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2357,
+          "durationMs": 2479,
           "checks": [
             {
               "what": "stored for the tablet",
@@ -972,7 +1038,7 @@
           "title": "לוח הקיוסק קריא בכל חמשת המראות, באייפון ובטאבלט, בלי גלילה לצדדים",
           "status": "pass",
           "category": "a11y",
-          "durationMs": 21743,
+          "durationMs": 22541,
           "checks": [
             {
               "what": "text below AA contrast:",
@@ -1005,7 +1071,7 @@
           "title": "אשף ההתקנה בדפדפן: ממלאים סניף, שם וקוד, מקבלים QR והוראות, רואים \"הותקן\" כשהטאבלט סרק; קריא בכל המראות; רק בעלים",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 14173,
+          "durationMs": 16258,
           "checks": [
             {
               "what": "nothing to create before the PIN",
@@ -1043,13 +1109,13 @@
   },
   "review": {
     "headline": "הכול ירוק. מוכן לשחרור.",
-    "verdict": "36 מתוך 36 בדיקות עברו ב־19 דקות ו־16 שניות. אבטחה 10/10 · שרידות 1/1 · מקצה לקצה 10/10 · נגישות וקריאות 1/1.",
+    "verdict": "38 מתוך 38 בדיקות עברו ב־7 דקות ו־19 שניות. אבטחה 11/11 · שרידות 1/1 · מקצה לקצה 11/11 · נגישות וקריאות 1/1.",
     "highlights": [
       "כל בדיקות הבדיקה סטטית עברו (3)",
       "כל בדיקות הלוגיקה עברו (1)",
       "כל בדיקות המסד נתונים עברו (2)",
-      "כל בדיקות האבטחה עברו (10)",
-      "כל בדיקות המקצה לקצה עברו (10)",
+      "כל בדיקות האבטחה עברו (11)",
+      "כל בדיקות המקצה לקצה עברו (11)",
       "כל בדיקות הרגרסיה עברו (8)",
       "כל בדיקות השרידות עברו (1)",
       "כל בדיקות הנגישות וקריאות עברו (1)",
@@ -1058,7 +1124,9 @@
     "risks": [],
     "changes": {
       "newlyFailing": [],
-      "fixed": [],
+      "fixed": [
+        "אשף ההתקנה בדפדפן: ממלאים סניף, שם וקוד, מקבלים QR והוראות, רואים \"הותקן\" כשהטאבלט סרק; קריא בכל המראות; רק בעלים"
+      ],
       "newTests": 0
     },
     "next": [

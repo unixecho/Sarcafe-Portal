@@ -180,7 +180,7 @@ export function kioskUiStage(live, metrics) {
         try {
           const p = s3.page
           await p.getByText(/מוכן להתקנה/).waitFor({ timeout: 8000 })
-          await p.getByRole('radiogroup', { name: 'דרך ההתקנה' }).getByText('קוד ממסך הטאבלט').click()
+          await p.getByRole('radiogroup', { name: 'דרך ההתקנה' }).getByRole('radio', { name: 'קוד ממסך הטאבלט' }).click()
           await p.getByLabel('הקוד שמופיע בטאבלט').fill('k7q 2mp')
           await p.getByLabel('קוד חדש (6 עד 8 ספרות)').fill('583917')
           await p.getByLabel('שוב, לאישור').fill('583917')
