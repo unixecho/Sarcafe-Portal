@@ -1,11 +1,12 @@
 {
   "version": 1,
+  "suite": "dashboard",
   "run": {
-    "startedAt": "2026-11-05T14:56:50.636Z",
-    "finishedAt": "2026-11-05T15:16:18.926Z",
-    "durationMs": 1168290,
+    "startedAt": "2026-11-05T23:53:07.929Z",
+    "finishedAt": "2026-11-06T00:12:25.296Z",
+    "durationMs": 1157367,
     "source": "local",
-    "commit": "cc49a772a1e67bc7f242ae0e3c4febf71c2bc538",
+    "commit": "62ddf2834dcfe3a2888ea1629660b330920c9566",
     "ref": "claude/youthful-euler-x2gvqa",
     "host": "local"
   },
@@ -22,14 +23,14 @@
       "id": "static",
       "title": "בדיקה סטטית: טיפוסים, מסד נתונים, סודות ותלויות",
       "status": "pass",
-      "durationMs": 5147,
+      "durationMs": 5715,
       "tests": [
         {
           "id": "static.typecheck",
           "title": "TypeScript מתקמפל בלי שגיאות (tsc --noEmit)",
           "status": "pass",
           "category": "static",
-          "durationMs": 3999
+          "durationMs": 3707
         },
         {
           "id": "static.migration-names",
@@ -57,28 +58,35 @@
           "title": "כל טבלה חדשה עם RLS",
           "status": "pass",
           "category": "security",
-          "durationMs": 2
+          "durationMs": 3
         },
         {
           "id": "static.secrets",
           "title": "אין סודות בקבצים שבגיט",
           "status": "pass",
           "category": "security",
-          "durationMs": 18
+          "durationMs": 16
         },
         {
           "id": "static.routes-guarded",
           "title": "כל נתיב API נעול או ברשימת הציבוריים שנבדקה",
           "status": "pass",
           "category": "security",
-          "durationMs": 6
+          "durationMs": 4
+        },
+        {
+          "id": "static.client-boundary",
+          "title": "רכיב דפדפן לא מגיע (גם לא דרך קבצים אחרים) לקוד שרץ רק בשרת (node:… / server-only)",
+          "status": "pass",
+          "category": "static",
+          "durationMs": 139
         },
         {
           "id": "static.npm-audit",
           "title": "אין חולשות קריטיות או גבוהות חדשות בספריות של הייצור (npm audit)",
           "status": "pass",
           "category": "security",
-          "durationMs": 1100
+          "durationMs": 1824
         },
         {
           "id": "static.docs",
@@ -93,7 +101,7 @@
       "id": "checks",
       "title": "בדיקות הרגרסיה הקיימות (check:* ו־verify:*)",
       "status": "pass",
-      "durationMs": 455238,
+      "durationMs": 74084,
       "tests": [
         {
           "id": "checks.check:a11y-scope",
@@ -108,196 +116,133 @@
           "title": "check:app-layout",
           "status": "pass",
           "category": "regression",
-          "durationMs": 6755
+          "durationMs": 5672
         },
         {
           "id": "checks.check:branch-manager",
           "title": "check:branch-manager",
           "status": "pass",
           "category": "regression",
-          "durationMs": 619
+          "durationMs": 574
         },
         {
           "id": "checks.check:checklist-issues",
           "title": "check:checklist-issues",
           "status": "pass",
           "category": "regression",
-          "durationMs": 683
+          "durationMs": 650
         },
         {
           "id": "checks.check:checklist-window",
           "title": "check:checklist-window",
           "status": "pass",
           "category": "regression",
-          "durationMs": 709
+          "durationMs": 673
         },
         {
           "id": "checks.check:intro",
           "title": "check:intro",
           "status": "pass",
           "category": "regression",
-          "durationMs": 1135
-        },
-        {
-          "id": "checks.check:kiosk-content",
-          "title": "check:kiosk-content",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 735
-        },
-        {
-          "id": "checks.check:kiosk-device",
-          "title": "check:kiosk-device",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 769
-        },
-        {
-          "id": "checks.check:kiosk-i18n",
-          "title": "check:kiosk-i18n",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 86998
-        },
-        {
-          "id": "checks.check:kiosk-menu",
-          "title": "check:kiosk-menu",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 612
-        },
-        {
-          "id": "checks.check:kiosk-ota",
-          "title": "check:kiosk-ota",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 3437
-        },
-        {
-          "id": "checks.check:kiosk-session",
-          "title": "check:kiosk-session",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 103225
-        },
-        {
-          "id": "checks.check:kiosk-ui",
-          "title": "check:kiosk-ui",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 167330
-        },
-        {
-          "id": "checks.check:kiosk-waitlist",
-          "title": "check:kiosk-waitlist",
-          "status": "pass",
-          "category": "regression",
-          "durationMs": 761
+          "durationMs": 1093
         },
         {
           "id": "checks.check:loyalty-signup",
           "title": "check:loyalty-signup",
           "status": "pass",
           "category": "regression",
-          "durationMs": 739
+          "durationMs": 626
         },
         {
           "id": "checks.check:notifications-gate",
           "title": "check:notifications-gate",
           "status": "pass",
           "category": "regression",
-          "durationMs": 617
+          "durationMs": 542
         },
         {
           "id": "checks.check:onboarding-wizard",
           "title": "check:onboarding-wizard",
           "status": "pass",
           "category": "regression",
-          "durationMs": 650
+          "durationMs": 593
         },
         {
           "id": "checks.check:payslips",
           "title": "check:payslips",
           "status": "pass",
           "category": "regression",
-          "durationMs": 772
+          "durationMs": 769
         },
         {
           "id": "checks.check:pos-access",
           "title": "check:pos-access",
           "status": "pass",
           "category": "regression",
-          "durationMs": 688
+          "durationMs": 694
         },
         {
           "id": "checks.check:schedule",
           "title": "check:schedule",
           "status": "pass",
           "category": "regression",
-          "durationMs": 13547
+          "durationMs": 13989
         },
         {
           "id": "checks.check:security",
           "title": "check:security",
           "status": "pass",
           "category": "security",
-          "durationMs": 12861
+          "durationMs": 12725
         },
         {
           "id": "checks.check:staff-access",
           "title": "check:staff-access",
           "status": "pass",
           "category": "regression",
-          "durationMs": 1223
+          "durationMs": 1025
         },
         {
           "id": "checks.check:staff-push",
           "title": "check:staff-push",
           "status": "pass",
           "category": "regression",
-          "durationMs": 836
+          "durationMs": 688
         },
         {
           "id": "checks.check:staff-themes",
           "title": "check:staff-themes",
           "status": "pass",
           "category": "regression",
-          "durationMs": 686
+          "durationMs": 567
         },
         {
           "id": "checks.verify:checklist-sql",
           "title": "verify:checklist-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 3486
-        },
-        {
-          "id": "checks.verify:kiosk-content-sql",
-          "title": "verify:kiosk-content-sql",
-          "status": "pass",
-          "category": "sql",
-          "durationMs": 13606
+          "durationMs": 3333
         },
         {
           "id": "checks.verify:onboarding-sql",
           "title": "verify:onboarding-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 3465
+          "durationMs": 3527
         },
         {
           "id": "checks.verify:schedule-sql",
           "title": "verify:schedule-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 14640
+          "durationMs": 14058
         },
         {
           "id": "checks.verify:waitlist-sql",
           "title": "verify:waitlist-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 13651
+          "durationMs": 12285
         }
       ]
     },
@@ -305,14 +250,14 @@
       "id": "unit",
       "title": "לוגיקה: החיפוש, ההודעות, הצבעים והדוח",
       "status": "pass",
-      "durationMs": 320,
+      "durationMs": 352,
       "tests": [
         {
           "id": "unit.load",
           "title": "המודולים נטענים כקוד TypeScript אמיתי",
           "status": "pass",
           "category": "unit",
-          "durationMs": 267
+          "durationMs": 278
         },
         {
           "id": "unit.index-unique",
@@ -326,7 +271,7 @@
           "title": "החיפוש לא מציע לאף אחד עמוד שהשרת יחסום בפניו (מול middleware.ts)",
           "status": "pass",
           "category": "security",
-          "durationMs": 0
+          "durationMs": 1
         },
         {
           "id": "unit.dock-plan",
@@ -336,18 +281,32 @@
           "durationMs": 1
         },
         {
+          "id": "unit.kiosk-pin-rules",
+          "title": "קוד צוות לקיוסק מלוח הבקרה: רק 6–8 ספרות שאי אפשר לנחש, ונשמר רק כרשומה של האפליקציה",
+          "status": "pass",
+          "category": "security",
+          "durationMs": 24
+        },
+        {
+          "id": "unit.qa-digest",
+          "title": "הודעת 07:00: הודעה אחת, שני דוחות, עבר/נכשל, וקישור לבעיות כשמשהו נכשל; דוח שלא הגיע = כישלון",
+          "status": "pass",
+          "category": "unit",
+          "durationMs": 13
+        },
+        {
           "id": "unit.roles-for",
           "title": "תפקידים לפי מי שמחובר: בעלים, מנהל/ת סניף, עובד/ת, מפתח",
           "status": "pass",
           "category": "unit",
-          "durationMs": 1
+          "durationMs": 0
         },
         {
           "id": "unit.search-hebrew",
           "title": "חיפוש בעברית: התאמה, תחילית ה/ב/ל, שגיאות כתיב, אנגלית ומילים נרדפות",
           "status": "pass",
           "category": "unit",
-          "durationMs": 37
+          "durationMs": 28
         },
         {
           "id": "unit.search-complete",
@@ -361,7 +320,7 @@
           "title": "הצעות לפי שעה, תפקיד והיסטוריה (צ׳קליסט פתיחה בבוקר, סגירה בערב)",
           "status": "pass",
           "category": "unit",
-          "durationMs": 1
+          "durationMs": 0
         },
         {
           "id": "unit.search-clean",
@@ -382,7 +341,7 @@
           "title": "כותרת ההודעה: שם השולח בלבד, בלי תווים מוסתרים",
           "status": "pass",
           "category": "unit",
-          "durationMs": 1
+          "durationMs": 0
         },
         {
           "id": "unit.message-window",
@@ -403,7 +362,7 @@
           "title": "השורה \"יישלח ל…\" אומרת בדיוק מי יקבל ומי לא",
           "status": "pass",
           "category": "unit",
-          "durationMs": 0
+          "durationMs": 1
         },
         {
           "id": "unit.tones",
@@ -424,7 +383,7 @@
           "title": "חוזה הדוח: הדוח שנשלח עם הקוד תקין, ושדה לא מוכר נדחה",
           "status": "pass",
           "category": "unit",
-          "durationMs": 8
+          "durationMs": 2
         }
       ]
     },
@@ -432,77 +391,77 @@
       "id": "security",
       "title": "אבטחה מול האפליקציה הרצה",
       "status": "pass",
-      "durationMs": 1833,
+      "durationMs": 1374,
       "tests": [
         {
           "id": "security.probe-signed-out",
-          "title": "כל 89 נתיבי ה־API: בלי התחברות לא מקבלים מידע פרטי ולא נופלים (500)",
+          "title": "כל 92 נתיבי ה־API: בלי התחברות לא מקבלים מידע פרטי ולא נופלים (500)",
           "status": "pass",
           "category": "security",
-          "durationMs": 1079
+          "durationMs": 859
         },
         {
           "id": "security.cross-site",
           "title": "כתיבה מאתר זר נחסמת (403) גם עם עוגיית התחברות",
           "status": "pass",
           "category": "security",
-          "durationMs": 32
+          "durationMs": 17
         },
         {
           "id": "security.form-post",
           "title": "שליחת טופס רגיל (לא JSON) להודעה לצוות נדחית",
           "status": "pass",
           "category": "security",
-          "durationMs": 22
+          "durationMs": 11
         },
         {
           "id": "security.headers",
           "title": "כותרות האבטחה בכל עמוד (מסגור, nosniff, HSTS, הרשאות, בלי X-Powered-By)",
           "status": "pass",
           "category": "security",
-          "durationMs": 325
+          "durationMs": 230
         },
         {
           "id": "security.private-cache",
           "title": "תשובות פרטיות לא נשמרות במטמון (no-store)",
           "status": "pass",
           "category": "security",
-          "durationMs": 133
+          "durationMs": 87
         },
         {
           "id": "security.pages-signed-out",
           "title": "עמודי הצוות והניהול שולחים מי שלא מחובר להתחברות",
           "status": "pass",
           "category": "security",
-          "durationMs": 22
+          "durationMs": 15
         },
         {
           "id": "security.roles-pages",
           "title": "עובד/ת לא נכנס/ת ללוח הבעלים ולא לסקירת ה־QA",
           "status": "pass",
           "category": "security",
-          "durationMs": 98
+          "durationMs": 73
         },
         {
           "id": "security.roles-api",
           "title": "ה־API של הבעלים סגור בפני עובדים ומנהלים שאינם בעלים",
           "status": "pass",
           "category": "security",
-          "durationMs": 56
+          "durationMs": 43
         },
         {
           "id": "security.qa-ingest-lock",
           "title": "דוח ה־QA מתקבל רק עם הסוד, בגודל סביר ובמבנה הנכון",
           "status": "pass",
           "category": "security",
-          "durationMs": 47
+          "durationMs": 29
         },
         {
           "id": "security.qa-ingest-missing",
           "title": "לפני המיגרציה: שמירת הדוח עונה \"עוד לא מוכן\" ולא נופלת",
           "status": "pass",
           "category": "recovery",
-          "durationMs": 19
+          "durationMs": 9
         }
       ]
     },
@@ -510,151 +469,165 @@
       "id": "features",
       "title": "התכונות החדשות: הודעה לצוות והיסטוריית החיפוש",
       "status": "pass",
-      "durationMs": 1493,
+      "durationMs": 1202,
       "tests": [
         {
           "id": "features.reset",
           "title": "מתחילים ממצב נקי של מסד הנתונים המדומה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2
+          "durationMs": 1
         },
         {
           "id": "features.tm-plan",
           "title": "מסך ההודעה מקבל את הצוות, מי הפעיל התראות והמשמרות המפורסמות בלבד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 30
+          "durationMs": 22
         },
         {
           "id": "features.tm-all",
           "title": "\"כל הצוות\": נשלח רק למי שהפעיל התראות, השולח לא מקבל, לא פעילים ועובדי סניף אחר לא מקבלים",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 35
+          "durationMs": 25
         },
         {
           "id": "features.tm-shift",
           "title": "משמרת מסוימת: נשלח למשובצים שהפעילו התראות בלבד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 36
+          "durationMs": 28
         },
         {
           "id": "features.tm-one",
           "title": "עובד/ת אחד/ת במשמרת: רק אליו/ה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 75
+          "durationMs": 52
         },
         {
           "id": "features.tm-one-off",
           "title": "מי שלא הפעיל/ה התראות לא מקבל/ת, וההודעה לא נשלחת",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 63
+          "durationMs": 42
         },
         {
           "id": "features.tm-duplicate",
           "title": "אותה בקשה פעמיים (לחיצה כפולה, ניסיון חוזר) נשלחת פעם אחת",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 76
+          "durationMs": 50
         },
         {
           "id": "features.tm-gm",
           "title": "מנהל/ת סניף: שולח/ת בסניף שלו/ה בלבד, ולא מקבל/ת את ההודעה של עצמו/ה",
           "status": "pass",
           "category": "security",
-          "durationMs": 95
+          "durationMs": 55
         },
         {
           "id": "features.tm-roles",
           "title": "עובד/ת ומי שלא מחובר לא יכולים לשלוח",
           "status": "pass",
           "category": "security",
-          "durationMs": 106
+          "durationMs": 78
         },
         {
           "id": "features.tm-shifts",
           "title": "משמרת לא מפורסמת, ישנה, רחוקה, של סניף אחר או מומצאת: נדחית באותה תשובה",
           "status": "pass",
           "category": "security",
-          "durationMs": 160
+          "durationMs": 111
         },
         {
           "id": "features.tm-validation",
           "title": "בקשה לא תקינה נדחית (400) לפני שנוגעים במשהו",
           "status": "pass",
           "category": "security",
-          "durationMs": 77
+          "durationMs": 66
         },
         {
           "id": "features.tm-clean",
           "title": "תווים מוסתרים וזיוף כיוון מנוקים לפני השמירה",
           "status": "pass",
           "category": "security",
-          "durationMs": 39
+          "durationMs": 25
         },
         {
           "id": "features.tm-limit",
           "title": "הגבלת קצב: 6 הודעות ב־10 דקות לשולח, השביעית נדחית (429)",
           "status": "pass",
           "category": "security",
-          "durationMs": 252
+          "durationMs": 170
         },
         {
           "id": "features.tm-limiter-down",
           "title": "כשמגביל הקצב לא עונה ההודעה לא יוצאת (נכשל סגור)",
           "status": "pass",
           "category": "survival",
-          "durationMs": 23
+          "durationMs": 16
         },
         {
           "id": "features.tm-no-migration",
           "title": "לפני המיגרציה: ההודעה נשלחת, ולחיצה כפולה עדיין לא שולחת פעמיים",
           "status": "pass",
           "category": "recovery",
-          "durationMs": 82
+          "durationMs": 51
         },
         {
           "id": "features.tm-inbox",
           "title": "מי שקיבל/ה רואה את ההודעה בהתראות, והקישור מוביל לבית",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 54
+          "durationMs": 25
         },
         {
           "id": "features.tu-before",
           "title": "לפני המיגרציה: ההיסטוריה עונה \"לא מסונכרן\" והאתר ממשיך לעבוד",
           "status": "pass",
           "category": "recovery",
-          "durationMs": 52
+          "durationMs": 32
         },
         {
           "id": "features.tu-follow",
           "title": "ההיסטוריה עוקבת אחרי האדם: נשמרת, נקראת מכל מכשיר, וכוללת את החיפוש",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 58
+          "durationMs": 41
         },
         {
           "id": "features.tu-merge",
           "title": "מכשיר ישן מצטרף פעם אחת: המספר הגבוה נשמר, איחוד כפול לא מכפיל",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 58
+          "durationMs": 40
         },
         {
           "id": "features.tu-validate",
           "title": "היסטוריה: כלי לא קיים, מזהה זדוני, יותר מ־60 כלים או שדה לא צפוי נדחים",
           "status": "pass",
           "category": "security",
-          "durationMs": 75
+          "durationMs": 66
         },
         {
           "id": "features.tu-reset",
           "title": "איפוס מוחק את ההיסטוריה בכל המכשירים",
+          "status": "pass",
+          "category": "e2e",
+          "durationMs": 31
+        },
+        {
+          "id": "features.qa-auth",
+          "title": "דוח QA מתקבל רק מ־GitHub של הפרויקט הזה (OIDC) או עם הסוד; אסימון מזויף, של מאגר אחר, ענף אחר, זרימה אחרת או שפג — נדחה",
+          "status": "pass",
+          "category": "security",
+          "durationMs": 130
+        },
+        {
+          "id": "features.qa-digest",
+          "title": "הודעת 07:00: אחת ביום, רק למפתח, עם שני הדוחות; כשמשהו נכשל — קישור לבעיות; דוח שלא הגיע = כישלון",
           "status": "pass",
           "category": "e2e",
           "durationMs": 44
@@ -665,7 +638,7 @@
       "id": "ui",
       "title": "המסכים בדפדפן אמיתי: לוחות, תפריטים, הודעה, חיפוש וקריאוּת",
       "status": "pass",
-      "durationMs": 572814,
+      "durationMs": 555107,
       "tests": [
         {
           "id": "ui.reset",
@@ -679,161 +652,189 @@
           "title": "לוח הבעלים: שורה עליונה עם סניפים, פעמון וחשבון; הודעה לצוות; חיפוש; סרגל תחתון",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 1893
+          "durationMs": 1968
         },
         {
           "id": "ui.branch-sheet",
           "title": "בכניסה הראשונה: \"איזה סניף?\" עם מתג הזכוכית, ונסגר בבחירה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2394
+          "durationMs": 2473
         },
         {
           "id": "ui.notifications",
           "title": "פעמון ההתראות נפתח כתפריט הזכוכית; חיובי בירוק, שלילי באדום; \"סימון הכול כנקרא\" עובד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 3519
+          "durationMs": 3637
         },
         {
           "id": "ui.notifications-long",
           "title": "רשימת התראות ארוכה: כל שורה בגובה שלה, בלי טקסט על טקסט, נגללת באצבע ולא נפתחת בטעות",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 9256
+          "durationMs": 8880
         },
         {
           "id": "ui.iphone-edges",
           "title": "באייפון: השורה העליונה לא מכסה את הכרטיס הראשון, והסרגל התחתון צמוד לתחתית בלי טקסט מתחתיו, גם בגלילה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 6871
+          "durationMs": 6839
         },
         {
           "id": "ui.kiosk-save-bar",
           "title": "תוכן הקיוסק: פס השמירה צמוד לתחתית המסך כל עוד העורך על המסך, בגלילה למטה ובחזרה למעלה, ולא מכסה את הסוף",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2605
+          "durationMs": 3031
         },
         {
           "id": "ui.dock-constant",
           "title": "הסרגל התחתון קבוע: אותו סרגל בין הלשוניות, בלי טעינה מחדש של הדף, הלשונית נדלקת מיד ולחיצה מהירה שנייה מנצחת",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 19722
+          "durationMs": 18719
         },
         {
           "id": "ui.skeleton-fast",
           "title": "שרת איטי: הסרגל נשאר והשלד של הדף מופיע מיד, והתוכן מחליף אותו כשהוא מגיע",
           "status": "pass",
           "category": "perf",
-          "durationMs": 8373
+          "durationMs": 5360
+        },
+        {
+          "id": "ui.revisit-instant",
+          "title": "חזרה ללשונית שכבר ביקרתם בה: מוצגת מיד, בלי שלד ובלי בקשה לשרת",
+          "status": "pass",
+          "category": "perf",
+          "durationMs": 8451
+        },
+        {
+          "id": "ui.revisit-numbers",
+          "title": "חזרה אחרי יותר מ־10 שניות: רק המספרים של הלוח נקראים מחדש, במקום, בלי שלד",
+          "status": "pass",
+          "category": "perf",
+          "durationMs": 14912
+        },
+        {
+          "id": "ui.refresh-after-save",
+          "title": "אחרי שמירה: הדף הבא שמוצג נקרא מהשרת פעם אחת (לא מוצג מצב ישן)",
+          "status": "pass",
+          "category": "e2e",
+          "durationMs": 4680
+        },
+        {
+          "id": "ui.fields-stream",
+          "title": "כניסה ראשונה עם מסד נתונים איטי: הדף מופיע, ורק השדות של המספרים מנצנצים עד שהם מגיעים",
+          "status": "pass",
+          "category": "perf",
+          "durationMs": 3422
         },
         {
           "id": "ui.soon-tiles",
           "title": "כרטיסי \"בקרוב\" בבית העובד/ת: שני כרטיסים מעוגלים בלי מלבן כהה מאחוריהם, בכל המראות",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 8165
+          "durationMs": 7470
         },
         {
           "id": "ui.auth-once",
           "title": "בדיקת \"מי מחובר\" פעם אחת לבקשה: הפריסה והדף חולקים אותה (בלי סבב נוסף מול Supabase)",
           "status": "pass",
           "category": "perf",
-          "durationMs": 205
+          "durationMs": 159
         },
         {
           "id": "ui.branch-switch",
           "title": "החלפת סניף בשורה העליונה: הנתונים, הרקע והעוגייה מתעדכנים",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2831
+          "durationMs": 2507
         },
         {
           "id": "ui.team-message-ui",
           "title": "הודעה לצוות מהמסך: בוחרים יום ועובד/ת, שולחים, מקבלים אישור ירוק",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2366
+          "durationMs": 2111
         },
         {
           "id": "ui.team-message-errors",
           "title": "שגיאה בשרת או בלי אינטרנט: הודעה אדומה, והטקסט נשאר כדי לנסות שוב",
           "status": "pass",
           "category": "survival",
-          "durationMs": 3495
+          "durationMs": 3331
         },
         {
           "id": "ui.finder",
           "title": "החיפוש: משלים, מציע ופותח; השימוש נשמר להיסטוריה של האדם",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2756
+          "durationMs": 2449
         },
         {
           "id": "ui.employee-home",
           "title": "בית העובד/ת: בלי הודעה לצוות, בלי החלפת סניף, החיפוש לא מציע כלי בעלים",
           "status": "pass",
           "category": "security",
-          "durationMs": 1948
+          "durationMs": 1732
         },
         {
           "id": "ui.gm-home",
           "title": "מנהל/ת סניף: הודעה לצוות לסניף שלו/ה בלבד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 1653
+          "durationMs": 1520
         },
         {
           "id": "ui.dev-and-qa",
           "title": "לוח המפתח: מתג התצוגות, כרטיס ה־QA, ועמוד הסקירה נפתח",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 4066
+          "durationMs": 3727
         },
         {
           "id": "ui.on-shift",
           "title": "\"מי במשמרת עכשיו\": כרטיס זכוכית, מתג הקודמת/עכשיו/הבאה, הקרוסלה ממשיכה לעבוד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 3213
+          "durationMs": 3160
         },
         {
           "id": "ui.carousel",
           "title": "הקרוסלה של \"מי במשמרת\" עוברת את כל הבדיקה המקורית (check:shift-scroller) על העותק הבנוי",
           "status": "pass",
           "category": "regression",
-          "durationMs": 430355
+          "durationMs": 394977
         },
         {
           "id": "ui.dock",
           "title": "הסרגל התחתון: הבחירה מיושרת לכרטיסייה בכל רוחב, ולחיצה עוברת לעמוד",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 6281
+          "durationMs": 5249
         },
         {
           "id": "ui.readable",
           "title": "קריאוּת: כל טקסט עומד ביחס ניגודיות AA מול מה שמאחוריו, בכל חמשת המראות",
           "status": "pass",
           "category": "a11y",
-          "durationMs": 29711
+          "durationMs": 27241
         },
         {
           "id": "ui.widths",
           "title": "בלי גלילה לצדדים ובלי שגיאות בטלפון קטן, טאבלט ומחשב",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 16772
+          "durationMs": 13816
         },
         {
           "id": "ui.smooth",
           "title": "גלילה חלקה בלוח הבעלים (מעבד מואט פי 4)",
           "status": "pass",
           "category": "perf",
-          "durationMs": 4362
+          "durationMs": 3269
         }
       ]
     },
@@ -841,7 +842,7 @@
       "id": "survival",
       "title": "שרידות והתאוששות: מסד הנתונים נופל, מחזיר שגיאות או איטי, וחוזר",
       "status": "pass",
-      "durationMs": 36308,
+      "durationMs": 36199,
       "tests": [
         {
           "id": "survival.reset",
@@ -855,42 +856,42 @@
           "title": "שגיאה פנימית במסד הנתונים: תשובה מסודרת בלי פרטים פנימיים",
           "status": "pass",
           "category": "survival",
-          "durationMs": 56
+          "durationMs": 43
         },
         {
           "id": "survival.db-down",
           "title": "מסד הנתונים לא עונה: ה־API מחזיר שגיאה מסודרת והעמודים לא קורסים עם פרטים",
           "status": "pass",
           "category": "survival",
-          "durationMs": 56
+          "durationMs": 100
         },
         {
           "id": "survival.recover",
           "title": "אחרי שמסד הנתונים חוזר: הכול עובד שוב בלי הפעלה מחדש",
           "status": "pass",
           "category": "recovery",
-          "durationMs": 182
+          "durationMs": 204
         },
         {
           "id": "survival.retry-after-outage",
           "title": "הודעה שנשלחה בזמן תקלה: נכשלת בלי לשלוח חלקית, ואותה בקשה מצליחה פעם אחת אחרי ההתאוששות",
           "status": "pass",
           "category": "recovery",
-          "durationMs": 98
+          "durationMs": 56
         },
         {
           "id": "survival.slow-db",
           "title": "מסד נתונים איטי (3 שניות): מסך ההודעה עדיין נטען",
           "status": "pass",
           "category": "survival",
-          "durationMs": 3037
+          "durationMs": 3022
         },
         {
           "id": "survival.bell-error",
           "title": "כשההתראות לא נטענות: הפעמון אומר זאת באדום, ואפשר לנסות שוב",
           "status": "pass",
           "category": "survival",
-          "durationMs": 32875
+          "durationMs": 32772
         }
       ]
     }
@@ -903,28 +904,28 @@
       "low": 0
     },
     "perf": {
-      "scrollWorstMs": 150,
+      "scrollWorstMs": 50,
       "scrollP95Ms": 33,
-      "scrollFrames": 86
+      "scrollFrames": 83
     },
-    "contrastLowest": 4.67
+    "contrastLowest": 4.66
   },
   "review": {
     "headline": "הכול ירוק. מוכן לשחרור.",
-    "verdict": "116 מתוך 116 בדיקות עברו ב־19 דקות ו־28 שניות. אבטחה 27/27 · שרידות 6/6 · התאוששות 5/5 · מקצה לקצה 29/29 · נגישות וקריאות 1/1.",
+    "verdict": "116 מתוך 116 בדיקות עברו ב־19 דקות ו־17 שניות. אבטחה 29/29 · שרידות 6/6 · התאוששות 5/5 · מקצה לקצה 31/31 · נגישות וקריאות 1/1.",
     "highlights": [
-      "כל בדיקות הבדיקה סטטית עברו (2)",
-      "כל בדיקות הלוגיקה עברו (13)",
-      "כל בדיקות המסד נתונים עברו (7)",
-      "כל בדיקות האבטחה עברו (27)",
-      "כל בדיקות המקצה לקצה עברו (29)",
+      "כל בדיקות הבדיקה סטטית עברו (3)",
+      "כל בדיקות הלוגיקה עברו (14)",
+      "כל בדיקות המסד נתונים עברו (6)",
+      "כל בדיקות האבטחה עברו (29)",
+      "כל בדיקות המקצה לקצה עברו (31)",
       "כל בדיקות השרידות עברו (6)",
       "כל בדיקות ההתאוששות עברו (5)",
       "כל בדיקות הנגישות וקריאות עברו (1)",
-      "כל בדיקות הביצועים עברו (3)",
+      "כל בדיקות הביצועים עברו (6)",
       "אין חולשות חדשות בספריות (רק הידועות שאושרו)",
-      "הטקסט קריא בכל המראות: הניגודיות הנמוכה ביותר 4.67:1 (הסף 4.5)",
-      "גלילה חלקה: הפריים האיטי ביותר 150 מ״ש בהאטה פי 4"
+      "הטקסט קריא בכל המראות: הניגודיות הנמוכה ביותר 4.66:1 (הסף 4.5)",
+      "גלילה חלקה: הפריים האיטי ביותר 50 מ״ש בהאטה פי 4"
     ],
     "risks": [
       "2 חולשות ידועות בספריות (PostCSS בתוך Next 15, zod 3) נבדקו ואושרו עד השדרוג; כל חולשה חדשה תכשיל את הבדיקה",
@@ -933,7 +934,7 @@
     "changes": {
       "newlyFailing": [],
       "fixed": [],
-      "newTests": 5
+      "newTests": 116
     },
     "next": [
       "לתכנן את השדרוג ל־Next 16 ול־zod 4, שסוגר את החולשות הידועות"
