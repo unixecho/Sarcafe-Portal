@@ -120,7 +120,7 @@ public final class RemotePinTest {
     assert.ok(/; PIN set/.test(receiver) && /; PIN NOT set/.test(receiver), 'adb says whether the PIN was set (it used to say "nothing changed" either way)')
     const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')
     assert.ok(/\['menu', 'תפריט'\]/.test(admin) && /portalCall\('menu-edit'/.test(admin), 'the panel has the menu editor tab')
-    assert.ok(/\['stock', 'מלאי'\]/.test(admin) && /\$\{C\.apiBase\}\/stock/.test(admin) && /C\.headers\(\)/.test(admin), 'the panel has the live-stock tab, on the portal with the kiosk key')
+    assert.ok(/\['stock', 'מלאי'\]/.test(admin) && /stockCall = \(method, payload\) => portalCall\('stock'/.test(admin) && /\$\{C\.apiBase\}\/\$\{path\}/.test(admin) && /C\.headers\(\)/.test(admin), 'the panel has the live-stock tab, on the portal with the kiosk key')
   })
 
   stage.test('menu-sql', 'עורך התפריט — הפונקציה במסד הנתונים (Postgres אמיתי): שם ומחיר לפריט ולסוג, ניקוי מחיר, טיוטה בלבד כשסגור, שם ריק נדחה, נעולה לדפדפנים', 'sql', async () => {

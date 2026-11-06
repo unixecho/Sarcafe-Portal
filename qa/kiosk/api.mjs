@@ -243,7 +243,13 @@ export function kioskApiStage(live) {
   stage.test('install-rules', 'אשף ההתקנה — כללים: בעלים בלבד ומאותו אתר, קוד צוות חזק, קוד התקנה פג אחרי 24 שעות, קוד שגוי = 404, הצפה נחסמת, בלי אפליקציה חתומה אין QR', 'security', async () => {
     freshInstall()
     const ok = { branchId: ID.gh, slug: 'givat-haviva-3', name: 'קיוסק שלישי', pin: '583917', confirm: '583917' }
-    assert.status(await install('owner', ok), 409, 'no QR before an app with its certificate digest is published')
+    { // the rule itself: without a published certificate digest there is no QR (the real latest.json has one since app 0.5)
+      const before = fs.readFileSync(LATEST, 'utf8')
+      const { certSha256, ...rest } = JSON.parse(before)
+      fs.writeFileSync(LATEST, JSON.stringify(rest))
+      try { assert.status(await install('owner', ok), 409, 'no QR before an app with its certificate digest is published') } finally { fs.writeFileSync(LATEST, before) }
+      void certSha256
+    }
     await withCert(async () => {
       for (const who of ['gm', 'dana']) assert.ok([401, 403].includes((await install(who, ok)).status), `${who} cannot install`)
       assert.ok([401, 403].includes((await live().call('/api/owner/kiosk/install', { method: 'POST', body: ok })).status), 'signed out')

@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-11-06 (evening): full menu editor on the kiosk tablet; AyekaBar ChatGPT prompt
+
+- **Owner asks:** the full menu editor on the tablet (names, prices, add/remove items and types, behind the staff PIN, the dashboard's rules); a ChatGPT (Astra 6, Extra High) prompt for AyekaBar's dashboard glass revamp with every Sarcafe tweak, then: a full QA suite + daily 07:00 notification + an extensive report with expected/actual results, and a PREVIEW on real data before anything is built.
+- **Menu editor:** panel tab **תפריט** (`overrides/kiosk-admin.js|css`), API `src/app/api/kiosk/menu-edit` (kiosk key, tablet's own branch, only during opening hours, draft + published, audited "(מהקיוסק)", 120/10 min), rules `src/lib/kiosk/menu-edit.ts`, the dashboard's RPCs + new `menu_update_entry` / `menu_update_entry_in_doc` (migration `20261106180000_menu_update_entry`, **APPLIED** by the owner; verified: ledger row, 2 functions, locked from anon, 0 overloads). Doc `docs/SARCAFE_KIOSK_MENU.md`.
+- **AyekaBar prompt:** `chatGPT/AYEKABAR_GLISSE_PASS_PROMPT.md` (owner's rules, every tweak, preview on real data first and wait for approval, QA suite stages, 07:00 digest, report with expected vs actual per test). Not run yet (the owner runs it in ChatGPT). Offered: expected/actual columns for Sarcafe's own report too (not done).
+- **QA:** full run: dashboard 119/119 PASS; kiosk 34/36 — two stale tests (wiring regex for the refactored `portalCall`; "no QR without a certificate digest" assumed latest.json has none, but app 0.5 has one → the test now removes it to check the rule). Fixed; kiosk suite re-run on the same build PASS 36/36. New: kiosk-api.menu-list|menu-edit|menu-rules, unit.kiosk-menu-edit-rules, kiosk-static.menu-sql (PGlite), check:kiosk-ui menu section (222 checks).
+- **Next step:** this push changes the page bundle → GitHub signs it → the tablet takes the תפריט tab within ~10 min. Owner tests it during opening hours. Pending owner items: try the QR wizard on a spare tablet; run the AyekaBar prompt; decide on expected/actual for Sarcafe's report; later the customer-site glisse reminder.
+
 ## Claude addendum, 2026-11-06 (later): GitHub builds and signs kiosk updates; tablet self-updated to app 0.4; QR install wizard; nightly QA moved earlier
 
 - **Owner asks:** QA suites at night before 7 AM; the menu editor and availability on the kiosk; never plug the tablet into the computer again for updates; an install wizard + private link for any tablet (later: a suite that prepares any tablet, until an approved APK is in a store). Owner decisions (asked): GitHub builds and signs; FULL menu editor on the tablet; QR setup.
