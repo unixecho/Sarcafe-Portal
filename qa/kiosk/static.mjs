@@ -119,7 +119,37 @@ public final class RemotePinTest {
     const receiver = fs.readFileSync(path.join(root, JAVA_SRC, 'KioskConfigReceiver.java'), 'utf8')
     assert.ok(/; PIN set/.test(receiver) && /; PIN NOT set/.test(receiver), 'adb says whether the PIN was set (it used to say "nothing changed" either way)')
     const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')
+    assert.ok(/\['menu', 'תפריט'\]/.test(admin) && /portalCall\('menu-edit'/.test(admin), 'the panel has the menu editor tab')
     assert.ok(/\['stock', 'מלאי'\]/.test(admin) && /\$\{C\.apiBase\}\/stock/.test(admin) && /C\.headers\(\)/.test(admin), 'the panel has the live-stock tab, on the portal with the kiosk key')
+  })
+
+  stage.test('menu-sql', 'עורך התפריט — הפונקציה במסד הנתונים (Postgres אמיתי): שם ומחיר לפריט ולסוג, ניקוי מחיר, טיוטה בלבד כשסגור, שם ריק נדחה, נעולה לדפדפנים', 'sql', async () => {
+    const { PGlite } = await import(path.join(root, 'node_modules/@electric-sql/pglite/dist/index.js'))
+    const db = new PGlite()
+    try {
+      await db.exec(`create role anon; create role authenticated; create role service_role;
+        create table public.menus (id uuid primary key, draft jsonb, published jsonb, updated_at timestamptz);`)
+      const sql = fs.readFileSync(path.join(root, 'supabase/migrations/20261106180000_menu_update_entry.sql'), 'utf8')
+      await db.exec(sql); await db.exec(sql) // idempotent
+      const M = '00000000-0000-4000-8000-000000000001'
+      const doc = { categories: [{ id: 'p', items: [{ uid: 'a', he: 'מאפה', price: 12, types: [{ uid: 't', he: 'גבינית', priceDelta: 2 }] }, { uid: 'x', he: 'אחר' }] }] }
+      await db.query('insert into menus values ($1, $2, $2, now())', [M, JSON.stringify(doc)])
+      const get = async () => (await db.query('select draft, published from menus')).rows[0]
+      await db.query("select menu_update_entry($1, 'a', null, '  מאפה רגיל ', '14', true)", [M])
+      let r = await get()
+      assert.equal(r.published.categories[0].items[0].he, 'מאפה רגיל'); assert.equal(r.published.categories[0].items[0].price, 14)
+      await db.query("select menu_update_entry($1, 'a', 't', 'גבינית גדולה', '20/24', true)", [M])
+      r = await get()
+      assert.equal(r.published.categories[0].items[0].types[0].priceDelta, '20/24')
+      await db.query("select menu_update_entry($1, 'a', null, null, '', false)", [M])
+      r = await get()
+      assert.ok(!('price' in r.draft.categories[0].items[0]) && r.published.categories[0].items[0].price === 14, 'closed: draft only')
+      assert.equal(r.draft.categories[0].items[1].he, 'אחר', 'other items untouched')
+      let refused = false; try { await db.query("select menu_update_entry($1, 'a', null, '', null, true)", [M]) } catch { refused = true }
+      assert.ok(refused, 'an empty name is refused')
+      const priv = (await db.query("select has_function_privilege('anon', 'public.menu_update_entry(uuid,text,text,text,text,boolean)', 'execute') a")).rows[0]
+      assert.equal(priv.a, false, 'browsers cannot call it')
+    } finally { await db.close() }
   })
 
   return stage

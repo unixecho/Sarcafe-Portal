@@ -211,3 +211,12 @@ body.kx-admin-open .kiosk-tray { display: none; }
 .kx-stock .kx-end { gap: 12px; }
 .kx-stock .kx-num { min-width: 2.4em; text-align: center; }
 .kx-switch:disabled { opacity: .45; }
+
+/* the menu editor (the תפריט tab): categories open one at a time; small buttons per item and type; delete reads red */
+.kx-cat { width: 100%; text-align: start; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.kx-cat .kx-chev { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; flex: none; }
+.kx-menu-type { padding-inline-start: 28px; }
+.kx-menu-item .kx-end, .kx-menu-type .kx-end { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.kx-mini { min-height: 44px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--kx-tint); color: var(--kx-text); font: inherit; font-size: .86rem; font-weight: 600; box-shadow: inset 0 0 0 .5px var(--kx-edge); }
+.kx-mini.is-bad { color: var(--kx-bad); }
+.kx-mini:disabled { opacity: .45; }

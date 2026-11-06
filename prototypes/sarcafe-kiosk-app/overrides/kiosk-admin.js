@@ -147,13 +147,14 @@
 
   // ---- the tabs -----------------------------------------------------------------------------------------------------------
   const TABS = [
-    ['overview', 'סקירה'], ['stock', 'מלאי'], ['display', 'מסכים'], ['ads', 'מודעות'], ['timing', 'זמנים'], ['lang', 'שפות'],
+    ['overview', 'סקירה'], ['stock', 'מלאי'], ['menu', 'תפריט'], ['display', 'מסכים'], ['ads', 'מודעות'], ['timing', 'זמנים'], ['lang', 'שפות'],
     ['battery', 'סוללה'], ['device', 'מכשיר'], ['updates', 'עדכונים'], ['diag', 'אבחון'],
   ];
   // one 24-px outline icon per tab (stroke styled in kiosk-admin.css); the button text stays the label alone
   const TAB_ICONS = {
     overview: 'M4 11 12 4l8 7v9H4zM10 20v-6h4v6',
     stock: 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10',
+    menu: 'M5 4h11l3 3v13H5zM8 9h8M8 13h8M8 17h5',
     display: 'M3 5h18v11H3zM8 20h8M12 16v4',
     ads: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M16 9.5h.01',
     timing: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
@@ -229,9 +230,10 @@
   // shakes, cookies), each item and each of its types: in stock / sold out and, when counted, how many. The portal applies the
   // dashboard's rules: only during opening hours, a count of 0 is sold out, every change is in the menu's audit log ("מהקיוסק").
   let stock = { state: 'idle', open: true, categories: [], busy: '' };
-  const stockUrl = () => (C.apiBase ? `${C.apiBase}/stock` : '');
-  async function stockCall(method, payload) {
-    const url = stockUrl();
+  // the portal's kiosk endpoints the panel writes to ({apiBase}/stock, {apiBase}/menu-edit), with the kiosk key
+  const stockCall = (method, payload) => portalCall('stock', method, payload);
+  async function portalCall(path, method, payload) {
+    const url = C.apiBase ? `${C.apiBase}/${path}` : '';
     const headers = C.headers();
     if (!url || !headers) return { ok: false, error: 'not_configured' };
     const abort = new AbortController();
@@ -308,6 +310,92 @@
       });
     });
     out.push(action('רענון המלאי', 'טוען שוב מהפורטל', () => loadStock()));
+    return out;
+  }
+
+  // ---- the menu editor (owner, 2026-11-06: the full editor on the tablet, behind the staff PIN) -----------------------------------
+  // GET/POST {apiBase}/menu-edit (src/app/api/kiosk/menu-edit): every category, item and type; rename, reprice, add, remove. The
+  // portal applies the dashboard's rules: only during opening hours, the tablet's own branch, each change in the menu's audit log.
+  let menu = { state: 'idle', open: true, categories: [], busy: false, openCat: '' };
+  async function loadMenu() {
+    menu.state = 'loading';
+    if (tab === 'menu') render();
+    const r = await portalCall('menu-edit', 'GET');
+    if (r.ok && Array.isArray(r.categories)) Object.assign(menu, { state: 'ready', open: r.open !== false, categories: r.categories });
+    else menu.state = r.error === 'not_configured' ? 'no_key' : 'error';
+    if (tab === 'menu') render();
+  }
+  const MENU_ERRORS = { closed: 'מחוץ לשעות הפעילות: אפשר לערוך את התפריט רק כשהסניף פתוח.', not_found: 'הפריט כבר לא בתפריט. מרעננים…', rate_limited: 'יותר מדי שינויים ברגע. נסו שוב בעוד דקה.', offline: 'אין חיבור לרשת. השינוי לא נשמר.', bad_request: 'משהו בשדות לא תקין (שם עד 80 תווים, מחיר בספרות).', not_ready: 'עדכון מסד הנתונים של עריכת התפריט עוד לא הוחל.' };
+  async function menuEdit(payload, done) {
+    if (menu.busy) return false;
+    menu.busy = true;
+    render();
+    const r = await portalCall('menu-edit', 'POST', payload);
+    menu.busy = false;
+    if (r.ok && Array.isArray(r.categories)) { menu.categories = r.categories; say(done || 'נשמר. התפריט מתעדכן מיד.'); render(); return true; }
+    say(MENU_ERRORS[r.error] || 'השינוי לא נשמר. נסו שוב.');
+    if (r.error === 'closed') menu.open = false;
+    if (r.error === 'not_found') loadMenu(); else render();
+    return false;
+  }
+  const PRICE_RE = /^$|^[0-9]+(\.[0-9]{1,2})?(\/[0-9]+(\.[0-9]{1,2})?)?$/;
+  // one dialog for adding and editing: a name and an optional price
+  function entryDialog(title, start, onSave) {
+    const nameIn = h('input', { type: 'text', value: start.name || '', maxlength: '80', class: 'kx-input', 'aria-label': 'שם', placeholder: 'שם' });
+    const priceIn = h('input', { type: 'text', value: start.price || '', maxlength: '20', inputmode: 'decimal', dir: 'ltr', class: 'kx-input', 'aria-label': start.priceLabel || 'מחיר (₪)', placeholder: start.priceLabel || 'מחיר (₪)' });
+    const msg = h('p', { class: 'kx-note is-warn', hidden: true });
+    const d = dialog(title, [nameIn, priceIn, h('p', { class: 'kx-note' }, start.priceHint || 'מחיר בספרות (למשל 14 או 20/24). ריק = בלי מחיר.'), msg], [
+      h('button', { type: 'button', class: 'kx-btn', onclick: () => d.close() }, 'ביטול'),
+      h('button', { type: 'button', class: 'kx-btn is-primary', onclick: async () => {
+        const fail = (t) => { msg.textContent = t; msg.hidden = false; };
+        const name = nameIn.value.trim();
+        const price = priceIn.value.trim();
+        if (!name) return fail('צריך שם.');
+        if (!PRICE_RE.test(price)) return fail('מחיר בספרות בלבד (למשל 14 או 20/24).');
+        d.close();
+        await onSave(name, price);
+      } }, 'שמירה'),
+    ]);
+    setTimeout(() => nameIn.focus(), 60);
+  }
+  function menuTab() {
+    if (menu.state === 'idle') { setTimeout(loadMenu, 0); return [note('טוען את התפריט…')]; }
+    if (menu.state === 'loading' && !menu.categories.length) return [note('טוען את התפריט…')];
+    if (menu.state === 'no_key') return [note('הקיוסק לא מחובר לפורטל (אין כתובת או מפתח). אפשר לערוך את התפריט מלוח הבקרה של הבעלים.', 'warn')];
+    if (menu.state === 'error' && !menu.categories.length) return [note('לא הצלחנו לטעון את התפריט.', 'warn'), action('לנסות שוב', null, () => loadMenu())];
+    const off = !menu.open || menu.busy;
+    const out = [menu.open
+      ? note('עריכת התפריט של הסניף: שם ומחיר, הוספה ומחיקה של פריטים וסוגים. כל שינוי מופיע בתפריט מיד, ונרשם ביומן.')
+      : note('הסניף סגור עכשיו: אפשר לראות את התפריט, ולערוך רק בשעות הפעילות.', 'warn')];
+    const btn = (label, aria, onclick, tone) => h('button', { type: 'button', class: `kx-mini${tone ? ` is-${tone}` : ''}`, 'aria-label': aria, disabled: off, onclick }, label);
+    const priceOf = (p) => (p ? `₪${p}` : 'בלי מחיר');
+    menu.categories.forEach((c) => {
+      const opened = menu.openCat === c.id;
+      out.push(h('button', { type: 'button', class: `kx-row kx-cat${opened ? ' is-open' : ''}`, 'aria-expanded': String(opened), onclick: () => { menu.openCat = opened ? '' : c.id; render(); } },
+        textOf(c.name, `${c.items.length} פריטים`), svg(opened ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6', 'kx-chev')));
+      if (!opened) return;
+      out.push(section(c.name));
+      c.items.forEach((item) => {
+        out.push(h('div', { class: 'kx-row kx-menu-item' }, textOf(item.name, item.types.length ? `${item.types.length} סוגים${item.price ? ` · ${priceOf(item.price)}` : ''}` : priceOf(item.price)),
+          h('div', { class: 'kx-end' },
+            btn('עריכה', `עריכה: ${item.name}`, () => entryDialog(`עריכה: ${item.name}`, { name: item.name, price: item.price }, (name, price) =>
+              menuEdit({ op: 'update', itemUid: item.uid, typeUid: null, ...(name !== item.name ? { name } : {}), ...(price !== item.price ? { price } : {}) }))),
+            btn('+ סוג', `הוספת סוג ל${item.name}`, () => entryDialog(`סוג חדש ל${item.name}`, { priceLabel: 'תוספת מחיר (₪)', priceHint: 'כמה הסוג מוסיף למחיר הפריט. ריק = אותו מחיר.' }, (name, price) =>
+              menuEdit({ op: 'add_type', itemUid: item.uid, name, ...(price ? { price } : {}) }, 'הסוג נוסף.'))),
+            btn('מחיקה', `מחיקה: ${item.name}`, () => confirmBox('מחיקת פריט', `למחוק את "${item.name}"${item.types.length ? ` ואת ${item.types.length} הסוגים שלו` : ''} מהתפריט?`, 'מחיקה', () =>
+              menuEdit({ op: 'remove_item', itemUid: item.uid }, 'הפריט נמחק.')), 'bad'))));
+        item.types.forEach((t) => {
+          out.push(h('div', { class: 'kx-row kx-menu-type' }, textOf(`· ${t.name}`, t.price ? `+₪${t.price}` : 'אותו מחיר'),
+            h('div', { class: 'kx-end' },
+              btn('עריכה', `עריכה: ${item.name} ${t.name}`, () => entryDialog(`עריכה: ${t.name}`, { name: t.name, price: t.price, priceLabel: 'תוספת מחיר (₪)' }, (name, price) =>
+                menuEdit({ op: 'update', itemUid: item.uid, typeUid: t.uid, ...(name !== t.name ? { name } : {}), ...(price !== t.price ? { price } : {}) }))),
+              btn('מחיקה', `מחיקה: ${item.name} ${t.name}`, () => confirmBox('מחיקת סוג', `למחוק את "${t.name}" מ"${item.name}"?`, 'מחיקה', () =>
+                menuEdit({ op: 'remove_type', typeUid: t.uid }, 'הסוג נמחק.')), 'bad'))));
+        });
+      });
+      out.push(action(`הוספת פריט ל${c.name}`, 'שם ומחיר', () => { if (!off) entryDialog(`פריט חדש ב${c.name}`, {}, (name, price) => menuEdit({ op: 'add_item', categoryId: c.id, name, ...(price ? { price } : {}) }, 'הפריט נוסף.')); }));
+    });
+    out.push(action('רענון התפריט', 'טוען שוב מהפורטל', () => loadMenu()));
     return out;
   }
 
@@ -589,10 +677,10 @@
     if (!root) return;
     const scroller = root.querySelector('.kx-body');
     const top = scroller ? scroller.scrollTop : 0;
-    const rows = groups([{ overview, stock: stockTab, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]()]);
+    const rows = groups([{ overview, stock: stockTab, menu: menuTab, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]()]);
     const tabs = h('nav', { class: 'kx-tabs', role: 'tablist' }, TABS.map(([id, label]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': String(id === tab), class: id === tab ? 'is-on' : '',
-      onclick: () => { tab = id; if (id === 'device' || id === 'updates' || id === 'diag') loadInfo(); if (id === 'stock') { loadStock(); return; } render(); const b = root.querySelector('.kx-body'); if (b) b.scrollTop = 0; },
+      onclick: () => { tab = id; if (id === 'device' || id === 'updates' || id === 'diag') loadInfo(); if (id === 'stock') { loadStock(); return; } if (id === 'menu') { loadMenu(); return; } render(); const b = root.querySelector('.kx-body'); if (b) b.scrollTop = 0; },
     }, svg(TAB_ICONS[id]), label)));
     const logo = h('img', { src: 'sarcafe-logo.png', alt: '', width: '38', height: '38', draggable: 'false' });
     logo.addEventListener('error', () => { logo.hidden = true; });

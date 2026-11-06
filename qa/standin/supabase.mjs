@@ -159,6 +159,48 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
       if (p_publish) apply(menu.published)
       return null
     },
+    // the dashboard's tablet item/type writes (migrations 015/016) and menu_update_entry (20261106180000): draft always,
+    // published when p_publish
+    ...(() => {
+      const menuOf = (id) => { const m = table('menus').find((x) => x.id === id); if (!m) throw Object.assign(new Error('menu not found'), { code: 'P0002' }); return m }
+      const docs = (m, publish) => [m.draft, ...(publish ? [m.published] : [])].filter(Boolean)
+      const items = (doc) => (doc.categories ?? []).flatMap((c) => c.items ?? [])
+      return {
+        add_menu_item({ p_menu_id, p_category_id, p_item, p_publish }) {
+          for (const d of docs(menuOf(p_menu_id), p_publish)) { const c = (d.categories ?? []).find((x) => String(x.id) === p_category_id); if (c) (c.items ??= []).push(structuredClone(p_item)) }
+          return null
+        },
+        remove_menu_item({ p_menu_id, p_item_uid, p_publish }) {
+          for (const d of docs(menuOf(p_menu_id), p_publish)) for (const c of d.categories ?? []) c.items = (c.items ?? []).filter((i) => i.uid !== p_item_uid)
+          return null
+        },
+        set_menu_item_container({ p_menu_id, p_item_uid, p_is_container, p_publish }) {
+          for (const d of docs(menuOf(p_menu_id), p_publish)) for (const i of items(d)) if (i.uid === p_item_uid) { if (p_is_container) i.types ??= []; else if (!(i.types ?? []).length) delete i.types }
+          return null
+        },
+        add_menu_item_type({ p_menu_id, p_item_uid, p_type, p_publish }) {
+          for (const d of docs(menuOf(p_menu_id), p_publish)) for (const i of items(d)) if (i.uid === p_item_uid) (i.types ??= []).push(structuredClone(p_type))
+          return null
+        },
+        remove_menu_item_type({ p_menu_id, p_type_uid, p_publish }) {
+          for (const d of docs(menuOf(p_menu_id), p_publish)) for (const i of items(d)) if (i.types) i.types = i.types.filter((t) => t.uid !== p_type_uid)
+          return null
+        },
+        menu_update_entry({ p_menu_id, p_item_uid, p_type_uid, p_name, p_price, p_publish }) {
+          if (p_name !== null && p_name !== undefined && (p_name.trim().length < 1 || p_name.trim().length > 80)) throw Object.assign(new Error('invalid name'), { code: '22023' })
+          const price = p_price === null || p_price === undefined ? undefined : p_price.trim() === '' ? null : /^[0-9]+(\.[0-9]+)?$/.test(p_price.trim()) ? Number(p_price.trim()) : p_price.trim()
+          for (const d of docs(menuOf(p_menu_id), p_publish)) for (const i of items(d)) {
+            if (i.uid !== p_item_uid) continue
+            const o = p_type_uid ? (i.types ?? []).find((t) => t.uid === p_type_uid) : i
+            if (!o) continue
+            const key = p_type_uid ? 'priceDelta' : 'price'
+            if (p_name !== null && p_name !== undefined) o.he = p_name.trim()
+            if (price === null) delete o[key]; else if (price !== undefined) o[key] = price
+          }
+          return null
+        },
+      }
+    })(),
     check_rate_limit({ p_key, p_max, p_window_seconds }) {
       const now = Date.now(); const list = (state.limits.get(p_key) ?? []).filter((t) => now - t < p_window_seconds * 1000)
       if (list.length >= p_max) { state.limits.set(p_key, list); return false }

@@ -70,7 +70,12 @@ const makeContent = ({ settings = {}, ads = ADS, hours = null, kiosk = {}, branc
     branchTiming: { idleSeconds: 60, graceSeconds: 10, slideSeconds: 7 }, settings: merged(settings), settingsUpdatedAt: updatedAt, ...kiosk },
 })
 
-const mock = { content: null, shift: null, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: null, stockWrites: [], stockOpen: true }
+const mock = { content: null, shift: null, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: null, stockWrites: [], stockOpen: true, menu: null, menuWrites: [] }
+// the menu as /api/kiosk/menu-edit answers it (src/lib/kiosk/menu-edit.ts menuTree)
+const MENU = () => [
+  { id: 'hot', name: 'קפה חם', items: [{ uid: 'coffee', name: 'הפוך קטן', price: '12', types: [] }] },
+  { id: 'pastries', name: 'מאפים', items: [{ uid: 'pastry', name: 'מאפה רגיל', price: '12', types: [{ uid: 'cheese', name: 'גבינית', price: '' }] }] },
+]
 // the live-stock list as /api/kiosk/stock answers it (src/lib/kiosk/stock.ts stockView)
 const STOCK = () => [
   { id: 'sandwiches', name: 'כריכים וטוסטים', items: [
@@ -80,7 +85,7 @@ const STOCK = () => [
   { id: 'shakes', name: 'שייק פירות טבעי', items: [{ uid: 'shake', name: 'שייק', available: true, quantity: null, types: [{ uid: 'banana', name: 'בננה תמר', available: true, quantity: null }] }] },
 ]
 function resetMock() {
-  Object.assign(mock, { content: makeContent(), shift: { ok: true, asOf: new Date().toISOString(), people: ['דנה', 'יוסי'], closesAt: '22:00' }, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: STOCK(), stockWrites: [], stockOpen: true })
+  Object.assign(mock, { content: makeContent(), shift: { ok: true, asOf: new Date().toISOString(), people: ['דנה', 'יוסי'], closesAt: '22:00' }, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: STOCK(), stockWrites: [], stockOpen: true, menu: MENU(), menuWrites: [] })
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' }
 const server = createServer((req, res) => {
@@ -94,6 +99,25 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/kiosk/shift') {
     if (req.headers['x-kiosk-key'] !== 'test-key') return json(401, { ok: false })
     return mock.shift && mock.shiftStatus === 200 ? json(200, mock.shift) : json(mock.shiftStatus, { ok: false })
+  }
+  if (url.pathname === '/api/kiosk/menu-edit') {
+    let text = ''
+    req.on('data', (c) => { text += c })
+    req.on('end', () => {
+      if (req.headers['x-kiosk-key'] !== 'test-key') return json(401, { ok: false })
+      if (req.method === 'GET') return json(200, { ok: true, open: mock.stockOpen, categories: mock.menu })
+      const b = JSON.parse(text || '{}')
+      mock.menuWrites.push(b)
+      if (!mock.stockOpen) return json(403, { ok: false, error: 'closed' })
+      const items = mock.menu.flatMap((c) => c.items)
+      if (b.op === 'update') { const i = items.find((x) => x.uid === b.itemUid); const o = b.typeUid ? i.types.find((t) => t.uid === b.typeUid) : i; if (b.name) o.name = b.name; if (b.price !== undefined) o.price = b.price }
+      if (b.op === 'add_item') mock.menu.find((c) => c.id === b.categoryId).items.push({ uid: `k${items.length}`, name: b.name, price: b.price || '', types: [] })
+      if (b.op === 'add_type') items.find((x) => x.uid === b.itemUid).types.push({ uid: `t${Date.now()}`, name: b.name, price: b.price || '' })
+      if (b.op === 'remove_item') for (const c of mock.menu) c.items = c.items.filter((x) => x.uid !== b.itemUid)
+      if (b.op === 'remove_type') for (const i of items) i.types = i.types.filter((t) => t.uid !== b.typeUid)
+      return json(200, { ok: true, categories: mock.menu })
+    })
+    return undefined
   }
   if (url.pathname === '/api/kiosk/stock') {
     let text = ''
@@ -707,7 +731,7 @@ console.log('\nthe control panel')
   check('it opens with the right token', (await ev(page, () => window.KioskAdmin.open('tok'))) === true && (await ev(page, () => window.KioskAdmin.isOpen)) === true)
   await page.waitForTimeout(200)
   const tabs = await ev(page, () => [...document.querySelectorAll('.kx-tabs button')].map((b) => b.textContent))
-  check('ten tabs (live stock second)', JSON.stringify(tabs) === JSON.stringify(['סקירה', 'מלאי', 'מסכים', 'מודעות', 'זמנים', 'שפות', 'סוללה', 'מכשיר', 'עדכונים', 'אבחון']), tabs)
+  check('eleven tabs (live stock, then the menu editor)', JSON.stringify(tabs) === JSON.stringify(['סקירה', 'מלאי', 'תפריט', 'מסכים', 'מודעות', 'זמנים', 'שפות', 'סוללה', 'מכשיר', 'עדכונים', 'אבחון']), tabs)
   await shot(page, 'ui-panel-overview')
   const cards = await ev(page, () => document.querySelector('.kx-cards').textContent)
   check('the overview shows the charge, the tablet and the branch', /61%/.test(cards) && /קיוסק גבעת חביבה/.test(cards) && /גבעת חביבה/.test(cards), cards)
@@ -846,6 +870,56 @@ console.log('\nlive stock from the panel (the dashboard\'s live list, edited on 
   await page.locator('.kx-stock').first().waitFor({ timeout: 5000 })
   check('closed: the tab says so and nothing can be changed', /הסניף סגור/.test(await page.locator('.kx-body').innerText()) && (await page.locator('.kx-stock button:not([disabled])').count()) === 0)
   await page.close()
+}
+
+console.log('\nthe menu editor in the panel (names, prices, items and types)')
+{
+  resetMock()
+  const page = await open({ staff: true })
+  await page.evaluate(() => window.KioskAdmin.open('tok'))
+  await page.locator('.kx-tabs button', { hasText: 'תפריט' }).click()
+  await page.locator('.kx-cat').first().waitFor({ timeout: 5000 })
+  const cats = await page.locator('.kx-cat').allInnerTexts()
+  check('every category of the menu, closed until tapped', cats.length === 2 && /קפה חם/.test(cats[0]) && /מאפים/.test(cats[1]), cats)
+  await page.locator('.kx-cat', { hasText: 'מאפים' }).click()
+  await page.getByRole('button', { name: 'עריכה: מאפה רגיל', exact: true }).click()
+  const dlg = page.locator('.kx-dialog')
+  await dlg.getByLabel('מחיר (₪)').fill('14a')
+  await dlg.getByRole('button', { name: 'שמירה', exact: true }).click()
+  check('a price that is not a number is refused in the dialog', /מחיר בספרות/.test(await dlg.innerText()) && mock.menuWrites.length === 0)
+  await dlg.getByLabel('מחיר (₪)').fill('14')
+  await dlg.getByLabel('שם', { exact: true }).fill('מאפה רגיל גדול')
+  await dlg.getByRole('button', { name: 'שמירה', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.kx-body')?.textContent.includes('מאפה רגיל גדול'), null, { timeout: 5000 }).catch(() => {})
+  check('editing sends only what changed, for that item', JSON.stringify(mock.menuWrites.at(-1)) === JSON.stringify({ op: 'update', itemUid: 'pastry', typeUid: null, name: 'מאפה רגיל גדול', price: '14' }), mock.menuWrites.at(-1))
+  check('...and the list shows it', /₪14/.test(await page.locator('.kx-menu-item', { hasText: 'מאפה רגיל גדול' }).innerText()))
+  await page.getByRole('button', { name: 'הוספת סוג למאפה רגיל גדול', exact: true }).click()
+  await page.locator('.kx-dialog').getByLabel('שם', { exact: true }).fill('שקדים')
+  await page.locator('.kx-dialog').getByRole('button', { name: 'שמירה', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.kx-body')?.textContent.includes('שקדים'), null, { timeout: 5000 }).catch(() => {})
+  check('a new type for an item', mock.menuWrites.at(-1).op === 'add_type' && mock.menuWrites.at(-1).itemUid === 'pastry' && mock.menuWrites.at(-1).name === 'שקדים' && (await page.locator('.kx-menu-type', { hasText: 'שקדים' }).count()) === 1)
+  await page.getByRole('button', { name: 'מחיקה: מאפה רגיל גדול גבינית', exact: true }).click()
+  await page.locator('.kx-dialog').getByRole('button', { name: 'מחיקה', exact: true }).click()
+  await page.waitForFunction(() => !document.querySelector('.kx-body')?.textContent.includes('גבינית'), null, { timeout: 5000 }).catch(() => {})
+  check('deleting a type asks first, then removes it', mock.menuWrites.at(-1).op === 'remove_type' && mock.menuWrites.at(-1).typeUid === 'cheese' && (await page.locator('.kx-menu-type', { hasText: 'גבינית' }).count()) === 0)
+  await page.locator('.kx-action', { hasText: 'הוספת פריט למאפים' }).click()
+  await page.locator('.kx-dialog').getByLabel('שם', { exact: true }).fill('קרואסון')
+  await page.locator('.kx-dialog').getByLabel('מחיר (₪)').fill('15')
+  await page.locator('.kx-dialog').getByRole('button', { name: 'שמירה', exact: true }).click()
+  await page.waitForFunction(() => document.querySelector('.kx-body')?.textContent.includes('קרואסון'), null, { timeout: 5000 }).catch(() => {})
+  check('a new item in a category', JSON.stringify(mock.menuWrites.at(-1)) === JSON.stringify({ op: 'add_item', categoryId: 'pastries', name: 'קרואסון', price: '15' }))
+  check('no page errors in the menu editor', page.errors.length === 0, page.errors)
+  await page.close()
+
+  resetMock()
+  mock.stockOpen = false
+  const closed = await open({ staff: true })
+  await closed.evaluate(() => window.KioskAdmin.open('tok'))
+  await closed.locator('.kx-tabs button', { hasText: 'תפריט' }).click()
+  await closed.locator('.kx-cat').first().waitFor({ timeout: 5000 })
+  await closed.locator('.kx-cat', { hasText: 'קפה חם' }).click()
+  check('closed: the editor says so and its buttons are off', /הסניף סגור/.test(await closed.locator('.kx-body').innerText()) && (await closed.locator('.kx-mini:not([disabled])').count()) === 0)
+  await closed.close()
 }
 
 console.log('\nthe old things still work')

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { createStage, assert } from '../lib/harness.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/qa/digest.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -21,7 +21,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts') }
 }
 
 export function unitStage(root) {
@@ -129,6 +129,19 @@ export function unitStage(root) {
     assert.ok(ok(base) && ok({ ...base, wifi: { ssid: 'a', password: 'b' } }))
     assert.ok(!ok({ ...base, slug: 'A B' }) && !ok({ ...base, extra: 1 }) && !ok({ ...base, wifi: { ssid: 'x'.repeat(33) } }), 'bad input refused')
     assert.ok(e.enrollRequestSchema.safeParse({ code: 'a'.repeat(43) }).success && !e.enrollRequestSchema.safeParse({ code: 'a'.repeat(42) }).success)
+  })
+  stage.test('kiosk-menu-edit-rules', 'עורך התפריט בקיוסק: עץ התפריט, מציאת פריט/סוג, ומה מותר לשלוח (שם, מחיר, פעולות)', 'unit', async () => {
+    const e = m.menuEdit
+    const doc = { categories: [{ id: 'p', title: { he: 'מאפים' }, items: [{ uid: 'a', he: 'מאפה', price: 12, types: [{ uid: 't', he: 'גבינית', priceDelta: 2 }] }, { he: 'בלי מזהה' }] }] }
+    const tree = e.menuTree(doc)
+    assert.deepEqual(tree[0].items.map((i) => [i.name, i.price, i.types.length]), [['מאפה', '12', 1]], 'items without an id are left out; prices as text')
+    assert.deepEqual(e.findEntry(doc, 'a', 't'), { label: 'מאפה — גבינית', hasTypes: true })
+    assert.equal(e.findEntry(doc, 'nope'), null)
+    assert.equal(e.itemOfType(doc, 't'), 'a')
+    const ok = (b) => e.menuEditSchema.safeParse(b).success
+    assert.ok(ok({ op: 'update', itemUid: 'a', price: '14.5' }) && ok({ op: 'update', itemUid: 'a', price: '20/24' }) && ok({ op: 'add_item', categoryId: 'p', name: 'x' }))
+    assert.ok(!ok({ op: 'update', itemUid: 'a', price: '-1' }) && !ok({ op: 'update', itemUid: 'a', price: '₪14' }) && !ok({ op: 'add_item', categoryId: 'p', name: '   ' }) && !ok({ op: 'nuke' }), 'bad input refused')
+    assert.ok(e.isEmptyEdit(e.menuEditSchema.parse({ op: 'update', itemUid: 'a' })) && !e.isEmptyEdit(e.menuEditSchema.parse({ op: 'update', itemUid: 'a', name: 'b' })))
   })
   stage.test('qa-digest', 'הודעת 07:00: הודעה אחת, שני דוחות, עבר/נכשל, וקישור לבעיות כשמשהו נכשל; דוח שלא הגיע = כישלון', 'unit', async () => {
     const d = m.digest
