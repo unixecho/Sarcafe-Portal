@@ -193,7 +193,8 @@ function apkMode(opts) {
   if (data.length > MAX_APK_BYTES) throw new Error('APK larger than 30 MB')
   let code = opts['version-code'] ? Number(opts['version-code']) : null
   let name = typeof opts['version-name'] === 'string' ? opts['version-name'] : null
-  const aapt2 = join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk', 'build-tools', '36.1.0', 'aapt2.exe')
+  // AAPT2: the GitHub release workflow's Linux aapt2 (.github/workflows/kiosk-release.yml); otherwise the owner's PC SDK
+  const aapt2 = process.env.AAPT2 || join(process.env.LOCALAPPDATA || '', 'Android', 'Sdk', 'build-tools', '36.1.0', 'aapt2.exe')
   if (existsSync(aapt2) && !opts['no-aapt']) {
     const badging = execFileSync(aapt2, ['dump', 'badging', apk], { encoding: 'utf8' })
     const m = /package: name='([^']+)' versionCode='(\d+)' versionName='([^']*)'/.exec(badging)

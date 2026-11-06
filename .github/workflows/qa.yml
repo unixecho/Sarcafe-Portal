@@ -1,4 +1,5 @@
-# The automatic QA suite (docs/QA_BLUEPRINT.md): every night, after every push to main, and on demand. It builds the app against a
+# The automatic QA suite (docs/QA_BLUEPRINT.md): every night (02:13 Israel winter / 03:13 summer, a backup try two hours later),
+# after every push to main, and on demand. It builds the app against a
 # stand-in Supabase (never the real project), runs both suites — the dashboard and the kiosk — and posts the two reports to the
 # developer's morning review (/staff/dev/qa). At 07:00 Israel time a second job asks the portal to send the developer ONE notification
 # with both results (pass / fail; a failure opens that report with its problems highlighted).
@@ -12,7 +13,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '41 2 * * *' # the suites: 04:41 in Israel in winter, 05:41 in summer — both reports are in long before 07:00
+    - cron: '13 0 * * *' # the suites: 02:13 in Israel in winter, 03:13 in summer — done by ~03:00/04:00, hours before the 07:00 digest
+    - cron: '13 2 * * *' # a second try if the first one never started (GitHub skips busy schedules); a run that finds today's reports skips itself
     - cron: '47 3 * * *' # the digest in summer (06:47 Israel; waits for 07:00). In winter this firing is an hour early and stops.
     - cron: '47 4 * * *' # the digest in winter (06:47 Israel; waits for 07:00). In summer the portal answers "already sent".
   workflow_dispatch:
@@ -26,8 +28,29 @@ permissions:
   contents: read
 
 jobs:
+  # the 04:13 UTC firing is only a backup: it runs the suites only when tonight's 00:13 run did not start or did not finish
+  tonight:
+    if: github.event_name == 'schedule' && github.event.schedule == '13 2 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      done: ${{ steps.check.outputs.done }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          since=$(date -u -d '-4 hours' +%Y-%m-%dT%H:%M:%SZ)
+          n=$(gh run list -R "$GITHUB_REPOSITORY" -w qa.yml -e schedule --json conclusion,createdAt,databaseId \
+            --jq "[.[] | select(.createdAt >= \"$since\" and .conclusion == \"success\" and .databaseId != $GITHUB_RUN_ID)] | length")
+          echo "done=$([ "${n:-0}" -gt 0 ] && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+
   qa:
-    if: github.event_name != 'schedule' || github.event.schedule == '41 2 * * *'
+    needs: [tonight]
+    # always(): `tonight` is skipped on every run but the backup one
+    if: always() && (github.event_name != 'schedule' || github.event.schedule == '13 0 * * *' || (github.event.schedule == '13 2 * * *' && needs.tonight.outputs.done != 'yes'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -69,7 +92,7 @@ jobs:
 
   digest:
     # always(): on the digest firings the qa job is skipped, and on a manual run the digest goes out even when QA failed
-    if: always() && ((github.event_name == 'schedule' && github.event.schedule != '41 2 * * *') || (github.event_name == 'workflow_dispatch' && inputs.digest))
+    if: always() && ((github.event_name == 'schedule' && github.event.schedule != '13 0 * * *' && github.event.schedule != '13 2 * * *') || (github.event_name == 'workflow_dispatch' && inputs.digest))
     needs: [qa]
     runs-on: ubuntu-latest
     timeout-minutes: 30

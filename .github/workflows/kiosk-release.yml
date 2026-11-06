@@ -1,0 +1,171 @@
+# The kiosk's updates, built and signed by GitHub (owner, 2026-11-06: "make sure I don't have to plug in my tablet into the computer
+# ever again for any updates"). On every push to main that changes the kiosk, this job:
+#   1. rebuilds the Android app when its Java / manifest / resources changed (version code = the published one + 1), signs it with
+#      the kiosk keystore, and publishes it to public/kiosk-ota/apk/ (scripts/publish-kiosk-ota.mjs apk);
+#   2. signs the kiosk page bundle (scripts/sign-kiosk-ota.mjs) when its content changed;
+#   3. commits both to main. Vercel serves them; the tablet looks every 10 minutes and installs by itself (silently: it is the
+#      device owner). No PC, no cable. docs/SARCAFE_KIOSK_OTA.md.
+#
+# Repository secrets (Settings → Secrets and variables → Actions), set once by the owner:
+#   KIOSK_KEYSTORE_B64   the app keystore (sarcafe-kiosk-v2.keystore), base64
+#   KIOSK_KS_PASS        its password
+#   KIOSK_KS_ALIAS       its key alias (optional, default sarcafe-kiosk)
+#   KIOSK_OTA_PEM        the page-signing private key (sarcafe-kiosk-ota.pem), the whole PEM text
+# Only this job can read them; they are written to the runner's temp folder (never into the repo) and the runner is thrown away.
+#
+# Manual run ("Run workflow"): `apk` = auto | yes | no; `dry` = build everything with a THROWAWAY key and publish nothing (proves the
+# build works; needs no secrets).
+name: Kiosk release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prototypes/sarcafe-kiosk/**'
+      - 'prototypes/sarcafe-kiosk-app/**'
+      - 'public/sarcafe-logo.png'
+      - 'public/backdrops/**'
+      - 'scripts/assemble-kiosk-bundle.mjs'
+  workflow_dispatch:
+    inputs:
+      apk:
+        description: 'Build a new app version: auto (only when the app code changed), yes, no'
+        type: choice
+        options: [auto, 'yes', 'no']
+        default: auto
+      dry:
+        description: 'Dry run: throwaway key, publish nothing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kiosk-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # commits the signed files to main
+    env:
+      DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry && 'yes' || 'no' }}
+      BT_VERSION: 36.1.0
+      PLATFORM: android-36
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: What changed
+        id: plan
+        run: |
+          choice="${{ github.event_name == 'workflow_dispatch' && inputs.apk || 'auto' }}"
+          before="${{ github.event.before }}"
+          if [ "$choice" = "auto" ]; then
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$before" 2>/dev/null; then
+              range="$before..HEAD"
+            else
+              range="HEAD~1..HEAD"
+            fi
+            if git diff --name-only $range -- prototypes/sarcafe-kiosk-app/src prototypes/sarcafe-kiosk-app/AndroidManifest.xml prototypes/sarcafe-kiosk-app/res | grep -q .; then choice=yes; else choice=no; fi
+          fi
+          echo "apk=$choice" >> "$GITHUB_OUTPUT"
+          echo "New app version: $choice · dry run: $DRY" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keys
+        run: |
+          umask 077
+          K="$RUNNER_TEMP/keys"; mkdir -p "$K"
+          if [ "$DRY" = "yes" ]; then
+            export SARCAFE_KIOSK_KS_PASS="dry-$(openssl rand -hex 16)"
+            keytool -genkeypair -keystore "$K/app.keystore" -storepass:env SARCAFE_KIOSK_KS_PASS -keypass:env SARCAFE_KIOSK_KS_PASS \
+              -alias sarcafe-kiosk -keyalg RSA -keysize 2048 -validity 30 -dname 'CN=Dry run' >/dev/null 2>&1
+            openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out "$K/ota.pem"
+            echo "::add-mask::$SARCAFE_KIOSK_KS_PASS"
+            echo "SARCAFE_KIOSK_KS_PASS=$SARCAFE_KIOSK_KS_PASS" >> "$GITHUB_ENV"
+            echo "SARCAFE_KIOSK_KS_ALIAS=sarcafe-kiosk" >> "$GITHUB_ENV"
+          else
+            missing=""
+            [ -n "$KEYSTORE_B64" ] || missing="$missing KIOSK_KEYSTORE_B64"
+            [ -n "$KS_PASS" ] || missing="$missing KIOSK_KS_PASS"
+            [ -n "$OTA_PEM" ] || missing="$missing KIOSK_OTA_PEM"
+            if [ -n "$missing" ]; then
+              echo "::error::Missing repository secrets:$missing (Settings → Secrets and variables → Actions). Nothing was published."
+              exit 1
+            fi
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$K/app.keystore"
+            printf '%s\n' "$OTA_PEM" > "$K/ota.pem"
+            echo "SARCAFE_KIOSK_KS_PASS=$KS_PASS" >> "$GITHUB_ENV"
+            echo "SARCAFE_KIOSK_KS_ALIAS=${KS_ALIAS:-sarcafe-kiosk}" >> "$GITHUB_ENV"
+          fi
+          echo "SARCAFE_KIOSK_KEYSTORE=$K/app.keystore" >> "$GITHUB_ENV"
+          echo "OTA_KEY=$K/ota.pem" >> "$GITHUB_ENV"
+        env:
+          KEYSTORE_B64: ${{ secrets.KIOSK_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.KIOSK_KS_PASS }}
+          KS_ALIAS: ${{ secrets.KIOSK_KS_ALIAS }}
+          OTA_PEM: ${{ secrets.KIOSK_OTA_PEM }}
+
+      - name: Android SDK pieces
+        if: steps.plan.outputs.apk == 'yes'
+        run: |
+          SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SM" --licenses >/dev/null || true
+          "$SM" "build-tools;$BT_VERSION" "platforms;$PLATFORM" >/dev/null
+          echo "AAPT2=$ANDROID_HOME/build-tools/$BT_VERSION/aapt2" >> "$GITHUB_ENV"
+
+      - name: Build and publish the app
+        if: steps.plan.outputs.apk == 'yes'
+        run: |
+          prev=$(node -p "require('./public/kiosk-ota/apk/latest.json').versionCode")
+          code=$((prev + 1)); name="0.$code"
+          SARCAFE_BUILD_TOOLS=$BT_VERSION SARCAFE_PLATFORM=$PLATFORM bash prototypes/sarcafe-kiosk-app/build.sh "$code" "$name" "$RUNNER_TEMP/kiosk-build"
+          node scripts/publish-kiosk-ota.mjs apk --apk "$RUNNER_TEMP/kiosk-build/sarcafe-kiosk.apk" --version-code "$code" --version-name "$name"
+          echo "App $name ($code) built and signed" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sign the page bundle
+        id: web
+        run: |
+          now=$(node --input-type=module -e "import { assembleBundle, computeVersion } from './scripts/publish-kiosk-ota.mjs'; console.log(computeVersion(assembleBundle()))")
+          was=$(node -e "try { console.log(require('./public/kiosk-ota/web-signature.json').version) } catch { console.log('') }")
+          if [ "$now" = "$was" ] && [ "$DRY" != "yes" ]; then
+            echo "Page bundle $now is already signed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/sign-kiosk-ota.mjs --key "$OTA_KEY"
+            echo "Page bundle $now signed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the dry-run app
+        if: env.DRY == 'yes' && steps.plan.outputs.apk == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiosk-dry-run-apk
+          path: ${{ runner.temp }}/kiosk-build/sarcafe-kiosk.apk
+          retention-days: 3
+
+      - name: Publish (commit to main)
+        if: env.DRY != 'yes'
+        run: |
+          git add public/kiosk-ota/web-signature.json public/kiosk-ota/apk
+          if git diff --cached --quiet; then echo "Nothing new to publish" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore(kiosk): release from ${GITHUB_SHA::7} (built and signed by GitHub Actions)"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && break; sleep 5; done
+          echo "Published: the tablet takes it within ~10 minutes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Forget the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys" "$RUNNER_TEMP/kiosk-build"

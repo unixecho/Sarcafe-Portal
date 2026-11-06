@@ -24,7 +24,7 @@ feature adds its tests in the same change (a new endpoint → `qa/live/features.
 
 ## Every morning
 `.github/workflows/qa.yml`:
-- **04:41 Israel time (05:41 in summer)**, after every push to `main`, and on demand ("Run workflow"): job `qa` runs both suites and posts
+- **02:13 Israel time (03:13 in summer), with a backup try two hours later if that run did not happen**, after every push to `main`, and on demand ("Run workflow"): job `qa` runs both suites and posts
   the two reports to `/api/qa/report` (stored in `qa_runs` with their `suite`).
 - **07:00 Israel time**: job `digest` asks `/api/qa/digest` to send the developer **one notification** with both results — title "בדיקות הבוקר: הכול עבר"
   (green) or "בדיקות הבוקר: <suite> נכשל" (red), and a line per suite ("<suite>: עבר 212/214 · <suite>: נכשל, 2 בדיקות"). Only developers receive it (badge `developer` or the

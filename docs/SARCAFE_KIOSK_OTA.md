@@ -238,3 +238,13 @@ Set `KIOSK_OTA_TEST_APK=<apk>` to also test `publish apk` with `aapt2`.
 - Silent `PackageInstaller` install as device owner, `MY_PACKAGE_REPLACED` relaunch, lock-task and home restored.
 - The `am broadcast` configuration, the PIN migration and the lockout.
 - The network callback after Wi-Fi drops, and no checks while the screen is off.
+
+## Built and signed by GitHub (owner, 2026-11-06)
+"Make sure I don't have to plug in my tablet into the computer ever again for any updates." `.github/workflows/kiosk-release.yml`
+runs on every push to `main` that touches the kiosk: it rebuilds the app when its Java / manifest / resources changed
+(`prototypes/sarcafe-kiosk-app/build.sh`, the Linux twin of `build.ps1`; version code = published + 1), signs the page bundle when it
+changed, and commits `public/kiosk-ota/` to `main`. The tablet installs both by itself within ~10 minutes. The PC is no longer
+needed for updates; a cable only for a complete reinstall.
+Secrets (repository → Settings → Secrets and variables → Actions): `KIOSK_KEYSTORE_B64`, `KIOSK_KS_PASS`, `KIOSK_KS_ALIAS`
+(optional), `KIOSK_OTA_PEM`. Without them the run fails with the list of what is missing and publishes nothing. "Run workflow" with
+`dry` builds everything with a throwaway key and publishes nothing.
