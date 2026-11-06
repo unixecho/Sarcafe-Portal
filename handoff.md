@@ -1,5 +1,9 @@
 # Sarcafe — cross-agent handoff
 
+## Owner requests to bring up later (recorded 2026-11-06, not started)
+- **AyekaBar glisse pass** for its dashboards, the same way Sarcafe's were done (owner: "I will later want to do an Ayeka Bar pass for the Glisse effect just like we did for Sarcafe").
+- **Remind the owner** about a glisse pass for the CUSTOMER-FACING websites (Sarcafe and AyekaBar). Undecided: the owner likes how they look now ("straight forward") but thinks glisse would look amazing. Ask before doing it; offer a preview first, change nothing live.
+
 ## Claude addendum, 2026-11-06 (cloud session): kiosk live stock from the tablet panel, wrong-PIN feedback, combined migration file — pushed to `main`; no new migration
 
 - **Owner reports/asks:** can't get into the kiosk panel ("after I enter the pw nothing happens"; the dashboard reset changed nothing); the kiosk should handle live stock like the dashboard (quantities from the dashboard and/or the kiosk); list the available sandwich, pastry and shake types.
