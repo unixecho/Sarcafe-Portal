@@ -136,7 +136,7 @@ export function kioskApiStage(live) {
     const r = await tablet('/api/kiosk/stock?device=givat-haviva-1', { method: 'GET', type: null })
     assert.status(r, 200, 'the list')
     assert.equal(r.headers.get('cache-control'), 'no-store')
-    const data = await r.json()
+    const data = r.json
     assert.equal(data.open, true)
     assert.deepEqual(data.categories.map((c) => c.name), ['כריכים וטוסטים', 'מאפים', 'שייק פירות טבעי'], 'the live categories only, in menu order (no coffee)')
     const toasts = data.categories[0].items.find((i) => i.uid === 'toasts')
@@ -152,7 +152,7 @@ export function kioskApiStage(live) {
     assert.status(r, 200, 'count down')
     assert.equal(find(menu().draft, 'pastry', 'pastry-cinnamon').quantity, 2, 'draft')
     assert.equal(find(menu().published, 'pastry', 'pastry-cinnamon').quantity, 2, 'published: customers see it at once')
-    const back = await r.json()
+    const back = r.json
     assert.equal(back.categories[1].items[0].types[1].quantity, 2, 'the answer is the new list')
     assert.status(await set({ itemUid: 'pastry', typeUid: 'pastry-cheese', quantity: 0 }), 200, 'last one sold')
     assert.equal(find(menu().published, 'pastry', 'pastry-cheese').available, false, 'a count of 0 is sold out')
@@ -184,7 +184,7 @@ export function kioskApiStage(live) {
     const closed = await set({ itemUid: 'shake', typeUid: 'shake-banana', available: false })
     assert.status(closed, 403, 'closed: no live stock (the dashboard rule for anyone but the owner)')
     assert.equal(find(menu().published, 'shake', 'shake-banana').available, undefined, 'nothing changed while closed')
-    const list = await (await tablet('/api/kiosk/stock?device=givat-haviva-1', { method: 'GET', type: null })).json()
+    const list = (await tablet('/api/kiosk/stock?device=givat-haviva-1', { method: 'GET', type: null })).json
     assert.equal(list.open, false, 'the list says closed, so the panel can say so')
     hours(true)
     live().standin.state.limits.clear()
