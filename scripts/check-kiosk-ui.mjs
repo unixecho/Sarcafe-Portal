@@ -70,9 +70,17 @@ const makeContent = ({ settings = {}, ads = ADS, hours = null, kiosk = {}, branc
     branchTiming: { idleSeconds: 60, graceSeconds: 10, slideSeconds: 7 }, settings: merged(settings), settingsUpdatedAt: updatedAt, ...kiosk },
 })
 
-const mock = { content: null, shift: null, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null }
+const mock = { content: null, shift: null, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: null, stockWrites: [], stockOpen: true }
+// the live-stock list as /api/kiosk/stock answers it (src/lib/kiosk/stock.ts stockView)
+const STOCK = () => [
+  { id: 'sandwiches', name: 'כריכים וטוסטים', items: [
+    { uid: 'toasts', name: 'טוסטים', available: true, quantity: null, types: [{ uid: 'caprese', name: 'קפרזה', available: true, quantity: null }, { uid: 'cheddar', name: "מוצרלה וצ'דר", available: false, quantity: null }] },
+    { uid: 'sandwiches', name: 'כריכים', available: true, quantity: 4, types: [] }] },
+  { id: 'pastries', name: 'מאפים', items: [{ uid: 'pastry', name: 'מאפה רגיל', available: true, quantity: null, types: [{ uid: 'cheese', name: 'גבינית', available: true, quantity: 1 }] }] },
+  { id: 'shakes', name: 'שייק פירות טבעי', items: [{ uid: 'shake', name: 'שייק', available: true, quantity: null, types: [{ uid: 'banana', name: 'בננה תמר', available: true, quantity: null }] }] },
+]
 function resetMock() {
-  Object.assign(mock, { content: makeContent(), shift: { ok: true, asOf: new Date().toISOString(), people: ['דנה', 'יוסי'], closesAt: '22:00' }, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null })
+  Object.assign(mock, { content: makeContent(), shift: { ok: true, asOf: new Date().toISOString(), people: ['דנה', 'יוסי'], closesAt: '22:00' }, shiftStatus: 200, log: [], reports: [], saves: [], deviceReply: null, reportReply: null, stock: STOCK(), stockWrites: [], stockOpen: true })
 }
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2' }
 const server = createServer((req, res) => {
@@ -86,6 +94,25 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/kiosk/shift') {
     if (req.headers['x-kiosk-key'] !== 'test-key') return json(401, { ok: false })
     return mock.shift && mock.shiftStatus === 200 ? json(200, mock.shift) : json(mock.shiftStatus, { ok: false })
+  }
+  if (url.pathname === '/api/kiosk/stock') {
+    let text = ''
+    req.on('data', (c) => { text += c })
+    req.on('end', () => {
+      if (req.headers['x-kiosk-key'] !== 'test-key') return json(401, { ok: false })
+      if (req.method === 'GET') return json(200, { ok: true, open: mock.stockOpen, categories: mock.stock })
+      const body = JSON.parse(text || '{}')
+      mock.stockWrites.push(body)
+      if (!mock.stockOpen) return json(403, { ok: false, error: 'closed' })
+      for (const c of mock.stock) for (const i of c.items) {
+        if (i.uid !== body.itemUid) continue
+        const o = body.typeUid ? i.types.find((t) => t.uid === body.typeUid) : i
+        if (body.quantity !== undefined) o.quantity = body.quantity
+        o.available = body.quantity === 0 ? false : body.available ?? o.available
+      }
+      return json(200, { ok: true, categories: mock.stock })
+    })
+    return undefined
   }
   if (url.pathname === '/api/kiosk/device') {
     let text = ''
@@ -680,7 +707,7 @@ console.log('\nthe control panel')
   check('it opens with the right token', (await ev(page, () => window.KioskAdmin.open('tok'))) === true && (await ev(page, () => window.KioskAdmin.isOpen)) === true)
   await page.waitForTimeout(200)
   const tabs = await ev(page, () => [...document.querySelectorAll('.kx-tabs button')].map((b) => b.textContent))
-  check('nine tabs', JSON.stringify(tabs) === JSON.stringify(['סקירה', 'מסכים', 'מודעות', 'זמנים', 'שפות', 'סוללה', 'מכשיר', 'עדכונים', 'אבחון']), tabs)
+  check('ten tabs (live stock second)', JSON.stringify(tabs) === JSON.stringify(['סקירה', 'מלאי', 'מסכים', 'מודעות', 'זמנים', 'שפות', 'סוללה', 'מכשיר', 'עדכונים', 'אבחון']), tabs)
   await shot(page, 'ui-panel-overview')
   const cards = await ev(page, () => document.querySelector('.kx-cards').textContent)
   check('the overview shows the charge, the tablet and the branch', /61%/.test(cards) && /קיוסק גבעת חביבה/.test(cards) && /גבעת חביבה/.test(cards), cards)
@@ -780,6 +807,44 @@ console.log('\nthe control panel')
   // on a desktop (no app) the test hook opens it; on the tablet's own origin it never would
   page = await open({ query: '?kioskAdmin=open' })
   check('a desktop browser can open it for testing (?kioskAdmin=open); the kiosk\'s own address cannot', (await ev(page, () => window.KioskAdmin.isOpen)) === true)
+  await page.close()
+}
+
+console.log('\nlive stock from the panel (the dashboard\'s live list, edited on the tablet)')
+{
+  resetMock()
+  let page = await open({ staff: true })
+  await page.evaluate(() => window.KioskAdmin.open('tok'))
+  await page.locator('.kx-tabs button', { hasText: 'מלאי' }).click()
+  await page.locator('.kx-stock').first().waitFor({ timeout: 5000 })
+  const titles = await page.locator('.kx-sec').allInnerTexts()
+  check('the stock tab lists the live categories with every type (sandwiches & toasts, pastries, shakes)', ['כריכים וטוסטים · טוסטים', 'כריכים וטוסטים', 'מאפים · מאפה רגיל', 'שייק פירות טבעי · שייק'].every((t) => titles.some((x) => x.startsWith(t))), titles)
+  check('...asked for with the kiosk key (no tablet name configured = the portal\'s default tablet)', mock.log.some((l) => l.path === '/api/kiosk/stock' && l.method === 'GET' && l.key === 'test-key'), mock.log.filter((l) => l.path === '/api/kiosk/stock'))
+  const cheddar = page.locator('.kx-stock', { hasText: "מוצרלה וצ'דר" })
+  check('a sold-out type reads "אזל"', /אזל/.test(await cheddar.innerText()) && (await cheddar.getAttribute('class')).includes('is-out'))
+  await page.getByRole('button', { name: 'יותר גבינית' }).click()
+  // wait for the save to finish (the row says "שומר…" meanwhile)
+  const saved = () => page.waitForFunction(() => document.querySelector('.kx-stock') && ![...document.querySelectorAll('.kx-stock')].some((r) => r.textContent.includes('שומר')), null, { timeout: 5000 }).catch(() => {})
+  await saved()
+  check('+ on a counted type sends the new count for that type', JSON.stringify(mock.stockWrites.at(-1)) === JSON.stringify({ itemUid: 'pastry', typeUid: 'cheese', quantity: 2 }), mock.stockWrites)
+  const cheeseRow = await page.locator('.kx-stock', { hasText: 'גבינית' }).innerText()
+  check('...and the row shows it', /במלאי · 2/.test(cheeseRow), cheeseRow)
+  await cheddar.getByRole('switch').click()
+  await page.waitForTimeout(100); await saved()
+  check('the switch puts a sold-out type back in stock', JSON.stringify(mock.stockWrites.at(-1)) === JSON.stringify({ itemUid: 'toasts', typeUid: 'cheddar', available: true }) && /במלאי/.test(await cheddar.innerText()), mock.stockWrites.at(-1))
+  await page.getByRole('button', { name: 'פחות כריכים' }).click()
+  await page.waitForTimeout(100); await saved()
+  check('an item without types is counted on its own row', mock.stockWrites.at(-1).itemUid === 'sandwiches' && mock.stockWrites.at(-1).typeUid === null && mock.stockWrites.at(-1).quantity === 3)
+  check('no page errors in the stock tab', page.errors.length === 0, page.errors)
+  await page.close()
+
+  resetMock()
+  mock.stockOpen = false
+  page = await open({ staff: true })
+  await page.evaluate(() => window.KioskAdmin.open('tok'))
+  await page.locator('.kx-tabs button', { hasText: 'מלאי' }).click()
+  await page.locator('.kx-stock').first().waitFor({ timeout: 5000 })
+  check('closed: the tab says so and nothing can be changed', /הסניף סגור/.test(await page.locator('.kx-body').innerText()) && (await page.locator('.kx-stock button:not([disabled])').count()) === 0)
   await page.close()
 }
 

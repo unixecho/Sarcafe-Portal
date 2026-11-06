@@ -7,6 +7,7 @@ export const ID = {
   gh: '11111111-1111-4111-8111-111111111111',
   maor: '22222222-2222-4222-8222-222222222222',
   kioskTablet: '33333333-3333-4333-8333-333333333333',
+  ghMenu: '44444444-4444-4444-8444-444444444444',
   owner: 'a0000000-0000-4000-8000-000000000001',
   dev: 'a0000000-0000-4000-8000-000000000002',
   gm: 'a0000000-0000-4000-8000-000000000003',
@@ -106,5 +107,26 @@ export function seed() {
     kiosk_settings: [],
     kiosk_ads: [],
     kiosk_feedback_options: [],
+    // Givat Haviva's menu, shaped like the real one: the live-stock categories (liveOnTablet) and one that is not
+    menus: [{ id: ID.ghMenu, slug: 'givat-haviva', branch_id: ID.gh, draft: ghMenu(), published: ghMenu(), updated_at: '2026-01-01T00:00:00Z' }],
+    menu_audit: [],
+  }
+}
+
+function ghMenu() {
+  return {
+    categories: [
+      { id: 'hot', title: { he: 'קפה חם' }, items: [{ uid: 'coffee-1', he: 'הפוך קטן', price: 12 }] },
+      { id: 'sandwiches', title: { he: 'כריכים וטוסטים' }, liveOnTablet: true, items: [
+        { uid: 'toasts', he: 'טוסטים', types: [{ uid: 'toast-caprese', he: 'קפרזה' }, { uid: 'toast-cheddar', he: "מוצרלה וצ'דר", available: false }] },
+        { uid: 'sandwiches', he: 'כריכים', quantity: 4 },
+      ] },
+      { id: 'pastries', title: { he: 'מאפים' }, liveOnTablet: true, items: [
+        { uid: 'pastry', he: 'מאפה רגיל', types: [{ uid: 'pastry-cheese', he: 'גבינית', quantity: 1 }, { uid: 'pastry-cinnamon', he: 'דניש קינמון', quantity: 3 }] },
+      ] },
+      { id: 'shakes', title: { he: 'שייק פירות טבעי' }, liveOnTablet: true, items: [
+        { uid: 'shake', he: 'שייק', types: [{ uid: 'shake-berry', he: 'תות, אוכמניות, דובדבן ורכז תפוח' }, { uid: 'shake-banana', he: 'בננה תמר' }] },
+      ] },
+    ],
   }
 }

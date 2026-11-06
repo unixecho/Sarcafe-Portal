@@ -61,3 +61,26 @@ Without migration `20261105223000` the owner routes answer 503 "not ready" and t
 (`javac` + `java`), the wiring. `kiosk-checks`: every `check:kiosk-*` script. `kiosk-api`: the key, commands end to end, the PIN round trip,
 the PIN rules and the rate limit, owner-only, outage. `kiosk-ui`: the dashboard in Chromium, the switch both ways (owner and developer),
 saving settings, the remote actions, access, contrast in all five looks, iPhone and tablet widths.
+
+## Live stock from the kiosk (owner, 2026-11-06)
+"I want the kiosk to be able to handle the live stock like the dashboard does so I can update the menu quantities from the dashboard
+and or the kiosk." The tablet's control panel has a **מלאי** tab (second): the SAME list as the dashboard's live-stock page
+(`/owner/tablet`): the categories marked live in the menu editor (`liveOnTablet`: today כריכים וטוסטים, מאפים, שייק פירות טבעי,
+עוגיות), every item and every type, each with in stock / sold out and, when counted, − / + on the count.
+- **One write path for both:** `POST /api/kiosk/stock` calls the same `set_availability()` as the dashboard: draft and the published
+  menu together, so customers see it at once (the menu realtime broadcast); a count of 0 is sold out; every change is in the menu
+  audit log as "(מהקיוסק)" with the tablet's name.
+- **The dashboard's rules for a non-owner hold:** only during opening hours (closed → 403; the tab says the branch is closed and the
+  controls are off); only items of the live categories (anything else → 404); the tablet's own branch only (its row in
+  `kiosk_devices`); the kiosk key; strict input; 240 changes per tablet per 10 minutes.
+- `GET /api/kiosk/stock?device=` gives the list and whether the branch is open. No tablet name = the portal's default tablet.
+- No migration. Reaches the tablet with the next signed page bundle (`kiosk-admin.js`, `kiosk-admin.css`).
+- A type the menu does not have cannot be shown: today **כריכים has no types** (one counted item); add them in the menu editor
+  and they appear in both lists.
+
+## The staff PIN on the tablet (2026-11-06)
+App 0.3 closes the PIN dialog **without a word on a wrong PIN** (a correct one always opens the panel or the fallback menu), so a
+wrong PIN looked like "nothing happens". App 0.4 says "Wrong PIN" (and the lockout time). The PIN was replaced when the tablet was
+re-provisioned on app 0.3 (2026-11-05, see handoff); the dashboard's reset reaches the tablet only from app 0.4. Until then, from the
+PC with the tablet on USB: `adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es pin <6-8 digits>` (also clears
+the lockout).

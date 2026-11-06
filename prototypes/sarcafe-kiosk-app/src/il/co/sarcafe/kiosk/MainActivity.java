@@ -466,6 +466,12 @@ public class MainActivity extends Activity {
         long lock = StaffPin.lockoutMs(failures);
         prefs.edit().putInt("pin_failures", failures)
             .putLong("pin_locked_until", lock > 0 ? System.currentTimeMillis() + lock : 0).apply();
+        // a wrong PIN used to close the dialog without a word, which looked like "nothing happens" (owner, 2026-11-06)
+        new AlertDialog.Builder(this)
+            .setMessage(lock > 0
+                ? "Wrong PIN. Locked for " + ((lock + 59999) / 60000) + " min."
+                : "Wrong PIN. Try again.")
+            .setPositiveButton("OK", null).show();
     }
 
     // ---- the control panel ---------------------------------------------------------------------------------------

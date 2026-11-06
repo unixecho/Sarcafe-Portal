@@ -138,6 +138,27 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
   const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_devices: [['id'], ['slug']], ...keys }
 
   const RPC = {
+    // supabase/migrations 012 + 014: one item's (or type's) available / quantity in draft, and in published when p_publish;
+    // a quantity of 0 also marks it sold out (patch_availability_fields)
+    set_availability({ p_menu_id, p_item_uid, p_type_uid, p_available, p_quantity, p_publish }) {
+      const menu = table('menus').find((m) => m.id === p_menu_id)
+      if (!menu) throw Object.assign(new Error(`menu ${p_menu_id} not found`), { code: 'P0001' })
+      const patch = (o) => {
+        if (p_quantity !== null && p_quantity !== undefined) o.quantity = p_quantity
+        const available = p_quantity === 0 ? false : p_available
+        if (available !== null && available !== undefined) o.available = available
+      }
+      const apply = (doc) => {
+        for (const c of doc?.categories ?? []) for (const i of c.items ?? []) {
+          if (i.uid !== p_item_uid) continue
+          if (!p_type_uid) patch(i)
+          else for (const t of i.types ?? []) if (t.uid === p_type_uid) patch(t)
+        }
+      }
+      apply(menu.draft)
+      if (p_publish) apply(menu.published)
+      return null
+    },
     check_rate_limit({ p_key, p_max, p_window_seconds }) {
       const now = Date.now(); const list = (state.limits.get(p_key) ?? []).filter((t) => now - t < p_window_seconds * 1000)
       if (list.length >= p_max) { state.limits.set(p_key, list); return false }

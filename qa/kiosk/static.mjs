@@ -103,6 +103,11 @@ public final class RemotePinTest {
     const page = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-device.js'), 'utf8')
     assert.ok(/localStorage\.setItem\(DONE_KEY, command\.id\)/.test(page) && page.indexOf('localStorage.setItem(DONE_KEY') < page.indexOf("command.kind === 'reload'"), 'the command is marked done before it runs (no reload loop)')
     assert.ok(/body\.commandDone = done/.test(page), 'the next report says it was done')
+    const main = fs.readFileSync(path.join(root, JAVA_SRC, 'MainActivity.java'), 'utf8')
+    const check = main.slice(main.indexOf('private void checkPin('), main.indexOf('// ---- the control panel'))
+    assert.ok(/Wrong PIN/.test(check) && /\.show\(\)/.test(check), 'a wrong PIN says so (it used to close the dialog without a word)')
+    const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')
+    assert.ok(/\['stock', 'מלאי'\]/.test(admin) && /\$\{C\.apiBase\}\/stock/.test(admin) && /C\.headers\(\)/.test(admin), 'the panel has the live-stock tab, on the portal with the kiosk key')
   })
 
   return stage

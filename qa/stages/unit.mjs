@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { createStage, assert } from '../lib/harness.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/qa/digest.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/qa/digest.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -21,7 +21,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts') }
 }
 
 export function unitStage(root) {
@@ -94,6 +94,24 @@ export function unitStage(root) {
     assert.ok(!r.remoteActionSchema.safeParse({ action: 'pin', slug: '../x', pin: '583917', confirm: '583917' }).success, 'bad tablet name refused')
     assert.equal(r.readCommand({ id: 'x', kind: 'reload', at: 'now' })?.kind, 'reload')
     assert.equal(r.readCommand({ id: 'x', kind: 'rm', at: 'now' }), null, 'a stored unknown kind is ignored')
+  })
+  stage.test('kiosk-stock-rules', 'מלאי מהקיוסק: רק הקטגוריות של המלאי החי, מצב כל סוג (כמות 0 = אזל), ורק פריט מהרשימה ניתן לעדכון', 'unit', async () => {
+    const s = m.stock
+    const doc = { categories: [
+      { id: 'hot', title: { he: 'קפה חם' }, items: [{ uid: 'c1', he: 'הפוך' }] },
+      { id: 'p', title: { he: 'מאפים' }, liveOnTablet: true, items: [{ uid: 'p1', he: 'מאפה', types: [{ uid: 't1', he: 'גבינית', quantity: 0 }, { uid: 't2', he: 'שקדים', available: false }, { uid: 't3', he: 'קינמון', quantity: 2 }] }, { he: 'בלי מזהה' }] },
+    ] }
+    const view = s.stockView(doc)
+    assert.deepEqual(view.map((c) => c.name), ['מאפים'], 'only live categories')
+    assert.equal(view[0].items.length, 1, 'an item without a uid is left out')
+    assert.deepEqual(view[0].items[0].types.map((t) => [t.available, t.quantity]), [[false, 0], [false, null], [true, 2]], 'count 0 and the flag both mean sold out')
+    assert.equal(s.stockLabel(doc, 'p1', 't3'), 'מאפה — קינמון')
+    assert.equal(s.stockLabel(doc, 'c1', null), null, 'a non-live item cannot be written')
+    assert.equal(s.stockLabel(doc, 'p1', 'nope'), null)
+    assert.deepEqual(s.stockView(null), [])
+    const ok = (b) => s.kioskStockWriteSchema.safeParse(b).success
+    assert.ok(ok({ itemUid: 'p1', typeUid: 't1', quantity: 3 }) && ok({ itemUid: 'p1', available: false }))
+    assert.ok(!ok({ itemUid: 'p1' }) && !ok({ itemUid: 'p1', quantity: -1 }) && !ok({ itemUid: 'p1', quantity: 1000 }) && !ok({ itemUid: 'a b', available: true }) && !ok({ itemUid: 'p1', available: true, menu: 'x' }), 'bad input refused')
   })
   stage.test('qa-digest', 'הודעת 07:00: הודעה אחת, שני דוחות, עבר/נכשל, וקישור לבעיות כשמשהו נכשל; דוח שלא הגיע = כישלון', 'unit', async () => {
     const d = m.digest

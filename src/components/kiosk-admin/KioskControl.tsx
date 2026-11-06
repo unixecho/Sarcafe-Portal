@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button, Switch } from 'glisse'
-import { BatteryCharging, BatteryMedium, ChevronLeft, KeyRound, ListChecks, Megaphone, RefreshCw, RotateCw, Tablet, Users, Wifi, WifiOff } from 'lucide-react'
+import { BatteryCharging, BatteryMedium, ChevronLeft, KeyRound, ListChecks, Megaphone, Package, RefreshCw, RotateCw, Tablet, Users, Wifi, WifiOff } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import Seg from '@/components/glass/Seg'
 import Pill from '@/components/glass/Pill'
@@ -167,6 +167,7 @@ export default function KioskControl({ initialDevices, branches, initialRemote }
       ))}
 
       <nav className="gl-surf gl-card" aria-label="עוד בקיוסק">
+        <Link className="gl-row-card" href="/owner/tablet"><span className="gl-ico" aria-hidden="true"><Package size={20} /></span><span className="gl-row-card__copy"><strong>מלאי חי</strong><small>כריכים, מאפים ושייקים: במלאי, אזל וכמה נשארו. אותה רשימה כמו לשונית "מלאי" בקיוסק</small></span><ChevronLeft size={18} className="gl-chev" aria-hidden="true" /></Link>
         <Link className="gl-row-card" href="/owner/kiosk"><span className="gl-ico" aria-hidden="true"><Megaphone size={20} /></span><span className="gl-row-card__copy"><strong>תוכן הקיוסק</strong><small>מודעות, זמנים, ימים חריגים, שם הטאבלט והסניף שלו</small></span><ChevronLeft size={18} className="gl-chev" aria-hidden="true" /></Link>
         <Link className="gl-row-card" href="/owner/kiosk/feedback"><span className="gl-ico" aria-hidden="true"><ListChecks size={20} /></span><span className="gl-row-card__copy"><strong>תוצאות ההצבעה</strong><small>מה הלקוחות בחרו בקיוסק</small></span><ChevronLeft size={18} className="gl-chev" aria-hidden="true" /></Link>
         <Link className="gl-row-card" href="/owner/waitlist"><span className="gl-ico" aria-hidden="true"><Users size={20} /></span><span className="gl-row-card__copy"><strong>נרשמים למועדון</strong><small>מי נרשם בקיוסק, בהסכמתו</small></span><ChevronLeft size={18} className="gl-chev" aria-hidden="true" /></Link>

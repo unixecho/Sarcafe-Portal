@@ -147,12 +147,13 @@
 
   // ---- the tabs -----------------------------------------------------------------------------------------------------------
   const TABS = [
-    ['overview', 'סקירה'], ['display', 'מסכים'], ['ads', 'מודעות'], ['timing', 'זמנים'], ['lang', 'שפות'],
+    ['overview', 'סקירה'], ['stock', 'מלאי'], ['display', 'מסכים'], ['ads', 'מודעות'], ['timing', 'זמנים'], ['lang', 'שפות'],
     ['battery', 'סוללה'], ['device', 'מכשיר'], ['updates', 'עדכונים'], ['diag', 'אבחון'],
   ];
   // one 24-px outline icon per tab (stroke styled in kiosk-admin.css); the button text stays the label alone
   const TAB_ICONS = {
     overview: 'M4 11 12 4l8 7v9H4zM10 20v-6h4v6',
+    stock: 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10',
     display: 'M3 5h18v11H3zM8 20h8M12 16v4',
     ads: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M16 9.5h.01',
     timing: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
@@ -221,6 +222,93 @@
     if (!root || previewing) { paintStatus(); return; }
     root.querySelectorAll('[data-live]').forEach((node) => { const make = LIVE[node.dataset.live]; if (make) node.replaceWith(make()); });
     paintStatus();
+  }
+
+  // ---- live stock (owner, 2026-11-06): the dashboard's live-stock list, edited from here too ---------------------------------------
+  // GET/POST {apiBase}/stock (src/app/api/kiosk/stock): the categories marked live on the dashboard (sandwiches & toasts, pastries,
+  // shakes, cookies), each item and each of its types: in stock / sold out and, when counted, how many. The portal applies the
+  // dashboard's rules: only during opening hours, a count of 0 is sold out, every change is in the menu's audit log ("מהקיוסק").
+  let stock = { state: 'idle', open: true, categories: [], busy: '' };
+  const stockUrl = () => (C.apiBase ? `${C.apiBase}/stock` : '');
+  async function stockCall(method, payload) {
+    const url = stockUrl();
+    const headers = C.headers();
+    if (!url || !headers) return { ok: false, error: 'not_configured' };
+    const abort = new AbortController();
+    const cut = setTimeout(() => abort.abort(), 10000);
+    try {
+      // no name = the one tablet the portal already knows (like the device report): then the name is left out
+      const res = await fetch(method === 'GET' && C.device ? `${url}?device=${encodeURIComponent(C.device)}` : url, {
+        method, cache: 'no-store', signal: abort.signal,
+        headers: method === 'GET' ? headers : { 'Content-Type': 'application/json', ...headers },
+        body: method === 'GET' ? undefined : JSON.stringify({ device: C.device || undefined, ...payload }),
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) { data = null; }
+      return data && typeof data === 'object' ? { status: res.status, ...data } : { ok: false, status: res.status, error: 'bad_answer' };
+    } catch (_) {
+      return { ok: false, error: 'offline' };
+    } finally { clearTimeout(cut); }
+  }
+  async function loadStock() {
+    stock.state = 'loading';
+    if (tab === 'stock') render();
+    const r = await stockCall('GET');
+    if (r.ok && Array.isArray(r.categories)) stock = { state: 'ready', open: r.open !== false, categories: r.categories, busy: '' };
+    else stock.state = r.error === 'not_configured' ? 'no_key' : 'error';
+    if (tab === 'stock') render();
+  }
+  const STOCK_ERRORS = { closed: 'מחוץ לשעות הפעילות: אפשר לעדכן מלאי רק כשהסניף פתוח.', not_live: 'הפריט הזה לא ברשימת המלאי של הסניף.', rate_limited: 'יותר מדי שינויים ברגע. נסו שוב בעוד דקה.', offline: 'אין חיבור לרשת. השינוי לא נשמר.' };
+  async function changeStock(key, payload) {
+    if (stock.busy) return;
+    stock.busy = key;
+    render();
+    const r = await stockCall('POST', payload);
+    stock.busy = '';
+    if (r.ok && Array.isArray(r.categories)) { stock.categories = r.categories; say('נשמר. התפריט מתעדכן מיד.'); }
+    else { say(STOCK_ERRORS[r.error] || 'השינוי לא נשמר. נסו שוב.'); if (r.error === 'closed') stock.open = false; }
+    render();
+  }
+  function stockRow(label, entry, itemUid, typeUid) {
+    const key = `${itemUid}:${typeUid || ''}`;
+    const busy = stock.busy === key;
+    const off = !stock.open || !!stock.busy;
+    const q = entry.quantity;
+    const send = (payload) => changeStock(key, { itemUid, typeUid: typeUid || null, ...payload });
+    const counter = h('div', { class: 'kx-stepper', 'aria-label': `כמות: ${label}` },
+      h('button', { type: 'button', 'aria-label': `פחות ${label}`, disabled: off || !(q > 0), onclick: () => send({ quantity: q - 1 }) }, '−'),
+      h('output', { class: 'kx-num' }, q === null ? '—' : `${q}`),
+      h('button', { type: 'button', 'aria-label': `יותר ${label}`, disabled: off || q >= 999, onclick: () => send({ quantity: q === null ? 1 : q + 1 }) }, '+'));
+    const sw = h('button', { type: 'button', role: 'switch', 'aria-checked': String(entry.available), class: 'kx-switch', 'aria-label': `${label}: ${entry.available ? 'במלאי' : 'אזל'}`, disabled: off,
+      onclick: () => send(entry.available ? { available: false } : (q === 0 ? { available: true, quantity: 1 } : { available: true })) }, h('i'));
+    const state = busy ? 'שומר…' : entry.available ? (q === null ? 'במלאי' : `במלאי · ${q}`) : 'אזל';
+    return h('div', { class: `kx-row kx-stock${entry.available ? '' : ' is-out'}` }, textOf(label, state), h('div', { class: 'kx-end' }, counter, sw));
+  }
+  function stockTab() {
+    if (stock.state === 'idle') { setTimeout(loadStock, 0); return [note('טוען את המלאי…')]; }
+    if (stock.state === 'loading' && !stock.categories.length) return [note('טוען את המלאי…')];
+    if (stock.state === 'no_key') return [note('הקיוסק לא מחובר לפורטל (אין כתובת או מפתח). אפשר לעדכן מלאי מלוח הבקרה של הבעלים.', 'warn')];
+    if (stock.state === 'error' && !stock.categories.length) return [note('לא הצלחנו לטעון את המלאי.', 'warn'), action('לנסות שוב', null, () => loadStock())];
+    const out = [
+      stock.open ? note('אותה רשימה כמו המלאי החי בלוח הבקרה: שינוי כאן מופיע בתפריט מיד, וגם בלוח הבקרה. כמות 0 = אזל.')
+        : note('הסניף סגור עכשיו: אפשר לראות את המלאי, ולעדכן רק בשעות הפעילות.', 'warn'),
+    ];
+    if (!stock.categories.length) out.push(note('אין קטגוריות של מלאי חי בסניף. בוחרים אותן בעורך התפריט בלוח הבקרה.'));
+    stock.categories.forEach((c) => {
+      let header = '';
+      const head = (title) => { if (header !== title) { header = title; out.push(section(title)); } };
+      c.items.forEach((item) => {
+        if (item.types.length) {
+          head(`${c.name} · ${item.name}`);
+          item.types.forEach((t) => out.push(stockRow(t.name, t, item.uid, t.uid)));
+        } else {
+          head(c.name);
+          out.push(stockRow(item.name, item, item.uid, null));
+        }
+      });
+    });
+    out.push(action('רענון המלאי', 'טוען שוב מהפורטל', () => loadStock()));
+    return out;
   }
 
   function overview() {
@@ -501,10 +589,10 @@
     if (!root) return;
     const scroller = root.querySelector('.kx-body');
     const top = scroller ? scroller.scrollTop : 0;
-    const rows = groups([{ overview, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]()]);
+    const rows = groups([{ overview, stock: stockTab, display, ads, timing, lang: langs, battery, device, updates, diag }[tab]()]);
     const tabs = h('nav', { class: 'kx-tabs', role: 'tablist' }, TABS.map(([id, label]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': String(id === tab), class: id === tab ? 'is-on' : '',
-      onclick: () => { tab = id; if (id === 'device' || id === 'updates' || id === 'diag') loadInfo(); render(); const b = root.querySelector('.kx-body'); if (b) b.scrollTop = 0; },
+      onclick: () => { tab = id; if (id === 'device' || id === 'updates' || id === 'diag') loadInfo(); if (id === 'stock') { loadStock(); return; } render(); const b = root.querySelector('.kx-body'); if (b) b.scrollTop = 0; },
     }, svg(TAB_ICONS[id]), label)));
     const logo = h('img', { src: 'sarcafe-logo.png', alt: '', width: '38', height: '38', draggable: 'false' });
     logo.addEventListener('error', () => { logo.hidden = true; });

@@ -205,3 +205,9 @@ body.kx-admin-open .kiosk-tray { display: none; }
   .kx-col { width: min(100%, 880px); }
 }
 @media (max-width: 520px) { .kx-head .kx-btn { display: none; } .kx-battery { flex-direction: column; align-items: flex-start; } }
+
+/* live stock (the מלאי tab): sold out reads red (owner: bad news red), in stock keeps the green switch; controls wait while saving */
+.kx-stock.is-out .kx-text small { color: var(--kx-bad); font-weight: 700; }
+.kx-stock .kx-end { gap: 12px; }
+.kx-stock .kx-num { min-width: 2.4em; text-align: center; }
+.kx-switch:disabled { opacity: .45; }
