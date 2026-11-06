@@ -75,6 +75,10 @@ public final class RemotePinTest {
     check("the tablet name defaults to the first tablet", PinReset.deviceOrDefault(null).equals("givat-haviva-1"));
     check("a bad tablet name falls back", PinReset.deviceOrDefault("../x").equals("givat-haviva-1"));
     check("a good tablet name is kept", PinReset.deviceOrDefault("maor-2").equals("maor-2"));
+    check("QR install: only our portal", EnrollRules.acceptablePortal("https://sarcafe-portal.vercel.app") && EnrollRules.acceptablePortal("https://sarcafe-portal.vercel.app/"));
+    check("QR install: another portal is refused", !EnrollRules.acceptablePortal("https://evil.example") && !EnrollRules.acceptablePortal("http://sarcafe-portal.vercel.app") && !EnrollRules.acceptablePortal("https://sarcafe-portal.vercel.app.evil.example"));
+    check("QR install: a 43-character code", EnrollRules.acceptableCode(rep("a", 43)) && !EnrollRules.acceptableCode(rep("a", 42)) && !EnrollRules.acceptableCode(rep("a", 42) + "/"));
+    check("QR install: settings of the right shape only", EnrollRules.acceptableChannel("menu:givat-haviva") && !EnrollRules.acceptableChannel("menu givat") && EnrollRules.acceptableKey("qa-kiosk-key-0123") && !EnrollRules.acceptableKey("short") && !EnrollRules.acceptableHttps("http://x"));
     System.out.println(fails == 0 ? "OK" : "FAILED " + fails);
     System.exit(fails == 0 ? 0 : 1);
   }
@@ -82,7 +86,7 @@ public final class RemotePinTest {
       const testDir = path.join(work, 'src')
       fs.mkdirSync(testDir, { recursive: true })
       fs.writeFileSync(path.join(testDir, 'RemotePinTest.java'), test)
-      const srcs = ['OtaRules.java', 'StaffPin.java', 'PinReset.java'].map((f) => path.join(root, JAVA_SRC, f))
+      const srcs = ['OtaRules.java', 'StaffPin.java', 'PinReset.java', 'EnrollRules.java'].map((f) => path.join(root, JAVA_SRC, f))
       const c = await run(compiler, ['--release', '8', '-Xlint:-options', '-encoding', 'UTF-8', '-d', path.join(work, 'out'), ...srcs, path.join(testDir, 'RemotePinTest.java')], { cwd: root, timeout: 120_000 })
       assert.ok(c.code === 0, `javac: ${c.output.split('\n').filter((l) => /error/.test(l)).slice(0, 4).join(' | ')}`)
       const java = path.join(path.dirname(compiler), 'java')
@@ -106,6 +110,12 @@ public final class RemotePinTest {
     const main = fs.readFileSync(path.join(root, JAVA_SRC, 'MainActivity.java'), 'utf8')
     const check = main.slice(main.indexOf('private void checkPin('), main.indexOf('// ---- the control panel'))
     assert.ok(/Wrong PIN/.test(check) && /\.show\(\)/.test(check), 'a wrong PIN says so (it used to close the dialog without a word)')
+    const manifest = fs.readFileSync(path.join(root, APP, 'AndroidManifest.xml'), 'utf8')
+    assert.ok(/GET_PROVISIONING_MODE/.test(manifest) && /ADMIN_POLICY_COMPLIANCE/.test(manifest) && /PROFILE_PROVISIONING_COMPLETE/.test(manifest), 'the app answers Android\'s QR setup (mode, compliance, complete)')
+    assert.ok((manifest.match(/android:permission="android\.permission\.BIND_DEVICE_ADMIN"/g) ?? []).length >= 3, 'only the system can start those steps')
+    const enrollJava = fs.readFileSync(path.join(root, JAVA_SRC, 'Enrollment.java'), 'utf8')
+    assert.ok(/setInstanceFollowRedirects\(false\)/.test(enrollJava) && /acceptablePortal/.test(enrollJava) && /remove\(CODE\)/.test(enrollJava), 'the install code goes only to our portal, no redirects, and is forgotten once used')
+    assert.ok(/Enrollment\.start\(this, configChanged\)/.test(main), 'the kiosk asks for its settings at start')
     const receiver = fs.readFileSync(path.join(root, JAVA_SRC, 'KioskConfigReceiver.java'), 'utf8')
     assert.ok(/; PIN set/.test(receiver) && /; PIN NOT set/.test(receiver), 'adb says whether the PIN was set (it used to say "nothing changed" either way)')
     const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')

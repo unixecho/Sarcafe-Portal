@@ -215,6 +215,9 @@ function apkMode(opts) {
   const file = `sarcafe-kiosk-${code}.apk`
   copyFileSync(apk, join(dir, file))
   const latest = { versionCode: code, versionName: name || String(code), url: file, sha256: sha256(data), size: data.length }
+  // the signing certificate's SHA-256: what Android's QR setup checks before it installs (src/lib/kiosk/enroll.ts, install wizard)
+  const cert = typeof opts['cert-sha256'] === 'string' ? opts['cert-sha256'].replace(/:/g, '').toLowerCase() : null
+  if (cert !== null) { if (!/^[0-9a-f]{64}$/.test(cert)) throw new Error('--cert-sha256 must be 64 hex'); latest.certSha256 = cert }
   writeFileSync(latestFile, `${JSON.stringify(latest, null, 2)}\n`)
   console.log(`kiosk-ota: APK ${latest.versionName} (${code}), ${Math.round(data.length / 1024)} KB -> public/kiosk-ota/apk/${file}; commit public/kiosk-ota/apk/ and push`)
 }

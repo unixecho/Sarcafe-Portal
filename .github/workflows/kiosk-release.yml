@@ -132,7 +132,8 @@ jobs:
           prev=$(node -p "require('./public/kiosk-ota/apk/latest.json').versionCode")
           code=$((prev + 1)); name="0.$code"
           SARCAFE_BUILD_TOOLS=$BT_VERSION SARCAFE_PLATFORM=$PLATFORM bash prototypes/sarcafe-kiosk-app/build.sh "$code" "$name" "$RUNNER_TEMP/kiosk-build"
-          node scripts/publish-kiosk-ota.mjs apk --apk "$RUNNER_TEMP/kiosk-build/sarcafe-kiosk.apk" --version-code "$code" --version-name "$name"
+          cert=$("$ANDROID_HOME/build-tools/$BT_VERSION/apksigner" verify --print-certs "$RUNNER_TEMP/kiosk-build/sarcafe-kiosk.apk" | grep -m1 'certificate SHA-256 digest' | awk '{print $NF}')
+          node scripts/publish-kiosk-ota.mjs apk --apk "$RUNNER_TEMP/kiosk-build/sarcafe-kiosk.apk" --version-code "$code" --version-name "$name" --cert-sha256 "$cert"
           echo "App $name ($code) built and signed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Sign the page bundle

@@ -110,6 +110,7 @@ export function seed() {
     // Givat Haviva's menu, shaped like the real one: the live-stock categories (liveOnTablet) and one that is not
     menus: [{ id: ID.ghMenu, slug: 'givat-haviva', branch_id: ID.gh, draft: ghMenu(), published: ghMenu(), updated_at: '2026-01-01T00:00:00Z' }],
     menu_audit: [],
+    kiosk_enrollments: [],
   }
 }
 

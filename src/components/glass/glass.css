@@ -370,3 +370,19 @@ html[data-task] :is(.gl-dock, .gl-dock-spacer) { display: none; }
   background: color-mix(in srgb, var(--bg) 92%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 14px 34px rgba(0, 0, 0, .4); }
 .gl-savebar > span { flex: 1; min-width: 0; font-size: 0.84rem; }
 html[data-dock] .gl-savebar { bottom: calc(max(10px, calc(env(safe-area-inset-bottom, 0px) - 12px)) + 80px); }
+
+/* the kiosk install wizard (/owner/kiosk/install) */
+.ki { display: grid; gap: 14px; }
+.ki-form { display: grid; gap: 12px; }
+.ki-input { min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; width: 100%; box-sizing: border-box; }
+.ki-input--ltr { direction: ltr; text-align: left; }
+.ki-input--pin { direction: ltr; text-align: center; letter-spacing: 0.3em; font-size: 1.2rem; }
+.ki-input[aria-invalid='true'] { border-color: var(--gl-bad); }
+.ki-check { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; min-height: 44px; }
+.ki-check input { width: 22px; height: 22px; accent-color: var(--neon); }
+.ki-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ki-qr { justify-items: center; text-align: center; display: grid; gap: 12px; }
+.ki-qr__img { width: min(100%, 420px); height: auto; aspect-ratio: 1; border-radius: 18px; background: #fff; padding: 8px; box-sizing: border-box; }
+.ki-steps { margin: 0; padding-inline-start: 22px; display: grid; gap: 8px; text-align: start; font-size: 0.92rem; line-height: 1.5; }
+.ki-recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ki-recent li { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.9rem; }

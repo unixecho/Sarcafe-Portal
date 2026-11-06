@@ -132,6 +132,7 @@ public class MainActivity extends Activity {
         ota.onAppStart(otaHost); // may switch in a downloaded bundle or roll a failed one back, before the first load
         KioskConfigReceiver.onChanged = configChanged;
         load();
+        Enrollment.start(this, configChanged); // a QR-installed kiosk fetches its settings once (docs/SARCAFE_KIOSK_INSTALL.md)
     }
 
     /** After an adb configuration broadcast (main thread): apply what can change while running and reload. */
@@ -153,6 +154,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (System.currentTimeMillis() >= staffUntil) lockIfPermitted();
+        Enrollment.start(this, configChanged); // tried again when the Wi-Fi was not up at the first start
     }
 
     @Override
@@ -190,6 +192,7 @@ public class MainActivity extends Activity {
             o.put("rtKey", prefs.getString("rt_key", ""));
             o.put("rtChannel", prefs.getString("rt_channel", "menu:givat-haviva") /* the dashboard's own menu channel */);
             o.put("signupKey", prefs.getString("signup_key", ""));
+            o.put("device", prefs.getString("device", "")); // the tablet's name in the portal (a QR install sets it)
             o.put("perf", prefs.getString("perf", "auto"));
             o.put("perfEpoch", prefs.getInt("perf_epoch", 0));
             return o.toString();

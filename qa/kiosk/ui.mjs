@@ -3,6 +3,9 @@
 import { createStage, assert } from '../lib/harness.mjs'
 import { ID, seed } from '../standin/seed.mjs'
 import { auditScreen } from '../live/contrast.mjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const LOOKS = ['neon', 'glass', 'pass', 'crema', 'latte']
 const URL_PATH = '/owner/kiosk/control'
@@ -139,6 +142,48 @@ export function kioskUiStage(live, metrics) {
         assert.ok(m.bar <= m.first + 0.5, `${width}px: the top bar covers the first card`)
       } finally { await s.close() }
     }
+  }, { timeout: 180_000 })
+
+  stage.test('install-wizard', 'אשף ההתקנה בדפדפן: ממלאים סניף, שם וקוד, מקבלים QR והוראות, רואים "הותקן" כשהטאבלט סרק; קריא בכל המראות; רק בעלים', 'e2e', async () => {
+    fresh()
+    live().db('kiosk_enrollments').length = 0
+    const LATEST = path.join(fileURLToPath(new URL('../../', import.meta.url)), 'qa/.work/app/public/kiosk-ota/apk/latest.json')
+    const before = fs.readFileSync(LATEST, 'utf8')
+    fs.writeFileSync(LATEST, JSON.stringify({ ...JSON.parse(before), certSha256: 'cd'.repeat(32) }))
+    try {
+      const s = await open('owner', '/owner/kiosk/install')
+      try {
+        const p = s.page
+        await p.locator('[data-kiosk-install="form"]').waitFor({ timeout: 10000 })
+        await p.getByText(/מוכן להתקנה/).waitFor({ timeout: 8000 })
+        const create = p.getByRole('button', { name: 'יצירת קוד QR להתקנה' })
+        assert.ok(await create.isDisabled(), 'nothing to create before the PIN')
+        await p.getByLabel('קוד חדש (6 עד 8 ספרות)').fill('123456')
+        assert.ok(await p.getByText('רצף עולה או יורד קל מדי לנחש.').isVisible(), 'a guessable PIN is refused on the spot')
+        await p.getByLabel('קוד חדש (6 עד 8 ספרות)').fill('583917')
+        await p.getByLabel('שוב, לאישור').fill('583917')
+        await create.click()
+        await p.locator('[data-kiosk-install="qr"] img.ki-qr__img').waitFor({ timeout: 10000 })
+        assert.ok(await p.getByText(/מקישים 6 פעמים/).isVisible(), 'the steps for the tablet')
+        assert.equal(live().db('kiosk_enrollments').length, 1, 'one install code')
+        assert.ok(!JSON.stringify(live().db('kiosk_enrollments')).includes('583917'), 'the PIN is not stored')
+        live().db('kiosk_enrollments')[0].used_at = new Date().toISOString() // the tablet scanned it
+        await p.locator('[data-installed]').waitFor({ timeout: 12000 })
+        assert.deepEqual(s.errors, [], 'page errors')
+      } finally { await s.close() }
+      const problems = []
+      for (const look of LOOKS) {
+        const row = live().db('staff').find((x) => x.id === ID.owner); if (row) row.ui_theme = look
+        const s2 = await open('owner', '/owner/kiosk/install', { theme: look })
+        try { await s2.page.getByText(/מוכן להתקנה/).waitFor({ timeout: 8000 }); const r = await auditScreen(s2.page); for (const f of r.failures) problems.push(`${look}: "${f.text}" ${f.ratio}:1`) } finally { await s2.close() }
+      }
+      const row = live().db('staff').find((x) => x.id === ID.owner); if (row) row.ui_theme = 'glass'
+      assert.deepEqual(problems.slice(0, 6), [], 'text below AA contrast:')
+      for (const who of ['dana', 'gm']) {
+        const r = await live().call('/owner/kiosk/install', { as: who })
+        assert.ok([302, 303, 307, 308].includes(r.status) && !/kiosk\/install/.test(r.headers.get('location') ?? ''), `${who} kept out`)
+      }
+    } finally { fs.writeFileSync(LATEST, before) }
   }, { timeout: 180_000 })
 
   return stage

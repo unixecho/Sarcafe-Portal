@@ -16,6 +16,7 @@ export const PUBLIC_ROUTES = {
   'kiosk/content/feedback': 'the QR poll answer, anonymous, rate limited',
   'kiosk/menu': 'the published menu snapshot',
   'kiosk/waitlist': 'kiosk loyalty sign-up, kiosk key + rate limit',
+  'kiosk/enroll': 'a newly installed kiosk trades its ONE-TIME install code (from the owner\'s QR, 24 h, hashed, used once) for its settings; rate limited, fails closed',
   'loyaltysignup': 'public loyalty sign-up: same-origin, HMAC form token, rate limit',
   'order/[token]': 'a customer order, by its secret token',
   'order/recover': 'customer order recovery, rate limited',

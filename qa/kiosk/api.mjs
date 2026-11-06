@@ -3,7 +3,10 @@
 import { createStage, assert } from '../lib/harness.mjs'
 import { ID } from '../standin/seed.mjs'
 import { SECRETS } from '../live/app.mjs'
-import { pbkdf2Sync } from 'node:crypto'
+import { pbkdf2Sync, createHash } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const KEY = SECRETS.KIOSK_SIGNUP_KEY
 const LEAK = /stack|at \/|node_modules|PGRST|relation |select |postgres/i
@@ -191,6 +194,77 @@ export function kioskApiStage(live) {
     live().standin.state.limits.set('kiosk-stock:givat-haviva-1', Array.from({ length: 240 }, () => Date.now())) // 240 changes in 10 minutes
     assert.status(await set({ itemUid: 'shake', typeUid: 'shake-banana', available: false }), 429, 'a flood is limited')
     live().standin.state.limits.clear()
+  })
+
+  // the install wizard (src/app/api/owner/kiosk/install + src/app/api/kiosk/enroll): QR for a factory-reset tablet, one-time code
+  const LATEST = path.join(fileURLToPath(new URL('../../', import.meta.url)), 'qa/.work/app/public/kiosk-ota/apk/latest.json')
+  const CERT = 'ab'.repeat(32)
+  const withCert = async (fn) => {
+    const before = fs.readFileSync(LATEST, 'utf8')
+    fs.writeFileSync(LATEST, JSON.stringify({ ...JSON.parse(before), certSha256: CERT }))
+    try { return await fn() } finally { fs.writeFileSync(LATEST, before) }
+  }
+  const install = (as, body, origin = true) => live().call('/api/owner/kiosk/install', { method: 'POST', as, origin, body })
+  const enroll = (code, opts = {}) => live().call('/api/kiosk/enroll', { method: 'POST', body: { code }, headers: { 'content-type': 'application/json' }, ...opts })
+  const freshInstall = () => { fresh(); live().db('kiosk_enrollments').length = 0; const d = live().db('kiosk_devices'); for (let i = d.length - 1; i >= 0; i--) if (d[i].slug !== 'givat-haviva-1') d.splice(i, 1) }
+
+  stage.test('install-roundtrip', 'אשף ההתקנה: הבעלים יוצר QR, טאבלט שאופס מקבל פעם אחת את כל ההגדרות שלו (כתובת, ערוץ, מפתח, שם, קוד הצוות כטביעה)', 'e2e', async () => {
+    freshInstall()
+    await withCert(async () => {
+      const r = await install('owner', { branchId: ID.gh, slug: 'givat-haviva-2', name: 'קיוסק שני', pin: '583917', confirm: '583917', wifi: { ssid: 'Sarcafe', password: 'wifi-pass-123', security: 'WPA' } })
+      assert.status(r, 201, 'QR made')
+      const qr = JSON.parse(r.json.qr)
+      assert.equal(qr['android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME'], 'il.co.sarcafe.kiosk/.KioskAdminReceiver')
+      assert.ok(/\/kiosk-ota\/apk\/sarcafe-kiosk-\d+\.apk$/.test(qr['android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION']), 'downloads the published app')
+      assert.equal(qr['android.app.extra.PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM'], Buffer.from(CERT, 'hex').toString('base64url'), 'Android checks the signing certificate')
+      assert.equal(qr['android.app.extra.PROVISIONING_WIFI_SSID'], 'Sarcafe', 'Wi-Fi inside the QR')
+      const code = qr['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'].enroll
+      assert.ok(/^[A-Za-z0-9_-]{43}$/.test(code), 'a 32-byte code')
+      const device = live().db('kiosk_devices').find((d) => d.slug === 'givat-haviva-2')
+      assert.ok(device && device.branch_id === ID.gh && device.name === 'קיוסק שני', 'the tablet is registered to the branch')
+      const stored = JSON.stringify(live().db('kiosk_enrollments'))
+      assert.ok(!stored.includes(code) && !stored.includes('583917') && !stored.includes('wifi-pass-123'), 'stored: neither the code, the PIN nor the Wi-Fi password')
+      assert.equal(live().db('kiosk_enrollments')[0].code_hash, createHash('sha256').update(code).digest('hex'), 'only its hash')
+
+      const got = await enroll(code)
+      assert.status(got, 200, 'the tablet trades the code')
+      assert.equal(got.headers.get('cache-control'), 'no-store')
+      const c = got.json.config
+      assert.equal(c.device, 'givat-haviva-2'); assert.equal(c.branch, 'givat-haviva'); assert.equal(c.rtChannel, 'menu:givat-haviva')
+      assert.equal(c.key, SECRETS.KIOSK_SIGNUP_KEY, 'the kiosk key, so it can report and sign people up')
+      assert.ok(/\/api\/kiosk\/menu$/.test(c.api) && /\/kiosk-ota\/$/.test(c.ota), 'its addresses')
+      assert.ok(matches(c.pinRecord, '583917') && !JSON.stringify(c).includes('583917'), 'the PIN as the app\'s record only')
+      assert.status(await enroll(code), 404, 'a second scan of the same QR gets nothing')
+      const list = await live().call('/api/owner/kiosk/install', { as: 'owner' })
+      assert.equal(list.json.app.qr, true)
+    })
+  })
+
+  stage.test('install-rules', 'אשף ההתקנה — כללים: בעלים בלבד ומאותו אתר, קוד צוות חזק, קוד התקנה פג אחרי 24 שעות, קוד שגוי = 404, הצפה נחסמת, בלי אפליקציה חתומה אין QR', 'security', async () => {
+    freshInstall()
+    const ok = { branchId: ID.gh, slug: 'givat-haviva-3', name: 'קיוסק שלישי', pin: '583917', confirm: '583917' }
+    assert.status(await install('owner', ok), 409, 'no QR before an app with its certificate digest is published')
+    await withCert(async () => {
+      for (const who of ['gm', 'dana']) assert.ok([401, 403].includes((await install(who, ok)).status), `${who} cannot install`)
+      assert.ok([401, 403].includes((await live().call('/api/owner/kiosk/install', { method: 'POST', body: ok })).status), 'signed out')
+      assert.ok([403, 415].includes((await install('owner', ok, false)).status), 'cross-site refused')
+      assert.status(await install('owner', { ...ok, pin: '123456', confirm: '123456' }), 400, 'a guessable PIN')
+      assert.status(await install('owner', { ...ok, confirm: '583918' }), 400, 'PINs differ')
+      assert.status(await install('owner', { ...ok, slug: '../x' }), 400, 'bad tablet name')
+      assert.status(await install('owner', { ...ok, branchId: '00000000-0000-4000-8000-000000000000' }), 400, 'unknown branch')
+      const r = await install('owner', ok)
+      assert.status(r, 201)
+      const code = JSON.parse(r.json.qr)['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'].enroll
+      live().db('kiosk_enrollments')[0].expires_at = new Date(Date.now() - 1000).toISOString()
+      assert.status(await enroll(code), 404, 'expired after 24 hours')
+      assert.status(await enroll('A'.repeat(43)), 404, 'a made-up code')
+      assert.status(await enroll('short'), 400, 'not a code')
+      assert.status(await live().call('/api/kiosk/enroll', { method: 'POST', body: 'code=x', headers: { 'content-type': 'text/plain' } }), 415, 'not JSON')
+      live().standin.state.limits.clear()
+      for (let i = 0; i < 10; i++) await enroll('B'.repeat(43))
+      assert.status(await enroll('B'.repeat(43)), 429, 'guessing is limited')
+      live().standin.state.limits.clear()
+    })
   })
 
   stage.test('outage', 'מסד הנתונים לא עונה: ה־API של הקיוסק עונה בשגיאה מסודרת בלי פרטים פנימיים, וחוזר לעבוד', 'survival', async () => {

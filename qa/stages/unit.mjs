@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { createStage, assert } from '../lib/harness.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/qa/digest.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/qa/digest.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -21,7 +21,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts') }
 }
 
 export function unitStage(root) {
@@ -112,6 +112,22 @@ export function unitStage(root) {
     const ok = (b) => s.kioskStockWriteSchema.safeParse(b).success
     assert.ok(ok({ itemUid: 'p1', typeUid: 't1', quantity: 3 }) && ok({ itemUid: 'p1', available: false }))
     assert.ok(!ok({ itemUid: 'p1' }) && !ok({ itemUid: 'p1', quantity: -1 }) && !ok({ itemUid: 'p1', quantity: 1000 }) && !ok({ itemUid: 'a b', available: true }) && !ok({ itemUid: 'p1', available: true, menu: 'x' }), 'bad input refused')
+  })
+  stage.test('kiosk-install-rules', 'אשף ההתקנה: ה־QR ש־Android קורא (רכיב, הורדה, טביעת התעודה בפורמט הנכון, Wi‑Fi), וקלט לא תקין נדחה', 'unit', async () => {
+    const e = m.enroll
+    assert.equal(e.certChecksum('00'.repeat(31) + 'ff'), Buffer.from('00'.repeat(31) + 'ff', 'hex').toString('base64url'), 'URL-safe base64, no padding')
+    assert.equal(e.certChecksum('nothex'), null)
+    const q = JSON.parse(e.provisioningPayload({ apkUrl: 'https://x/a.apk', certSha256: 'ab'.repeat(32), code: 'c'.repeat(43), portal: 'https://x', wifi: { ssid: 'n', security: 'NONE', password: 'ignored' } }))
+    assert.equal(q['android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME'], 'il.co.sarcafe.kiosk/.KioskAdminReceiver')
+    assert.equal(q['android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED'], true)
+    assert.equal(q['android.app.extra.PROVISIONING_WIFI_PASSWORD'], undefined, 'an open network carries no password')
+    assert.deepEqual(q['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'], { enroll: 'c'.repeat(43), portal: 'https://x' })
+    assert.throws(() => e.provisioningPayload({ apkUrl: 'x', certSha256: 'bad', code: 'c', portal: 'x' }))
+    const ok = (b) => e.installRequestSchema.safeParse(b).success
+    const base = { branchId: '123e4567-e89b-42d3-a456-426614174000', slug: 'gh-2', name: 'קיוסק', pin: '583917', confirm: '583917' }
+    assert.ok(ok(base) && ok({ ...base, wifi: { ssid: 'a', password: 'b' } }))
+    assert.ok(!ok({ ...base, slug: 'A B' }) && !ok({ ...base, extra: 1 }) && !ok({ ...base, wifi: { ssid: 'x'.repeat(33) } }), 'bad input refused')
+    assert.ok(e.enrollRequestSchema.safeParse({ code: 'a'.repeat(43) }).success && !e.enrollRequestSchema.safeParse({ code: 'a'.repeat(42) }).success)
   })
   stage.test('qa-digest', 'הודעת 07:00: הודעה אחת, שני דוחות, עבר/נכשל, וקישור לבעיות כשמשהו נכשל; דוח שלא הגיע = כישלון', 'unit', async () => {
     const d = m.digest
