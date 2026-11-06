@@ -19,7 +19,7 @@ import type { OwnerBranch } from '@/lib/kiosk/device'
 
 type Recent = { id: string; slug: string | null; name: string | null; createdAt: string; expiresAt: string; usedAt: string | null }
 type Status = { ready: boolean; app: { version: string; qr: boolean } | null; recent: Recent[] }
-type Made = { qr: string; image: string; expiresAt: string; slug: string; name: string; app: string }
+type Made = { qr: string; image: string; expiresAt: string; slug: string; name: string; app: string; madeAt: number }
 
 const nextSlug = (branch: string, taken: string[]) => {
   for (let n = 1; n < 100; n++) { const s = `${branch}-${n}`; if (!taken.includes(s)) return s }
@@ -65,7 +65,7 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
   const slugOk = DEVICE_SLUG_PATTERN.test(slug)
   const canQr = !!status?.app?.qr && status.ready
   const ready = canQr && !!branchId && name.trim().length >= 2 && slugOk && !pinError && pin.length > 0 && pin === confirm && (!wifiOn || ssid.trim().length > 0)
-  const used = useMemo(() => (made ? status?.recent.find((r) => r.slug === made.slug && r.usedAt && r.createdAt >= new Date(Date.parse(made.expiresAt) - 24 * 3_600_000 - 60_000).toISOString()) : null), [made, status])
+  const used = useMemo(() => (made ? status?.recent.find((r) => r.slug === made.slug && r.usedAt && Date.parse(r.usedAt) >= made.madeAt - 60_000) : null), [made, status])
 
   async function create() {
     if (!ready || busy) return
@@ -78,7 +78,7 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { glassToast(data?.error?.message || 'לא הצלחנו ליצור קוד התקנה.', 'bad'); return }
       const image = await QRCode.toDataURL(data.qr, { errorCorrectionLevel: 'M', margin: 2, width: 420 })
-      setMade({ qr: data.qr, image, expiresAt: data.expiresAt, slug, name: name.trim(), app: data.app })
+      setMade({ qr: data.qr, image, expiresAt: data.expiresAt, slug, name: name.trim(), app: data.app, madeAt: Date.now() })
       setPin(''); setConfirm(''); setWifiPass('')
       glassToast('קוד ההתקנה מוכן.', 'ok')
       void load()

@@ -32,15 +32,16 @@ export const GET = apiRoute(async () => {
   await requireOwner()
   const app = latestApp()
   const service = createServiceRoleClient()
-  const { data, error } = await service.from('kiosk_enrollments').select('id, created_at, expires_at, used_at, kiosk_devices(slug, name)').order('created_at', { ascending: false }).limit(10)
+  const { data, error } = await service.from('kiosk_enrollments').select('id, device_id, created_at, expires_at, used_at').order('created_at', { ascending: false }).limit(10)
   const ready = !error || !isMissingObject(error)
+  const rows = (data ?? []) as Array<{ id: string; device_id: string; created_at: string; expires_at: string; used_at: string | null }>
+  const ids = [...new Set(rows.map((r) => r.device_id))]
+  const { data: devices } = ids.length ? await service.from('kiosk_devices').select('id, slug, name').in('id', ids) : { data: [] }
+  const byId = new Map(((devices ?? []) as Array<{ id: string; slug: string; name: string }>).map((d) => [d.id, d]))
   return NextResponse.json({
     ready,
     app: app ? { version: app.versionName, qr: typeof app.certSha256 === 'string' } : null,
-    recent: (data ?? []).map((r) => {
-      const d = (r as { kiosk_devices?: { slug?: string; name?: string } | null }).kiosk_devices
-      return { id: r.id, slug: d?.slug ?? null, name: d?.name ?? null, createdAt: r.created_at, expiresAt: r.expires_at, usedAt: r.used_at }
-    }),
+    recent: rows.map((r) => ({ id: r.id, slug: byId.get(r.device_id)?.slug ?? null, name: byId.get(r.device_id)?.name ?? null, createdAt: r.created_at, expiresAt: r.expires_at, usedAt: r.used_at })),
   }, { headers: NO_STORE })
 })
 

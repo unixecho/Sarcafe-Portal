@@ -247,7 +247,7 @@ export function kioskApiStage(live) {
     await withCert(async () => {
       for (const who of ['gm', 'dana']) assert.ok([401, 403].includes((await install(who, ok)).status), `${who} cannot install`)
       assert.ok([401, 403].includes((await live().call('/api/owner/kiosk/install', { method: 'POST', body: ok })).status), 'signed out')
-      assert.ok([403, 415].includes((await install('owner', ok, false)).status), 'cross-site refused')
+      assert.status(await install('owner', ok, 'https://evil.example'), 403, 'from another site')
       assert.status(await install('owner', { ...ok, pin: '123456', confirm: '123456' }), 400, 'a guessable PIN')
       assert.status(await install('owner', { ...ok, confirm: '583918' }), 400, 'PINs differ')
       assert.status(await install('owner', { ...ok, slug: '../x' }), 400, 'bad tablet name')

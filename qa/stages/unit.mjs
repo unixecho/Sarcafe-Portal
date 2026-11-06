@@ -122,7 +122,8 @@ export function unitStage(root) {
     assert.equal(q['android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED'], true)
     assert.equal(q['android.app.extra.PROVISIONING_WIFI_PASSWORD'], undefined, 'an open network carries no password')
     assert.deepEqual(q['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE'], { enroll: 'c'.repeat(43), portal: 'https://x' })
-    assert.throws(() => e.provisioningPayload({ apkUrl: 'x', certSha256: 'bad', code: 'c', portal: 'x' }))
+    let threw = false; try { e.provisioningPayload({ apkUrl: 'x', certSha256: 'bad', code: 'c', portal: 'x' }) } catch { threw = true }
+    assert.ok(threw, 'a bad certificate digest is refused')
     const ok = (b) => e.installRequestSchema.safeParse(b).success
     const base = { branchId: '123e4567-e89b-42d3-a456-426614174000', slug: 'gh-2', name: 'קיוסק', pin: '583917', confirm: '583917' }
     assert.ok(ok(base) && ok({ ...base, wifi: { ssid: 'a', password: 'b' } }))
