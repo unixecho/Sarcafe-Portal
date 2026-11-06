@@ -1,8 +1,8 @@
 {
-  "versionCode": 5,
-  "versionName": "0.5",
-  "url": "sarcafe-kiosk-5.apk",
-  "sha256": "36afe01834ef1a49630e6d9e0bdecfb49e4afa29429f73cf692fd4bfe80452c2",
-  "size": 3423204,
+  "versionCode": 6,
+  "versionName": "0.6",
+  "url": "sarcafe-kiosk-6.apk",
+  "sha256": "85c382336a03f4d926f410118d58265e73dfb081643617ccad554e4fef02ed39",
+  "size": 3423203,
   "certSha256": "27ada9ed4148f88348950a1ec20500164e773939c956544ef83576dd7556c995"
 }
