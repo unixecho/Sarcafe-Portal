@@ -117,6 +117,7 @@ public final class RemotePinTest {
     assert.ok(/setInstanceFollowRedirects\(false\)/.test(enrollJava) && /acceptablePortal/.test(enrollJava) && /remove\(CODE\)/.test(enrollJava), 'the install code goes only to our portal, no redirects, and is forgotten once used')
     assert.ok(/Enrollment\.start\(this, configChanged\)/.test(main), 'the kiosk asks for its settings at start')
     const receiver = fs.readFileSync(path.join(root, JAVA_SRC, 'KioskConfigReceiver.java'), 'utf8')
+    assert.ok(/getStringExtra\("enroll"\)/.test(receiver) && /Enrollment\.saveExtras\(context, intent\.getExtras\(\)\)/.test(receiver), 'the install code also works over adb (a tablet without QR setup)')
     assert.ok(/; PIN set/.test(receiver) && /; PIN NOT set/.test(receiver), 'adb says whether the PIN was set (it used to say "nothing changed" either way)')
     const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')
     assert.ok(/\['menu', 'תפריט'\]/.test(admin) && /portalCall\('menu-edit'/.test(admin), 'the panel has the menu editor tab')

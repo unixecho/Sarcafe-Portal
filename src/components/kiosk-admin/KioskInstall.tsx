@@ -25,6 +25,24 @@ const nextSlug = (branch: string, taken: string[]) => {
   for (let n = 1; n < 100; n++) { const s = `${branch}-${n}`; if (!taken.includes(s)) return s }
   return `${branch}-${Date.now() % 1000}`
 }
+/** The same install over adb, for a tablet whose setup has no QR scanner (the owner's adb: CLAUDE.md "Kiosk tablet tools"). */
+function manualCommands(made: { qr: string }, apkFile: string | null): string {
+  let code = '', portal = ''
+  try {
+    const extras = (JSON.parse(made.qr) as Record<string, { enroll?: string; portal?: string }>)['android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE']
+    code = extras?.enroll ?? ''; portal = extras?.portal ?? ''
+  } catch { /* shown empty */ }
+  const apk = apkFile ?? 'sarcafe-kiosk.apk'
+  return [
+    'cd C:\\Users\\Johnathan\\android-tools\\platform-tools',
+    `Invoke-WebRequest ${portal}/kiosk-ota/apk/${apk} -OutFile ${apk}`,
+    `.\\adb.exe install -r ${apk}`,
+    '.\\adb.exe shell dpm set-device-owner il.co.sarcafe.kiosk/.KioskAdminReceiver',
+    `.\\adb.exe shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es enroll ${code} --es portal ${portal}`,
+    '.\\adb.exe shell am start -n il.co.sarcafe.kiosk/.MainActivity',
+  ].join('\n')
+}
+
 const when = (iso: string) => new Intl.DateTimeFormat('he-IL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Jerusalem' }).format(new Date(iso))
 
 export default function KioskInstall({ branches, takenSlugs, apkFile }: { branches: OwnerBranch[]; takenSlugs: string[]; apkFile: string | null }) {
@@ -103,6 +121,12 @@ export default function KioskInstall({ branches, takenSlugs, apkFile }: { branch
             <li>הטאבלט מוריד את הקיוסק ({made.app}), נכנס למצב קיוסק נעול ומתחבר ל{branch?.name ?? 'סניף'} לבד. 3–5 דקות.</li>
             <li>בודקים: 5 הקשות בפינה השמאלית העליונה ואז הקוד שבחרתם.</li>
           </ol>
+          <details className="ki-manual">
+            <summary>אם בטאבלט אין סורק QR בהתקנה: התקנה מהמחשב (USB)</summary>
+            <p className="gl-note">אותו קוד חד־פעמי. בטאבלט אחרי האיפוס: מדלגים על חשבון Google, מפעילים &quot;ניפוי באגים ב־USB&quot; (אפשרויות מפתח), ומחברים למחשב. ב־PowerShell:</p>
+            <pre className="ki-cmd" dir="ltr">{manualCommands(made, apkFile)}</pre>
+            <Button variant="glass" onClick={() => { void navigator.clipboard?.writeText(manualCommands(made, apkFile)).then(() => glassToast('הפקודות הועתקו.', 'ok'), () => glassToast('לא הצלחנו להעתיק.', 'bad')) }}>העתקת הפקודות</Button>
+          </details>
           <div className="ki-actions">
             <Button variant="filled" onClick={() => setMade(null)}>התקנה של טאבלט נוסף</Button>
             <Link className="gl-chip gl-chip--soft" href="/owner/kiosk/control">ללוח הקיוסק</Link>

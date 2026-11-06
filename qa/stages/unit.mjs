@@ -3,7 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
-import { createStage, assert } from '../lib/harness.mjs'
+import { createStage, assert, startChecks } from '../lib/harness.mjs'
+import { buildReport } from '../lib/report.mjs'
 
 const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts']
 
@@ -257,6 +258,21 @@ export function unitStage(root) {
     assert.equal(out.issues, '3 לטיפול')
     assert.equal(out['tablet-avail'], '2 אזלו')
     assert.deepEqual(b({ stats: { outOfStockCount: { known: false, value: 0 }, hasUnpublishedChanges: { known: false, value: false } }, shortages: null, requests: 0 }), {}, 'unknown numbers make no pill')
+  })
+  stage.test('expected-actual', 'הדוח: כל בדיקה כותבת מה היה צפוי ומה קרה בפועל; כישלון מוצג קודם, גם שגיאה שאינה בדיקה; והדוח עומד בחוזה', 'unit', async () => {
+    const inner = createStage('demo', 'demo')
+    inner.test('ok', 'עוברת', 'unit', async () => { assert.status({ status: 401 }, 401, 'בלי חיבור'); assert.equal(3, 3, 'כמות') })
+    inner.test('bad', 'נכשלת', 'unit', async () => { assert.equal('a', 'a', 'שם'); assert.equal(2, 5, 'כמות') }, { retry: false })
+    inner.test('crash', 'קורסת', 'unit', async () => { throw new Error('boom') }, { retry: false })
+    const r = await inner.run({ log: () => {} })
+    startChecks() // the demo stage used the same recorder; this test's own checks start here
+    const [ok, bad, crash] = r.tests
+    assert.deepEqual(ok.checks.map((c) => [c.what, c.expected, c.actual, c.ok]), [['בלי חיבור', 'HTTP 401', 'HTTP 401', true], ['כמות', '3', '3', true]], 'a passing test keeps its checks')
+    assert.deepEqual([bad.checks[0].what, bad.checks[0].expected, bad.checks[0].actual, bad.checks[0].ok], ['כמות', '5', '2', false], 'the failing check comes first')
+    assert.equal(crash.checks[0].actual, 'boom', 'an error that is not a check is shown as one')
+    const report = buildReport({ suite: 'dashboard', stages: [r], startedAt: new Date().toISOString(), source: 'local', commit: null, ref: null, host: 'local', metrics: {}, previous: null })
+    const parsed = m.report.QaReport.safeParse(report)
+    assert.ok(parsed.success, `the report with checks fits the contract ${parsed.success ? '' : JSON.stringify(parsed.error.issues[0])}`)
   })
   stage.test('report-contract', 'חוזה הדוח: הדוח שנשלח עם הקוד תקין, ושדה לא מוכר נדחה', 'unit', async () => {
     const shipped = JSON.parse(fs.readFileSync(path.join(root, 'qa/reports/latest.json'), 'utf8'))

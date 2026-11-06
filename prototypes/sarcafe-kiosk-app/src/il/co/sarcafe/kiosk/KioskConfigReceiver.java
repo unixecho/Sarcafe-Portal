@@ -31,6 +31,12 @@ public class KioskConfigReceiver extends BroadcastReceiver {
         SharedPreferences prefs = context.getSharedPreferences("kiosk", Context.MODE_PRIVATE);
         boolean changed = apply(prefs, intent);
         if ("now".equals(intent.getStringExtra("ota_check"))) OtaUpdater.get(context).checkNow();
+        // the install wizard's one-time code over adb (when a tablet has no QR setup): --es enroll <code> --es portal https://...
+        // the app trades it for its settings exactly as after a QR install (docs/SARCAFE_KIOSK_INSTALL.md)
+        if (intent.getStringExtra("enroll") != null) {
+            Enrollment.saveExtras(context, intent.getExtras());
+            Enrollment.start(context, onChanged);
+        }
         Runnable r = onChanged;
         if (changed && r != null) r.run();
         // "changed" only means the page reloads; a new PIN never reloads it, so the PIN gets its own word (owner, 2026-11-06: a PIN

@@ -165,6 +165,8 @@ export function kioskUiStage(live, metrics) {
         await create.click()
         await p.locator('[data-kiosk-install="qr"] img.ki-qr__img').waitFor({ timeout: 10000 })
         assert.ok(await p.getByText(/מקישים 6 פעמים/).isVisible(), 'the steps for the tablet')
+        const cmds = await p.locator('.ki-cmd').textContent()
+        assert.ok(/dpm set-device-owner il\.co\.sarcafe\.kiosk\/\.KioskAdminReceiver/.test(cmds) && /--es enroll [A-Za-z0-9_-]{43} --es portal https?:\/\//.test(cmds), 'the USB fallback carries the same one-time code')
         assert.equal(live().db('kiosk_enrollments').length, 1, 'one install code')
         assert.ok(!JSON.stringify(live().db('kiosk_enrollments')).includes('583917'), 'the PIN is not stored')
         live().db('kiosk_enrollments')[0].used_at = new Date().toISOString() // the tablet scanned it

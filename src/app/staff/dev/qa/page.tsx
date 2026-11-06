@@ -92,7 +92,25 @@ function StageCard({ stage }: { stage: QaStage }) {
         {ordered.slice(0, 120).map((t) => (
           <li key={t.id} className={`qa-test qa-test--${t.status}`}>
             {t.status === 'pass' ? <CircleCheck size={15} aria-hidden="true" /> : t.status === 'fail' ? <CircleAlert size={15} aria-hidden="true" /> : <TriangleAlert size={15} aria-hidden="true" />}
-            <span><span className="qa-test__title">{t.title}</span><span className="qa-test__cat">{CATEGORY[t.category] ?? t.category}</span>{t.detail && t.status !== 'pass' && <small className="qa-test__detail">{t.detail}</small>}</span>
+            <span className="qa-test__body"><span className="qa-test__title">{t.title}</span><span className="qa-test__cat">{CATEGORY[t.category] ?? t.category}</span>{t.detail && t.status !== 'pass' && <small className="qa-test__detail">{t.detail}</small>}
+              {t.checks && t.checks.length > 0 && (
+                <details className="qa-checks" open={t.status === 'fail'}>
+                  <summary>צפוי מול בפועל ({t.checks.length})</summary>
+                  <table>
+                    <thead><tr><th scope="col">מה נבדק</th><th scope="col">צפוי</th><th scope="col">בפועל</th></tr></thead>
+                    <tbody>
+                      {t.checks.map((c, i) => (
+                        <tr key={i} className={c.ok ? 'is-ok' : 'is-bad'}>
+                          <td>{c.ok ? <CircleCheck size={13} aria-label="עבר" /> : <CircleAlert size={13} aria-label="נכשל" />} {c.what}</td>
+                          <td dir="auto"><bdi>{c.expected}</bdi></td>
+                          <td dir="auto"><bdi>{c.actual}</bdi></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              )}
+            </span>
           </li>
         ))}
         {ordered.length > 120 && <li className="qa-test qa-test--more">ועוד {ordered.length - 120} בדיקות</li>}

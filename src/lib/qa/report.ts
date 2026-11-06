@@ -9,6 +9,9 @@ const status = z.enum(['pass', 'warn', 'fail'])
 const testStatus = z.enum(['pass', 'fail', 'skip', 'flaky'])
 export const QA_CATEGORIES = ['static', 'unit', 'sql', 'security', 'e2e', 'regression', 'survival', 'recovery', 'a11y', 'perf'] as const
 
+/** One check inside a test: what was looked at, what was expected, what actually happened (qa/lib/harness.mjs). */
+export const QaCheck = z.object({ what: text(160), expected: text(160), actual: text(200), ok: z.boolean() }).strict()
+
 export const QaTest = z.object({
   id: text(120),
   title: text(240),
@@ -16,6 +19,7 @@ export const QaTest = z.object({
   category: z.enum(QA_CATEGORIES),
   durationMs: z.number().int().min(0).max(3_600_000),
   detail: text(600).optional(),
+  checks: z.array(QaCheck).max(12).optional(),
 }).strict()
 
 export const QaStage = z.object({

@@ -27,7 +27,7 @@ export function buildReport({ suite = 'dashboard', stages, startedAt, source, co
     run: { startedAt, finishedAt, durationMs: Date.parse(finishedAt) - Date.parse(startedAt), source, commit, ref, host },
     status,
     totals,
-    stages: stages.map((s) => ({ id: s.id, title: s.title, status: s.status, durationMs: s.durationMs, tests: s.tests.map((t) => ({ id: t.id, title: t.title.slice(0, 240), status: t.status, category: t.category, durationMs: t.durationMs, ...(t.detail ? { detail: t.detail.slice(0, 600) } : {}) })) })),
+    stages: stages.map((s) => ({ id: s.id, title: s.title, status: s.status, durationMs: s.durationMs, tests: s.tests.map((t) => ({ id: t.id, title: t.title.slice(0, 240), status: t.status, category: t.category, durationMs: t.durationMs, ...(t.detail ? { detail: t.detail.slice(0, 600) } : {}), ...(t.checks?.length ? { checks: t.checks.slice(0, 12) } : {}) })) })),
     metrics: { audit: metrics.audit ?? null, perf: metrics.perf ?? null, contrastLowest: metrics.contrastLowest ?? null },
     review: null,
   }
@@ -88,6 +88,18 @@ function writeReview(report, previous) {
   return { headline, verdict, highlights: highlights.slice(0, 12), risks: risks.slice(0, 12), changes, next: next.slice(0, 10) }
 }
 
+// expected vs actual, per check (owner, 2026-11-06): every failing or flaky test with all its checks, then one line per passing test
+const cell = (v) => String(v ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ')
+function expectedActual(report) {
+  const all = report.stages.flatMap((s) => s.tests)
+  const bad = all.filter((t) => t.status === 'fail' || t.status === 'flaky')
+  const good = all.filter((t) => t.status === 'pass' && t.checks?.length)
+  const table = (t) => `\n### ${t.status === 'fail' ? '❌' : t.status === 'flaky' ? '⚠️' : '✅'} ${t.title}\n| | מה נבדק | צפוי | בפועל |\n|---|---|---|---|\n` +
+    (t.checks ?? []).map((c) => `| ${c.ok ? '✅' : '❌'} | ${cell(c.what)} | ${cell(c.expected)} | ${cell(c.actual)} |`).join('\n')
+  return '\n## צפוי מול בפועל\n' + (bad.length ? bad.map(table).join('\n') : 'כל הבדיקות עברו.') +
+    (good.length ? `\n\n<details><summary>בדיקות שעברו (${good.length})</summary>\n${good.map(table).join('\n')}\n</details>` : '')
+}
+
 export function writeReport(dir, report) {
   fs.mkdirSync(path.join(dir, 'history'), { recursive: true })
   const stamp = report.run.finishedAt.replace(/[:.]/g, '-')
@@ -103,6 +115,7 @@ export function writeReport(dir, report) {
     r.changes.newlyFailing.length || r.changes.fixed.length ? `\n## מה השתנה\n${r.changes.newlyFailing.map((t) => `- התחילה להיכשל: ${t}`).join('\n')}\n${r.changes.fixed.map((t) => `- תוקנה: ${t}`).join('\n')}` : '',
     '\n## הצעדים הבאים\n' + r.next.map((h, i) => `${i + 1}. ${h}`).join('\n'),
     '\n## שלבים\n' + report.stages.map((s) => `- ${s.status === 'pass' ? '✅' : s.status === 'warn' ? '⚠️' : '❌'} ${s.title}: ${s.tests.filter((t) => t.status === 'pass').length}/${s.tests.length}`).join('\n'),
+    expectedActual(report),
   ].filter(Boolean).join('\n')
   fs.writeFileSync(path.join(dir, `${file}.md`), md + '\n')
   return md
