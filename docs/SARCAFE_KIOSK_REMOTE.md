@@ -83,4 +83,7 @@ App 0.3 closes the PIN dialog **without a word on a wrong PIN** (a correct one a
 wrong PIN looked like "nothing happens". App 0.4 says "Wrong PIN" (and the lockout time). The PIN was replaced when the tablet was
 re-provisioned on app 0.3 (2026-11-05, see handoff); the dashboard's reset reaches the tablet only from app 0.4. Until then, from the
 PC with the tablet on USB: `adb shell am broadcast -n il.co.sarcafe.kiosk/.KioskConfigReceiver --es pin <6-8 digits>` (also clears
-the lockout).
+the lockout). **App 0.3 answers `nothing changed` even when the PIN WAS saved** (that word only means "no page reload"); a PIN that
+is not 6–8 digits is ignored with the same answer. From app 0.4 the answer ends `; PIN set` or `; PIN NOT set`.
+**adb on the owner's PC** is not on the PATH: `C:\Users\Johnathan\android-tools\platform-tools\adb.exe` (PowerShell: `.\adb.exe` from
+that folder). `scripts/pc/kiosk-adb.ps1` finds it: `powershell -ExecutionPolicy Bypass -File scripts\pc\kiosk-adb.ps1 pin <6-8 digits>`.

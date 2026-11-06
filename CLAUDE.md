@@ -24,3 +24,7 @@ The dashboards are glass (glisse 0.5.0). Every new feature screen uses the share
 # Automatic QA (owner, 2026-11-05) — run it on every change
 
 `npm run qa` (`docs/QA_BLUEPRINT.md`) before every push: static checks, the 30+ regression scripts, unit rules, security probes of every API route, the new features end to end, the screens in a real browser (contrast in all five looks), survival and recovery. A failing test is fixed or explicitly reviewed, never deleted; a new feature adds its tests in the same change; a new API route must be guarded or added (with its reason) to `PUBLIC_ROUTES` in `qa/stages/static.mjs`. GitHub Actions runs it every morning and after each push to `main`; the developer reads the review at `/staff/dev/qa`. Write the outcome (passed / failed / skipped and why) in `handoff.md`.
+
+# Kiosk tablet tools on the owner's PC
+`adb` is not on the PATH: it is `C:\Users\Johnathan\android-tools\platform-tools\adb.exe` (PowerShell: `.\adb.exe` from that folder, or
+`scripts\pc\kiosk-adb.ps1`). Give the owner commands for that path. Never put a PIN, key or keystore password in a file or commit.

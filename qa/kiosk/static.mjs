@@ -106,6 +106,8 @@ public final class RemotePinTest {
     const main = fs.readFileSync(path.join(root, JAVA_SRC, 'MainActivity.java'), 'utf8')
     const check = main.slice(main.indexOf('private void checkPin('), main.indexOf('// ---- the control panel'))
     assert.ok(/Wrong PIN/.test(check) && /\.show\(\)/.test(check), 'a wrong PIN says so (it used to close the dialog without a word)')
+    const receiver = fs.readFileSync(path.join(root, JAVA_SRC, 'KioskConfigReceiver.java'), 'utf8')
+    assert.ok(/; PIN set/.test(receiver) && /; PIN NOT set/.test(receiver), 'adb says whether the PIN was set (it used to say "nothing changed" either way)')
     const admin = fs.readFileSync(path.join(root, APP, 'overrides/kiosk-admin.js'), 'utf8')
     assert.ok(/\['stock', 'מלאי'\]/.test(admin) && /\$\{C\.apiBase\}\/stock/.test(admin) && /C\.headers\(\)/.test(admin), 'the panel has the live-stock tab, on the portal with the kiosk key')
   })

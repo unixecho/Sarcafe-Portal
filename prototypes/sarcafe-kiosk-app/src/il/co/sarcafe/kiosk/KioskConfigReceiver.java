@@ -33,7 +33,11 @@ public class KioskConfigReceiver extends BroadcastReceiver {
         if ("now".equals(intent.getStringExtra("ota_check"))) OtaUpdater.get(context).checkNow();
         Runnable r = onChanged;
         if (changed && r != null) r.run();
-        setResultData(changed ? "changed" : "nothing changed");
+        // "changed" only means the page reloads; a new PIN never reloads it, so the PIN gets its own word (owner, 2026-11-06: a PIN
+        // that WAS saved answered "nothing changed" and looked like a failure)
+        String pin = intent.getStringExtra("pin");
+        String pinResult = pin == null ? "" : (StaffPin.isAcceptableNewPin(pin) ? "; PIN set" : "; PIN NOT set: it must be 6-8 digits");
+        setResultData((changed ? "changed" : "nothing changed") + pinResult);
     }
 
     /** Stores what the broadcast carries. True when the page should be reloaded. */

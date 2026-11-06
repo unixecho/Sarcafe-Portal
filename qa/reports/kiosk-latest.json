@@ -2,11 +2,11 @@
   "version": 1,
   "suite": "kiosk",
   "run": {
-    "startedAt": "2026-11-06T07:09:15.293Z",
-    "finishedAt": "2026-11-06T07:15:54.921Z",
-    "durationMs": 399628,
+    "startedAt": "2026-11-06T13:00:11.433Z",
+    "finishedAt": "2026-11-06T13:07:13.184Z",
+    "durationMs": 421751,
     "source": "local",
-    "commit": "4beafbe5629ada13796356c037ea2e6a0cfa1fb8",
+    "commit": "1b99fb73a7851d2517418d5985493b5bf4fcb7d7",
     "ref": "claude/youthful-euler-x2gvqa",
     "host": "local"
   },
@@ -23,28 +23,28 @@
       "id": "kiosk-static",
       "title": "הקיוסק: הקוד של הדף, החבילה והאפליקציה (Java)",
       "status": "pass",
-      "durationMs": 1149,
+      "durationMs": 4351,
       "tests": [
         {
           "id": "kiosk-static.page-scripts",
           "title": "כל הסקריפטים של דף הקיוסק תקינים (node --check)",
           "status": "pass",
           "category": "static",
-          "durationMs": 383
+          "durationMs": 425
         },
         {
           "id": "kiosk-static.bundle",
           "title": "חבילת הדף נבנית: כל הקבצים, כל אחד במקום, בלי קובץ ריק",
           "status": "pass",
           "category": "static",
-          "durationMs": 13
+          "durationMs": 2810
         },
         {
           "id": "kiosk-static.java-pin",
           "title": "האפליקציה (Java): קוד שנקבע בלוח הבקרה נבדק אצל הטאבלט כמו קוד שהוקלד בו, ורשומה פגומה נדחית",
           "status": "pass",
           "category": "unit",
-          "durationMs": 752
+          "durationMs": 1114
         },
         {
           "id": "kiosk-static.java-wiring",
@@ -59,70 +59,70 @@
       "id": "kiosk-checks",
       "title": "בדיקות הרגרסיה של הקיוסק (check:kiosk-* ו־verify:kiosk-*)",
       "status": "pass",
-      "durationMs": 356647,
+      "durationMs": 367611,
       "tests": [
         {
           "id": "kiosk-checks.check:kiosk-content",
           "title": "check:kiosk-content",
           "status": "pass",
           "category": "regression",
-          "durationMs": 528
+          "durationMs": 3344
         },
         {
           "id": "kiosk-checks.check:kiosk-device",
           "title": "check:kiosk-device",
           "status": "pass",
           "category": "regression",
-          "durationMs": 490
+          "durationMs": 640
         },
         {
           "id": "kiosk-checks.check:kiosk-i18n",
           "title": "check:kiosk-i18n",
           "status": "pass",
           "category": "regression",
-          "durationMs": 83143
+          "durationMs": 84694
         },
         {
           "id": "kiosk-checks.check:kiosk-menu",
           "title": "check:kiosk-menu",
           "status": "pass",
           "category": "regression",
-          "durationMs": 448
+          "durationMs": 516
         },
         {
           "id": "kiosk-checks.check:kiosk-ota",
           "title": "check:kiosk-ota",
           "status": "pass",
           "category": "regression",
-          "durationMs": 2271
+          "durationMs": 2794
         },
         {
           "id": "kiosk-checks.check:kiosk-session",
           "title": "check:kiosk-session",
           "status": "pass",
           "category": "regression",
-          "durationMs": 99605
+          "durationMs": 100353
         },
         {
           "id": "kiosk-checks.check:kiosk-ui",
           "title": "check:kiosk-ui",
           "status": "pass",
           "category": "regression",
-          "durationMs": 157025
+          "durationMs": 160095
         },
         {
           "id": "kiosk-checks.check:kiosk-waitlist",
           "title": "check:kiosk-waitlist",
           "status": "pass",
           "category": "regression",
-          "durationMs": 493
+          "durationMs": 516
         },
         {
           "id": "kiosk-checks.verify:kiosk-content-sql",
           "title": "verify:kiosk-content-sql",
           "status": "pass",
           "category": "sql",
-          "durationMs": 12643
+          "durationMs": 14658
         }
       ]
     },
@@ -130,49 +130,49 @@
       "id": "kiosk-api",
       "title": "הקיוסק: ה־API של הטאבלט ושליטה מרחוק מלוח הבקרה",
       "status": "pass",
-      "durationMs": 7951,
+      "durationMs": 7977,
       "tests": [
         {
           "id": "kiosk-api.report-key",
           "title": "הדיווח של הטאבלט: בלי מפתח או עם מפתח שגוי — 401; סוג תוכן שגוי, גוף גדול או לא תקין — נדחה; תקין — נרשם",
           "status": "pass",
           "category": "security",
-          "durationMs": 104
+          "durationMs": 114
         },
         {
           "id": "kiosk-api.settings-own",
           "title": "הטאבלט שומר רק את ההגדרות שלו, בתוך הגבולות; לא את הסניף, השם או המפתח",
           "status": "pass",
           "category": "security",
-          "durationMs": 34
+          "durationMs": 33
         },
         {
           "id": "kiosk-api.commands",
           "title": "פקודה מלוח הבקרה: מגיעה לטאבלט עם הדיווח, נשארת עד שהוא מאשר אותה, ומתנקה רק עם המזהה שלה",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 122
+          "durationMs": 117
         },
         {
           "id": "kiosk-api.pin-roundtrip",
           "title": "איפוס קוד מלוח הבקרה: נשמרת רק \"טביעה\", הטאבלט מושך אותה עם המפתח, מאשר, והיא נמחקת",
           "status": "pass",
           "category": "security",
-          "durationMs": 84
+          "durationMs": 85
         },
         {
           "id": "kiosk-api.pin-rules",
           "title": "קוד חדש: 6–8 ספרות, לא רצף ולא ספרה חוזרת, שני הקודים זהים; בעלים בלבד, מאותו אתר; 5 בשעה",
           "status": "pass",
           "category": "security",
-          "durationMs": 297
+          "durationMs": 306
         },
         {
           "id": "kiosk-api.owner-settings",
           "title": "הבעלים משנה כל הגדרה של הטאבלט מלוח הבקרה, בתוך הגבולות, וכלל צולב נאכף",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 54
+          "durationMs": 62
         },
         {
           "id": "kiosk-api.stock-list",
@@ -186,21 +186,21 @@
           "title": "עדכון מלאי מהקיוסק: נכנס לטיוטה ולתפריט שמוצג ללקוחות מיד, כמות 0 = אזל, ונרשם ביומן \"מהקיוסק\"",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 82
+          "durationMs": 88
         },
         {
           "id": "kiosk-api.stock-rules",
           "title": "מלאי מהקיוסק — כללי לוח הבקרה: רק בשעות הפעילות, רק פריטים של המלאי החי, רק עם המפתח, קלט לא תקין נדחה",
           "status": "pass",
           "category": "security",
-          "durationMs": 86
+          "durationMs": 88
         },
         {
           "id": "kiosk-api.outage",
           "title": "מסד הנתונים לא עונה: ה־API של הקיוסק עונה בשגיאה מסודרת בלי פרטים פנימיים, וחוזר לעבוד",
           "status": "pass",
           "category": "survival",
-          "durationMs": 7057
+          "durationMs": 7053
         }
       ]
     },
@@ -208,49 +208,49 @@
       "id": "kiosk-ui",
       "title": "הקיוסק: לוח הקיוסק בדפדפן אמיתי",
       "status": "pass",
-      "durationMs": 31955,
+      "durationMs": 33804,
       "tests": [
         {
           "id": "kiosk-ui.dashboard",
           "title": "לוח הקיוסק: מצב הטאבלט (מחובר, סוללה, גרסאות), פעולות מרחוק וכל ההגדרות, עם הסרגל התחתון",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 1697
+          "durationMs": 2031
         },
         {
           "id": "kiosk-ui.switch",
           "title": "מעבר בין הלוחות בשני הכיוונים, בלי טעינה מחדש של הדף ועם אותו סרגל תחתון (בעלים ומפתח)",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 4861
+          "durationMs": 4618
         },
         {
           "id": "kiosk-ui.settings-save",
           "title": "שינוי הגדרה: פס השמירה מופיע, שמירה מעדכנת את הטאבלט, ביטול מחזיר",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2159
+          "durationMs": 2481
         },
         {
           "id": "kiosk-ui.remote-actions",
           "title": "פקודה מרחוק ואיפוס קוד מהמסך: נשלחים, מוצגים כ\"ממתין לטאבלט\" וניתנים לביטול; קוד חלש נדחה במקום",
           "status": "pass",
           "category": "e2e",
-          "durationMs": 2414
+          "durationMs": 2491
         },
         {
           "id": "kiosk-ui.access",
           "title": "רק בעלים: עובד/ת ומנהל/ת סניף לא נכנסים ללוח הקיוסק",
           "status": "pass",
           "category": "security",
-          "durationMs": 23
+          "durationMs": 26
         },
         {
           "id": "kiosk-ui.readable",
           "title": "לוח הקיוסק קריא בכל חמשת המראות, באייפון ובטאבלט, בלי גלילה לצדדים",
           "status": "pass",
           "category": "a11y",
-          "durationMs": 20798
+          "durationMs": 22157
         }
       ]
     }
@@ -262,7 +262,7 @@
   },
   "review": {
     "headline": "הכול ירוק. מוכן לשחרור.",
-    "verdict": "29 מתוך 29 בדיקות עברו ב־6 דקות ו־40 שניות. אבטחה 7/7 · שרידות 1/1 · מקצה לקצה 7/7 · נגישות וקריאות 1/1.",
+    "verdict": "29 מתוך 29 בדיקות עברו ב־7 דקות ו־2 שניות. אבטחה 7/7 · שרידות 1/1 · מקצה לקצה 7/7 · נגישות וקריאות 1/1.",
     "highlights": [
       "כל בדיקות הבדיקה סטטית עברו (3)",
       "כל בדיקות הלוגיקה עברו (1)",
@@ -278,7 +278,7 @@
     "changes": {
       "newlyFailing": [],
       "fixed": [],
-      "newTests": 19
+      "newTests": 0
     },
     "next": [
       "אין צורך בפעולה. הריצה הבאה מחר בבוקר, ואחרי כל פרסום"
