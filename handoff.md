@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Claude addendum, 2026-11-06 (night): expected vs actual in Sarcafe's QA reports; the install code over adb (QR wizard fallback)
+
+- **Owner asks:** expected and actual results in Sarcafe's QA too; test the QR wizard on the ONLY tablet (owner has no spare); ChatGPT ran out of credits on the AyekaBar prompt — after this, see where it left off and implement it here.
+- **Expected/actual:** `qa/lib/harness.mjs` records every assert (what, expected, actual, ok); a test keeps failures first (≤10) then ≤4 passing; a non-assert error becomes a failed check. Report contract `QaCheck` in `src/lib/qa/report.ts` (≤12 per test); `qa/lib/report.mjs` keeps them and writes "צפוי מול בפועל" tables to the Markdown (GitHub summary); `/staff/dev/qa` shows a per-test table (open on failure, failing row red). Report size ~100 KB (limit 600 KB). New unit test `unit.expected-actual`.
+- **Wizard fallback:** `KioskConfigReceiver` accepts `--es enroll <code> --es portal <origin>` over adb and runs the same enrollment; the wizard's QR screen shows copy-ready PowerShell commands (owner's adb path) with the same one-time code. Needs app 0.6 (this push builds it on GitHub).
+- **QA:** full run PASS — dashboard 120/120, kiosk 36/36.
+- **Next step:** after app 0.6 reaches the tablet (check `kiosk_devices.app_version = 6`), the owner runs the wizard as a REINSTALL of `givat-haviva-1` (factory reset wipes the tablet; Google FRP may ask for the account password). If the welcome screen has no QR scanner, the USB commands on the same page. Then: AyekaBar — see where ChatGPT left off and continue.
+
 ## Claude addendum, 2026-11-06 (evening): full menu editor on the kiosk tablet; AyekaBar ChatGPT prompt
 
 - **Owner asks:** the full menu editor on the tablet (names, prices, add/remove items and types, behind the staff PIN, the dashboard's rules); a ChatGPT (Astra 6, Extra High) prompt for AyekaBar's dashboard glass revamp with every Sarcafe tweak, then: a full QA suite + daily 07:00 notification + an extensive report with expected/actual results, and a PREVIEW on real data before anything is built.
