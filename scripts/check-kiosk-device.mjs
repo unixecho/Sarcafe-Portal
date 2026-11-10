@@ -11,7 +11,7 @@
 import ts from 'typescript'
 import vm from 'node:vm'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -246,12 +246,15 @@ section('the app: the staff bridge')
   check('an update never reloads the page while the panel is open', /staff != null && staff\.panelOpen\(\)/.test(main))
   check('a new PIN needs the current one, shares the lockout of the PIN dialog, and must be 6 to 8 digits', /pin_locked_until/.test(bridge) && /StaffPin\.verify/.test(bridge) && /isAcceptableNewPin\(newPin\)/.test(bridge))
   check('the restart of the whole tablet is only for the device owner and asks first', /isDeviceOwnerApp/.test(bridge) && /confirmReboot/.test(main) && /setNegativeButton\("Cancel"/.test(main))
+  check('the PIN dialog closes the keyboard it opened, on OK and on every other way out (it stayed over the panel on the real tablet)', /setOnDismissListener[^]*?hideKeyboard\(input\)/.test(main) && /onClick[^]*?hideKeyboard\(input\)[^]*?checkPin\(/.test(main) && /hideSoftInputFromWindow/.test(main))
   const jdk = ['C:/Program Files/Eclipse Adoptium/jdk-21.0.7.6-hotspot/bin/javac.exe'].find(existsSync)
   const androidJar = join(process.env.LOCALAPPDATA || '', 'Android/Sdk/platforms/android-36/android.jar')
   if (jdk && existsSync(androidJar)) {
     const out = join(dir, 'classes')
     mkdirSync(out, { recursive: true })
-    const sources = ['KioskAdminReceiver', 'KioskConfigReceiver', 'MainActivity', 'OtaReceiver', 'OtaRules', 'OtaUpdater', 'StaffBridge', 'StaffPin'].map((n) => join(ROOT, `prototypes/sarcafe-kiosk-app/src/il/co/sarcafe/kiosk/${n}.java`))
+    // every source file, as build.sh does (a fixed list went stale when Enrollment, PinReset ... were added)
+    const srcDir = join(ROOT, 'prototypes/sarcafe-kiosk-app/src/il/co/sarcafe/kiosk')
+    const sources = readdirSync(srcDir).filter((f) => f.endsWith('.java')).sort().map((f) => join(srcDir, f))
     const r = spawnSync(jdk, ['--release', '8', '-encoding', 'UTF-8', '-Xlint:-options', '-classpath', androidJar, '-d', out, ...sources], { encoding: 'utf8' })
     check('the whole app compiles (javac --release 8 against android-36)', r.status === 0, (r.stderr || '').split('\n').slice(0, 6).join(' | '))
   } else console.log('  - the compile check needs the JDK and android.jar of this PC: skipped')

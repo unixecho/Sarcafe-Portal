@@ -468,13 +468,33 @@ public class MainActivity extends Activity {
             .setNegativeButton("Cancel", null)
             .setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
                 @Override public void onClick(android.content.DialogInterface d, int w) {
+                    hideKeyboard(input); // while the dialog's own window can still name the keyboard's target
                     checkPin(input.getText().toString(), stored, legacy);
                 }
             }).create();
         // the number keypad opens by itself, with the cursor already in the field
         dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        // ...and it goes away again however the dialog ends (OK, Cancel, Back): it used to stay open over the control panel
+        // (seen on the real tablet, 2026-11-05)
+        dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+            @Override public void onDismiss(android.content.DialogInterface d) { hideKeyboard(input); }
+        });
         dialog.show();
         input.requestFocus();
+    }
+
+    /** Closes the on-screen keyboard for the given view's window and for the activity's own (either may already be gone). */
+    private void hideKeyboard(View v) {
+        try {
+            android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm == null) return;
+            if (v != null && v.getWindowToken() != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+            View decor = getWindow().getDecorView();
+            if (decor.getWindowToken() != null) imm.hideSoftInputFromWindow(decor.getWindowToken(), 0);
+        } catch (RuntimeException ignored) {
+            // the keyboard is a courtesy; never let it break the PIN flow
+        }
     }
 
     /** PBKDF2 check; a correct legacy PIN is moved to the new format; wrong tries lock the dialog for longer each time. */
