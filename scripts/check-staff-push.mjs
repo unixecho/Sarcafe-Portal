@@ -202,6 +202,13 @@ check(
   'the card is on the staff home, both owner dashboard views and the onboarding wizard',
   /<StaffPushCard/.test(read('src/components/dashboard/EmployeeDashboardView.tsx')) && (ownerDash.match(/<StaffPushCard/g) ?? []).length === 1 && /<StaffPushCard/.test(read('src/components/dashboard/OwnerDashboardView.tsx')) && /<StaffPushCard variant="wizard"/.test(read('src/components/staff/StaffTour.tsx')) && /<SetupGate/.test(read('src/components/staff/StaffOnboarding.tsx'))
 )
+{
+  // owner, 2026-11-10: alerts are required to use the app (the gate), so the dashboards show no card once they are on
+  const card = read('src/components/staff/StaffPushCard.tsx')
+  const hidden = card.match(/if \(([^\n]*)\) return null/)?.[1] ?? ''
+  check('the home card is hidden once alerts are on, and still shows the ask, the iPhone steps and a blocked phone', /stage === 'on' && variant === 'home'/.test(hidden) && !/stage === 'ask'|stage === 'install'|stage === 'denied'|stage === 'failed'/.test(hidden))
+  check('the onboarding wizard keeps its "alerts are on" confirmation (the "on" card is still rendered for the wizard)', /if \(stage === 'on'\) \{\s*return \(\s*<section className="app-push app-push--on"/.test(card))
+}
 const dispatch = read('src/app/api/shifts/dispatch/route.ts')
 check('request-driven writes push what they just notified', /after\(async \(\) => \{[\s\S]*await flushStaffPush\(\)/.test(dispatch))
 check('publishing announces the requests for the week after, BEFORE the flush', /publishWeek'\) await announceRequestsOpen\(action\.weekId\)/.test(dispatch) && dispatch.indexOf('announceRequestsOpen(action.weekId)') < dispatch.indexOf('await flushStaffPush()'))

@@ -17,7 +17,7 @@ import '@/components/app/app.css'
 // Asks staff to put Sarcafe on their home screen and switch on alerts: shift changes, a reminder
 // before a shift, a checklist nobody submitted, and colleagues giving shifts away. It is the same
 // card in the onboarding wizard (variant "wizard") and on the staff and owner home screens
-// (variant "home"); only the home one can be snoozed.
+// (variant "home"); only the home one can be snoozed, and the home one disappears once alerts are on.
 //
 // The permission ask is two-step on purpose, like the customer order page: a plain-language card
 // first, and the browser's one-shot permission dialog only after the person said yes here (a
@@ -108,7 +108,9 @@ export default function StaffPushCard({ variant = 'home' }: { variant?: 'home' |
     setTest('sent')
   }
 
-  if (stage === 'checking' || stage === 'unsupported' || stage === 'snoozed') return null
+  // Alerts are part of using the app (the notifications gate will not open a staff page without them), so once they are on
+  // the dashboards have nothing to say about them: no card (owner, 2026-11-10). The wizard keeps its "on" confirmation.
+  if (stage === 'checking' || stage === 'unsupported' || stage === 'snoozed' || (stage === 'on' && variant === 'home')) return null
 
   if (stage === 'install') {
     return (

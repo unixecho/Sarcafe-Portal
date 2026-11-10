@@ -63,7 +63,8 @@ Everything that already wrote to the in-app inbox is pushed with no change at it
 
 1. **Install + opt in.** `StaffPushCard` (`src/components/staff/StaffPushCard.tsx`) is shown in the onboarding
    wizard (`variant="wizard"`), at the top of the staff home and on both owner dashboard views
-   (`variant="home"`, dismissible for 3 days). A plain-language ask comes first; the browser permission dialog
+   (`variant="home"`, dismissible for 3 days, and hidden altogether once alerts are on: the notifications gate
+   already requires them, owner 2026-11-10; the wizard keeps showing its "on" confirmation). A plain-language ask comes first; the browser permission dialog
    only after "yes". On an iPhone in a normal Safari tab it shows the add-to-home-screen steps instead, because
    Web Push exists there only inside the home-screen app.
 2. **Subscribe.** `subscribeStaffPush()` (`src/lib/push/client.ts`) -> `POST /api/staff/push` with
@@ -113,8 +114,8 @@ waiting, and the scheduler state. Code: `src/lib/push/dev.ts`, `src/components/s
   the server row, never the browser subscription, so staff alerts keep working.
 - A shared phone: alerts go to whoever signed in last on it. Signing out does not remove the subscription; the person
   can switch alerts off from the card before handing the phone over.
-- Delivery depends on the push service (Apple, Google); the card's "send a test" shows the push service's own error text
-  when it refuses.
+- Delivery depends on the push service (Apple, Google); the "send a test" button (onboarding wizard card, and the
+  developer's test bench `DevPushPanel`) shows the push service's own error text when it refuses.
 - Not in this release: per-category preferences (everything is on or off), quiet hours, notification of unreviewed
   checklists with defects (the owner inbox already shows those), manager push for new availability submissions.
 
