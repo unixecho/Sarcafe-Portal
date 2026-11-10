@@ -246,7 +246,8 @@ section('the app: the staff bridge')
   check('an update never reloads the page while the panel is open', /staff != null && staff\.panelOpen\(\)/.test(main))
   check('a new PIN needs the current one, shares the lockout of the PIN dialog, and must be 6 to 8 digits', /pin_locked_until/.test(bridge) && /StaffPin\.verify/.test(bridge) && /isAcceptableNewPin\(newPin\)/.test(bridge))
   check('the restart of the whole tablet is only for the device owner and asks first', /isDeviceOwnerApp/.test(bridge) && /confirmReboot/.test(main) && /setNegativeButton\("Cancel"/.test(main))
-  check('the PIN dialog closes the keyboard it opened, on OK and on every other way out (it stayed over the panel on the real tablet)', /setOnDismissListener[^]*?hideKeyboard\(input\)/.test(main) && /onClick[^]*?hideKeyboard\(input\)[^]*?checkPin\(/.test(main) && /hideSoftInputFromWindow/.test(main))
+  // real tablet, 2026-11-10: hiding only in onDismiss did nothing for Cancel (the dialog's window is already gone there), so each way out has its own call
+  check('the PIN dialog closes the keyboard it opened: on OK, on Cancel, on Back, and again once the dialog is gone', /setNegativeButton\("Cancel", new[^]*?hideKeyboard\(input\)/.test(main) && /setOnCancelListener[^]*?hideKeyboard\(input\)/.test(main) && /onDismiss[^]*?postDelayed[^]*?hideKeyboard\(null\)/.test(main) && /onClick[^]*?hideKeyboard\(input\)[^]*?checkPin\(/.test(main) && /hideSoftInputFromWindow/.test(main))
   const jdk = ['C:/Program Files/Eclipse Adoptium/jdk-21.0.7.6-hotspot/bin/javac.exe'].find(existsSync)
   const androidJar = join(process.env.LOCALAPPDATA || '', 'Android/Sdk/platforms/android-36/android.jar')
   if (jdk && existsSync(androidJar)) {

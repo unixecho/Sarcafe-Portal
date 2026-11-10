@@ -465,7 +465,9 @@ public class MainActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("Staff PIN")
             .setView(input)
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton("Cancel", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { hideKeyboard(input); }
+            })
             .setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
                 @Override public void onClick(android.content.DialogInterface d, int w) {
                     hideKeyboard(input); // while the dialog's own window can still name the keyboard's target
@@ -477,7 +479,15 @@ public class MainActivity extends Activity {
         // ...and it goes away again however the dialog ends (OK, Cancel, Back): it used to stay open over the control panel
         // (seen on the real tablet, 2026-11-05)
         dialog.setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
-            @Override public void onDismiss(android.content.DialogInterface d) { hideKeyboard(input); }
+            @Override public void onDismiss(android.content.DialogInterface d) {
+                hideKeyboard(input);
+                // by now the dialog's window is gone, so the call above cannot name it: once the activity's own window has
+                // the keyboard's focus back, ask again (this is the one that works for Cancel and Back)
+                ui.postDelayed(new Runnable() { @Override public void run() { hideKeyboard(null); } }, 120);
+            }
+        });
+        dialog.setOnCancelListener(new android.content.DialogInterface.OnCancelListener() {
+            @Override public void onCancel(android.content.DialogInterface d) { hideKeyboard(input); }
         });
         dialog.show();
         input.requestFocus();
