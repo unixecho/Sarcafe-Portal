@@ -1,11 +1,11 @@
 # 09 — Agent task tracker
 
-Updated 2026-11-11. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. No implementation task has run. PC parity gap accepted by user; full Windows baseline is not green.
+Updated 2026-11-11. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. FABLE-000 has run on the PC and waits for Codex; no feature task has run. Not verified by Codex yet.
 
 | Task | Status | Dependencies | Codex acceptance evidence |
 |---|---|---|---|
 | Discovery/planning | Documents prepared; baseline recorded | Existing checkout | [Audit](01-repository-audit.md), [baseline](baseline/2026-11-11.md) |
-| FABLE-000 | Ready for manual assignment | User selects actual Fable 5.2 | Pending: portability fix, independent full baseline rerun |
+| FABLE-000 | **Ready for Codex review** (2026-11-11, PC) | Base `6caf454`, one local unpushed commit in worktree `Sarcafe-identity-pc` (`codex/identity-pc`) | Fable report: root `handoff.md`, 2026-11-11 Fable addendum. Own run on the PC: dashboard 131/131, kiosk 38/38, exit 0 (Edge, not Playwright Chromium; Linux and laptop not re-run). Pending: Codex diff review and independent rerun |
 | FABLE-001 | Prepared, blocked on 000 review | 000 verified | None |
 | FABLE-002 | Prepared, not started | 001 verified; Glisse skill for UI | None |
 | FABLE-003 | Prepared, not started | 002 verified | None |
@@ -38,4 +38,4 @@ Exact next step:
 Status: ready for Codex review
 ```
 
-Next step: user runs [FABLE_PROMPT.md](FABLE_PROMPT.md) inside the project with Fable 5.2. Claude completes FABLE-000 and returns its report/diff; Codex independently reruns the QA baseline before authorizing FABLE-001. No production action is part of this handoff.
+Next step: Codex reviews the FABLE-000 diff and independently reruns the QA baseline before authorizing FABLE-001. No production action is part of this handoff.

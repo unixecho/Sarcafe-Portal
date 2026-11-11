@@ -3,7 +3,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createStage, assert } from '../lib/harness.mjs'
-import { run } from '../lib/exec.mjs'
+import { run, npm, NODE, packageBin } from '../lib/exec.mjs'
 
 // Every route must name one of these guards, or be on PUBLIC with its reason. A new unguarded route fails the suite.
 const GUARDS = /requireOwner|requireMenuEditor|requireAnyMenuEditor|resolveStaffIdentity|requireStaffIdentity|qaCallerAllowed|requireSchedule\w*|requirePublishedScheduleViewer|bearerMatches|privateStaffRoute|messengerFor|resolveTabletWrite|requireOrderStaff|performOrderDispatch|performDispatch|keysMatch|requirePos\w*|requireStaff\w*|getUser\(\)/
@@ -70,7 +70,7 @@ export function staticStage(root) {
   const migrations = fs.readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort()
 
   stage.test('typecheck', 'TypeScript מתקמפל בלי שגיאות (tsc --noEmit)', 'static', async () => {
-    const r = await run('npx', ['tsc', '--noEmit', '-p', '.'], { cwd: root, timeout: 300_000 })
+    const r = await run(NODE, [packageBin(root, 'typescript', 'tsc'), '--noEmit', '-p', '.'], { cwd: root, timeout: 300_000 })
     assert.ok(r.code === 0, r.output.split('\n').filter((l) => /error TS/.test(l)).slice(0, 5).join(' | ') || r.output.slice(-400))
   }, { retry: false, timeout: 320_000 })
 
@@ -193,7 +193,7 @@ export function staticStage(root) {
   })
 
   stage.test('npm-audit', 'אין חולשות קריטיות או גבוהות חדשות בספריות של הייצור (npm audit)', 'security', async () => {
-    const r = await run('npm', ['audit', '--omit=dev', '--json'], { cwd: root, timeout: 120_000 })
+    const r = await npm(['audit', '--omit=dev', '--json'], { cwd: root, timeout: 120_000 })
     let data
     try { data = JSON.parse(r.output.slice(r.output.indexOf('{'))) } catch { throw new Error(`npm audit gave no report: ${r.output.slice(-200)}`) }
     const v = data.metadata?.vulnerabilities ?? {}

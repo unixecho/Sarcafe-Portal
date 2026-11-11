@@ -6,15 +6,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { pbkdf2Sync, randomBytes } from 'node:crypto'
 import { createStage, assert, skipTest } from '../lib/harness.mjs'
-import { run } from '../lib/exec.mjs'
+import { run, NODE, importFile } from '../lib/exec.mjs'
+import { findJdk } from '../lib/jdk.mjs'
 
 const APP = 'prototypes/sarcafe-kiosk-app'
 const JAVA_SRC = `${APP}/src/il/co/sarcafe/kiosk`
-
-function javac() {
-  for (const p of [process.env.JAVA_HOME && path.join(process.env.JAVA_HOME, 'bin', 'javac'), '/usr/bin/javac'].filter(Boolean)) if (fs.existsSync(p)) return p
-  return null
-}
 
 export function kioskStaticStage(root) {
   const stage = createStage('kiosk-static', 'הקיוסק: הקוד של הדף, החבילה והאפליקציה (Java)')
@@ -24,14 +20,14 @@ export function kioskStaticStage(root) {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js'))
     assert.ok(files.length >= 15, `only ${files.length} scripts`)
     const bad = []
-    for (const f of files) { const r = await run('node', ['--check', path.join(dir, f)], { cwd: root, timeout: 30_000 }); if (r.code !== 0) bad.push(`${f}: ${r.output.split('\n').slice(0, 2).join(' ')}`) }
+    for (const f of files) { const r = await run(NODE, ['--check', path.join(dir, f)], { cwd: root, timeout: 30_000 }); if (r.code !== 0) bad.push(`${f}: ${r.output.split('\n').slice(0, 2).join(' ')}`) }
     assert.deepEqual(bad, [], 'scripts that do not parse:')
   })
 
   stage.test('bundle', 'חבילת הדף נבנית: כל הקבצים, כל אחד במקום, בלי קובץ ריק', 'static', async () => {
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'kiosk-bundle-'))
     try {
-      const { assemble } = await import(path.join(root, 'scripts/assemble-kiosk-bundle.mjs'))
+      const { assemble } = await importFile(path.join(root, 'scripts/assemble-kiosk-bundle.mjs'))
       await assemble(out)
       const files = []
       const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else files.push(p) } }
@@ -46,8 +42,9 @@ export function kioskStaticStage(root) {
   })
 
   stage.test('java-pin', 'האפליקציה (Java): קוד שנקבע בלוח הבקרה נבדק אצל הטאבלט כמו קוד שהוקלד בו, ורשומה פגומה נדחית', 'unit', async () => {
-    const compiler = javac()
-    if (!compiler) skipTest('no JDK on this machine (javac): GitHub Actions has one')
+    const jdk = findJdk()
+    if (!jdk) skipTest('no JDK on this machine (no javac in JAVA_HOME or on the PATH): GitHub Actions has one')
+    const compiler = jdk.javac
     const work = fs.mkdtempSync(path.join(os.tmpdir(), 'kiosk-java-'))
     try {
       // the record exactly as the portal makes it (src/lib/kiosk/pin-record.ts pinRecord: PBKDF2-HMAC-SHA1, 15000, 16-byte salt)
@@ -89,8 +86,7 @@ public final class RemotePinTest {
       const srcs = ['OtaRules.java', 'StaffPin.java', 'PinReset.java', 'EnrollRules.java'].map((f) => path.join(root, JAVA_SRC, f))
       const c = await run(compiler, ['--release', '8', '-Xlint:-options', '-encoding', 'UTF-8', '-d', path.join(work, 'out'), ...srcs, path.join(testDir, 'RemotePinTest.java')], { cwd: root, timeout: 120_000 })
       assert.ok(c.code === 0, `javac: ${c.output.split('\n').filter((l) => /error/.test(l)).slice(0, 4).join(' | ')}`)
-      const java = path.join(path.dirname(compiler), 'java')
-      const r = await run(fs.existsSync(java) ? java : 'java', ['-cp', path.join(work, 'out'), 'il.co.sarcafe.kiosk.RemotePinTest', record], { cwd: root, timeout: 60_000 })
+      const r = await run(jdk.java, ['-cp', path.join(work, 'out'), 'il.co.sarcafe.kiosk.RemotePinTest', record], { cwd: root, timeout: 60_000 })
       assert.ok(r.code === 0 && /OK/.test(r.output), r.output.split('\n').filter((l) => /FAIL/.test(l)).join(' | ') || r.output.slice(-300))
     } finally { fs.rmSync(work, { recursive: true, force: true }) }
   }, { retry: false, timeout: 180_000 })
@@ -129,7 +125,7 @@ public final class RemotePinTest {
   })
 
   stage.test('menu-sql', 'עורך התפריט — הפונקציה במסד הנתונים (Postgres אמיתי): שם ומחיר לפריט ולסוג, ניקוי מחיר, טיוטה בלבד כשסגור, שם ריק נדחה, נעולה לדפדפנים', 'sql', async () => {
-    const { PGlite } = await import(path.join(root, 'node_modules/@electric-sql/pglite/dist/index.js'))
+    const { PGlite } = await importFile(path.join(root, 'node_modules/@electric-sql/pglite/dist/index.js'))
     const db = new PGlite()
     try {
       await db.exec(`create role anon; create role authenticated; create role service_role;

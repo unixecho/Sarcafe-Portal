@@ -137,7 +137,7 @@ const wizard = read('src/components/staff/StaffOnboarding.tsx')
 check('the button passes the wish through, and the page continues at "my details" after ?linked=1', /<GoogleLinkButton prepared=\{prepared\} back="onboarding"/.test(wizard) && /params\.get\('linked'\) === '1'/.test(wizard) && /setContinuing\(true\)/.test(wizard))
 check('a person who finished the walk and opens the page again goes home (the icon always ends at the home)', /mine\.onboardingDone && !failed\) \{ window\.location\.replace\('\/staff'\)/.test(wizard))
 check('the tour can be watched again with ?tour=1', /params\.get\('tour'\) === '1'/.test(wizard))
-check('the bearer link stays in the address bar through setup (so the icon can be saved WITH it) and leaves it, and this device, the moment the code is set', /clearInvite\(storage\(\)\)\n      window\.history\.replaceState\(null, '', window\.location\.pathname\)/.test(wizard) && !/if \(invite\) window\.history\.replaceState/.test(wizard))
+check('the bearer link stays in the address bar through setup (so the icon can be saved WITH it) and leaves it, and this device, the moment the code is set', /clearInvite\(storage\(\)\)\r?\n      window\.history\.replaceState\(null, '', window\.location\.pathname\)/.test(wizard) && !/if \(invite\) window\.history\.replaceState/.test(wizard))
 const onboardingApi = read('src/app/api/staff/onboarding/route.ts')
 check('the person\'s first and last name reach the details step', /firstName: identity\.first_name/.test(onboardingApi) && /firstName: person\?\.first_name/.test(onboardingApi))
 

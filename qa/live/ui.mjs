@@ -2,7 +2,7 @@
 import { createStage, assert } from '../lib/harness.mjs'
 import { ID } from '../standin/seed.mjs'
 import { auditScreen } from './contrast.mjs'
-import { run } from '../lib/exec.mjs'
+import { run, NODE } from '../lib/exec.mjs'
 import { browserPath } from '../stages/checks.mjs'
 import { fileURLToPath } from 'node:url'
 
@@ -541,7 +541,7 @@ export function uiStage(live, metrics) {
   stage.test('carousel', 'הקרוסלה של "מי במשמרת" עוברת את כל הבדיקה המקורית (check:shift-scroller) על העותק הבנוי', 'regression', async () => {
     const script = fileURLToPath(new URL('../../scripts/check-shift-scroller.mjs', import.meta.url))
     // ~400 s here (6 phone/tablet sizes × 7 cases); the limit leaves room for a slower CI machine
-    const r = await run('node', [script, live().base], { timeout: 900_000, env: { EDGE_PATH: browserPath() ?? '' } })
+    const r = await run(NODE, [script, live().base], { timeout: 900_000, env: { EDGE_PATH: browserPath() ?? '' } })
     const summary = r.output.match(/(\d+) passed, (\d+) failed/)
     assert.ok(r.code === 0, `exit ${r.code}: ${r.output.split('\n').filter((l) => /✗/.test(l)).slice(0, 4).join(' | ').slice(0, 400) || r.output.slice(-300)}`)
     assert.ok(summary && Number(summary[1]) > 100, `too few checks ran: ${summary?.[0]}`)

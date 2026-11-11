@@ -11,8 +11,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { harnessStage } from './stages/harness.mjs'
 import { staticStage } from './stages/static.mjs'
-import { checksStage } from './stages/checks.mjs'
+import { checksStage, browserPath, browserProblems } from './stages/checks.mjs'
 import { unitStage } from './stages/unit.mjs'
 import { startLive } from './live/app.mjs'
 import { securityStage } from './live/security.mjs'
@@ -23,7 +24,8 @@ import { kioskStaticStage } from './kiosk/static.mjs'
 import { kioskApiStage } from './kiosk/api.mjs'
 import { kioskUiStage } from './kiosk/ui.mjs'
 import { buildReport, writeReport } from './lib/report.mjs'
-import { run } from './lib/exec.mjs'
+import { run, npmCli } from './lib/exec.mjs'
+import { findJdk } from './lib/jdk.mjs'
 import { qaCredential } from './lib/github-token.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -50,7 +52,17 @@ const banner = (s) => console.log(`\n━━ ${s.title}`)
 
 async function runStage(stage, suite = 'dashboard') { banner(stage); const r = await stage.run(); results[suite].push(r); return r }
 
+// what this run really ran on (docs/QA_BLUEPRINT.md, "Machines"): said at the top of every log, never assumed
+{
+  const jdk = findJdk()
+  const browser = browserPath()
+  console.log(`QA on ${process.platform} ${process.arch} · Node ${process.version} · npm ${npmCli() ?? '(the npm on the PATH)'} · JDK ${jdk ? `${jdk.version} (${jdk.home})` : 'none found: the Java tests will be skipped'}`)
+  console.log(`Browser: ${browser ?? 'none found: the browser tests cannot run (npx playwright install chromium)'}`)
+  for (const p of browserProblems()) console.log(`  ! ${p}`)
+}
+
 if (wantSuite('dashboard')) {
+  if (want('harness')) await runStage(harnessStage(ROOT))
   if (want('static')) { const s = staticStage(ROOT); await runStage(s); metrics.audit = s.audit ?? null }
   if (want('checks') && !flag('fast')) await runStage(checksStage(ROOT, 'dashboard'))
   if (want('unit')) await runStage(unitStage(ROOT))

@@ -5,7 +5,8 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { startStandin, sessionCookie } from '../standin/supabase.mjs'
 import { seed, tokenFor, userFor } from '../standin/seed.mjs'
-import { run, start } from '../lib/exec.mjs'
+import { run, start, NODE, packageBin } from '../lib/exec.mjs'
+import { workDir, removeScratch, copySource, linkDependencies, sourceFingerprint, assertPortFree } from '../lib/scratch.mjs'
 import { browserPath } from '../stages/checks.mjs'
 
 const require = createRequire(import.meta.url)
@@ -15,20 +16,13 @@ export const SECRETS = { CRON_SECRET: 'qa-cron-secret-0123456789', QA_REPORT_SEC
 // GitHub's token signer, played by the stand-in (lib/qa/auth.ts reads <issuer>/.well-known/jwks): tests sign with signToken()
 export const OIDC_ISSUER = `http://127.0.0.1:54399/__qa`
 
-const SKIP = new Set(['node_modules', '.next', '.git', 'qa', '.vercel'])
-function copyTree(from, to, top = true) {
-  fs.mkdirSync(to, { recursive: true })
-  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
-    if (top && SKIP.has(e.name)) continue
-    if (e.name === 'node_modules' || e.name === '.next') continue
-    const a = path.join(from, e.name), b = path.join(to, e.name)
-    if (e.isDirectory()) copyTree(a, b, false)
-    else if (e.isFile()) fs.copyFileSync(a, b)
-  }
-}
+// The fingerprint of the source a build in qa/.work was made from (qa/lib/scratch.mjs sourceFingerprint), kept beside the build.
+const STAMP = '.qa-source'
 
 export async function startLive(root, { log = console.log, reuseBuild = false } = {}) {
-  const work = path.join(root, 'qa/.work/app')
+  const work = workDir(root, 'app')
+  // The test app's whole world: the stand-in and made-up keys. It is started with the operating system's variables only
+  // (cleanEnv), so a real project address, key or provider setting in the developer's shell can never reach it.
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${STANDIN_PORT}`,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: 'qa-anon-key',
@@ -38,31 +32,58 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     NEXT_TELEMETRY_DISABLED: '1',
     ...SECRETS,
   }
-  const standin = await startStandin({ port: STANDIN_PORT, seed })
-  const built = reuseBuild && fs.existsSync(path.join(work, '.next/BUILD_ID'))
-  if (!built) {
-    log('  building the app against the stand-in (production build)…')
-    fs.rmSync(work, { recursive: true, force: true })
-    copyTree(root, work)
-    fs.mkdirSync(path.join(work, 'qa/reports'), { recursive: true })
-    for (const f of ['latest.json', 'kiosk-latest.json']) fs.copyFileSync(path.join(root, 'qa/reports', f), path.join(work, 'qa/reports', f))
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(work, 'node_modules'), 'dir')
-    // the carousel's own browser check needs its throwaway fixture page: only ever in this scratch copy
-    await run('node', [path.join(root, 'scripts/check-shift-scroller.mjs'), '--write-fixture', work], { cwd: root, timeout: 30_000 })
-    // --profile: a production build whose React <Profiler> still reports renders (check:shift-scroller counts renders per swipe;
-    // in a plain production build onRender never fires and the count reads NaN). Everything else is the real production build.
-    const b = await run('npx', ['next', 'build', '--profile'], { cwd: work, env, timeout: 900_000 })
-    if (b.code !== 0) { await standin.close(); throw new Error(`next build failed:\n${b.output.slice(-3000)}`) }
+  const next = packageBin(root, 'next')
+  // a server left over from an earlier run would answer for this one (an OLD build passing or failing today's tests): refuse to start
+  await assertPortFree(STANDIN_PORT, 'the stand-in Supabase')
+  await assertPortFree(APP_PORT, 'the test app')
+
+  // Everything started from here on is closed again when a later step fails: nothing is left running or listening.
+  let standin = null, server = null, browser = null
+  const closeAll = async () => {
+    await browser?.close().catch(() => null)
+    await server?.stop().catch(() => null)
+    await standin?.close().catch(() => null)
   }
-  const server = start('npx', ['next', 'start', '-p', String(APP_PORT), '-H', '127.0.0.1'], { cwd: work, env: { ...env, NODE_ENV: 'production' }, readyRe: /Ready in|started server|Local:/i, timeout: 120_000 })
-  await server.ready
+  try {
+    standin = await startStandin({ port: STANDIN_PORT, seed })
+    const fingerprint = sourceFingerprint(root)
+    let built = false
+    if (reuseBuild) {
+      let stamp = null
+      try { stamp = fs.readFileSync(path.join(work, STAMP), 'utf8').trim() } catch { /* no build yet */ }
+      built = stamp === fingerprint && fs.existsSync(path.join(work, '.next/BUILD_ID'))
+      // a kept build is only kept when it was made from exactly this source: a stale one would test yesterday's app
+      if (!built) log(stamp ? '  --reuse-build: the source changed since the last build, building again' : '  --reuse-build: no finished build to keep, building')
+    }
+    if (!built) {
+      log('  building the app against the stand-in (production build)…')
+      removeScratch(root, work)
+      const copied = copySource(root, work)
+      log(`  ${copied} source files copied to qa/.work/app`)
+      fs.mkdirSync(path.join(work, 'qa/reports'), { recursive: true })
+      for (const f of ['latest.json', 'kiosk-latest.json']) fs.copyFileSync(path.join(root, 'qa/reports', f), path.join(work, 'qa/reports', f))
+      linkDependencies(root, work)
+      // the carousel's own browser check needs its throwaway fixture page: only ever in this scratch copy
+      const fixture = await run(NODE, [path.join(root, 'scripts/check-shift-scroller.mjs'), '--write-fixture', work], { cwd: root, timeout: 30_000 })
+      if (fixture.code !== 0) throw new Error(`the carousel fixture was not written:\n${fixture.output.slice(-600)}`)
+      // --profile: a production build whose React <Profiler> still reports renders (check:shift-scroller counts renders per swipe;
+      // in a plain production build onRender never fires and the count reads NaN). Everything else is the real production build.
+      const b = await run(NODE, [next, 'build', '--profile'], { cwd: work, env, cleanEnv: true, timeout: 900_000 })
+      if (b.code !== 0) throw new Error(`next build failed:\n${b.output.slice(-3000)}`)
+      fs.writeFileSync(path.join(work, STAMP), fingerprint + '\n')
+    }
+    server = start(NODE, [next, 'start', '-p', String(APP_PORT), '-H', '127.0.0.1'], { cwd: work, env: { ...env, NODE_ENV: 'production' }, cleanEnv: true, readyRe: /Ready in|started server|Local:/i, timeout: 120_000 })
+    await server.ready
+    const { chromium } = require('playwright')
+    const executablePath = browserPath()
+    browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
+  } catch (err) {
+    await closeAll()
+    throw err
+  }
   const base = `http://127.0.0.1:${APP_PORT}`
   // warm up: the first request compiles nothing in production, but it opens the route cache
   await fetch(`${base}/login`).catch(() => null)
-
-  const { chromium } = require('playwright')
-  const executablePath = browserPath()
-  const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
 
   const cookieFor = (who) => (who ? sessionCookie(standin.url, tokenFor(who), userFor(who), `refresh-${who}`) : null)
   /** fetch the app as someone. opts: { as, method, body, origin (true = same site), headers } */
@@ -104,7 +125,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     base, standin, browser, call, page, control,
     db: (table) => standin.db[table] ?? [],
     reset: () => standin.reset(),
-    async stop() { await browser.close().catch(() => null); server.stop(); await standin.close().catch(() => null) },
+    stop: closeAll,
     logs: server.logs,
   }
 }

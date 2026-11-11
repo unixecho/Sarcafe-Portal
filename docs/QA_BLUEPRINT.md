@@ -13,14 +13,55 @@ production build serves both.
 | `npm run qa` | both suites, both reports (≈20–30 min, most of it the production build and the 30+ regression scripts) |
 | `npm run qa -- --suite kiosk` | one suite (`dashboard` or `kiosk`) |
 | `npm run qa:fast` | everything except the existing `check:*` / `verify:*` scripts |
-| `npm run qa -- --only static,unit` | some stages (dashboard: `static, checks, unit, security, features, ui, survival`; kiosk: `kiosk-static, kiosk-checks, kiosk-api, kiosk-ui`) |
-| `npm run qa -- --reuse-build` | keep the last production build (only when no app code changed since) |
+| `npm run qa -- --only static,unit` | some stages (dashboard: `harness, static, checks, unit, security, features, ui, survival`; kiosk: `kiosk-static, kiosk-checks, kiosk-api, kiosk-ui`) |
+| `npm run qa -- --reuse-build` | keep the last production build. It is kept only when it was made from exactly today's source (a fingerprint of every file that goes into the build is stored beside it); after any edit the suite says so and builds again |
 | `npm run qa -- --post` | also send both reports to the portal (in GitHub Actions: GitHub's identity token; by hand: `QA_REPORT_SECRET`) |
 | `node qa/tools/send-digest.mjs --dry` | what the 07:00 notification would say right now (sends nothing) |
 | `QA_TESTS=ui.reset,ui.notifications-long npm run qa -- --only ui` | only those tests, while fixing one thing (the full run before the push still runs everything) |
 
 **The rule:** every change runs `npm run qa` before it is pushed, and a failing test is fixed or explicitly reviewed, never deleted. A new
 feature adds its tests in the same change (a new endpoint → `qa/live/features.mjs` + it appears in `security.probe-signed-out` automatically).
+
+## Machines (Windows and Linux)
+The suite runs the same way on a Windows PC and on GitHub's Linux runner. Set up a machine once:
+
+```
+npm ci
+npx playwright install chromium      (Linux CI: npx playwright install --with-deps chromium)
+npm run qa
+```
+
+The first line of every run says what it really ran on (platform, Node, the npm script it uses, the JDK it found). What has actually been run:
+
+| Machine | Node / npm | JDK | Result |
+|---|---|---|---|
+| GitHub Actions, `ubuntu-latest` (`.github/workflows/qa.yml`) | Node 22 | Temurin 17 | the daily and per-push runs; **not re-run with the 2026-11-11 harness changes yet** (they are not on `main`) |
+| Owner's PC, Windows 11 | Node 22.20.0 / npm 11.9.0 | Oracle JDK 24.0.1 (found through the `javac` on the PATH; `JAVA_HOME` is not set) | full run, see `handoff.md` 2026-11-11 |
+| Work laptop, Windows 11 | Node 24.13.0 / npm 11.6.2 | Temurin 21.0.7 | before the fix only (the failing baseline in `docs/identity-system/baseline/2026-11-11.md`); not re-run after it |
+
+Supported: **Node 22 or 24, any JDK from 17 up** (the Java tests compile with `--release 8`). No version is pinned in `package.json`
+on purpose: CI is the reference (Node 22, Temurin 17), and a different local version is printed, not hidden. Without a JDK the two
+Java tests are skipped with the reason; with one they must run.
+
+Rules the harness keeps so it works on both (`qa/lib/exec.mjs`, `qa/lib/jdk.mjs`, `qa/lib/scratch.mjs`; tested by the `harness` stage):
+- **No shell, ever.** A command is an executable and an argument array. `npm` and `npx` are not spawned by name (on Windows they are
+  `.cmd` files that only a shell can start: `spawn npm ENOENT`): npm's own `npm-cli.js` and a package's own `bin` script are run with
+  the Node that runs the suite (`npm()`, `packageBin()`).
+- **A module is imported by file URL** (`importFile()`), never by a bare absolute path (`C:…` is not a module address).
+- **The JDK is looked for, not assumed:** `JAVA_HOME` when it holds a compiler, else the `javac` on the PATH (`javac.exe` on Windows);
+  when that is only a launcher (Oracle's `javapath`), the JDK it runs. The check scripts get it as `JAVA_HOME`.
+- **The build copy** (`qa/.work/app`) holds only what a build reads: the files and folders listed in `qa/lib/scratch.mjs`
+  (`SOURCE_FILES`, `SOURCE_DIRS`), never a `.env*` file, never another top-level folder. A new top-level file the build needs is
+  added to that list on purpose. It reaches the installed packages through a junction on Windows (no administrator rights) and a
+  symlink elsewhere; removing the copy removes the link first and refuses any path outside `qa/.work`.
+- **The test app starts with the operating system's variables only** plus the stand-in's made-up keys (`cleanEnv`): a real project
+  address, key or provider setting in the developer's shell cannot reach it. The `check:*` scripts still get the whole environment,
+  as they do when run by hand.
+- **Nothing is left running.** A program that passes its time limit is ended with everything it started (Windows: `taskkill /T` on
+  the suite's own child; Linux: a server's process group); when the build, the server or the browser fails to start, whatever was
+  already started is closed; Ctrl+C ends the children too. A run refuses to start while its two ports (54399, 3399) are taken.
+- Not on Windows: a checkout path with non-English letters breaks the Java tests (the JDK's launcher reads its arguments in the
+  system code page). Spaces are fine.
 
 ## Every morning
 `.github/workflows/qa.yml`:
@@ -47,6 +88,7 @@ are optional fallbacks. Migration `20261105090000` creates `qa_runs` (with `suit
 ## What it checks (stages)
 | Stage | File | Categories | What |
 |---|---|---|---|
+| harness | `qa/stages/harness.mjs` | unit, security | the suite checks itself on this machine: npm and package tools start without a shell, a module loads by its path, the JDK is found and compiles, a stuck program and a server are ended with everything they started, the test app's environment is clean, the build copy holds only app code and its cleanup cannot leave `qa/.work` |
 | static | `qa/stages/static.mjs` | static, sql, security | `tsc`; migration names; **no function with two signatures** (follows `drop` and `rename`); every new function revoked from browser roles; RLS on every new table; secrets in git; **every API route guarded or on the reviewed public list**; npm audit (new high/critical fail; known ones listed with a reason); required docs exist |
 | checks | `qa/stages/checks.mjs` | regression, sql, security | every existing `check:*` / `verify:*` script (SQL is real Postgres via PGlite). The Windows-Edge browser checks run on the suite's Chromium (`EDGE_PATH`); `check:shift-scroller` needs its fixture page, so it runs in the ui stage against the built copy. Anything this machine truly cannot run is **skipped with the reason**, never passed |
 | unit | `qa/stages/unit.mjs` | unit, security | the pure rules as real TypeScript: search engine (Hebrew, typos, ranking), **tool index vs the middleware access lists**, message cleaning (direction overrides, zero-width), tones, pills, the report contract |
@@ -64,8 +106,8 @@ are optional fallbacks. Migration `20261105090000` creates `qa_runs` (with `suit
 | kiosk-api | `qa/kiosk/api.mjs` | security, e2e, survival | the kiosk key, a tablet sees only its own settings, commands end to end (sent → carried by the report → done), the PIN round trip (never the PIN, only the record; once), the PIN rules and the rate limit, owner-only, outage answers |
 | kiosk-ui | `qa/kiosk/ui.mjs` | e2e, security, a11y | the kiosk dashboard in Chromium: the tablet's state, the switch between the dashboards both ways (owner and developer, no reload), saving settings, remote actions and the PIN sheet, access by role, contrast in all five looks, iPhone and tablet widths |
 
-The Java stage needs a JDK (`javac`): the workflow installs Temurin 17; locally the suite finds `/usr/bin/javac` or `JAVA_HOME`, and skips
-with the reason when there is none.
+The Java stage needs a JDK (`javac`): the workflow installs Temurin 17; locally the suite finds it through `JAVA_HOME` or the PATH
+(`qa/lib/jdk.mjs`, see "Machines"), and skips with the reason only when there really is none.
 
 **Flaky:** a failing test runs once more; passing the second time is reported as *flaky* (amber), never hidden.
 
@@ -75,12 +117,14 @@ qa/
   run.mjs                  stages → report → review → (post)
   lib/harness.mjs          stage/test, assert, retry-once, skip-with-reason, time limits
   lib/report.mjs           report JSON + the Hebrew morning review + diff with the previous run
-  lib/exec.mjs             child processes with time limits; long-running servers in their own process group
+  lib/exec.mjs             child processes without a shell, with time limits; npm and package tools; servers ended with what they started
+  lib/jdk.mjs              where this machine's JDK is
+  lib/scratch.mjs          the build copy: what goes in, the link to the packages, the source fingerprint, safe removal
   standin/supabase.mjs     in-memory PostgREST + GoTrue user + RPCs + fault injection (down / error / slow / missing tables & functions)
   standin/seed.mjs         the project's world (people, branches, shifts) relative to today
   live/app.mjs             production build of THIS checkout against the stand-in, `call(path, { as })`, `page(who)`, control
   live/*.mjs               the live stages
-  stages/*.mjs             static, checks, unit
+  stages/*.mjs             harness (the suite checks itself), static, checks, unit
   kiosk/*.mjs              the kiosk suite's stages (static + Java, api, ui)
   lib/github-token.mjs     GitHub's identity token for posting
   tools/send-digest.mjs    the 07:00 digest call
