@@ -9,6 +9,7 @@ import path from 'node:path'
 import { createStage, assert, skipTest } from '../lib/harness.mjs'
 import { run, start, npm, npmCli, packageBin, importFile, systemEnv, NODE } from '../lib/exec.mjs'
 import { findJdk } from '../lib/jdk.mjs'
+import { probeBrowser, selectBrowser, resolveBrowser, PROBE_MARK } from '../lib/browser.mjs'
 import { sourceFiles, sourceFingerprint, copySource, linkDependencies, removeScratch, workDir, isInside, assertPortFree } from '../lib/scratch.mjs'
 
 const alive = (pid) => { try { process.kill(pid, 0); return true } catch (err) { return err.code === 'EPERM' } }
@@ -96,21 +97,113 @@ export function harnessStage(root) {
     if (process.platform === 'win32') assert.equal(findJdk({ JAVA_HOME: path.join(temp(), 'not a jdk'), PATH: '' }), null, 'a JAVA_HOME without a compiler is not a JDK')
   }, { timeout: 200_000, retry: false })
 
-  stage.test('timeout-kills-tree', 'תוכנית שנתקעה נעצרת בזמן, יחד עם מה שהיא הפעילה (ב־Windows: כל העץ)', 'unit', async () => {
-    const dir = path.join(temp(), 'stuck')
+  // A fixture program that starts a child that starts a grandchild; each prints its number (and appends it to pids.txt), then hangs.
+  // They end themselves when the stop file appears (and after two minutes at the latest), so a test can clear up leftovers without
+  // ever signalling a number that might by then belong to another program.
+  const treeFixture = (dir) => {
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'child.mjs'), 'setInterval(() => {}, 1000)\n')
-    fs.writeFileSync(path.join(dir, 'parent.mjs'), `import { spawn } from 'node:child_process'\nimport { fileURLToPath } from 'node:url'\nconst c = spawn(process.execPath, [fileURLToPath(new URL('./child.mjs', import.meta.url))], { stdio: 'ignore' })\nconsole.log('pids ' + process.pid + ' ' + c.pid)\nsetInterval(() => {}, 1000)\n`)
-    const r = await run(NODE, [path.join(dir, 'parent.mjs')], { timeout: 2500 })
-    assert.equal(r.code !== 0, true, 'a killed program does not report success')
-    assert.match(r.output, /killed after 2500 ms/, 'the report says it was stopped for time')
-    const m = r.output.match(/pids (\d+) (\d+)/)
-    assert.ok(m, 'the program started and named its processes')
-    const [parent, child] = [Number(m[1]), Number(m[2])]
-    assert.ok(await until(() => !alive(parent)), 'the program itself is gone')
-    if (process.platform === 'win32') assert.ok(await until(() => !alive(child)), 'what it started is gone too')
-    else if (alive(child)) { try { process.kill(child, 'SIGKILL') } catch { /* gone */ } } // POSIX run(): the direct child only, as before; start() ends the group (below)
-  }, { timeout: 40_000 })
+    const stopFile = path.join(dir, 'stop')
+    const pidFile = path.join(dir, 'pids.txt')
+    for (const f of [stopFile, pidFile]) fs.rmSync(f, { force: true }) // a second try starts clean
+    fs.writeFileSync(path.join(dir, 'tree.mjs'), [
+      "import { spawn } from 'node:child_process'",
+      "import fs from 'node:fs'",
+      "import { fileURLToPath } from 'node:url'",
+      "const [depth, stop, pids] = [Number(process.argv[2]), process.argv[3], process.argv[4]]",
+      "console.log('pid ' + depth + ' ' + process.pid)",
+      "fs.appendFileSync(pids, 'pid ' + depth + ' ' + process.pid + '\\n')",
+      // Windows: Node ends its own ordinary children when it dies, which would hide a tree that was not ended; a detached child is
+      // outside that and survives its parent, like the programs npm and a build start. POSIX: left in the parent's process group.
+      "if (depth < 3) spawn(process.execPath, [fileURLToPath(import.meta.url), String(depth + 1), stop, pids], { stdio: 'inherit', detached: process.platform === 'win32', windowsHide: true })",
+      "setInterval(() => { if (fs.existsSync(stop)) process.exit(0) }, 150)",
+      "setTimeout(() => process.exit(0), 120000)",
+      '',
+    ].join('\n'))
+    const readPids = () => { const text = fs.existsSync(pidFile) ? fs.readFileSync(pidFile, 'utf8') : ''; return [1, 2, 3].map((d) => Number(text.match(new RegExp('pid ' + d + ' (\\d+)'))?.[1] ?? 0)) }
+    return { args: [path.join(dir, 'tree.mjs'), '1', stopFile, pidFile], stopFile, readPids }
+  }
+  // leftovers after a failed check end themselves: nothing here signals a process, and the failed check still fails the test
+  const releaseTree = async (fixture) => { fs.writeFileSync(fixture.stopFile, ''); await until(() => fixture.readPids().every((p) => !p || !alive(p)), 5000) }
+
+  stage.test('timeout-kills-tree', 'תוכנית שנתקעה נעצרת בזמן, יחד עם כל מה שהיא הפעילה (ב־Windows וב־Linux)', 'unit', async () => {
+    const fixture = treeFixture(path.join(temp(), 'stuck'))
+    try {
+      const r = await run(NODE, fixture.args, { timeout: 4000 })
+      assert.equal(r.code !== 0, true, 'a killed program does not report success')
+      assert.equal(r.timedOut, true, 'the result says it ran out of time')
+      assert.match(r.output, /killed after 4000 ms/, 'the report says it was stopped for time')
+      const pids = fixture.readPids()
+      assert.ok(pids.every((p) => p > 0), 'the program, its child and its grandchild started and named themselves (' + pids.join(', ') + ')')
+      assert.ok(await until(() => !alive(pids[0])), 'the program itself is gone')
+      assert.ok(await until(() => !alive(pids[1])), 'what it started is gone too')
+      assert.ok(await until(() => !alive(pids[2])), 'and what THAT started is gone too')
+    } finally { await releaseTree(fixture) }
+  }, { timeout: 60_000 })
+
+  stage.test('browser-probe', 'דפדפן נבחר רק אם באמת עלה: יציאה בשגיאה, היתקעות או יציאה בלי הדף נדחים עם הסיבה, והבא בתור נבדק', 'unit', async () => {
+    const dir = path.join(temp(), 'browsers')
+    const hang = treeFixture(path.join(dir, 'hang'))
+    const put = (name, text) => { const f = path.join(dir, name); fs.writeFileSync(f, text); return f }
+    // Each "browser" is a file; its probe is this Node running it (in place of the real probe, which starts a browser with Playwright).
+    const exit23 = put('exit23.mjs', 'console.error("cannot open display"); process.exit(23)\n')
+    const silent = put('silent.mjs', 'process.exit(0)\n')
+    const good = put('good.mjs', 'console.log("rendered " + process.argv[2])\n')
+    const stuck = hang.args[0]
+    const missing = path.join(dir, 'not installed', 'browser')
+    const command = (exe) => (exe === stuck ? [NODE, hang.args] : exe === missing ? [exe, []] : [NODE, [exe, PROBE_MARK]])
+    const probe = (exe, timeout = 20_000) => probeBrowser(exe, { timeout, command })
+    try {
+      const a = await probe(exit23)
+      assert.equal(a.ok, false, 'a browser whose probe exits with 23 is rejected')
+      assert.match(a.reason, /exited with 23: cannot open display/, 'with its exit code and what it said')
+
+      const b = await probe(silent)
+      assert.equal(b.ok, false, 'a probe that exits 0 without the rendered page is rejected')
+      assert.match(b.reason, /without rendering/, 'and the reason says so')
+
+      const t0 = Date.now()
+      const c = await probe(stuck, 3000)
+      assert.equal(c.ok, false, 'a browser that never answers is rejected')
+      assert.match(c.reason, /no answer within 3000 ms/, 'the reason is the time limit')
+      assert.ok(Date.now() - t0 < 20_000, 'the probe is bounded')
+      const pids = hang.readPids()
+      assert.ok(pids.every((p) => p > 0), 'the stuck browser had started a child and a grandchild (' + pids.join(', ') + ')')
+      for (const [i, p] of pids.entries()) assert.ok(await until(() => !alive(p)), ['the stuck browser', 'its child', 'its grandchild'][i] + ' is gone after the probe')
+
+      const d = await probe(missing)
+      assert.equal(d.ok, false, 'a browser that cannot be started is rejected')
+      assert.match(d.reason, /does not start/, 'with the start error')
+
+      assert.deepEqual(await probe(good), { ok: true }, 'a probe that renders the page and exits 0 is accepted')
+
+      // fallback: the failures are passed over in order, each recorded, and the first working one is chosen
+      const seen = []
+      const each = async (exe) => { const r = await probe(exe, 3000); seen.push(path.basename(exe) + ':' + r.ok); return r }
+      const chosen = await selectBrowser([missing, exit23, undefined, stuck, silent, good, exit23], { probe: each })
+      assert.equal(chosen.browser, good, 'the first working browser is chosen')
+      assert.deepEqual(seen, ['exit23.mjs:false', 'tree.mjs:false', 'silent.mjs:false', 'good.mjs:true'], 'every installed one before it was tried, and nothing after it')
+      assert.equal(chosen.problems.length, 3, 'one recorded problem per rejected browser (one that is not installed is not a problem)')
+      assert.match(chosen.problems[0], /exit23\.mjs is installed but is not usable: exited with 23/, 'the first problem names the browser and the reason')
+      assert.match(chosen.problems[1], /no answer within 3000 ms/, 'the second is the time-out')
+      assert.match(chosen.problems[2], /without rendering/, 'the third is the silent exit')
+
+      const none = await selectBrowser([exit23, stuck], { probe: each })
+      assert.equal(none.browser, null, 'when nothing works, no browser is chosen')
+      assert.equal(none.problems.length, 2, 'and both reasons are kept')
+
+      // the real probe, against something that is a file but not a browser: a failure with the reason, never a pass
+      const real = await probeBrowser(exit23, { timeout: 60_000 })
+      assert.equal(real.ok, false, 'the real probe rejects a file that is not a browser')
+      assert.match(real.reason, /exited with 1|no answer/, 'with a reason')
+    } finally { await releaseTree(hang) }
+  }, { timeout: 200_000, retry: false })
+
+  stage.test('browser-chosen', 'הדפדפן של הריצה הזאת עבר את בדיקת המוכנות האמיתית (או שאין דפדפן, וזה נאמר)', 'unit', async () => {
+    const { browser, problems } = await resolveBrowser()
+    if (!browser && problems.length === 0) skipTest('no browser is installed on this machine (npx playwright install chromium)')
+    assert.ok(browser, 'a browser on this machine works. Rejected: ' + problems.join(' | ').slice(0, 400))
+    assert.deepEqual(await probeBrowser(browser), { ok: true }, 'the chosen browser passes the readiness check again')
+  }, { timeout: 120_000 })
 
   stage.test('server-start-stop', 'שרת שהופעל נסגר עם כל מה שהפעיל והפורט מתפנה; שרת שנופל בהפעלה מדווח', 'unit', async () => {
     const dir = path.join(temp(), 'server')

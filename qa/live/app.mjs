@@ -7,7 +7,7 @@ import { startStandin, sessionCookie } from '../standin/supabase.mjs'
 import { seed, tokenFor, userFor } from '../standin/seed.mjs'
 import { run, start, NODE, packageBin } from '../lib/exec.mjs'
 import { workDir, removeScratch, copySource, linkDependencies, sourceFingerprint, assertPortFree } from '../lib/scratch.mjs'
-import { browserPath } from '../stages/checks.mjs'
+import { resolveBrowser } from '../lib/browser.mjs'
 
 const require = createRequire(import.meta.url)
 export const STANDIN_PORT = 54399
@@ -75,7 +75,8 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     server = start(NODE, [next, 'start', '-p', String(APP_PORT), '-H', '127.0.0.1'], { cwd: work, env: { ...env, NODE_ENV: 'production' }, cleanEnv: true, readyRe: /Ready in|started server|Local:/i, timeout: 120_000 })
     await server.ready
     const { chromium } = require('playwright')
-    const executablePath = browserPath()
+    const { browser: executablePath, problems } = await resolveBrowser()
+    if (!executablePath && problems.length) throw new Error(`no browser on this machine works: ${problems.join(' | ')}`)
     browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
   } catch (err) {
     await closeAll()

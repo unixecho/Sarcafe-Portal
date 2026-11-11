@@ -35,15 +35,15 @@ The first line of every run says what it really ran on (platform, Node, the npm 
 
 | Machine | Node / npm | JDK | Result |
 |---|---|---|---|
-| GitHub Actions, `ubuntu-latest` (`.github/workflows/qa.yml`) | Node 22 | Temurin 17 | the daily and per-push runs; **not re-run with the 2026-11-11 harness changes yet** (they are not on `main`) |
-| Owner's PC, Windows 11 | Node 22.20.0 / npm 11.9.0 | Oracle JDK 24.0.1 (found through the `javac` on the PATH; `JAVA_HOME` is not set) | full run, see `handoff.md` 2026-11-11 |
+| GitHub Actions, `ubuntu-latest` (`.github/workflows/qa.yml`) | Node 22 | Temurin 17 | the daily and per-push runs; **not re-run with the 2026-11-11 / 11-12 harness changes yet** (they are not on `main`), so the Linux process-group code is untested |
+| Owner's PC, Windows 11 | Node 22.20.0 / npm 11.9.0 | Oracle JDK 24.0.1 (found through the `javac` on the PATH; `JAVA_HOME` is not set) | full runs, see `handoff.md` 2026-11-11 and 2026-11-12 (the second from a folder with spaces) |
 | Work laptop, Windows 11 | Node 24.13.0 / npm 11.6.2 | Temurin 21.0.7 | before the fix only (the failing baseline in `docs/identity-system/baseline/2026-11-11.md`); not re-run after it |
 
 Supported: **Node 22 or 24, any JDK from 17 up** (the Java tests compile with `--release 8`). No version is pinned in `package.json`
 on purpose: CI is the reference (Node 22, Temurin 17), and a different local version is printed, not hidden. Without a JDK the two
 Java tests are skipped with the reason; with one they must run.
 
-Rules the harness keeps so it works on both (`qa/lib/exec.mjs`, `qa/lib/jdk.mjs`, `qa/lib/scratch.mjs`; tested by the `harness` stage):
+Rules the harness keeps so it works on both (`qa/lib/exec.mjs`, `qa/lib/jdk.mjs`, `qa/lib/scratch.mjs`, `qa/lib/browser.mjs`; tested by the `harness` stage):
 - **No shell, ever.** A command is an executable and an argument array. `npm` and `npx` are not spawned by name (on Windows they are
   `.cmd` files that only a shell can start: `spawn npm ENOENT`): npm's own `npm-cli.js` and a package's own `bin` script are run with
   the Node that runs the suite (`npm()`, `packageBin()`).
@@ -57,9 +57,17 @@ Rules the harness keeps so it works on both (`qa/lib/exec.mjs`, `qa/lib/jdk.mjs`
 - **The test app starts with the operating system's variables only** plus the stand-in's made-up keys (`cleanEnv`): a real project
   address, key or provider setting in the developer's shell cannot reach it. The `check:*` scripts still get the whole environment,
   as they do when run by hand.
-- **Nothing is left running.** A program that passes its time limit is ended with everything it started (Windows: `taskkill /T` on
-  the suite's own child; Linux: a server's process group); when the build, the server or the browser fails to start, whatever was
-  already started is closed; Ctrl+C ends the children too. A run refuses to start while its two ports (54399, 3399) are taken.
+- **Nothing is left running.** Every program the suite starts (`run()` and `start()` alike) is ended with everything it started when
+  it passes its time limit or is stopped: on Windows `taskkill /T` from the suite's own still-running child; on Linux / macOS the
+  child is started as the leader of its own process group and the group is signalled. Never a process the suite did not start.
+  When the build, the server or the browser fails to start, whatever was already started is closed; Ctrl+C ends the children too.
+  A run refuses to start while its two ports (54399, 3399) are taken. The `harness` stage proves it with a program that starts a
+  child that starts a grandchild, and requires all three to be gone (on both systems; **the Linux half has not been run yet**).
+- **A browser is used only after it proves it works** (`qa/lib/browser.mjs`, `qa/lib/browser-probe.mjs`): each candidate is started
+  with Playwright in its own process, must render a test page and exit 0 inside 45 seconds. A non-zero exit, a time-out, a start
+  error or an exit without the page rejects it **with the reason on the run's first lines**, and the next candidate is tried
+  (Playwright's Chromium, `QA_CHROMIUM`, the container's copy, on Windows the installed Edge). When browsers are installed but
+  none works, the browser tests **fail** with those reasons; "skipped: needs Windows Edge" is only for a machine with no browser.
 - Not on Windows: a checkout path with non-English letters breaks the Java tests (the JDK's launcher reads its arguments in the
   system code page). Spaces are fine.
 
@@ -88,7 +96,7 @@ are optional fallbacks. Migration `20261105090000` creates `qa_runs` (with `suit
 ## What it checks (stages)
 | Stage | File | Categories | What |
 |---|---|---|---|
-| harness | `qa/stages/harness.mjs` | unit, security | the suite checks itself on this machine: npm and package tools start without a shell, a module loads by its path, the JDK is found and compiles, a stuck program and a server are ended with everything they started, the test app's environment is clean, the build copy holds only app code and its cleanup cannot leave `qa/.work` |
+| harness | `qa/stages/harness.mjs` | unit, security | the suite checks itself on this machine: npm and package tools start without a shell, a module loads by its path, the JDK is found and compiles, a stuck program and a server are ended with everything they started (three generations), a browser that exits with an error, hangs or renders nothing is rejected with the reason and the next one is tried, the chosen browser passes the real readiness check, the test app's environment is clean, the build copy holds only app code and its cleanup cannot leave `qa/.work` |
 | static | `qa/stages/static.mjs` | static, sql, security | `tsc`; migration names; **no function with two signatures** (follows `drop` and `rename`); every new function revoked from browser roles; RLS on every new table; secrets in git; **every API route guarded or on the reviewed public list**; npm audit (new high/critical fail; known ones listed with a reason); required docs exist |
 | checks | `qa/stages/checks.mjs` | regression, sql, security | every existing `check:*` / `verify:*` script (SQL is real Postgres via PGlite). The Windows-Edge browser checks run on the suite's Chromium (`EDGE_PATH`); `check:shift-scroller` needs its fixture page, so it runs in the ui stage against the built copy. Anything this machine truly cannot run is **skipped with the reason**, never passed |
 | unit | `qa/stages/unit.mjs` | unit, security | the pure rules as real TypeScript: search engine (Hebrew, typos, ranking), **tool index vs the middleware access lists**, message cleaning (direction overrides, zero-width), tones, pills, the report contract |
@@ -119,6 +127,7 @@ qa/
   lib/report.mjs           report JSON + the Hebrew morning review + diff with the previous run
   lib/exec.mjs             child processes without a shell, with time limits; npm and package tools; servers ended with what they started
   lib/jdk.mjs              where this machine's JDK is
+  lib/browser.mjs          this run's browser: the first candidate that passes a bounded readiness check (browser-probe.mjs)
   lib/scratch.mjs          the build copy: what goes in, the link to the packages, the source fingerprint, safe removal
   standin/supabase.mjs     in-memory PostgREST + GoTrue user + RPCs + fault injection (down / error / slow / missing tables & functions)
   standin/seed.mjs         the project's world (people, branches, shifts) relative to today

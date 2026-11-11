@@ -13,7 +13,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { harnessStage } from './stages/harness.mjs'
 import { staticStage } from './stages/static.mjs'
-import { checksStage, browserPath, browserProblems } from './stages/checks.mjs'
+import { checksStage } from './stages/checks.mjs'
+import { resolveBrowser } from './lib/browser.mjs'
 import { unitStage } from './stages/unit.mjs'
 import { startLive } from './live/app.mjs'
 import { securityStage } from './live/security.mjs'
@@ -55,10 +56,10 @@ async function runStage(stage, suite = 'dashboard') { banner(stage); const r = a
 // what this run really ran on (docs/QA_BLUEPRINT.md, "Machines"): said at the top of every log, never assumed
 {
   const jdk = findJdk()
-  const browser = browserPath()
+  const { browser, problems } = await resolveBrowser() // chosen once, before any stage: the first browser that proves it works
   console.log(`QA on ${process.platform} ${process.arch} · Node ${process.version} · npm ${npmCli() ?? '(the npm on the PATH)'} · JDK ${jdk ? `${jdk.version} (${jdk.home})` : 'none found: the Java tests will be skipped'}`)
-  console.log(`Browser: ${browser ?? 'none found: the browser tests cannot run (npx playwright install chromium)'}`)
-  for (const p of browserProblems()) console.log(`  ! ${p}`)
+  console.log(`Browser: ${browser ?? (problems.length ? 'none works (see below): the browser tests will FAIL' : 'none found: the browser tests cannot run (npx playwright install chromium)')}`)
+  for (const p of problems) console.log(`  ! ${p}`)
 }
 
 if (wantSuite('dashboard')) {

@@ -3,7 +3,7 @@ import { createStage, assert } from '../lib/harness.mjs'
 import { ID } from '../standin/seed.mjs'
 import { auditScreen } from './contrast.mjs'
 import { run, NODE } from '../lib/exec.mjs'
-import { browserPath } from '../stages/checks.mjs'
+import { browserPath } from '../lib/browser.mjs'
 import { fileURLToPath } from 'node:url'
 
 const LOOKS = ['neon', 'glass', 'pass', 'crema', 'latte']

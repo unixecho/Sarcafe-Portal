@@ -29,20 +29,24 @@ const running = (child) => child.pid !== undefined && child.exitCode === null &&
 
 /** Ends a process this suite started, with everything it started in turn. Never touches a process the suite did not start. */
 export function killTree(child) {
-  if (!child || !owned.has(child) || !running(child)) return
+  // `owned` holds a child from its start until its output pipes close: after that nothing of it is left and its number may be reused
+  if (!child || !owned.has(child) || child.pid === undefined) return
   if (WIN) {
-    // Windows has no process groups to signal: taskkill /T walks the tree from OUR child's pid (still running, checked above).
+    // Windows has no process groups to signal: taskkill /T walks the tree from OUR child's pid, and only while that child is still
+    // running (the number of a finished process can already belong to another program).
+    if (!running(child)) return
     const taskkill = path.join(process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows', 'System32', 'taskkill.exe')
     const r = spawnSync(taskkill, ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
     if (r.status !== 0) { try { child.kill('SIGKILL') } catch { /* gone */ } }
     return
   }
-  // a child started in its own group (start()) is ended with its group; any other is ended alone, as before
-  if (child.__group) { try { process.kill(-child.pid, 'SIGKILL'); return } catch { /* fall through */ } }
-  try { child.kill('SIGKILL') } catch { /* gone */ }
+  // POSIX: every child of run() and start() is the leader of its OWN process group (spawned detached), so the group is exactly the
+  // tree it started and nothing else. The group id stays reserved while any member lives, so this also ends what a finished leader
+  // left behind; when the group is empty the signal has nobody to reach (ESRCH).
+  try { process.kill(-child.pid, 'SIGKILL'); return } catch { /* no such group: fall through to the child itself */ }
+  if (running(child)) { try { child.kill('SIGKILL') } catch { /* gone */ } }
 }
-const adopt = (child, group = false) => {
-  child.__group = group
+const adopt = (child) => {
   owned.add(child)
   child.once('close', () => owned.delete(child))
   child.once('error', () => owned.delete(child))
@@ -52,15 +56,22 @@ const endAll = () => { for (const child of [...owned]) killTree(child) }
 process.on('exit', endAll)
 for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]]) process.on(signal, () => { endAll(); process.exit(code) })
 
-/** Runs a command with a time limit. Resolves { code, output, ms } (output = the last 6000 characters of stdout+stderr); never rejects. */
+/**
+ * Runs a command with a time limit. Resolves { code, output, ms, timedOut, spawnError } (output = the last 6000 characters of
+ * stdout+stderr); never rejects. At the time limit the command is ended with everything it started, on Windows and POSIX alike.
+ */
 export function run(cmd, args, { cwd, env, cleanEnv = false, timeout = 600_000, onLine } = {}) {
   return new Promise((resolve) => {
     const t0 = Date.now()
     let child
-    try { child = adopt(spawn(cmd, args, { cwd, env: childEnv(env, cleanEnv), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })) } catch (err) { resolve({ code: 1, output: String(err), ms: 0 }); return }
+    // POSIX: its own process group (detached), so the time limit ends the whole tree. Windows: taskkill /T does that.
+    try { child = adopt(spawn(cmd, args, { cwd, env: childEnv(env, cleanEnv), stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN, windowsHide: true })) } catch (err) { resolve({ code: 1, output: String(err), ms: 0, timedOut: false, spawnError: String(err?.message ?? err) }); return }
     let output = ''
     let done = false
-    const finish = (code) => { if (done) return; done = true; clearTimeout(timer); resolve({ code, output, ms: Date.now() - t0 }) }
+    let timedOut = false
+    let spawnError = null
+    let lastResort
+    const finish = (code) => { if (done) return; done = true; clearTimeout(timer); clearTimeout(lastResort); resolve({ code, output, ms: Date.now() - t0, timedOut, spawnError }) }
     const take = (chunk) => {
       const s = chunk.toString()
       output = (output + s).slice(-6000)
@@ -68,9 +79,15 @@ export function run(cmd, args, { cwd, env, cleanEnv = false, timeout = 600_000, 
     }
     child.stdout.on('data', take)
     child.stderr.on('data', take)
-    const timer = setTimeout(() => { output += `\n[qa] killed after ${timeout} ms`; killTree(child) }, timeout)
-    child.on('close', (code) => finish(code ?? 1))
-    child.on('error', (err) => { output = (output + String(err)).slice(-6000); finish(1) })
+    const timer = setTimeout(() => {
+      timedOut = true
+      output += `\n[qa] killed after ${timeout} ms`
+      killTree(child)
+      // the report must not wait for ever on a pipe something still holds open: it is a failure either way
+      lastResort = setTimeout(() => { output += '\n[qa] its output did not close within 10 s of being stopped'; finish(1) }, 10_000)
+    }, timeout)
+    child.on('close', (code) => finish(timedOut ? (code || 1) : (code ?? 1)))
+    child.on('error', (err) => { spawnError = String(err?.message ?? err); output = (output + String(err)).slice(-6000); finish(1) })
   })
 }
 
@@ -80,7 +97,7 @@ export function run(cmd, args, { cwd, env, cleanEnv = false, timeout = 600_000, 
  */
 export function start(cmd, args, { cwd, env, cleanEnv = false, readyRe, timeout = 120_000 } = {}) {
   // POSIX: its own process group, so stop() also ends what it started. Windows: taskkill /T does that (a detached child would open a console window).
-  const child = adopt(spawn(cmd, args, { cwd, env: childEnv(env, cleanEnv), stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN, windowsHide: true }), !WIN)
+  const child = adopt(spawn(cmd, args, { cwd, env: childEnv(env, cleanEnv), stdio: ['ignore', 'pipe', 'pipe'], detached: !WIN, windowsHide: true }))
   let logs = ''
   const gone = new Promise((resolve) => { child.once('close', resolve); child.once('error', resolve) })
   const ready = new Promise((resolve, reject) => {
