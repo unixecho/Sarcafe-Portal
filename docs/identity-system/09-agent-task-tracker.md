@@ -5,7 +5,7 @@ Updated 2026-11-11. Implementation model: Claude Fable 5.2; manual user invocati
 | Task | Status | Dependencies | Codex acceptance evidence |
 |---|---|---|---|
 | Discovery/planning | Documents prepared; baseline recorded | Existing checkout | [Audit](01-repository-audit.md), [baseline](baseline/2026-11-11.md) |
-| FABLE-000 | **Ready for Codex review** (2026-11-11, PC) | Base `6caf454`, one local unpushed commit in worktree `Sarcafe-identity-pc` (`codex/identity-pc`) | Fable report: root `handoff.md`, 2026-11-11 Fable addendum. Own run on the PC: dashboard 131/131, kiosk 38/38, exit 0 (Edge, not Playwright Chromium; Linux and laptop not re-run). Pending: Codex diff review and independent rerun |
+| FABLE-000 | **Ready for Codex review** (2026-11-11, PC) | Base `6caf454`, commit `46725b5` pushed as `origin/codex/identity-pc`, worktree `Sarcafe-identity-pc` (`codex/identity-pc`) | Fable report: root `handoff.md`, 2026-11-11 Fable addendum. Own run on the PC: dashboard 131/131, kiosk 38/38, exit 0 (Edge, not Playwright Chromium; Linux and laptop not re-run). Pending: Codex diff review and independent rerun |
 | FABLE-001 | Prepared, blocked on 000 review | 000 verified | None |
 | FABLE-002 | Prepared, not started | 001 verified; Glisse skill for UI | None |
 | FABLE-003 | Prepared, not started | 002 verified | None |
