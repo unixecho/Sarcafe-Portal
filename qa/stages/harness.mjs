@@ -12,7 +12,23 @@ import { findJdk } from '../lib/jdk.mjs'
 import { probeBrowser, selectBrowser, resolveBrowser, PROBE_MARK } from '../lib/browser.mjs'
 import { sourceFiles, sourceFingerprint, copySource, linkDependencies, removeScratch, workDir, isInside, assertPortFree } from '../lib/scratch.mjs'
 
-const alive = (pid) => { try { process.kill(pid, 0); return true } catch (err) { return err.code === 'EPERM' } }
+// Is this process still RUNNING? Signal 0 alone is not enough on Linux: it also succeeds for a zombie, a process that has already
+// ended and only waits for its parent to collect it (in a container without an init process nobody does, so it stays for ever).
+// So on Linux the kernel's own record is read first, and a zombie (Z) or dead (X, x) entry counts as ended. Anything else, an
+// unreadable record, Windows and a POSIX system without /proc fall through to the signal probe, which never ends a process.
+/** The state letter of a /proc/<pid>/stat line ("pid (name) S …"), or null. The name may hold spaces and brackets: the state is the field after the LAST ")". */
+export const procStatState = (stat) => {
+  const end = typeof stat === 'string' ? stat.lastIndexOf(')') : -1
+  if (end < 0) return null
+  const state = stat.slice(end + 1).trim().split(/\s+/)[0] ?? ''
+  return /^[A-Za-z]$/.test(state) ? state : null
+}
+const linuxState = (pid) => { if (process.platform !== 'linux') return null; try { return procStatState(fs.readFileSync(`/proc/${pid}/stat`, 'utf8')) } catch { return null } }
+const alive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  if (['Z', 'X', 'x'].includes(linuxState(pid))) return false
+  try { process.kill(pid, 0); return true } catch (err) { return err.code === 'EPERM' }
+}
 const until = async (fn, ms = 8000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 100)) } return !!(await fn()) }
 const freePort = () => new Promise((resolve) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)) }) })
 const listening = (port) => new Promise((resolve) => { const c = net.connect(port, '127.0.0.1'); c.once('connect', () => { c.destroy(); resolve(true) }); c.once('error', () => resolve(false)) })
@@ -124,6 +140,31 @@ export function harnessStage(root) {
   }
   // leftovers after a failed check end themselves: nothing here signals a process, and the failed check still fails the test
   const releaseTree = async (fixture) => { fs.writeFileSync(fixture.stopFile, ''); await until(() => fixture.readPids().every((p) => !p || !alive(p)), 5000) }
+
+  stage.test('process-state', 'הבדיקה מבחינה בין תהליך שרץ לתהליך שהסתיים (ב־Linux גם "זומבי" נחשב שהסתיים)', 'unit', async () => {
+    assert.equal(procStatState('4242 (node) S 1 4242 4242 0 -1 4194560'), 'S', 'a sleeping process')
+    assert.equal(procStatState('4242 (node) Z 1 4242 4242 0 -1 4227084'), 'Z', 'a zombie')
+    assert.equal(procStatState('17 (a b) c (d)) Z 1 17 17 0'), 'Z', 'a name with spaces and brackets: the state after the LAST bracket')
+    assert.equal(procStatState('17 (Z) R 1 17'), 'R', 'a running process whose NAME is Z is not a zombie')
+    assert.equal(procStatState('17 (sh) X 1'), 'X', 'dead')
+    for (const bad of ['', 'no brackets here', '17 (node)', '17 (node) 12 1', undefined, null]) assert.equal(procStatState(bad), null, 'not a stat line: ' + JSON.stringify(bad))
+    assert.equal(alive(process.pid), true, 'this process is running')
+    for (const bad of [0, -1, NaN, 1.5, undefined]) assert.equal(alive(bad), false, 'not a process number: ' + String(bad))
+    // a real program: running while it runs, ended once it has ended (its number is read while it is still ours)
+    const dir = path.join(temp(), 'state')
+    fs.mkdirSync(dir, { recursive: true })
+    const stop = path.join(dir, 'stop')
+    const script = path.join(dir, 'wait.mjs')
+    fs.writeFileSync(script, "import fs from 'node:fs'\nconsole.log('pid ' + process.pid)\nsetInterval(() => { if (fs.existsSync(process.argv[2])) process.exit(0) }, 100)\nsetTimeout(() => process.exit(0), 60000)\n")
+    const s = start(NODE, [script, stop], { readyRe: /pid \d+/, timeout: 20_000 })
+    try {
+      await s.ready
+      const pid = Number(s.logs().match(/pid (\d+)/)[1])
+      assert.equal(alive(pid), true, 'a program that is running counts as running')
+      fs.writeFileSync(stop, '')
+      assert.ok(await until(() => !alive(pid)), 'once it has ended it counts as ended')
+    } finally { fs.writeFileSync(stop, ''); await s.stop() }
+  }, { timeout: 60_000 })
 
   stage.test('timeout-kills-tree', 'תוכנית שנתקעה נעצרת בזמן, יחד עם כל מה שהיא הפעילה (ב־Windows וב־Linux)', 'unit', async () => {
     const fixture = treeFixture(path.join(temp(), 'stuck'))

@@ -35,7 +35,7 @@ The first line of every run says what it really ran on (platform, Node, the npm 
 
 | Machine | Node / npm | JDK | Result |
 |---|---|---|---|
-| GitHub Actions, `ubuntu-latest` (`.github/workflows/qa.yml`) | Node 22 | Temurin 17 | the daily and per-push runs; **not re-run with the 2026-11-11 / 11-12 harness changes yet** (they are not on `main`), so the Linux process-group code is untested |
+| GitHub Actions, `ubuntu-latest` (`.github/workflows/qa.yml`) | Node 22 | Temurin 17 | the daily and per-push runs; **not re-run with the 2026-11-11 / 11-12 harness changes yet** (they are not on `main`). The harness stage alone was run on Linux in a `node:20-alpine` container (Node 20, no JDK, no browser): 11 passed, 2 skipped; the full suite has not run on Linux with these changes |
 | Owner's PC, Windows 11 | Node 22.20.0 / npm 11.9.0 | Oracle JDK 24.0.1 (found through the `javac` on the PATH; `JAVA_HOME` is not set) | full runs, see `handoff.md` 2026-11-11 and 2026-11-12 (the second from a folder with spaces) |
 | Work laptop, Windows 11 | Node 24.13.0 / npm 11.6.2 | Temurin 21.0.7 | before the fix only (the failing baseline in `docs/identity-system/baseline/2026-11-11.md`); not re-run after it |
 
@@ -62,7 +62,9 @@ Rules the harness keeps so it works on both (`qa/lib/exec.mjs`, `qa/lib/jdk.mjs`
   child is started as the leader of its own process group and the group is signalled. Never a process the suite did not start.
   When the build, the server or the browser fails to start, whatever was already started is closed; Ctrl+C ends the children too.
   A run refuses to start while its two ports (54399, 3399) are taken. The `harness` stage proves it with a program that starts a
-  child that starts a grandchild, and requires all three to be gone (on both systems; **the Linux half has not been run yet**).
+  child that starts a grandchild, and requires all three to be gone on both systems. "Gone" means not running: on Linux a zombie
+  (ended, waiting to be collected; in a container without an init process it stays for ever) counts as ended, read from
+  `/proc/<pid>/stat`. Run on Linux in `node:20-alpine` with and without an init process (2026-11-12, the harness stage only).
 - **A browser is used only after it proves it works** (`qa/lib/browser.mjs`, `qa/lib/browser-probe.mjs`): each candidate is started
   with Playwright in its own process, must render a test page and exit 0 inside 45 seconds. A non-zero exit, a time-out, a start
   error or an exit without the page rejects it **with the reason on the run's first lines**, and the next candidate is tried

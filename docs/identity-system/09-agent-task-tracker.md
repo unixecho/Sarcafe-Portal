@@ -1,11 +1,11 @@
 # 09 — Agent task tracker
 
-Updated 2026-11-12. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. FABLE-000 round 2 (Codex findings R1, R2) is done on the PC and waits for Codex; no feature task has run. Not verified by Codex yet.
+Updated 2026-11-12. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. FABLE-000 round 2 was reviewed; R1/R2 are sound, but Codex requested R3 for a Linux-container zombie false-positive in the self-test. Fable fixed R3 (2026-11-12, local commit on `codex/identity-pc`, not pushed) and it waits for Codex. No feature task has run. FABLE-001 remains blocked.
 
 | Task | Status | Dependencies | Codex acceptance evidence |
 |---|---|---|---|
 | Discovery/planning | Documents prepared; baseline recorded | Existing checkout | [Audit](01-repository-audit.md), [baseline](baseline/2026-11-11.md) |
-| FABLE-000 | **Ready for Codex review, round 2** (2026-11-12, PC). Round 1: Codex CHANGES REQUESTED (R1 POSIX process tree, R2 browser probe) | Base `6caf454`; round 1 `46725b5`..`a04dc13`; round 2 on top, pushed as `origin/codex/identity-pc` | Fable report: root `handoff.md`, 2026-11-12 addendum. Own run on the PC from a path with spaces: dashboard 133/133, kiosk 38/38, exit 0; five SQL verifiers pass. **Linux not run: the POSIX half of R1 is unverified.** Pending: Codex review and rerun |
+| FABLE-000 | **Ready for Codex review, round 3** (2026-11-12, PC): R3 fixed. Round 2: Codex CHANGES REQUESTED (R1/R2 accepted; R3 Linux zombie false-positive) | Base `6caf454`; reviewed `a04dc13..7d10554` on `origin/codex/identity-pc` | Codex independently: Windows path-with-spaces full QA dashboard 133/133 + kiosk 38/38; five SQL verifiers pass; Linux with init passes and the broken-group mutation fails. No-init Linux leaves only `STAT Z` entries but `alive()` counts them as running, so the focused test falsely fails. Fix R3 and return for Codex review. **Fable, round 3 (root `handoff.md`, newest addendum):** `alive()` reads `/proc/<pid>/stat` on Linux and counts `Z`/`X` as ended; one file of code (`qa/stages/harness.mjs`), local commit on top of `7d10554`, not pushed. Windows: harness 13/13; full QA from a path with spaces dashboard 134/134, kiosk 38/38, exit 0; five SQL verifiers pass. Linux `node:20-alpine`: old helper fails without init; R3 passes without and with init; process-group mutation fails in both. Full suite not run on Linux. Pending: Codex review and rerun. |
 | FABLE-001 | Prepared, blocked on 000 review | 000 verified | None |
 | FABLE-002 | Prepared, not started | 001 verified; Glisse skill for UI | None |
 | FABLE-003 | Prepared, not started | 002 verified | None |
@@ -38,4 +38,4 @@ Exact next step:
 Status: ready for Codex review
 ```
 
-Next step: Codex reviews the FABLE-000 diff and independently reruns the QA baseline before authorizing FABLE-001. No production action is part of this handoff.
+Next step: Fable has fixed R3 only and returned the narrow diff/evidence (`7d10554..HEAD` of local `codex/identity-pc`); Codex reviews and reruns focused Linux/Windows checks before authorizing FABLE-001. No production action is part of this handoff.
