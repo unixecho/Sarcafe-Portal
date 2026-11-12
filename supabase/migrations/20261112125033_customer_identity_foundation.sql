@@ -1,4 +1,4 @@
--- 20261112120000_customer_identity_foundation
+-- 20261112125033_customer_identity_foundation
 --
 -- FABLE-001 (docs/identity-system/, docs/SARCAFE_IDENTITY.md): the service-only foundation of the hybrid identity system. Eleven tables
 -- and three callable functions; nothing reads or writes them yet except the new server module src/lib/identity/. No existing table, function,
@@ -31,9 +31,11 @@ create table if not exists public.customer_members (
 
 -- A verified sign-in (Supabase Auth subject). One auth user is at most one principal, and so at most one member. member_id is null
 -- for a pure operator (an organization administrator who is not a member). Never created from a typed e-mail or a name.
+-- The auth user cannot be deleted while a principal points at it (restrict, not cascade): authority ends by state and revoked_at,
+-- with its audit row, never by a row disappearing. A privacy-erasure flow is a later, explicit, audited design.
 create table if not exists public.customer_principals (
   id            uuid primary key default gen_random_uuid(),
-  auth_user_id  uuid not null unique references auth.users(id) on delete cascade,
+  auth_user_id  uuid not null unique references auth.users(id) on delete restrict,
   member_id     uuid references public.customer_members(id) on delete restrict,
   state         text not null default 'active' check (state in ('active', 'revoked')),
   verified_at   timestamptz not null default now(),
@@ -99,7 +101,7 @@ create index if not exists customer_business_orgs_org_idx on public.customer_bus
 -- What a principal may administer, in exactly one scope. There is no global grant: the CHECK allows only these three shapes.
 create table if not exists public.customer_access_grants (
   id               uuid primary key default gen_random_uuid(),
-  principal_id     uuid not null references public.customer_principals(id) on delete cascade,
+  principal_id     uuid not null references public.customer_principals(id) on delete restrict,
   capability       text not null check (capability in ('business_admin', 'organization_admin', 'department_head')),
   scope_kind       text not null check (scope_kind in ('business', 'organization', 'department')),
   business_id      uuid references public.customer_businesses(id) on delete restrict,
@@ -121,6 +123,7 @@ create table if not exists public.customer_access_grants (
 create unique index if not exists customer_access_grants_live_idx on public.customer_access_grants
   (principal_id, capability, coalesce(business_id, organization_id), coalesce(department_id, '00000000-0000-0000-0000-000000000000'::uuid))
   where revoked_at is null;
+create index if not exists customer_access_grants_principal_idx on public.customer_access_grants (principal_id);
 create index if not exists customer_access_grants_business_idx on public.customer_access_grants (business_id) where business_id is not null;
 create index if not exists customer_access_grants_org_idx on public.customer_access_grants (organization_id, department_id) where organization_id is not null;
 
@@ -134,7 +137,7 @@ create table if not exists public.customer_org_memberships (
   department_id             uuid not null,
   display_name              text check (display_name is null or char_length(btrim(display_name)) between 1 and 80),
   state                     text not null default 'pending' check (state in ('pending', 'approved', 'rejected', 'inactive')),
-  reviewed_by_principal_id  uuid references public.customer_principals(id) on delete set null,
+  reviewed_by_principal_id  uuid references public.customer_principals(id) on delete restrict,
   reviewed_at               timestamptz,
   review_reason             text check (review_reason is null or char_length(review_reason) between 1 and 300),
   version                   integer not null default 1 check (version >= 1),
@@ -148,6 +151,7 @@ create table if not exists public.customer_org_memberships (
 );
 create index if not exists customer_org_memberships_member_idx on public.customer_org_memberships (member_id);
 create index if not exists customer_org_memberships_department_idx on public.customer_org_memberships (organization_id, department_id);
+create index if not exists customer_org_memberships_reviewer_idx on public.customer_org_memberships (reviewed_by_principal_id) where reviewed_by_principal_id is not null;
 
 create table if not exists public.customer_business_memberships (
   id            uuid primary key default gen_random_uuid(),
@@ -341,10 +345,16 @@ grant execute on function public.customer_access_check(uuid, text, uuid, uuid, u
 -- Gives a principal one capability in one exact scope, and writes the audit row in the same transaction. The actor (p_actor_auth_user_id,
 -- resolved by the server) is rechecked here, so a caller holding the service key still cannot grant outside the actor's own scope:
 --   business_admin of B      needs: the actor administers business B.
---   organization_admin of O  needs: the actor administers organization O, or administers a business that has a draft/active
---                            agreement with O (how an organization gets its first administrator).
+--   organization_admin of O  needs: the actor administers organization O. BOOTSTRAP: only while O has NO live administrator (no
+--                            active principal holding an unrevoked, unexpired organization_admin grant on O), a business
+--                            administrator of a business with a draft/active agreement with O may appoint one. The organization
+--                            row is locked first, so two bootstraps cannot both pass; once an administrator exists every business
+--                            is refused, and bootstrap reopens only if all of them are revoked, expired or switched off. The audit
+--                            row of a bootstrap names the authorizing business and grant (detail.bootstrap_*).
 --   department_head of O/D   needs: the actor administers organization O.
--- Nobody grants to themselves. A department head grants nothing. Returns { ok, status: created|unchanged, grant_id } or { ok:false, error }.
+-- Nobody grants to themselves. A department head grants nothing. Returns { ok, status: created|unchanged, grant_id } or
+-- { ok:false, error }: 'bad_request' for a malformed call, 'denied' for everything else. An unknown, switched-off or own target
+-- answers exactly like an actor without authority, so the answer never says whether a principal exists.
 create or replace function public.customer_access_grant(
   p_actor_auth_user_id uuid, p_principal_id uuid, p_capability text, p_business_id uuid, p_organization_id uuid, p_department_id uuid,
   p_expires_at timestamptz, p_reason text)
@@ -358,6 +368,8 @@ declare
   v_target public.customer_principals%rowtype;
   v_existing public.customer_access_grants%rowtype;
   v_grant uuid;
+  v_bootstrap_business uuid;
+  v_detail jsonb;
 begin
   if p_actor_auth_user_id is null or p_principal_id is null or p_capability is null then return v_bad; end if;
   if v_reason is not null and char_length(v_reason) > 300 then return v_bad; end if;
@@ -370,14 +382,22 @@ begin
   elsif p_capability = 'organization_admin' then
     if p_organization_id is null or p_business_id is not null or p_department_id is not null then return v_bad; end if;
     v_kind := 'organization';
+    -- every change to an organization's administrators waits here, so "is there a live administrator?" below cannot be raced
+    perform 1 from public.customer_organizations o where o.id = p_organization_id for update;
     v_actor := public.customer_access_check(p_actor_auth_user_id, 'organization_admin', null, p_organization_id, null);
-    if not coalesce((v_actor ->> 'ok')::boolean, false) then
-      -- the first administrator: from a business that has an agreement with this (active) organization
-      select public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null) into v_actor
+    if not coalesce((v_actor ->> 'ok')::boolean, false) and not exists (
+      select 1 from public.customer_access_grants g
+        join public.customer_principals p on p.id = g.principal_id and p.state = 'active'
+       where g.scope_kind = 'organization' and g.capability = 'organization_admin' and g.organization_id = p_organization_id
+         and g.revoked_at is null and (g.expires_at is null or g.expires_at > now())) then
+      -- bootstrap: no live administrator, so a business that has an agreement with this (active) organization appoints one
+      select a.business_id, public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null)
+        into v_bootstrap_business, v_actor
         from public.customer_business_orgs a
         join public.customer_organizations o on o.id = a.organization_id and o.state = 'active'
        where a.organization_id = p_organization_id and a.state in ('draft', 'active')
          and coalesce((public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null) ->> 'ok')::boolean, false)
+       order by a.business_id
        limit 1;
     end if;
   elsif p_capability = 'department_head' then
@@ -390,9 +410,9 @@ begin
   end if;
   if not coalesce((v_actor ->> 'ok')::boolean, false) then return v_denied; end if;
 
+  -- an unknown, switched-off or own target: the same answer as "not yours" (no target existence is disclosed)
   select * into v_target from public.customer_principals p where p.id = p_principal_id and p.state = 'active';
-  if not found then return jsonb_build_object('ok', false, 'error', 'bad_principal'); end if;
-  if v_target.auth_user_id = p_actor_auth_user_id then return jsonb_build_object('ok', false, 'error', 'self_grant'); end if;
+  if not found or v_target.auth_user_id = p_actor_auth_user_id then return v_denied; end if;
 
   select * into v_existing from public.customer_access_grants g
    where g.principal_id = p_principal_id and g.capability = p_capability and g.revoked_at is null
@@ -410,10 +430,14 @@ begin
   values (p_principal_id, p_capability, v_kind, p_business_id, p_organization_id, p_department_id, p_expires_at)
   returning id into v_grant;
 
+  v_detail := jsonb_build_object('capability', p_capability, 'scope_kind', v_kind, 'department_id', p_department_id, 'principal_id', p_principal_id, 'actor_via', v_actor ->> 'via');
+  if v_bootstrap_business is not null then
+    -- which business, and which of its grants (null for a legacy owner: actor_staff_id names them), authorized the bootstrap
+    v_detail := v_detail || jsonb_build_object('bootstrap_business_id', v_bootstrap_business, 'bootstrap_grant_id', v_actor -> 'grant_id');
+  end if;
   insert into public.customer_identity_audit (business_id, organization_id, actor_auth_user_id, actor_principal_id, actor_staff_id, operation, target_table, target_id, reason, detail)
   values (p_business_id, p_organization_id, p_actor_auth_user_id, (v_actor ->> 'principal_id')::uuid, (v_actor ->> 'staff_id')::uuid,
-          'access.grant', 'customer_access_grants', v_grant, v_reason,
-          jsonb_build_object('capability', p_capability, 'scope_kind', v_kind, 'department_id', p_department_id, 'principal_id', p_principal_id, 'actor_via', v_actor ->> 'via'));
+          'access.grant', 'customer_access_grants', v_grant, v_reason, v_detail);
 
   return jsonb_build_object('ok', true, 'status', 'created', 'grant_id', v_grant);
 end;
@@ -423,6 +447,9 @@ grant execute on function public.customer_access_grant(uuid, uuid, text, uuid, u
 
 -- Ends a grant now, with the audit row in the same transaction. The actor needs the same authority that could have given it (see
 -- customer_access_grant); anyone may give up their OWN grant. An unknown grant and a grant outside the actor's scope answer the same.
+-- An organization_admin grant is managed by the organization's administrators only: a business administrator may end one (a dead
+-- leftover) only under the bootstrap rule, i.e. while the organization has no live administrator at all. The organization row is
+-- locked before the grant row, the same order as customer_access_grant.
 create or replace function public.customer_access_revoke(p_actor_auth_user_id uuid, p_grant_id uuid, p_reason text)
 returns jsonb language plpgsql set search_path = '' as $$
 declare
@@ -431,10 +458,18 @@ declare
   v_grant public.customer_access_grants%rowtype;
   v_actor jsonb;
   v_own boolean;
+  v_bootstrap_business uuid;
+  v_detail jsonb;
 begin
   if p_actor_auth_user_id is null or p_grant_id is null then return jsonb_build_object('ok', false, 'error', 'bad_request'); end if;
   if v_reason is not null and char_length(v_reason) > 300 then return jsonb_build_object('ok', false, 'error', 'bad_request'); end if;
 
+  -- scope columns of a grant never change (customer_access_grants_keep), so they can be read before the row is locked
+  select * into v_grant from public.customer_access_grants g where g.id = p_grant_id;
+  if not found then return v_denied; end if;
+  if v_grant.scope_kind = 'organization' then
+    perform 1 from public.customer_organizations o where o.id = v_grant.organization_id for update;
+  end if;
   select * into v_grant from public.customer_access_grants g where g.id = p_grant_id for update;
   if not found then return v_denied; end if;
 
@@ -444,11 +479,18 @@ begin
     v_actor := public.customer_access_check(p_actor_auth_user_id, 'business_admin', v_grant.business_id, null, null);
   else
     v_actor := public.customer_access_check(p_actor_auth_user_id, 'organization_admin', null, v_grant.organization_id, null);
-    if v_grant.scope_kind = 'organization' and not coalesce((v_actor ->> 'ok')::boolean, false) then
-      select public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null) into v_actor
+    if v_grant.scope_kind = 'organization' and not coalesce((v_actor ->> 'ok')::boolean, false) and not exists (
+      select 1 from public.customer_access_grants g
+        join public.customer_principals p on p.id = g.principal_id and p.state = 'active'
+       where g.scope_kind = 'organization' and g.capability = 'organization_admin' and g.organization_id = v_grant.organization_id
+         and g.revoked_at is null and (g.expires_at is null or g.expires_at > now())) then
+      select a.business_id, public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null)
+        into v_bootstrap_business, v_actor
         from public.customer_business_orgs a
+        join public.customer_organizations o on o.id = a.organization_id and o.state = 'active'
        where a.organization_id = v_grant.organization_id and a.state in ('draft', 'active')
          and coalesce((public.customer_access_check(p_actor_auth_user_id, 'business_admin', a.business_id, null, null) ->> 'ok')::boolean, false)
+       order by a.business_id
        limit 1;
     end if;
   end if;
@@ -460,13 +502,16 @@ begin
 
   update public.customer_access_grants set revoked_at = now(), revoked_reason = coalesce(v_reason, 'revoked') where id = v_grant.id;
 
+  v_detail := jsonb_build_object('capability', v_grant.capability, 'scope_kind', v_grant.scope_kind, 'department_id', v_grant.department_id,
+                                 'principal_id', v_grant.principal_id, 'actor_via', case when coalesce((v_actor ->> 'ok')::boolean, false) then v_actor ->> 'via' else 'self' end);
+  if v_bootstrap_business is not null and coalesce((v_actor ->> 'ok')::boolean, false) then
+    v_detail := v_detail || jsonb_build_object('bootstrap_business_id', v_bootstrap_business, 'bootstrap_grant_id', v_actor -> 'grant_id');
+  end if;
   insert into public.customer_identity_audit (business_id, organization_id, actor_auth_user_id, actor_principal_id, actor_staff_id, operation, target_table, target_id, reason, detail)
   values (v_grant.business_id, v_grant.organization_id, p_actor_auth_user_id,
           case when coalesce((v_actor ->> 'ok')::boolean, false) then (v_actor ->> 'principal_id')::uuid else v_grant.principal_id end,
           case when coalesce((v_actor ->> 'ok')::boolean, false) then (v_actor ->> 'staff_id')::uuid end,
-          'access.revoke', 'customer_access_grants', v_grant.id, v_reason,
-          jsonb_build_object('capability', v_grant.capability, 'scope_kind', v_grant.scope_kind, 'department_id', v_grant.department_id,
-                             'principal_id', v_grant.principal_id, 'actor_via', case when coalesce((v_actor ->> 'ok')::boolean, false) then v_actor ->> 'via' else 'self' end));
+          'access.revoke', 'customer_access_grants', v_grant.id, v_reason, v_detail);
 
   return jsonb_build_object('ok', true, 'status', 'revoked', 'grant_id', v_grant.id);
 end;
@@ -496,4 +541,4 @@ on conflict do nothing;
 --          (select count(*) from (select proname from pg_proc p where p.pronamespace = 'public'::regnamespace
 --            and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') group by proname having count(*) > 1) t) = 0 as no_overloads;
 -- Ledger row (only when the owner applies it; NOT applied by this change):
---   insert into supabase_migrations.schema_migrations (version, name) values ('20261112120000', 'customer_identity_foundation') on conflict do nothing;
+--   insert into supabase_migrations.schema_migrations (version, name) values ('20261112125033', 'customer_identity_foundation') on conflict do nothing;

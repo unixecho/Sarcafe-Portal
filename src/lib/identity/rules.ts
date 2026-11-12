@@ -1,5 +1,5 @@
 // Pure rules of the identity foundation. Every rule here has its twin in the database (customer_access_check and the CHECK
-// constraints of 20261112120000_customer_identity_foundation.sql); the database is the authority, these keep a bad question from
+// constraints of 20261112125033_customer_identity_foundation.sql); the database is the authority, these keep a bad question from
 // being asked at all. No database, no secrets.
 import { isOp } from '@/lib/staff/access'
 import type { AccessCheckArgs, IdentityCapability, IdentityScope, IdentitySession } from '@/lib/identity/types'

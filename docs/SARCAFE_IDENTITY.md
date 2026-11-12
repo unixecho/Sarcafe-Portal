@@ -1,6 +1,7 @@
 # Sarcafe identity foundation (FABLE-001)
 
-Status: **built and tested locally; the migration is NOT applied to production; nothing uses it yet.** Plan and later slices:
+Status: **built and tested locally; corrected after Codex review round 1 (R1–R5, 2026-11-12); the migration is NOT applied to
+production; nothing uses it yet.** Plan and later slices:
 `docs/identity-system/`. This file describes what exists in the code.
 
 ## What it is
@@ -42,6 +43,10 @@ protect anything from server code, which uses the service role and bypasses RLS,
 - the `customer_keep_columns` trigger refuses to re-point an existing grant, membership, department, agreement, branch mapping or
   principal at another scope or person;
 - the audit refuses update and delete; the service role has no `delete` on any identity table;
+- every foreign key is `on delete restrict` (the one exception is the branch mapping, which follows its branch). In particular
+  an auth user that is a principal cannot be deleted, and a principal that holds a grant or reviewed a membership cannot be
+  deleted: authority ends through `revoked_at` / `state` with its audit row, never by a row disappearing. A privacy-erasure or
+  deprovisioning flow is a later, explicit, audited design and does not exist yet;
 - `customer_access_grant` / `customer_access_revoke` recheck the acting user's authority for the target scope inside the
   transaction, so holding the service key is not enough to grant across tenants through them.
 
@@ -55,15 +60,29 @@ protect anything from server code, which uses the service role and bypasses RLS,
 
 A live grant is not revoked, not expired, of an active principal, on an active target. Capabilities do not imply each other: an
 organization administrator is not a department head and administers no business. Who may give what (`customer_access_grant`):
-a business administrator gives `business_admin` on that business and appoints the first `organization_admin` of an organization
-the business has a `draft` or `active` agreement with; an organization administrator gives `organization_admin` and
+a business administrator gives `business_admin` on that business; an organization administrator gives `organization_admin` and
 `department_head` in that organization; a department head gives nothing; nobody grants to themselves.
+
+**The first organization administrator (bootstrap).** An organization starts with no administrator, so someone outside it has to
+appoint the first one. A business administrator may do that only when all of these hold: the organization is active, the business
+has a `draft` or `active` agreement with it, and the organization has **no live administrator** (no active principal holding an
+unrevoked, unexpired `organization_admin` grant). As soon as one exists, every business is refused, including the one that
+appointed them and any other business with an agreement: from then on only the organization's own administrators add or revoke
+administrators (anyone may still give up their own grant). If every administrator is later revoked, expired or switched off,
+bootstrap reopens. Under the same rule, and only then, a business administrator may end a dead leftover administrator grant.
+Both functions lock the organization row (`for update`) before they decide, in the same order (organization, then grant), so
+two bootstraps at the same moment cannot both pass and no deadlock is possible between them. The audit row of a bootstrap carries
+`detail.bootstrap_business_id` and `detail.bootstrap_grant_id` (null when a legacy owner acted; `actor_staff_id` names them).
+
+**Refusals say nothing.** The three functions answer `bad_request` for a malformed call and `denied` for everything else. A grant
+to an unknown principal, a switched-off principal or the actor's own principal is `denied`, exactly like an actor with no
+authority, so an answer never reveals whether a principal, business, organization, department or grant exists.
 
 ## Code
 
 | File | What |
 |---|---|
-| `supabase/migrations/20261112120000_customer_identity_foundation.sql` | the eleven tables, constraints, triggers, three functions, the Sarcafe seed |
+| `supabase/migrations/20261112125033_customer_identity_foundation.sql` | the eleven tables, constraints, triggers, three functions, the Sarcafe seed |
 | `src/lib/identity/types.ts`, `rules.ts` | pure types and rules (scope shapes, capability ↔ scope, full-session rule); each has its SQL twin |
 | `src/lib/identity/access.ts` | `authorizeIdentityAction(session, { capability, scope }, check)`: the decision, with the database question injected |
 | `src/lib/identity/server/session.ts` | `resolveIdentitySession()`: wraps the existing `resolveStaffIdentity()` and adds a verified auth user who is not staff |
@@ -76,19 +95,29 @@ yours"); the database not answering 503. An unexpected answer is a refusal.
 
 ## Tests
 
-- `npm run verify:identity-sql` (real Postgres via PGlite, synthetic two-business / two-organization world, 173 checks): applies
+- `npm run verify:identity-sql` (real Postgres via PGlite, synthetic two-business / two-organization world, 228 checks): applies
   in order and twice more with an identical schema snapshot; scoped foreign keys and ID swaps as the table owner and as the service
   role; one shared identity and duplicate-looking people; uniqueness; the access matrix for every role; revoked / expired /
   switched-off; grant and revoke with the actor recheck; nobody became staff and `is_op()` is unchanged; RLS, grants and real
   attempts as `anon` / `authenticated`; no duplicate function names; then the real `access.ts` deciding with the real SQL function
-  for every session class. It runs inside `npm run qa` (the `checks` stage runs every `verify:*` script).
+  for every session class. It runs inside `npm run qa` (the `checks` stage runs every `verify:*` script). Since review round 1 it
+  also covers: bootstrap with two businesses and one organization (first administrator, the other business refused to add or
+  revoke, an organization administrator adding another, recovery after revoked / expired / switched-off, suspended and ended
+  agreements, the audit detail); proof that every path takes the organization row lock; 14 refusals that must be one identical
+  answer; a refused auth-user deletion with principal, grant and audit intact; and a check that every foreign key has a usable
+  supporting index (with a control that removes two indexes and must find exactly those two).
+- `npm run identity:concurrency-docker` (**not** part of `npm run qa`: it needs Docker and the local `postgres:16` image, and
+  never pulls one). PGlite has a single connection, so two real sessions are raced here against a throwaway Postgres 16 container
+  with every migration applied: a held transaction makes the second business wait and then be refused; 12 simultaneous races end
+  with exactly one winner each; a revoke of the last administrator makes a bootstrap wait and then succeed. `--without-lock`
+  removes the lock inside the throwaway database and must fail. Exit 2 means "not run" (no Docker or no image), never "passed".
 - `qa/stages/unit.mjs`: `identity-scope`, `identity-guard`, `identity-isolated` (no file outside `src/lib/identity` imports it or
   touches its tables; the server files are `server-only`; the pure files reach no server, secret or database).
 
 ## Before it is applied to production (not done, not authorized)
 
 Run `verify:identity-sql` with the three mandatory verifiers and `verify:waitlist-sql`, check `pg_proc` for duplicate names, run the
-"Check after applying" query at the end of the migration, and record the ledger row `20261112120000` /
+"Check after applying" query at the end of the migration, and record the ledger row `20261112125033` /
 `customer_identity_foundation`. Applying it creates the Sarcafe business row and maps the existing branches; it creates no member,
 principal, grant or membership. A branch created later is not mapped automatically.
 
@@ -99,4 +128,10 @@ principal, grant or membership. A branch created later is not mapped automatical
 - PGlite is real Postgres, not Supabase: the default privileges Supabase gives the service role are imitated by the verifier; the
   production grant state was not queried.
 - A principal's `member_id` cannot change after creation (a later slice that links an operator to a member must do it on purpose).
+- The migration file was renamed once before it was ever applied (`20261112120000` → `20261112125033`, its real UTC creation
+  time, review R4). No database has the old version.
+- An auth user that is a principal cannot be deleted at all (review R2). Until an erasure flow is designed, removing such an
+  account from Supabase Auth fails with a foreign-key error; that is intended.
+- The two-session test needs Docker, so it does not run in `npm run qa` or in GitHub Actions; the lock is otherwise covered by the
+  single-connection lock checks in the verifier.
 - Capabilities for scanning, invitations, photos, credentials, consent, Wallet and benefits belong to later slices.

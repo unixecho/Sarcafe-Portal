@@ -29,13 +29,13 @@ export const identityAccessCheck: AccessCheck = async (args) => {
   return asResult(data)
 }
 
-export type GrantResult = { ok: true; status: 'created' | 'unchanged' | 'revoked'; grantId: string } | { ok: false; error: 'denied' | 'bad_request' | 'bad_principal' | 'self_grant' }
+export type GrantResult = { ok: true; status: 'created' | 'unchanged' | 'revoked'; grantId: string } | { ok: false; error: 'denied' | 'bad_request' }
 
 const asGrantResult = (data: unknown): GrantResult => {
   const row = data as Partial<Record<string, unknown>> | null
   if (row && row.ok === true && typeof row.grant_id === 'string' && (row.status === 'created' || row.status === 'unchanged' || row.status === 'revoked')) return { ok: true, status: row.status, grantId: row.grant_id }
   const error = row && typeof row.error === 'string' ? row.error : 'denied'
-  return { ok: false, error: error === 'bad_request' || error === 'bad_principal' || error === 'self_grant' ? error : 'denied' }
+  return { ok: false, error: error === 'bad_request' ? 'bad_request' : 'denied' }
 }
 
 /**

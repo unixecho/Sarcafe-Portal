@@ -29,6 +29,7 @@
     "check:kiosk-menu": "node scripts/check-kiosk-menu.mjs",
     "verify:waitlist-sql": "node scripts/verify-waitlist-sql.mjs",
     "verify:identity-sql": "node scripts/verify-identity-sql.mjs",
+    "identity:concurrency-docker": "node scripts/identity-concurrency-docker.mjs",
     "check:kiosk-waitlist": "node scripts/check-kiosk-waitlist.mjs",
     "check:loyalty-signup": "node scripts/check-loyalty-signup.mjs",
     "verify:kiosk-content-sql": "node scripts/verify-kiosk-content-sql.mjs",

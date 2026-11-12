@@ -1,8 +1,11 @@
-// Local database check for the hybrid identity foundation (FABLE-001, 20261112120000_customer_identity_foundation.sql).
+// Local database check for the hybrid identity foundation (FABLE-001, 20261112125033_customer_identity_foundation.sql).
 // Applies every migration in order to an in-memory Postgres (PGlite), re-applies the new one, then attacks it with a synthetic
 // two-business / two-organization world: ID swaps, wrong-tenant references, duplicate-looking people, grants, RLS and browser
 // denial. The last part runs the real TypeScript guard decision (src/lib/identity/access.ts) against the real SQL function for
 // every kind of session. Nothing here touches production; every person and id is made up.
+// Codex review round 1 (R1-R5) added: first-administrator bootstrap with two businesses and one organization, the organization row
+// lock, restrictive deletes, non-disclosing grant errors and foreign-key index support. Two REAL concurrent sessions are exercised
+// by scripts/identity-concurrency-docker.mjs (PGlite has one connection, so it cannot run them).
 //
 //   node scripts/verify-identity-sql.mjs
 
@@ -17,7 +20,7 @@ import ts from 'typescript'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const migrations = path.join(root, 'supabase/migrations') + path.sep
-const NEW = '20261112120000_customer_identity_foundation.sql'
+const NEW = '20261112125033_customer_identity_foundation.sql'
 const TABLES = ['customer_members', 'customer_principals', 'customer_businesses', 'customer_business_branches', 'customer_organizations', 'customer_departments', 'customer_business_orgs', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships', 'customer_identity_audit']
 const FUNCTIONS = ['customer_access_check(uuid,text,uuid,uuid,uuid)', 'customer_access_grant(uuid,uuid,text,uuid,uuid,uuid,timestamptz,text)', 'customer_access_revoke(uuid,uuid,text)']
 const TRIGGER_FUNCTIONS = ['customer_keep_columns()', 'customer_identity_audit_keep()']
@@ -104,7 +107,7 @@ const staffRow = async (authUser, over = {}) => {
   const s = { role: 'staff', badge: null, active: true, ...over }
   return (await one(`insert into public.staff (auth_user_id, first_name, role, badge, active) values ($1, 'Synthetic', $2, $3, $4) returning id`, [authUser, s.role, s.badge, s.active])).id
 }
-const U = { owner: await user(), badgeOwner: await user(), goneOwner: await user(), gm: await user(), employee: await user(), adminA: await user(), adminB: await user(), headA1: await user(), b2Admin: await user(), newcomer: await user(), stranger: await user(), revokedPrincipal: await user() }
+const U = { owner: await user(), badgeOwner: await user(), goneOwner: await user(), gm: await user(), employee: await user(), adminA: await user(), adminB: await user(), headA1: await user(), b2Admin: await user(), newcomer: await user(), stranger: await user(), revokedPrincipal: await user(), c1: await user(), c2: await user(), c3: await user(), c4: await user() }
 const S = { owner: await staffRow(U.owner, { role: 'owner', badge: 'owner' }), badgeOwner: await staffRow(U.badgeOwner, { badge: 'owner' }), goneOwner: await staffRow(U.goneOwner, { role: 'owner', badge: 'owner', active: false }), gm: await staffRow(U.gm, { badge: 'general_manager' }), employee: await staffRow(U.employee, { badge: 'barista' }) }
 const staffCount = await count(`select count(*) n from public.staff`)
 const authCount = await count(`select count(*) n from auth.users`)
@@ -119,7 +122,7 @@ await db.query(`insert into public.customer_business_orgs (business_id, organiza
 await db.query(`insert into public.customer_business_orgs (business_id, organization_id, state) values ($1, $2, 'active')`, [b2, orgB])
 const principal = async (authUser, member = null) => (await one(`insert into public.customer_principals (auth_user_id, member_id) values ($1, $2) returning id`, [authUser, member])).id
 const member = async () => (await one(`insert into public.customer_members default values returning id`)).id
-const P = { adminA: await principal(U.adminA), adminB: await principal(U.adminB), headA1: await principal(U.headA1), b2Admin: await principal(U.b2Admin), newcomer: await principal(U.newcomer), revoked: await principal(U.revokedPrincipal) }
+const P = { adminA: await principal(U.adminA), adminB: await principal(U.adminB), headA1: await principal(U.headA1), b2Admin: await principal(U.b2Admin), newcomer: await principal(U.newcomer), revoked: await principal(U.revokedPrincipal), c1: await principal(U.c1), c2: await principal(U.c2), c3: await principal(U.c3), c4: await principal(U.c4) }
 await db.query(`update public.customer_principals set state = 'revoked' where id = $1`, [P.revoked])
 const grant = async (principalId, capability, kind, ids, over = {}) => (await one(
   `insert into public.customer_access_grants (principal_id, capability, scope_kind, business_id, organization_id, department_id, expires_at) values ($1,$2,$3,$4,$5,$6,$7) returning id`,
@@ -257,11 +260,39 @@ check('giving the same thing again changes nothing and writes no second audit ro
 check('WRONG BUSINESS: a Sarcafe owner cannot give business_admin on the other business', no(await give(U.owner, P.newcomer, 'business_admin', { business: b2 })))
 check('the other business\'s administrator cannot give anything on Sarcafe', no(await give(U.b2Admin, P.adminA, 'business_admin', { business: b1 })))
 check('an employee, a general manager and a stranger cannot give anything', no(await give(U.employee, P.adminA, 'business_admin', { business: b1 })) && no(await give(U.gm, P.adminA, 'business_admin', { business: b1 })) && no(await give(U.stranger, P.adminA, 'organization_admin', { org: orgA })))
-check('nobody grants to themselves', (await give(U.b2Admin, P.b2Admin, 'business_admin', { business: b2 })).error === 'self_grant' && (await give(U.adminA, P.adminA, 'department_head', { org: orgA, dept: A1 })).error === 'self_grant')
-check('a revoked or unknown principal cannot be given anything (told only to an actor who has the authority)', (await give(U.owner, P.revoked, 'business_admin', { business: b1 })).error === 'bad_principal' && (await give(U.owner, nowhere, 'business_admin', { business: b1 })).error === 'bad_principal'
+check('nobody grants to themselves (refused as denied)', no(await give(U.b2Admin, P.b2Admin, 'business_admin', { business: b2 })) && no(await give(U.adminA, P.adminA, 'department_head', { org: orgA, dept: A1 })) && no(await give(U.adminA, P.adminA, 'organization_admin', { org: orgA })))
+check('a revoked or unknown principal cannot be given anything (refused as denied)', no(await give(U.owner, P.revoked, 'business_admin', { business: b1 })) && no(await give(U.owner, nowhere, 'business_admin', { business: b1 }))
   && no(await give(U.stranger, nowhere, 'business_admin', { business: b1 })))
-r = await give(U.owner, P.adminB, 'organization_admin', { org: orgA })
-check('a business with an agreement appoints the organization\'s administrator (Sarcafe ↔ organization A)', r.ok === true && r.status === 'created' && (await one(`select organization_id o, business_id b from public.customer_identity_audit where target_id = $1`, [r.grant_id])).o === orgA, JSON.stringify(r))
+// R3: the answer must not say whether the target principal exists. Every refusal below must be byte-for-byte the same answer.
+{
+  const g0 = await count(`select count(*) n from public.customer_access_grants`); const au0 = await audits()
+  const answers = {
+    'business scope: an actor with no authority, a real target': await give(U.stranger, P.adminA, 'business_admin', { business: b1 }),
+    'business scope: an actor with no authority, an unknown target': await give(U.stranger, nowhere, 'business_admin', { business: b1 }),
+    'business scope: the owner, an unknown target': await give(U.owner, nowhere, 'business_admin', { business: b1 }),
+    'business scope: the owner, a switched-off target': await give(U.owner, P.revoked, 'business_admin', { business: b1 }),
+    'business scope: an administrator by grant, their own principal': await give(U.b2Admin, P.b2Admin, 'business_admin', { business: b2 }),
+    'business scope: an administrator by grant, an unknown target': await give(U.b2Admin, nowhere, 'business_admin', { business: b2 }),
+    'organization scope: the administrator, an unknown target': await give(U.adminA, nowhere, 'organization_admin', { org: orgA }),
+    'organization scope: the administrator, a switched-off target': await give(U.adminA, P.revoked, 'organization_admin', { org: orgA }),
+    'organization scope: the administrator, their own principal': await give(U.adminA, P.adminA, 'organization_admin', { org: orgA }),
+    'organization scope: the wrong organization, a real target': await give(U.adminA, P.newcomer, 'organization_admin', { org: orgB }),
+    'department scope: the administrator, an unknown target': await give(U.adminA, nowhere, 'department_head', { org: orgA, dept: A2 }),
+    'department scope: the administrator, a switched-off target': await give(U.adminA, P.revoked, 'department_head', { org: orgA, dept: A2 }),
+    'department scope: the administrator, their own principal': await give(U.adminA, P.adminA, 'department_head', { org: orgA, dept: A2 }),
+    'department scope: a department head (no authority), a real target': await give(U.headA1, P.newcomer, 'department_head', { org: orgA, dept: A2 }),
+  }
+  const distinct = [...new Set(Object.values(answers).map((x) => JSON.stringify(x)))]
+  check('R3: unknown, switched-off and own targets answer exactly like "no authority" (one identical answer in 14 cases)', distinct.length === 1 && distinct[0] === JSON.stringify({ ok: false, error: 'denied' }), JSON.stringify(Object.entries(answers).filter(([, x]) => JSON.stringify(x) !== JSON.stringify({ ok: false, error: 'denied' }))))
+  check('R3: none of those refusals wrote a grant or an audit row', await count(`select count(*) n from public.customer_access_grants`) === g0 && await audits() === au0)
+  const sources = (await all(`select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('customer_access_grant', 'customer_access_revoke', 'customer_access_check')`)).map((x) => x.prosrc).join('\n')
+  const errors = [...new Set([...sources.matchAll(/'error',\s*'([a-z_]+)'/g)].map((m) => m[1]))].sort().join()
+  check('R3: the three functions can only ever answer bad_request or denied', errors === 'bad_request,denied', errors)
+  check('R3: the server repository knows no other refusal either (no bad_principal / self_grant)', !/bad_principal|self_grant/.test(readFileSync(path.join(root, 'src/lib/identity/server/repository.ts'), 'utf8')) && /error: 'denied' \| 'bad_request' \}/.test(readFileSync(path.join(root, 'src/lib/identity/server/repository.ts'), 'utf8')))
+}
+a0 = await audits()
+check('R1: organization A already has an administrator, so Sarcafe (which has an agreement with it) can no longer appoint one', no(await give(U.owner, P.adminB, 'organization_admin', { org: orgA })) && await audits() === a0)
+check('R1: nor revoke organization A\'s administrator', no(await take(U.owner, G.adminA)) && (await one(`select revoked_at x from public.customer_access_grants where id = $1`, [G.adminA])).x === null && await audits() === a0)
 check('but not for an organization it has no agreement with (Sarcafe ↮ organization B)', no(await give(U.owner, P.adminA, 'organization_admin', { org: orgB })))
 check('the other business (agreement with B only) cannot appoint in organization A', no(await give(U.b2Admin, P.newcomer, 'organization_admin', { org: orgA })))
 r = await give(U.adminA, P.newcomer, 'department_head', { org: orgA, dept: A2 })
@@ -270,6 +301,111 @@ check('and cannot appoint in organization B, nor smuggle B1 in under organizatio
 check('a department head appoints nobody, in their own department or elsewhere', no(await give(U.headA1, P.newcomer, 'department_head', { org: orgA, dept: A1 })) && no(await give(U.headA1, P.newcomer, 'organization_admin', { org: orgA })))
 check('a malformed request is refused: wrong scope shape, an expiry in the past, an unknown capability, a 301-letter reason', bad(await give(U.owner, P.newcomer, 'business_admin', { business: b1, org: orgA })) && bad(await give(U.owner, P.newcomer, 'business_admin', { business: b1 }, { expires: new Date(Date.now() - 1000).toISOString() }))
   && bad(await give(U.owner, P.newcomer, 'owner', { business: b1 })) && bad(await give(U.owner, P.adminA, 'business_admin', { business: b1 }, { reason: 'x'.repeat(301) })))
+// ------------------------------------------------------------------ R1: first-administrator bootstrap
+console.log('\nR1: bootstrap of the first organization administrator (two businesses with agreements to ONE organization)')
+const orgC = (await one(`insert into public.customer_organizations (slug, name) values ('org-c', 'Organization C') returning id`)).id
+await db.query(`insert into public.customer_business_orgs (business_id, organization_id, state) values ($1, $3, 'draft'), ($2, $3, 'active')`, [b1, b2, orgC])
+const liveAdmins = (org) => count(`select count(*) n from public.customer_access_grants g join public.customer_principals p on p.id = g.principal_id and p.state = 'active' where g.capability = 'organization_admin' and g.organization_id = $1 and g.revoked_at is null and (g.expires_at is null or g.expires_at > now())`, [org])
+const auditOf = (grantId, operation = 'access.grant') => one(`select * from public.customer_identity_audit where target_id = $1 and operation = $2`, [grantId, operation])
+const BASE_KEYS = 'actor_via,capability,department_id,principal_id,scope_kind'
+const BOOT_KEYS = 'actor_via,bootstrap_business_id,bootstrap_grant_id,capability,department_id,principal_id,scope_kind'
+const keys = (detail) => Object.keys(detail).sort().join()
+check('organization C has no administrator; a stranger, an employee and organization A\'s administrator cannot appoint one', await liveAdmins(orgC) === 0 && no(await give(U.stranger, P.c1, 'organization_admin', { org: orgC })) && no(await give(U.employee, P.c1, 'organization_admin', { org: orgC })) && no(await give(U.adminA, P.c1, 'organization_admin', { org: orgC })))
+r = await give(U.owner, P.c1, 'organization_admin', { org: orgC })
+const c1Grant = r.grant_id
+check('business A (Sarcafe, by its legacy owner) bootstraps the FIRST administrator', r.ok === true && r.status === 'created' && await liveAdmins(orgC) === 1 && yes(await ask(U.c1, 'organization_admin', { org: orgC }), 'grant'), JSON.stringify(r))
+let row = await auditOf(c1Grant)
+check('the bootstrap audit row names the authorizing business (Sarcafe) and the legacy owner; no stored grant was involved', row.organization_id === orgC && row.business_id === null && row.actor_staff_id === S.owner && row.actor_principal_id === null
+  && keys(row.detail) === BOOT_KEYS && row.detail.bootstrap_business_id === b1 && row.detail.bootstrap_grant_id === null && row.detail.actor_via === 'legacy_owner', JSON.stringify(row.detail))
+a0 = await audits()
+check('business B (also has an agreement) cannot ADD an administrator afterwards', no(await give(U.b2Admin, P.c2, 'organization_admin', { org: orgC })) && await liveAdmins(orgC) === 1)
+check('business B cannot REVOKE the administrator', no(await take(U.b2Admin, c1Grant)) && (await one(`select revoked_at x from public.customer_access_grants where id = $1`, [c1Grant])).x === null)
+check('business A, which appointed the first one, cannot add a second or revoke the first either', no(await give(U.owner, P.c2, 'organization_admin', { org: orgC })) && no(await take(U.owner, c1Grant)) && await liveAdmins(orgC) === 1 && await audits() === a0)
+check('a business refusal answers exactly like any other refusal', JSON.stringify(await give(U.b2Admin, P.c2, 'organization_admin', { org: orgC })) === JSON.stringify(await give(U.stranger, P.c2, 'organization_admin', { org: orgC })) && JSON.stringify(await take(U.b2Admin, c1Grant)) === JSON.stringify(await take(U.b2Admin, nowhere)))
+r = await give(U.c1, P.c2, 'organization_admin', { org: orgC })
+const c2Grant = r.grant_id
+row = await auditOf(c2Grant)
+check('the organization\'s administrator adds another administrator; that is not a bootstrap (no bootstrap detail)', r.ok === true && r.status === 'created' && await liveAdmins(orgC) === 2 && keys(row.detail) === BASE_KEYS && row.actor_principal_id === P.c1 && row.detail.actor_via === 'grant', JSON.stringify(row.detail))
+check('with two administrators both businesses are still refused', no(await give(U.owner, P.c3, 'organization_admin', { org: orgC })) && no(await give(U.b2Admin, P.c3, 'organization_admin', { org: orgC })) && no(await take(U.owner, c2Grant)) && no(await take(U.b2Admin, c2Grant)))
+r = await take(U.c1, c2Grant, 'synthetic')
+row = await auditOf(c2Grant, 'access.revoke')
+check('an organization administrator revokes another administrator (audited as an organization act, no bootstrap detail)', r.ok === true && r.status === 'revoked' && await liveAdmins(orgC) === 1 && keys(row.detail) === BASE_KEYS && row.actor_principal_id === P.c1)
+check('one administrator left: business B is still refused', no(await give(U.b2Admin, P.c3, 'organization_admin', { org: orgC })))
+
+console.log('\nR1: recovery — revoked, expired and switched-off administrators do not block bootstrap for ever')
+r = await take(U.c1, c1Grant, 'leaving')
+check('REVOKED: the last administrator gives up their grant, so the organization has none', r.status === 'revoked' && await liveAdmins(orgC) === 0)
+r = await give(U.b2Admin, P.c3, 'organization_admin', { org: orgC })
+const c3Grant = r.grant_id
+row = await auditOf(c3Grant)
+check('bootstrap reopens: business B (a stored business_admin grant) appoints the next first administrator', r.ok === true && r.status === 'created' && await liveAdmins(orgC) === 1, JSON.stringify(r))
+check('that bootstrap audit row names business B and the exact grant that authorized it', keys(row.detail) === BOOT_KEYS && row.detail.bootstrap_business_id === b2 && row.detail.bootstrap_grant_id === G.b2Admin && row.actor_principal_id === P.b2Admin && row.actor_staff_id === null && row.organization_id === orgC, JSON.stringify(row.detail))
+check('and it closes again at once: business A is refused', no(await give(U.owner, P.c4, 'organization_admin', { org: orgC })) && no(await take(U.owner, c3Grant)))
+await db.query(`update public.customer_access_grants set expires_at = now() - interval '1 minute' where id = $1`, [c3Grant])
+check('EXPIRED: an expired (unrevoked) administrator grant is not a live administrator', await liveAdmins(orgC) === 0 && no(await ask(U.c3, 'organization_admin', { org: orgC })))
+r = await give(U.owner, P.c4, 'organization_admin', { org: orgC })
+const c4Grant = r.grant_id
+check('bootstrap reopens for business A', r.ok === true && r.status === 'created' && (await auditOf(c4Grant)).detail.bootstrap_business_id === b1 && await liveAdmins(orgC) === 1, JSON.stringify(r))
+check('while that administrator is live, business B cannot clean up the expired leftover grant', no(await take(U.b2Admin, c3Grant)) && (await one(`select revoked_at x from public.customer_access_grants where id = $1`, [c3Grant])).x === null)
+await db.query(`update public.customer_principals set state = 'revoked' where id = $1`, [P.c4])
+check('SWITCHED-OFF PRINCIPAL: a live grant of a revoked principal is not a live administrator', await liveAdmins(orgC) === 0 && no(await ask(U.c4, 'organization_admin', { org: orgC })))
+r = await take(U.owner, c3Grant, 'expired leftover')
+row = await auditOf(c3Grant, 'access.revoke')
+check('with no live administrator a business with an agreement may end a dead administrator grant, audited as a bootstrap act', r.ok === true && r.status === 'revoked' && keys(row.detail) === BOOT_KEYS && row.detail.bootstrap_business_id === b1 && row.detail.bootstrap_grant_id === null && row.actor_staff_id === S.owner, JSON.stringify(row?.detail))
+r = await give(U.b2Admin, P.c2, 'organization_admin', { org: orgC })
+const c2Again = r.grant_id
+check('bootstrap reopens for business B, and closes again', r.ok === true && r.status === 'created' && c2Again !== c2Grant && await liveAdmins(orgC) === 1 && no(await give(U.owner, P.c1, 'organization_admin', { org: orgC })) && no(await take(U.owner, c2Again)))
+const orgD = (await one(`insert into public.customer_organizations (slug, name) values ('org-d', 'Organization D') returning id`)).id
+await db.query(`insert into public.customer_business_orgs (business_id, organization_id, state) values ($1, $3, 'suspended'), ($2, $3, 'ended')`, [b1, b2, orgD])
+check('a suspended or ended agreement gives no bootstrap right', no(await give(U.owner, P.c1, 'organization_admin', { org: orgD })) && no(await give(U.b2Admin, P.c1, 'organization_admin', { org: orgD })) && await liveAdmins(orgD) === 0)
+await db.query(`update public.customer_organizations set state = 'inactive' where id = $1`, [orgC])
+await db.query(`update public.customer_access_grants set revoked_at = now(), revoked_reason = 'test' where id = $1`, [c2Again])
+check('an inactive organization cannot be bootstrapped', await liveAdmins(orgC) === 0 && no(await give(U.owner, P.c1, 'organization_admin', { org: orgC })) && no(await give(U.b2Admin, P.c1, 'organization_admin', { org: orgC })))
+await db.query(`update public.customer_organizations set state = 'active' where id = $1`, [orgC])
+r = await give(U.b2Admin, P.c2, 'organization_admin', { org: orgC })
+const c2Live = r.grant_id
+check('(organization C active again, administrator c2 appointed by bootstrap for the lock checks below)', r.ok === true && r.status === 'created')
+
+console.log('\nR1: the organization row is locked before bootstrap eligibility is decided (same transaction)')
+// One connection cannot run two sessions; what it CAN prove is that every path takes the row lock: after the call, inside the same
+// transaction, the organization row's xmax is this transaction. On a REFUSED call nothing is written, so only the explicit
+// FOR UPDATE can have set it (the control below shows a refused call that takes no lock leaves it unset). A successful call also
+// inserts a grant, whose foreign key takes a weaker lock on the same row, so there the xmax alone proves less: the source-order
+// check and the real two-session test (scripts/identity-concurrency-docker.mjs) cover that path.
+const lockedBy = async (org, call) => {
+  await db.exec('begin')
+  try {
+    const answer = await call()
+    const state = await one(`select xmax::text x, (txid_current() % 4294967296)::text t from public.customer_organizations where id = $1`, [org])
+    return { answer, locked: state.x === state.t && state.x !== '0' }
+  } finally { await db.exec('rollback') }
+}
+let lock = await lockedBy(orgC, () => give(U.owner, P.c1, 'organization_admin', { org: orgC }))
+check('a REFUSED bootstrap (an administrator exists) still took the organization lock before deciding', no(lock.answer) && lock.locked, JSON.stringify(lock))
+await db.query(`update public.customer_access_grants set revoked_at = now(), revoked_reason = 'test' where id = $1`, [c2Live])
+lock = await lockedBy(orgC, () => give(U.owner, P.c1, 'organization_admin', { org: orgC }))
+check('a SUCCESSFUL bootstrap holds the organization lock until its transaction ends', lock.answer.ok === true && lock.answer.status === 'created' && lock.locked, JSON.stringify(lock))
+check('(the rolled-back bootstrap left nothing behind)', await liveAdmins(orgC) === 0)
+r = await give(U.owner, P.c1, 'organization_admin', { org: orgC })
+const c1Again = r.grant_id
+lock = await lockedBy(orgC, () => give(U.c1, P.c3, 'organization_admin', { org: orgC }))
+check('an organization administrator adding another one takes the same lock', lock.answer.ok === true && lock.locked, JSON.stringify(lock))
+lock = await lockedBy(orgC, () => take(U.b2Admin, c1Again))
+check('a refused revoke of an administrator grant takes it too', no(lock.answer) && lock.locked, JSON.stringify(lock))
+lock = await lockedBy(orgC, () => take(U.c1, c1Again))
+check('and so does a successful one', lock.answer.status === 'revoked' && lock.locked, JSON.stringify(lock))
+lock = await lockedBy(orgA, () => give(U.headA1, P.c3, 'department_head', { org: orgA, dept: A2 }))
+check('CONTROL: a refused department-head grant takes no organization lock, so the probe is not always true', no(lock.answer) && !lock.locked, JSON.stringify(lock))
+lock = await lockedBy(orgC, () => give(U.stranger, P.c3, 'business_admin', { business: b1 }))
+check('CONTROL: a refused business grant takes no organization lock', no(lock.answer) && !lock.locked, JSON.stringify(lock))
+check('the lock is taken BEFORE the eligibility question in both functions (source order)', await (async () => {
+  const src = async (name) => (await one(`select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = $1`, [name])).prosrc
+  const grantSrc = await src('customer_access_grant'); const revokeSrc = await src('customer_access_revoke')
+  const before = (text, a, b) => text.indexOf(a) > 0 && text.indexOf(b) > 0 && text.indexOf(a) < text.indexOf(b)
+  return before(grantSrc, 'where o.id = p_organization_id for update', 'not exists (') && before(grantSrc, 'where o.id = p_organization_id for update', `'organization_admin', null, p_organization_id`)
+    && before(revokeSrc, 'where o.id = v_grant.organization_id for update', 'where g.id = p_grant_id for update') && before(revokeSrc, 'where o.id = v_grant.organization_id for update', 'not exists (')
+})())
+
 a0 = await audits()
 r = await give(U.b2Admin, P.newcomer, 'organization_admin', { org: orgB })
 check('an expired grant is closed (reason: expired) and replaced by a fresh one, so one live grant remains', r.ok === true && r.status === 'created' && r.grant_id !== expired
@@ -282,7 +418,11 @@ check('the owner revokes the grant: revoked, audited once, and the access is gon
 check('revoking again changes nothing', (await take(U.owner, newcomerGrant)).status === 'unchanged' && await audits() === a0 + 1)
 r = await take(U.headA1, G.headA1, 'leaving')
 check('someone may give up their own grant, and it is audited as their own act', r.status === 'revoked' && no(await ask(U.headA1, 'department_head', { org: orgA, dept: A1 })) && (await one(`select detail d from public.customer_identity_audit where target_id = $1 and operation = 'access.revoke'`, [G.headA1])).d.actor_via === 'self')
-check('the audit holds ids and words from a fixed list only: no name, phone, e-mail or free text beyond the reason', (await all(`select detail d from public.customer_identity_audit`)).every((x) => Object.keys(x.d).sort().join() === 'actor_via,capability,department_id,principal_id,scope_kind'))
+check('the audit holds ids and words from a fixed list only: no name, phone, e-mail or free text beyond the reason', (await all(`select detail d from public.customer_identity_audit`)).every((x) => [BASE_KEYS, BOOT_KEYS].includes(keys(x.d))))
+check('bootstrap detail appears only on organization-administrator rows scoped to an organization, and there are such rows', await (async () => {
+  const boots = await all(`select organization_id o, business_id b, detail d from public.customer_identity_audit where detail ? 'bootstrap_business_id'`)
+  return boots.length >= 5 && boots.every((x) => x.o !== null && x.b === null && x.d.capability === 'organization_admin' && x.d.scope_kind === 'organization' && [b1, b2].includes(x.d.bootstrap_business_id))
+})())
 await refused('the audit cannot be rewritten', `update public.customer_identity_audit set reason = 'edited'`, [], /append-only/)
 await refused('nor deleted', `delete from public.customer_identity_audit`, [], /append-only/)
 
@@ -292,12 +432,68 @@ check('no administrator of an organization or of the other business has a staff 
 const isOpAs = async (authUser) => { await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [authUser]); try { return await as('authenticated', async () => (await one(`select public.is_op() v`)).v) } finally { await db.query(`select set_config('request.jwt.claim.sub', '', false)`) } }
 check('the existing owner predicate (public.is_op) still says yes for the owner and no for every external administrator', await isOpAs(U.owner) === true && await isOpAs(U.adminA) === false && await isOpAs(U.b2Admin) === false && await isOpAs(U.headA1) === false)
 check('the migration never writes to staff, auth or the waitlist', !/insert\s+into\s+(public\.)?(staff|customer_waitlist)|insert\s+into\s+auth\.|update\s+(public\.)?staff|alter\s+table\s+(public\.)?(staff|branches|customer_waitlist)/i.test(readFileSync(migrations + NEW, 'utf8')))
-check('deleting an auth user removes that user\'s principal and grants and nothing else, and keeps the audit', await (async () => {
+console.log('\nR2: deleting an auth user cannot erase authority or its history')
+{
   const u = await user(); const p = await principal(u); const g = (await give(U.adminA, p, 'department_head', { org: orgA, dept: A2 })).grant_id
+  const bare = await user(); const bareP = await principal(bare)
   const auditsBefore = await audits()
-  await db.query(`delete from auth.users where id = $1`, [u])
-  return await count(`select count(*) n from public.customer_principals where id = $1`, [p]) === 0 && await count(`select count(*) n from public.customer_access_grants where id = $1`, [g]) === 0 && await audits() === auditsBefore && await count(`select count(*) n from public.customer_identity_audit where target_id = $1`, [g]) === 1
-})())
+  const intact = async () => await count(`select count(*) n from auth.users where id = $1`, [u]) === 1 && await count(`select count(*) n from public.customer_principals where id = $1 and auth_user_id = $2 and state = 'active'`, [p, u]) === 1
+    && await count(`select count(*) n from public.customer_access_grants where id = $1 and principal_id = $2 and revoked_at is null`, [g, p]) === 1 && await count(`select count(*) n from public.customer_identity_audit where target_id = $1 and operation = 'access.grant'`, [g]) === 1 && await audits() === auditsBefore
+  await refused('deleting an auth user who is a principal with a grant is refused by the database', `delete from auth.users where id = $1`, [u], /foreign key constraint.*customer_principals/i)
+  check('the auth user, the principal, the live grant and its audit row are all still there, unchanged', await intact())
+  await refused('deleting an auth user who is a principal WITHOUT any grant is refused too', `delete from auth.users where id = $1`, [bare], /foreign key constraint.*customer_principals/i)
+  check('that principal is still there', await count(`select count(*) n from public.customer_principals where id = $1`, [bareP]) === 1)
+  await refused('deleting a principal that holds a grant is refused (table owner)', `delete from public.customer_principals where id = $1`, [p], /foreign key constraint.*customer_access_grants/i)
+  await as('service_role', async () => {
+    await refused('service_role: deleting that principal is refused', `delete from public.customer_principals where id = $1`, [p], /permission denied/)
+    await refused('service_role: deleting that grant is refused', `delete from public.customer_access_grants where id = $1`, [g], /permission denied/)
+  })
+  check('nothing moved after those attempts', await intact())
+  const reviewer = await member()
+  await db.query(`insert into public.customer_org_memberships (member_id, organization_id, department_id, state, reviewed_by_principal_id, reviewed_at) values ($1, $2, $3, 'approved', $4, now())`, [reviewer, orgB, B1, bareP])
+  await refused('a principal recorded as the reviewer of a membership cannot be deleted either (the decision keeps its author)', `delete from public.customer_principals where id = $1`, [bareP], /foreign key constraint.*customer_org_memberships/i)
+  const ended = await take(U.adminA, g, 'synthetic end')
+  check('authority ends the audited way: revoked_at is set and an access.revoke row is written', ended.status === 'revoked' && (await one(`select revoked_at x from public.customer_access_grants where id = $1`, [g])).x !== null && await count(`select count(*) n from public.customer_identity_audit where target_id = $1 and operation = 'access.revoke'`, [g]) === 1)
+  await refused('and even then the auth user cannot be deleted: the principal and its history stay', `delete from auth.users where id = $1`, [u], /foreign key constraint.*customer_principals/i)
+  const soft = await all(`select c.conrelid::regclass::text t, c.conname, c.confdeltype::text d from pg_constraint c join pg_class r on r.oid = c.conrelid join pg_namespace n on n.oid = r.relnamespace where n.nspname = 'public' and r.relname = any($1) and c.contype = 'f' and c.confdeltype <> 'r' order by 1, 2`, [TABLES])
+  check('every foreign key of the identity tables is ON DELETE RESTRICT, except the branch mapping (a mapping, not authority, follows its branch)', soft.length === 1 && /customer_business_branches/.test(soft[0].t) && /branch_id/.test(soft[0].conname) && soft[0].d === 'c', JSON.stringify(soft))
+  check('the three foreign keys named in the review are restrictive', await count(`select count(*) n from pg_constraint c where c.contype = 'f' and c.confdeltype = 'r' and ((c.conrelid = 'public.customer_principals'::regclass and c.confrelid = 'auth.users'::regclass) or (c.conrelid = 'public.customer_access_grants'::regclass and c.confrelid = 'public.customer_principals'::regclass) or (c.conrelid = 'public.customer_org_memberships'::regclass and c.confrelid = 'public.customer_principals'::regclass))`) === 3)
+}
+
+console.log('\nR5: every foreign key has a supporting index')
+{
+  // usable = a valid index whose LEADING plain columns are exactly the foreign key's columns (any order), and which is either not
+  // partial or partial only on "<one of those columns> IS NOT NULL" (a null reference is never looked up through the key).
+  const fks = await all(`
+    select r.relname t, c.conname, (select string_agg(a.attname, ',' order by k.ord) from unnest(c.conkey) with ordinality k(attnum, ord) join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) cols,
+           exists (
+             select 1 from pg_index i
+              where i.indrelid = c.conrelid and i.indisvalid and i.indnkeyatts >= cardinality(c.conkey)
+                and (select array_agg(x order by x) from unnest((i.indkey::int2[])[0:cardinality(c.conkey) - 1]) x) = (select array_agg(x order by x) from unnest(c.conkey) x)
+                and (i.indpred is null or exists (select 1 from pg_attribute a where a.attrelid = c.conrelid and a.attnum = any(c.conkey) and pg_get_expr(i.indpred, i.indrelid) = '(' || a.attname || ' IS NOT NULL)'))
+           ) supported
+      from pg_constraint c join pg_class r on r.oid = c.conrelid join pg_namespace n on n.oid = r.relnamespace
+     where n.nspname = 'public' and r.relname = any($1) and c.contype = 'f' order by 1, 2`, [TABLES])
+  const missing = fks.filter((x) => !x.supported).map((x) => `${x.t}(${x.cols})`)
+  check(`all ${fks.length} foreign keys of the identity tables have a usable supporting index`, fks.length === 19 && missing.length === 0, `${fks.length} foreign keys; without an index: ${missing.join(' | ') || 'none'}`)
+  check('customer_org_memberships.reviewed_by_principal_id has its partial non-null index', /\(reviewed_by_principal_id\) WHERE \(reviewed_by_principal_id IS NOT NULL\)/i.test((await one(`select indexdef d from pg_indexes where schemaname = 'public' and indexname = 'customer_org_memberships_reviewer_idx'`))?.d ?? ''))
+  check('customer_access_grants.principal_id has a plain index (the live-grant unique index is partial, so it does not count)', /\(principal_id\)$/i.test((await one(`select indexdef d from pg_indexes where schemaname = 'public' and indexname = 'customer_access_grants_principal_idx'`))?.d ?? ''))
+  check('the detector is not blind: it reports a foreign key whose only index is the partial live-grant one', await (async () => {
+    await db.exec('begin')
+    try {
+      await db.exec('drop index public.customer_access_grants_principal_idx; drop index public.customer_org_memberships_reviewer_idx')
+      const again = await all(`
+        select r.relname t, (select string_agg(a.attname, ',' order by k.ord) from unnest(c.conkey) with ordinality k(attnum, ord) join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) cols
+          from pg_constraint c join pg_class r on r.oid = c.conrelid join pg_namespace n on n.oid = r.relnamespace
+         where n.nspname = 'public' and r.relname = any($1) and c.contype = 'f' and not exists (
+             select 1 from pg_index i
+              where i.indrelid = c.conrelid and i.indisvalid and i.indnkeyatts >= cardinality(c.conkey)
+                and (select array_agg(x order by x) from unnest((i.indkey::int2[])[0:cardinality(c.conkey) - 1]) x) = (select array_agg(x order by x) from unnest(c.conkey) x)
+                and (i.indpred is null or exists (select 1 from pg_attribute a where a.attrelid = c.conrelid and a.attnum = any(c.conkey) and pg_get_expr(i.indpred, i.indrelid) = '(' || a.attname || ' IS NOT NULL)'))) order by 1, 2`, [TABLES])
+      return again.map((x) => `${x.t}(${x.cols})`).join(' | ') === 'customer_access_grants(principal_id) | customer_org_memberships(reviewed_by_principal_id)'
+    } finally { await db.exec('rollback') }
+  })())
+}
 
 // ------------------------------------------------------------------ grants, RLS and browser denial
 console.log('\naccess: row level security, table and function privileges, a real attempt as each browser role')
