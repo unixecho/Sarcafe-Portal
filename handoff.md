@@ -1,5 +1,11 @@
 # Sarcafe — cross-agent handoff
 
+## Claude (Fable 5.2) note, 2026-11-12: `codex/identity-pc` pushed on the owner's instruction ("Push the branch"); remote now holds `bd5c3ad` + `e17ed36` (and this note)
+
+- `git push origin codex/identity-pc`: `1cd9084..e17ed36`, read back with `git ls-remote`. `main` (`2a18889`) and `codex/identity-plan` (`6caf454`) not moved. Where the note below says "NOT pushed", that was true when written.
+- A review branch only: no deployment follows from it (commits carry `[skip ci]`), nothing is live, migration `20261112125033_customer_identity_foundation.sql` **NOT APPLIED TO PRODUCTION**. No test rerun for the push.
+- **Exact next step:** Codex reviews `git diff 1cd9084 bd5c3ad` (round 2). FABLE-002 stays unstarted.
+
 ## Claude (Fable 5.2) note, 2026-11-12: FABLE-001 corrections R1–R5 committed locally as `bd5c3ad` on the owner's instruction ("Commit locally"); NOT pushed
 
 - Branch `codex/identity-pc`, parent `1cd9084`. The commit holds exactly the round-2 working tree described in the addendum below, plus Codex's own round-1 addendum and tracker edits (they were uncommitted in the same tree and are included unchanged). Where the addendum below says "uncommitted on top of `1cd9084`", read: commit `bd5c3ad`; review it with `git diff 1cd9084 bd5c3ad`.
