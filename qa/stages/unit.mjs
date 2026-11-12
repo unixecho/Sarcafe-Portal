@@ -6,7 +6,7 @@ import ts from 'typescript'
 import { createStage, assert, startChecks } from '../lib/harness.mjs'
 import { buildReport } from '../lib/report.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -22,7 +22,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') } }
 }
 
 export function unitStage(root) {
@@ -282,5 +282,92 @@ export function unitStage(root) {
     const huge = structuredClone(shipped); huge.review.headline = 'x'.repeat(5000)
     assert.ok(!m.report.QaReport.safeParse(huge).success, 'oversize accepted')
   })
+  // ── hybrid identity foundation (FABLE-001, docs/SARCAFE_IDENTITY.md). The same decision is run against the real SQL function,
+  // with two businesses and two organizations, by scripts/verify-identity-sql.mjs (the 'checks' stage).
+  const ID = { b1: '11111111-1111-4111-8111-111111111111', b2: '22222222-2222-4222-8222-222222222222', orgA: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', orgB: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', dept: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', user: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', staff: 'ffffffff-ffff-4fff-8fff-ffffffffffff', grant: '99999999-9999-4999-8999-999999999999', principal: '88888888-8888-4888-8888-888888888888' }
+  stage.test('identity-scope', 'זהויות: כל פעולה נקשרת לעסק אחד, לארגון אחד או למחלקה אחת בדיוק; היקף רחב, כפול או חסר נדחה', 'security', async () => {
+    const i = m.identity
+    assert.deepEqual(i.normalizeScope({ kind: 'business', businessId: ID.b1 }), { kind: 'business', businessId: ID.b1 }, 'a business')
+    assert.deepEqual(i.normalizeScope({ kind: 'organization', organizationId: ID.orgA }), { kind: 'organization', organizationId: ID.orgA }, 'an organization')
+    assert.deepEqual(i.normalizeScope({ kind: 'department', organizationId: ID.orgA, departmentId: ID.dept }), { kind: 'department', organizationId: ID.orgA, departmentId: ID.dept }, 'a department with its organization')
+    assert.deepEqual(i.normalizeScope({ kind: 'business', businessId: ID.b1, organizationId: undefined }), { kind: 'business', businessId: ID.b1 }, 'an undefined extra field is nothing')
+    const refused = [undefined, null, 'business', [], {}, { kind: 'all' }, { kind: 'global' }, { businessId: ID.b1 }, { kind: 'business' }, { kind: 'business', businessId: 'sarcafe' }, { kind: 'organization', organizationId: ID.orgA.toUpperCase() },
+      { kind: 'business', businessId: ID.b1, organizationId: ID.orgA }, { kind: 'organization', organizationId: ID.orgA, businessId: ID.b1 }, { kind: 'organization', organizationId: ID.orgA, departmentId: ID.dept },
+      { kind: 'department', departmentId: ID.dept }, { kind: 'department', organizationId: ID.orgA }, { kind: 'department', organizationId: ID.orgA, departmentId: ID.dept, businessId: ID.b1 }, { kind: 'business', businessId: [ID.b1] }, { kind: 'business', businessId: ID.b1, role: 'owner' }]
+    assert.deepEqual(refused.filter((x) => i.normalizeScope(x) !== null).map((x) => JSON.stringify(x)), [], 'scopes that should have been refused:')
+    assert.deepEqual(i.IDENTITY_CAPABILITIES.map((c) => [c, i.SCOPE_OF[c]]), [['business_admin', 'business'], ['organization_admin', 'organization'], ['department_head', 'department']], 'each capability has one scope shape')
+    assert.ok(i.capabilityFitsScope('business_admin', { kind: 'business', businessId: ID.b1 }) && !i.capabilityFitsScope('business_admin', { kind: 'organization', organizationId: ID.orgA }) && !i.capabilityFitsScope('organization_admin', { kind: 'department', organizationId: ID.orgA, departmentId: ID.dept }), 'a capability only fits its own scope')
+    assert.deepEqual(i.accessCheckArgs(ID.user, 'department_head', { kind: 'department', organizationId: ID.orgA, departmentId: ID.dept }), { authUserId: ID.user, capability: 'department_head', businessId: null, organizationId: ID.orgA, departmentId: ID.dept }, 'the question sent to the database')
+    assert.ok(!i.isCapability('owner') && !i.isCapability('benefit_scanner') && !i.isCapability(null) && i.isCapability('business_admin'), 'unknown capabilities')
+  })
+  stage.test('identity-guard', 'זהויות: מי רשאי לנהל — רק התחברות מלאה, רק בהיקף שלו; בעלים של סרקפה לא מקבל עסק אחר, הרשאה שבוטלה לא עובדת, ותקלה אינה גישה', 'security', async () => {
+    const i = m.identity
+    const owner = { id: ID.staff, role: 'owner', badge: 'owner', branch_id: null }
+    const full = (staff = null, over = {}) => ({ authUserId: ID.user, via: 'google', full: true, staff, ...over })
+    const business = (id) => ({ kind: 'business', businessId: id })
+    // a stand-in for the database: Sarcafe (b1) is the legacy business, a grant exists for organization A only
+    let asked = []
+    const db = (grants = {}) => async (args) => {
+      asked.push(args)
+      if (args.capability === 'business_admin' && args.businessId === ID.b1 && grants.legacyOwner) return { ok: true, via: 'legacy_owner', staff_id: ID.staff }
+      if (args.capability === 'organization_admin' && args.organizationId === ID.orgA && grants.orgA) return { ok: true, via: 'grant', grant_id: ID.grant, principal_id: ID.principal }
+      return { ok: false, error: 'denied' }
+    }
+    const decide = (session, capability, scope, check) => { asked = []; return i.authorizeIdentityAction(session, { capability, scope }, check) }
+    const code = (o) => (o.ok ? 'ok:' + o.via : o.status + ':' + o.code)
+    const table = [
+      ['signed out', null, 'business_admin', business(ID.b1), db({ legacyOwner: true }), '401:unauthenticated', 0],
+      ['an owner on an employee-code session', { authUserId: null, via: 'employee_code', full: false, staff: owner }, 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:full_session_required', 0],
+      ['an owner on a quick Google session', full(owner, { full: false }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:quick_session', 0],
+      ['an owner, full session, Sarcafe', full(owner), 'business_admin', business(ID.b1), db({ legacyOwner: true }), 'ok:legacy_owner', 1],
+      ['an owner by badge only', full({ id: ID.staff, role: 'staff', badge: 'owner' }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), 'ok:legacy_owner', 1],
+      ['WRONG BUSINESS: the same owner, another business', full(owner), 'business_admin', business(ID.b2), db({ legacyOwner: true }), '403:denied', 1],
+      ['an owner asking for an organization', full(owner), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({ legacyOwner: true }), '403:denied', 1],
+      ['a general manager', full({ id: ID.staff, role: 'staff', badge: 'general_manager' }), 'business_admin', business(ID.b1), db({}), '403:denied', 1],
+      ['an employee', full({ id: ID.staff, role: 'staff', badge: 'barista' }), 'business_admin', business(ID.b1), db({}), '403:denied', 1],
+      ['the database says legacy owner, the session has no owner row', full({ id: ID.staff, role: 'staff', badge: 'barista' }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:denied', 1],
+      ['an external administrator with a grant', full(null), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({ orgA: true }), 'ok:grant', 1],
+      ['the same administrator after the grant was REVOKED', full(null), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({}), '403:denied', 1],
+      ['WRONG ORGANIZATION', full(null), 'organization_admin', { kind: 'organization', organizationId: ID.orgB }, db({ orgA: true }), '403:denied', 1],
+      ['an external administrator asking for a business', full(null), 'business_admin', business(ID.b1), db({ orgA: true }), '403:denied', 1],
+      ['a capability in the wrong scope', full(owner), 'organization_admin', business(ID.b1), db({ legacyOwner: true }), '400:bad_scope', 0],
+      ['no scope', full(owner), 'business_admin', undefined, db({ legacyOwner: true }), '400:bad_scope', 0],
+      ['a scope with an extra tenant', full(owner), 'business_admin', { kind: 'business', businessId: ID.b1, organizationId: ID.orgA }, db({ legacyOwner: true }), '400:bad_scope', 0],
+      ['an unknown capability', full(owner), 'owner', business(ID.b1), db({ legacyOwner: true }), '400:bad_scope', 0],
+      ['the database does not answer', full(owner), 'business_admin', business(ID.b1), async () => { throw new Error('down') }, '503:unavailable', 0],
+      ['the database answers nonsense', full(owner), 'business_admin', business(ID.b1), async () => ({ ok: true, via: 'superuser' }), '403:denied', 0],
+      ['a grant answer without its ids', full(null), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, async () => ({ ok: true, via: 'grant' }), '403:denied', 0],
+      ['a legacy-owner answer for an organization', full(owner), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, async () => ({ ok: true, via: 'legacy_owner', staff_id: ID.staff }), '403:denied', 0],
+    ]
+    for (const [label, session, capability, scope, check, expected, questions] of table) {
+      const outcome = await decide(session, capability, scope, check)
+      assert.equal(code(outcome), expected, label)
+      assert.equal(asked.length, questions, label + ': questions put to the database')
+    }
+    const ok = await decide(full(owner), 'business_admin', business(ID.b1), db({ legacyOwner: true }))
+    assert.deepEqual(asked[0], { authUserId: ID.user, capability: 'business_admin', businessId: ID.b1, organizationId: null, departmentId: null }, 'the database is asked about the session\'s own user and exactly that scope')
+    assert.deepEqual([ok.staffId, ok.grantId, ok.principalId, ok.scope], [ID.staff, null, null, business(ID.b1)], 'what a passing answer carries')
+  })
+  // Nothing uses the identity module yet: it must not have changed who gets into the existing app.
+  stage.test('identity-isolated', 'זהויות: היסוד החדש לא נוגע בכניסה, בבעלים, בצוות, בקופה, בקיוסק או ברשימת ההמתנה, ואין לו מסך או נתיב', 'security', async () => {
+    const src = path.join(root, 'src')
+    const files = []
+    const walk = (dir) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx)$/.test(e.name)) files.push(p) } }
+    walk(src)
+    const rel = (f) => path.relative(root, f).split(path.sep).join('/')
+    const inside = (f) => rel(f).startsWith('src/lib/identity/')
+    const users = files.filter((f) => !inside(f) && /['"]@\/lib\/identity\//.test(fs.readFileSync(f, 'utf8'))).map(rel)
+    assert.deepEqual(users, [], 'files outside src/lib/identity that import it (this slice has no route and no screen):')
+    const reach = files.filter((f) => !inside(f) && /customer_(members|principals|businesses|business_branches|organizations|departments|business_orgs|access_grants|org_memberships|business_memberships|identity_audit|access_check|access_grant|access_revoke)\b/.test(fs.readFileSync(f, 'utf8'))).map(rel)
+    assert.deepEqual(reach, [], 'files outside src/lib/identity that touch the identity tables or functions:')
+    const server = files.filter((f) => rel(f).startsWith('src/lib/identity/server/'))
+    assert.ok(server.length >= 3, 'the server part exists')
+    assert.deepEqual(server.filter((f) => !/^import 'server-only'/.test(fs.readFileSync(f, 'utf8'))).map(rel), [], 'server files that do not start with server-only:')
+    const pure = files.filter((f) => inside(f) && !rel(f).startsWith('src/lib/identity/server/'))
+    assert.deepEqual(pure.filter((f) => /server-only|node:|supabase|next\/|process\.env/.test(fs.readFileSync(f, 'utf8'))).map(rel), [], 'pure rule files that reach a server, a secret or the database:')
+    const writes = files.filter(inside).filter((f) => /\.from\(['"](staff|staff_\w+|auth\.\w+|customer_waitlist\w*|pos_\w+)['"]\)|auth\.admin|createUser|signUp/.test(fs.readFileSync(f, 'utf8'))).map(rel)
+    assert.deepEqual(writes, [], 'identity files that reach staff, auth accounts, POS or the waitlist:')
+  })
+
   return stage
 }

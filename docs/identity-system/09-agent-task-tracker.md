@@ -1,12 +1,12 @@
 # 09 — Agent task tracker
 
-Updated 2026-11-12. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. FABLE-000 round 2 was reviewed; R1/R2 are sound, but Codex requested R3 for a Linux-container zombie false-positive in the self-test. Fable fixed R3 (2026-11-12, commit `2053be7`, pushed to `origin/codex/identity-pc`) and it waits for Codex. No feature task has run. FABLE-001 remains blocked.
+Updated 2026-11-12. Implementation model: Claude Fable 5.2; manual user invocation. Codex is architect/reviewer. Codex reviewed FABLE-000 round 3 and independently verified R3 on Windows and Linux. FABLE-000 is verified. FABLE-001 has been built by Fable and waits for Codex review (uncommitted; migration NOT applied to production). FABLE-002 is not started.
 
 | Task | Status | Dependencies | Codex acceptance evidence |
 |---|---|---|---|
 | Discovery/planning | Documents prepared; baseline recorded | Existing checkout | [Audit](01-repository-audit.md), [baseline](baseline/2026-11-11.md) |
-| FABLE-000 | **Ready for Codex review, round 3** (2026-11-12, PC): R3 fixed. Round 2: Codex CHANGES REQUESTED (R1/R2 accepted; R3 Linux zombie false-positive) | Base `6caf454`; reviewed `a04dc13..7d10554` on `origin/codex/identity-pc` | Codex independently: Windows path-with-spaces full QA dashboard 133/133 + kiosk 38/38; five SQL verifiers pass; Linux with init passes and the broken-group mutation fails. No-init Linux leaves only `STAT Z` entries but `alive()` counts them as running, so the focused test falsely fails. Fix R3 and return for Codex review. **Fable, round 3 (root `handoff.md`, newest addendum):** `alive()` reads `/proc/<pid>/stat` on Linux and counts `Z`/`X` as ended; one file of code (`qa/stages/harness.mjs`), commit `2053be7` on top of `7d10554`, pushed to `origin/codex/identity-pc`. Windows: harness 13/13; full QA from a path with spaces dashboard 134/134, kiosk 38/38, exit 0; five SQL verifiers pass. Linux `node:20-alpine`: old helper fails without init; R3 passes without and with init; process-group mutation fails in both. Full suite not run on Linux. Pending: Codex review and rerun. |
-| FABLE-001 | Prepared, blocked on 000 review | 000 verified | None |
+| FABLE-000 | **Verified** (Codex, 2026-11-12, round 3) | Base `6caf454`; final correction `7d10554..2053be7` | R1/R2 accepted in round 2. R3 independently reviewed and rerun: Windows harness 13/13; Linux focused checks 2/2 without init and 2/2 with init; disposable process-group mutation correctly failed the live-child assertion while the process-state test passed. Fable's exact R3 full Windows run from a path with spaces: dashboard 134/134, kiosk 38/38; all five SQL verifiers passed. Full Linux suite remains unrun. See newest root `handoff.md` addendum. |
+| FABLE-001 | **Ready for Codex review** (2026-11-12, PC) | 000 verified; base `0ba81e5`, uncommitted diff + untracked files in worktree `Sarcafe-identity-pc` | Fable report: root `handoff.md`, newest addendum; domain doc `docs/SARCAFE_IDENTITY.md`. Own runs: `verify:identity-sql` 173/173; schedule 433, checklist 52, onboarding 49, waitlist 60, kiosk-content 161; typecheck ok; full QA dashboard 138/138, kiosk 38/38, exit 0. Migration `20261112120000_customer_identity_foundation.sql` applied/re-applied in PGlite only, **NOT applied to production**. Pending: Codex review and rerun |
 | FABLE-002 | Prepared, not started | 001 verified; Glisse skill for UI | None |
 | FABLE-003 | Prepared, not started | 002 verified | None |
 | FABLE-004 | Prepared, not started | 003 verified | None |
@@ -38,4 +38,4 @@ Exact next step:
 Status: ready for Codex review
 ```
 
-Next step: Fable has fixed R3 only and returned the narrow diff/evidence (`7d10554..2053be7` on `origin/codex/identity-pc`); Codex reviews and reruns focused Linux/Windows checks before authorizing FABLE-001. No production action is part of this handoff.
+Next step: FABLE-000 is verified. Fable has built FABLE-001 and stopped at ready for Codex review; Codex reviews and reruns before FABLE-002 may start. No production migration application, deployment, posting, notification or other production action is part of this handoff.
