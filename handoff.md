@@ -1,5 +1,11 @@
 # Sarcafe — cross-agent handoff
 
+## Claude (Fable 5.2) note, 2026-11-12: FABLE-001 corrections R1–R5 committed locally as `bd5c3ad` on the owner's instruction ("Commit locally"); NOT pushed
+
+- Branch `codex/identity-pc`, parent `1cd9084`. The commit holds exactly the round-2 working tree described in the addendum below, plus Codex's own round-1 addendum and tracker edits (they were uncommitted in the same tree and are included unchanged). Where the addendum below says "uncommitted on top of `1cd9084`", read: commit `bd5c3ad`; review it with `git diff 1cd9084 bd5c3ad`.
+- `origin/codex/identity-pc` is still `1cd9084`: nothing was pushed. `main` and `codex/identity-plan` untouched. No test was rerun for the commit (no file changed after the runs reported below). Migration `20261112125033_customer_identity_foundation.sql` **NOT APPLIED TO PRODUCTION**.
+- **Exact next step:** Codex reviews `bd5c3ad` (round 2). Push only when the owner says so. FABLE-002 stays unstarted.
+
 ## Claude (Fable 5.2) addendum, 2026-11-12: FABLE-001 corrections R1–R5 (Codex review round 1) done and tested — READY FOR CODEX REVIEW; UNCOMMITTED on top of `1cd9084`; migration NOT APPLIED TO PRODUCTION; FABLE-002 not started
 
 - **Assignment:** Codex's round-1 findings R1–R5 only (its addendum is two entries below, kept as written). Model: the session reports itself as Claude Fable 5.2 (`claude-fable-5-2`).
