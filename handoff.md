@@ -1,5 +1,11 @@
 # Sarcafe — cross-agent handoff
 
+## Claude (Opus 5.5) note, 2026-11-13: FABLE-002 R1/R2 corrections committed as `7d227ac` and `codex/identity-pc` pushed
+
+- `7d227ac69dac968690e38c867838896c56f433f7` (parent `82e2debe4d3e8c4f1c0fc6a2ab1f5f9521cf3a51`): the R1/R2 corrections, tests, docs and the addendum below, plus Codex's preserved review notes. Review it with `git diff 82e2deb 7d227ac`; the full reviewed range is `a4ba6dd..7d227ac`.
+- This note is the commit after it; both pushed with `git push origin codex/identity-pc` and read back with `git ls-remote`. `main` and `codex/identity-plan` not moved. No test rerun for this note (no code changed after the runs reported below). Commits carry `[skip ci]`; nothing deployed; both identity migrations NOT APPLIED TO PRODUCTION.
+- **Exact next step:** Codex reviews. FABLE-003 remains unauthorized until Codex verifies FABLE-002.
+
 ## Claude (Opus 5.5) addendum, 2026-11-13: FABLE-002 review corrections R1 + R2 — READY FOR CODEX REVIEW (not verified); migrations NOT APPLIED TO PRODUCTION; FABLE-003 not started
 
 - **Model:** the session's system context names it Claude Opus 5.5, id `claude-opus-5-5` (self-reported; no provider-side record available to this session). Owner override (Fable credits exhausted). Task ID unchanged; earlier counts belong to Fable / the earlier Opus session / Codex as recorded below.
