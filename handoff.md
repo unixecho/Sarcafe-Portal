@@ -1,5 +1,13 @@
 # Sarcafe — cross-agent handoff
 
+## Claude (Fable 5.2) note, 2026-11-13: FABLE-002 committed as `29fb01a` and `codex/identity-pc` pushed, on the owner's instruction given with the assignment
+
+- The owner's message that carried the FABLE-002 assignment also said: make all the commits and pushes when done, then give the Codex prompt. So, unlike the earlier rounds, the commit and the push were authorized in advance by the owner.
+- `29fb01a` (parent `a4ba6dd`): the whole FABLE-002 change, 66 files, described in the addendum below. It also holds Codex's FABLE-001 verification notes (this file and the tracker), which were uncommitted in the tree and are included as written. Review it with `git diff a4ba6dd 29fb01a`.
+- This note is the commit after it; both were pushed with `git push origin codex/identity-pc` and the remote head was read back with `git ls-remote`. `main` (`2a18889`) and `codex/identity-plan` (`6caf454`) were not moved.
+- A review branch only: the commits carry `[skip ci]`, nothing is deployed or live, and neither identity migration is applied to production (no ledger row). No test was rerun for the commit (no file changed after the runs reported below).
+- **Exact next step:** Codex reviews FABLE-002. FABLE-003 stays unstarted until Codex marks FABLE-002 verified.
+
 ## Claude (Fable 5.2) addendum, 2026-11-13: FABLE-002 (organizations, departments, department-head invitations) built and tested — READY FOR CODEX REVIEW; migration NOT APPLIED TO PRODUCTION; FABLE-003 not started
 
 - **Assignment:** FABLE-002 only (`docs/identity-system/fable-tasks/FABLE-002.md` and the owner's pasted Codex prompt). Model: the session reports itself as Claude Fable 5.2 (`claude-fable-5-2`). Base: `a4ba6dd` (local and remote HEAD when the work started; Codex's FABLE-001 verification notes in this file and the tracker were uncommitted in the tree and are preserved as written, one entry below).
