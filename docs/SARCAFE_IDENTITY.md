@@ -279,6 +279,26 @@ is created or consumed.
   widget and skip link are not drawn there. The people there are not staff and not customers; the owner may decide otherwise.
 - Not built on purpose: e-mail or SMS delivery, organization-administrator invitations, switching a principal off, erasure.
 
+### Review continuation, 2026-11-13 (Claude Opus 5.5, owner-authorized replacement for Fable; not a Codex verification)
+- **Both write DELETEs check the Origin themselves** (`deleteInvitation`, `deleteHead` in `server/org-handlers.ts`); before, they
+  relied on the middleware alone. QA `identity.cross-site-writes` sends every management write of both families from another
+  site (403, nothing written) with same-origin controls.
+- **Open decision D1 (setup authority), behaviour pinned, not approved:** `verify:identity-org-sql` section "under review (D1)".
+  While an organization has no live administrator, ANY business with a draft/active agreement can revoke the other business's
+  invitations, end heads it invited and switch the organization off/on; a suspended agreement loses that at once; the bootstrap
+  ends it for both businesses and kills setup-era invitations; heads accepted during setup keep their grant. In practice only the
+  creating business has an agreement (no function attaches a second business), so the cross-business case needs data written
+  outside this slice.
+- **Open decision D2 (`/benefits` private):** `check:a11y-scope` now classifies `/benefits` subpages one by one (`invite`,
+  `manage`); a new one (the planned `/benefits/register` for invited employees) fails the check until it is decided on purpose.
+- **Identity proof, residual risk for review:** the recipient check proves the *account* holds a Google identity with that verified
+  address; it does not check that the *current session* was made through Google (the JWT `amr`). If the hosted project allows
+  e-mail/password sign-up without confirmation, or manual identity linking, a pre-created account could later absorb the victim's
+  Google identity. Hosted Auth settings must be checked (see handoff); an `amr` check was not added because it cannot be verified
+  without a real Google sign-in.
+- QA `identity.ui-keyboard`: the invitation page's states in all five looks (contrast) and keyboard-only acceptance with a visible
+  focus ring.
+
 ## Before it is applied to production (not done, not authorized)
 
 Two migrations, in this order: `20261112125033_customer_identity_foundation.sql`, then `20261112162132_customer_org_management.sql`

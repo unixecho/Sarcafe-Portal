@@ -147,6 +147,34 @@ export function identityStage(root, live) {
     assert.equal(live().db('schedule_notifications').filter((n) => /invit|הזמנ/i.test(JSON.stringify(n))).length, 0, 'no notification was queued: the link is copied, nothing is sent')
   }, { timeout: 120_000 })
 
+  // ── every management write, of both families, from another site (2026-11-13: the two DELETEs now check the Origin themselves too)
+  stage.test('cross-site-writes', 'כל פעולת ניהול שמגיעה מאתר אחר נדחית (כולל שתי פעולות המחיקה) ולא משנה דבר', 'security', async () => {
+    await fresh()
+    const org = await createOrg('ארגון חוצה אתרים'); const dept = await createDept(org)
+    const accepted = await post(`${I}/accept`, 'head', {}, { cookie: inviteCookie(await token(org, dept, 'head')) })
+    assert.status(accepted, 200, 'a head accepted (setup)')
+    const pending = (await invite(org, dept, 'head2')).json.invitationId
+    const grant = (await api(`${O}/organizations/${org}`, { as: 'owner' })).json.heads[0].grantId
+    const before = JSON.stringify([await count(`select count(*) n from public.customer_identity_audit`), await sql(`select id, name, state from public.customer_departments order by id`), await sql(`select name, state from public.customer_organizations`)])
+    const evil = { origin: 'https://evil.example' }
+    const writes = (base, as) => [
+      ['PATCH', `${base}/organizations/${org}`, { name: 'Taken' }], ['POST', `${base}/organizations/${org}/departments`, { name: 'Planted' }],
+      ['PATCH', `${base}/organizations/${org}/departments/${dept}`, { state: 'inactive' }], ['POST', `${base}/organizations/${org}/invitations`, { departmentId: dept, email: emailOf('outsider') }],
+      ['DELETE', `${base}/organizations/${org}/invitations/${pending}`], ['DELETE', `${base}/organizations/${org}/heads/${grant}`],
+    ].map(([method, url, body]) => ({ method, url, body, as }))
+    await seedAdmin(org, 'orgadmin')
+    for (const w of [...writes(O, 'owner'), ...writes(B, 'orgadmin')]) {
+      assert.status(await live().call(w.url, { method: w.method, as: w.as, ...(w.body ? { body: w.body } : {}), ...evil }), 403, `${w.as} ${w.method} ${w.url.replace(/[0-9a-f-]{36}/g, ':id')} from another site`)
+    }
+    assert.status(await live().call(`${O}/organizations`, { method: 'POST', as: 'owner', body: { name: 'Cross-site' }, ...evil }), 403, 'creating an organization from another site')
+    assert.equal(JSON.stringify([await count(`select count(*) n from public.customer_identity_audit`), await sql(`select id, name, state from public.customer_departments order by id`), await sql(`select name, state from public.customer_organizations`)]), before, 'nothing was written')
+    assert.equal((await sql(`select revoked_at from public.customer_invitations where id = $1`, [pending]))[0].revoked_at, null, 'the pending invitation is still open')
+    assert.equal((await sql(`select revoked_at from public.customer_access_grants where id = $1`, [grant]))[0].revoked_at, null, 'the head still holds the department')
+    // the same two DELETEs from our own origin work (so the probe above is not always 403)
+    assert.status(await api(`${B}/organizations/${org}/invitations/${pending}`, { method: 'DELETE', as: 'orgadmin' }), 200, 'CONTROL: same-origin revoke of the invitation')
+    assert.status(await api(`${B}/organizations/${org}/heads/${grant}`, { method: 'DELETE', as: 'orgadmin' }), 200, 'CONTROL: same-origin end of the head')
+  }, { timeout: 120_000 })
+
   // ── tenants: another business's organization, an organization that runs itself, swapped ids
   stage.test('tenants', 'היקפים: ארגון של עסק אחר, ארגון שמנהל את עצמו ומזהים מוחלפים נדחים באותה תשובה', 'security', async () => {
     await fresh()
@@ -610,7 +638,43 @@ export function identityStage(root, live) {
     } finally { await fault({ mode: 'none' }); await broken.close() }
   }, { timeout: 180_000 })
 
-  stage.test('ui-looks', 'קריאוּת בכל חמשת המראות, שלושה רוחבים, קצוות אייפון ותנועה מופחתת, במסך הבעלים ובעמודי ההטבות', 'a11y', async () => {
+  // 2026-11-13 (Opus continuation): the invitation page was not in the contrast audit, and nothing drove a screen by keyboard.
+  stage.test('ui-keyboard', 'עמוד ההזמנה: קריא בכל חמשת המראות, ואפשר לאשר אותו במקלדת בלבד עם טבעת מיקוד גלויה', 'a11y', async () => {
+    await fresh()
+    const org = await createOrg('מכללת הדוגמה'); const dept = await createDept(org, 'מטבח')
+    const problems = []
+    let measured = 0
+    for (const look of LOOKS) {
+      for (const [who, mark, url] of [['head', 'invite-ready', `/benefits/invite#${await token(org, dept, 'head')}`], [null, 'invite-sign-in', '/benefits/invite'], ['outsider', 'invite-none', '/benefits/invite']]) {
+        const s = await open(who, url, { theme: look })
+        try {
+          await at(s.page, mark).waitFor({ timeout: 15_000 })
+          const r = await auditScreen(s.page)
+          measured += r.measured
+          for (const f of r.failures) problems.push(`${look} ${mark}: "${f.text}" ${f.ratio}:1`)
+        } finally { await s.close() }
+      }
+    }
+    assert.ok(measured > 30, `texts measured: ${measured}`)
+    assert.deepEqual(problems.slice(0, 12), [], `${problems.length} texts below AA on the invitation page:`)
+
+    const s = await open('head', `/benefits/invite#${await token(org, dept, 'head')}`)
+    try {
+      await at(s.page, 'invite-ready').waitFor({ timeout: 15_000 })
+      const onAccept = () => s.page.evaluate(() => { const b = document.querySelector('[data-identity="invite-accept"]'); return !!b && (b === document.activeElement || b.contains(document.activeElement)) })
+      let tabs = 0
+      while (tabs < 20 && !(await onAccept())) { await s.page.keyboard.press('Tab'); tabs++ }
+      assert.ok(await onAccept(), `Tab reaches the accept button (${tabs} presses)`)
+      const ring = await s.page.evaluate(() => { const st = getComputedStyle(document.activeElement); return (st.outlineStyle !== 'none' && parseFloat(st.outlineWidth) > 0) || (st.boxShadow && st.boxShadow !== 'none') })
+      assert.ok(ring, 'the focused button shows a focus ring (outline or shadow)')
+      await s.page.keyboard.press('Enter')
+      await at(s.page, 'invite-accepted').waitFor({ timeout: 15_000 })
+      assert.equal(await count(`select count(*) n from public.customer_access_grants where capability = 'department_head' and revoked_at is null`), 1, 'the keyboard acceptance made exactly one head grant')
+      assert.deepEqual(s.errors, [], 'no script errors')
+    } finally { await s.close() }
+  }, { timeout: 300_000 })
+
+  stage.test('ui-looks','קריאוּת בכל חמשת המראות, שלושה רוחבים, קצוות אייפון ותנועה מופחתת, במסך הבעלים ובעמודי ההטבות', 'a11y', async () => {
     await fresh()
     const org = await createOrg('מכללת הדוגמה'); const dept = await createDept(org, 'מטבח'); await createDept(org, 'הנהלת חשבונות ומשאבי אנוש של הקמפוס הצפוני')
     assert.status(await invite(org, dept, 'head2'), 201, 'a pending invitation to show')

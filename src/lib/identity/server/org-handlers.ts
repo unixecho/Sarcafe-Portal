@@ -5,7 +5,7 @@ import { ApiError, BadRequest } from '@/lib/http/errors'
 import { DEFAULT_INVITATION_EXPIRY_HOURS, INVITATION_EXPIRY_HOURS, normalizeEmail, recipientHint } from '@/lib/identity/invitations'
 import { isUuid } from '@/lib/identity/rules'
 import type { IdentityActor } from '@/lib/identity/server/guard'
-import { identityJson, readIdentityBody, refuse, throttleCredential, throttleWrites } from '@/lib/identity/server/http'
+import { assertSameOrigin, identityJson, readIdentityBody, refuse, throttleCredential, throttleWrites } from '@/lib/identity/server/http'
 import { invitationTokenDigest, newInvitationToken, recipientDigest } from '@/lib/identity/server/invitations'
 import {
   createDepartment, createInvitation, organizationDetail, revokeDepartmentHead, revokeInvitation, updateDepartment, updateOrganization,
@@ -102,6 +102,8 @@ export async function postInvitation(guard: OrganizationGuard, request: Request,
 }
 
 export async function deleteInvitation(guard: OrganizationGuard, request: Request, context: Context<'organizationId' | 'invitationId'>) {
+  // a write with no body still comes from our own pages only (the middleware refuses a foreign Origin too; this is the second lock)
+  assertSameOrigin(request)
   const { organizationId, invitationId } = await context.params
   const actor = await guard(organizationId)
   await throttleWrites(actor.authUserId)
@@ -112,6 +114,8 @@ export async function deleteInvitation(guard: OrganizationGuard, request: Reques
 }
 
 export async function deleteHead(guard: OrganizationGuard, request: Request, context: Context<'organizationId' | 'grantId'>) {
+  // a write with no body still comes from our own pages only (the middleware refuses a foreign Origin too; this is the second lock)
+  assertSameOrigin(request)
   const { organizationId, grantId } = await context.params
   const actor = await guard(organizationId)
   await throttleWrites(actor.authUserId)

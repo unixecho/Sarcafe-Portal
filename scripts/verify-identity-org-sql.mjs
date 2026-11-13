@@ -507,5 +507,51 @@ check('every principal created by an acceptance has no member and is active; non
   [U.head, U.head2].sort().map((id) => ({ auth_user_id: id, state: 'active', member_id: null }))))
 check('every audit row of this slice is in exactly one scope and carries no address, digest or token', (await all(`select business_id, organization_id, detail::text d from public.customer_identity_audit`)).every((r) => (r.business_id === null) !== (r.organization_id === null) && !/example\.test|[0-9a-f]{64}/.test(r.d)))
 
+// ------------------------------------------------------------------ open decision D1 (2026-11-13, Opus continuation): consequences
+// Fable extended the zero-live-administrator bootstrap condition to managing an organization and its invitations. These checks do
+// not approve that reading; they pin down what it means today so Codex reviews the real behaviour, and so a later change to it is
+// a visible decision. They run after the "nobody became staff" counts on purpose (they add synthetic auth users).
+console.log('\nunder review (D1): setup authority while an organization has no administrator, with two businesses sharing it')
+{
+  for (const who of ['d1Head', 'd1Head2', 'd1Head3', 'd1Admin']) U[who] = await user()
+  for (const who of ['d1Head', 'd1Head2', 'd1Head3']) { mail[who] = `${who.toLowerCase()}@example.test`; R[who] = digest(`recipient:${mail[who]}`) }
+  const pAdmin = await principal(U.d1Admin)
+  const org = (await createOrg('owner', b1, 'D1 Shared')).organization_id
+  const agreementB = (await one(`insert into public.customer_business_orgs (business_id, organization_id, state) values ($1, $2, 'active') returning id`, [b2, org])).id
+  const dept = (await createDept('owner', org, 'Front')).department_id
+  const invA = await invite('owner', org, dept, 'd1Head')
+  const headA = await accept(await tokenOf(invA.invitation_id), 'd1Head')
+  const invA3 = await invite('owner', org, dept, 'd1Head3')
+  const headA3 = await accept(await tokenOf(invA3.invitation_id), 'd1Head3')
+  const invA2 = await invite('owner', org, dept, 'd1Head2')
+  check('setup world: Sarcafe made the organization, a department and two heads; the other business has an active agreement too', !!org && !!dept && headA.ok === true && headA3.ok === true && invA2.ok === true)
+
+  const revokedByB = await call('customer_invitation_revoke', { p_actor_auth_user_id: U.b2Admin, p_invitation_id: invA2.invitation_id, p_reason: 'other business' })
+  check('CONSEQUENCE: in setup the OTHER sharing business revokes an invitation Sarcafe issued (audited with that business as the setup business)', revokedByB.status === 'revoked'
+    && (await lastAudit('invitation.revoke')).detail.setup_business_id === b2 && (await lastAudit('invitation.revoke')).detail.actor_via === 'setup')
+  const endedByB = await call('customer_department_head_revoke', { p_actor_auth_user_id: U.b2Admin, p_grant_id: headA.grant_id, p_reason: 'other business' })
+  check('CONSEQUENCE: in setup the other sharing business ends a department head Sarcafe invited', endedByB.status === 'revoked' && (await access('d1Head', 'department_head', { org, dept })).ok !== true)
+  check('CONSEQUENCE: in setup the other sharing business switches the shared organization off and on (switching off ends its open invitations)', (await updateOrg('b2Admin', org, { state: 'inactive' })).status === 'updated'
+    && (await lastAudit('organization.update')).detail.setup_business_id === b2 && (await updateOrg('b2Admin', org, { state: 'active' })).status === 'updated')
+
+  const invB = await invite('b2Admin', org, dept, 'd1Head2')
+  const tokenB = await tokenOf(invB.invitation_id)
+  check('the other business issues an invitation in setup and its recipient can see it', invB.ok === true && (await peek(tokenB, 'd1Head2')).ok === true)
+  await db.query(`update public.customer_business_orgs set state = 'suspended' where id = $1`, [agreementB])
+  check('a SUSPENDED agreement gives no setup authority, and the invitation that business issued stops working at once', denied(await manage('b2Admin', org)) && denied(await peek(tokenB, 'd1Head2')) && (await manage('owner', org)).via === 'setup')
+  await db.query(`update public.customer_business_orgs set state = 'active' where id = $1`, [agreementB])
+  check('back to active: the same invitation can be seen again (it was never revoked, only unusable)', (await peek(tokenB, 'd1Head2')).ok === true)
+
+  const appointed = await bootstrap('b2Admin', org, pAdmin)
+  check('the other business appoints the first administrator (the foundation rule)', appointed.ok === true)
+  check('SETUP ENDS FOR BOTH businesses at that moment, and the invitation issued in setup is dead', denied(await manage('owner', org, true)) && denied(await manage('b2Admin', org, true))
+    && denied(await peek(tokenB, 'd1Head2')) && denied(await accept(tokenB, 'd1Head2')))
+  check('a head who accepted DURING setup keeps the department after the bootstrap (setup-era grants are not undone)', (await access('d1Head3', 'department_head', { org, dept })).ok === true)
+  check('the new administrator can end that setup-era head; neither business can any more', denied(await call('customer_department_head_revoke', { p_actor_auth_user_id: U.owner, p_grant_id: headA3.grant_id, p_reason: null }))
+    && denied(await call('customer_department_head_revoke', { p_actor_auth_user_id: U.b2Admin, p_grant_id: headA3.grant_id, p_reason: null }))
+    && (await call('customer_department_head_revoke', { p_actor_auth_user_id: U.d1Admin, p_grant_id: headA3.grant_id, p_reason: null })).status === 'revoked')
+  check('no D1 step created a staff row', await count(`select count(*) n from public.staff`) === staffCount)
+}
+
 console.log(`\n${passed} passed, ${failed.length} failed`)
 if (failed.length) { console.log('FAILED:\n - ' + failed.join('\n - ')); process.exit(1) }

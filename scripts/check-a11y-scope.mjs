@@ -37,6 +37,14 @@ const unknown = tops.filter((n) => !CUSTOMER.includes(n) && !PRIVATE.includes(n)
 check('no unclassified top-level route', unknown.length === 0, unknown.join(', '))
 check('the customer folders are exactly the customer prefixes', JSON.stringify([...S.CUSTOMER_PREFIXES].map((p) => p.slice(1)).sort()) === JSON.stringify([...CUSTOMER].sort()))
 check('no private folder is a customer prefix', PRIVATE.every((n) => !S.isCustomerFacing(`/${n}`) && !S.isCustomerFacing(`/${n}/x`)))
+// 'benefits' is classified one level deeper (open review decision D2, 2026-11-13): today it holds only the sign-in door, the
+// administrators' / heads' page and the invitation page. The plan (docs/identity-system/02-architecture.md) also puts invited
+// EMPLOYEES of an organization under /benefits (/benefits/register); they are not a small known team, so a new /benefits page
+// must be decided on purpose here instead of silently inheriting "private, no accessibility widget".
+const BENEFITS_PRIVATE = ['invite', 'manage']
+const benefitsPages = readdirSync(join(app, 'benefits')).filter((n) => statSync(join(app, 'benefits', n)).isDirectory())
+check('every /benefits page is classified (today: only the administration pages, all private)', benefitsPages.every((n) => BENEFITS_PRIVATE.includes(n)), benefitsPages.filter((n) => !BENEFITS_PRIVATE.includes(n)).join(', '))
+check('/benefits, /benefits/manage and /benefits/invite get no widget and no skip link', ['/benefits', '/benefits/manage', '/benefits/invite'].every((p) => S.isCustomerFacing(p) === false))
 
 section('the wiring')
 const layout = read('src/app/layout.tsx')
