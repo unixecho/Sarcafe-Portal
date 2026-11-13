@@ -18,12 +18,18 @@ export type IdentityStaff = { id: string; role?: string | null; badge?: string |
 /**
  * Who is asking, as the SERVER resolved it (never from a request body):
  * - `authUserId`: the verified Supabase Auth subject, or null for a six-digit employee-code session (no auth user behind it);
- * - `full`: a full sign-in (Google), not a quick code session. Identity administration needs a full session;
+ * - `via`: how THIS session signed in, as proven by the server (src/lib/identity/session-proof.ts), never what the account has:
+ *     `google`         an OAuth session (validated `amr`) on an account with a matching, confirmed, Google-verified identity;
+ *     `quick`          a six-digit quick session minted for an auth user (pos_quick_sessions);
+ *     `other`          any other auth-user session: password, magic link, recovery, missing or malformed evidence, or OAuth on an
+ *                      account without a matching verified Google identity. Linking Google to the account does not change this;
+ *     `employee_code`  the employee-code cookie (no auth user);
+ * - `full`: true only for `google`. Identity administration and invitation acceptance need it;
  * - `staff`: the caller's existing staff row when they have one. An external administrator has none, and never gets one.
  */
 export type IdentitySession = {
   authUserId: string | null
-  via: 'google' | 'employee_code'
+  via: 'google' | 'quick' | 'other' | 'employee_code'
   full: boolean
   staff: IdentityStaff | null
 }
@@ -45,7 +51,7 @@ export type AccessCheckResult =
 
 export type AccessCheck = (args: AccessCheckArgs) => Promise<AccessCheckResult>
 
-export type AccessDenial = 'unauthenticated' | 'full_session_required' | 'quick_session' | 'bad_scope' | 'denied' | 'unavailable'
+export type AccessDenial = 'unauthenticated' | 'full_session_required' | 'quick_session' | 'google_session_required' | 'bad_scope' | 'denied' | 'unavailable'
 
 export type AccessOutcome =
   | { ok: true; via: 'legacy_owner' | 'grant'; authUserId: string; capability: IdentityCapability; scope: IdentityScope; grantId: string | null; principalId: string | null; staffId: string | null }

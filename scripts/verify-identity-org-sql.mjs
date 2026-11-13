@@ -544,13 +544,84 @@ console.log('\nunder review (D1): setup authority while an organization has no a
 
   const appointed = await bootstrap('b2Admin', org, pAdmin)
   check('the other business appoints the first administrator (the foundation rule)', appointed.ok === true)
-  check('SETUP ENDS FOR BOTH businesses at that moment, and the invitation issued in setup is dead', denied(await manage('owner', org, true)) && denied(await manage('b2Admin', org, true))
-    && denied(await peek(tokenB, 'd1Head2')) && denied(await accept(tokenB, 'd1Head2')))
+  check('SETUP ENDS FOR BOTH businesses at that moment, and the invitation issued in setup is UNUSABLE while an administrator exists (not revoked)', denied(await manage('owner', org, true)) && denied(await manage('b2Admin', org, true))
+    && denied(await peek(tokenB, 'd1Head2')) && denied(await accept(tokenB, 'd1Head2')) && (await one(`select revoked_at, consumed_at from public.customer_invitations where id = $1`, [invB.invitation_id])).revoked_at === null)
   check('a head who accepted DURING setup keeps the department after the bootstrap (setup-era grants are not undone)', (await access('d1Head3', 'department_head', { org, dept })).ok === true)
   check('the new administrator can end that setup-era head; neither business can any more', denied(await call('customer_department_head_revoke', { p_actor_auth_user_id: U.owner, p_grant_id: headA3.grant_id, p_reason: null }))
     && denied(await call('customer_department_head_revoke', { p_actor_auth_user_id: U.b2Admin, p_grant_id: headA3.grant_id, p_reason: null }))
     && (await call('customer_department_head_revoke', { p_actor_auth_user_id: U.d1Admin, p_grant_id: headA3.grant_id, p_reason: null })).status === 'revoked')
+  // Codex, 2026-11-13 (D1 decided): invitations are checked against the issuer's CURRENT authority. Appointment does not revoke
+  // them; if the last administrator is revoked before they expire, setup returns and they are usable again. Kept, not changed.
+  const adminGrant = (await one(`select id from public.customer_access_grants where principal_id = $1 and organization_id = $2 and capability = 'organization_admin' and revoked_at is null`, [pAdmin, org])).id
+  const ended = await call('customer_access_revoke', { p_actor_auth_user_id: U.d1Admin, p_grant_id: adminGrant, p_reason: 'synthetic: last administrator leaves' })
+  check('LIFECYCLE: after the last administrator is revoked, setup returns and the same unexpired setup invitation is usable again', ended.ok === true
+    && (await manage('owner', org)).via === 'setup' && (await peek(tokenB, 'd1Head2')).ok === true)
   check('no D1 step created a staff row', await count(`select count(*) n from public.staff`) === staffCount)
+}
+
+// ------------------------------------------------------------------ review R2 (Codex, 2026-11-13): switching an organization off
+// must not lose it. Its live administrator still finds it (with its state) and can switch it back on, after any reload; a head of
+// one of its departments has nothing while it is off; nobody else can see or reactivate it.
+console.log('\nreview R2: a switched-off organization stays with its administrator, who can switch it back on')
+{
+  for (const who of ['r2Admin', 'r2Head', 'r2Late', 'r2Gone']) U[who] = await user()
+  for (const who of ['r2Head', 'r2Late']) { mail[who] = `${who.toLowerCase()}@example.test`; R[who] = digest(`recipient:${mail[who]}`) }
+  const pR2 = await principal(U.r2Admin)
+  const pGone = await principal(U.r2Gone)
+  const orgA = (await createOrg('owner', b1, 'R2 Alpha')).organization_id
+  const orgB = (await createOrg('owner', b1, 'R2 Beta')).organization_id
+  const deptA = (await createDept('owner', orgA, 'Floor')).department_id
+  const headInv = await invite('owner', orgA, deptA, 'r2Head')
+  const head = await accept(await tokenOf(headInv.invitation_id), 'r2Head')
+  const madeA = await bootstrap('owner', orgA, pR2)
+  const madeB = await bootstrap('owner', orgB, pR2)
+  check('R2 world: one administrator of two organizations; a head in the first', !!orgA && !!orgB && head.ok === true && madeA.ok === true && madeB.ok === true)
+  const scopes = (who) => call('customer_manage_scopes', { p_auth_user_id: U[who] })
+  const states = async (who) => (await scopes(who)).organizations.map((o) => [o.name, o.state])
+  const stateOf = async (org) => (await one(`select state from public.customer_organizations where id = $1`, [org])).state
+  check('before: both organizations are listed for the administrator, each with its state', same(await states('r2Admin'), [['R2 Alpha', 'active'], ['R2 Beta', 'active']]))
+  check('before: the head sees their department', (await scopes('r2Head')).departments.length === 1)
+
+  // one organization: off, read again (a reload reads the same function), still there, then on again
+  const late = await invite('r2Admin', orgA, deptA, 'r2Late')
+  const lateToken = await tokenOf(late.invitation_id)
+  check('the administrator switches organization Alpha off', (await updateOrg('r2Admin', orgA, { state: 'inactive' })).status === 'updated' && await stateOf(orgA) === 'inactive')
+  check('REGRESSION R2: Alpha is STILL listed for its administrator, marked inactive, on every fresh read; Beta is unchanged', same(await states('r2Admin'), [['R2 Beta', 'active'], ['R2 Alpha', 'inactive']])
+    && same(await states('r2Admin'), [['R2 Beta', 'active'], ['R2 Alpha', 'inactive']]))
+  const detail = await call('customer_org_detail', { p_actor_auth_user_id: U.r2Admin, p_organization_id: orgA })
+  check('its administrator may open it (state shown as inactive) but not work in it: no new department, no invitation', detail.ok === true && detail.organization.state === 'inactive' && detail.via === 'organization_admin'
+    && denied(await manage('r2Admin', orgA)) && denied(await createDept('r2Admin', orgA, 'Not now')) && denied(await invite('r2Admin', orgA, deptA, 'r2Late')))
+  check('while it is off, the head of its department has no scope and no access', same((await scopes('r2Head')).departments, []) && (await access('r2Head', 'department_head', { org: orgA, dept: deptA })).ok !== true)
+  check('while it is off, the invitation that was open is ended and can be neither seen nor accepted', denied(await peek(lateToken, 'r2Late')) && denied(await accept(lateToken, 'r2Late')))
+  const outsiders = ['owner', 'stranger', 'gm', 'b2Admin', 'orgAdmin', 'r2Head']
+  const theirs = await Promise.all(outsiders.map(async (who) => (await scopes(who)).organizations.some((o) => o.organization_id === orgA)))
+  check('nobody else lists it: the owner (setup ended with the administrator), a stranger, a general manager, another business, another organization\'s administrator, its own head', theirs.every((x) => x === false), JSON.stringify(theirs))
+  const tries = []
+  for (const who of outsiders) tries.push(await updateOrg(who, orgA, { state: 'active' }))
+  check('and nobody else can switch it back on (one answer each); it is still off', tries.every(denied) && await stateOf(orgA) === 'inactive', JSON.stringify(tries))
+  check('the administrator switches it back on', (await updateOrg('r2Admin', orgA, { state: 'active' })).status === 'updated' && await stateOf(orgA) === 'active'
+    && (await lastAudit('organization.update')).detail.actor_via === 'organization_admin' && (await lastAudit('organization.update')).detail.state_to === 'active')
+  check('after reactivation: both listed active; the head\'s kept grant works again; the invitation ended by the switch-off stays ended', same(await states('r2Admin'), [['R2 Alpha', 'active'], ['R2 Beta', 'active']])
+    && (await scopes('r2Head')).departments.length === 1 && (await access('r2Head', 'department_head', { org: orgA, dept: deptA })).ok === true && denied(await peek(lateToken, 'r2Late')))
+
+  // several organizations: both off, then on again one at a time
+  check('both organizations switched off', (await updateOrg('r2Admin', orgA, { state: 'inactive' })).status === 'updated' && (await updateOrg('r2Admin', orgB, { state: 'inactive' })).status === 'updated')
+  check('both are still listed, each marked inactive', same(await states('r2Admin'), [['R2 Alpha', 'inactive'], ['R2 Beta', 'inactive']]))
+  check('Beta back on: Beta active, Alpha still listed and inactive', (await updateOrg('r2Admin', orgB, { state: 'active' })).status === 'updated' && same(await states('r2Admin'), [['R2 Beta', 'active'], ['R2 Alpha', 'inactive']]))
+  check('Alpha back on: both active again', (await updateOrg('r2Admin', orgA, { state: 'active' })).status === 'updated' && same(await states('r2Admin'), [['R2 Alpha', 'active'], ['R2 Beta', 'active']]))
+
+  // only a LIVE administrator: a revoked, expired or switched-off administrator does not find the inactive organization
+  await db.query(`insert into public.customer_access_grants (principal_id, capability, scope_kind, organization_id) values ($1, 'organization_admin', 'organization', $2)`, [pGone, orgB])
+  await updateOrg('r2Admin', orgB, { state: 'inactive' })
+  check('a second live administrator also finds the switched-off organization', same((await scopes('r2Gone')).organizations.map((o) => [o.name, o.state]), [['R2 Beta', 'inactive']]))
+  await db.query(`update public.customer_access_grants set expires_at = now() - interval '1 minute' where principal_id = $1`, [pGone])
+  const expired = (await scopes('r2Gone')).organizations.length
+  await db.query(`update public.customer_access_grants set expires_at = null, revoked_at = now(), revoked_reason = 'synthetic' where principal_id = $1`, [pGone])
+  const revoked = (await scopes('r2Gone')).organizations.length
+  check('an expired or revoked administrator no longer lists it, and cannot switch it on', expired === 0 && revoked === 0 && denied(await updateOrg('r2Gone', orgB, { state: 'active' })) && await stateOf(orgB) === 'inactive')
+  await db.query(`update public.customer_principals set state = 'revoked' where id = $1`, [pR2])
+  check('an administrator whose principal is switched off lists nothing and changes nothing', (await scopes('r2Admin')).organizations.length === 0 && denied(await updateOrg('r2Admin', orgB, { state: 'active' })) && await stateOf(orgB) === 'inactive')
+  check('no R2 step created a staff row', await count(`select count(*) n from public.staff`) === staffCount)
 }
 
 console.log(`\n${passed} passed, ${failed.length} failed`)

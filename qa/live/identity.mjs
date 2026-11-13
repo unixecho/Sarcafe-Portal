@@ -2,14 +2,16 @@
 // running production build. The identity functions the app calls are answered by a REAL Postgres with the real migrations
 // (qa/standin/identity-db.mjs), so every answer below is the real SQL's. Covered: who may call each route (role, session and
 // tenant matrix), the invitation's whole life (intended recipient, wrong recipient, self-declared address, expiry, revocation,
-// replay, simultaneous replay), the rate limiter failing closed, database outages and a migration that is not applied, private
+// replay, simultaneous replay), the CURRENT session's sign-in method (review R1), recovering a switched-off organization (review
+// R2), the rate limiter failing closed, database outages and a migration that is not applied, private
 // headers, the sign-in return and the middleware, and the screens in a real browser (five looks, three widths, iPhone edges).
 // Every person, address and organization is made up.
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createStage, assert } from '../lib/harness.mjs'
-import { ID, SESSIONS, emailOf } from '../standin/seed.mjs'
+import { ID, SESSIONS, emailOf, tokenFor, tokenForMethod, userFor } from '../standin/seed.mjs'
+import { sessionCookie } from '../standin/supabase.mjs'
 import { auditScreen } from './contrast.mjs'
 
 const O = '/api/owner/members'
@@ -273,8 +275,12 @@ export function identityStage(root, live) {
     assert.deepEqual(await api(`${I}/status`, { as: 'head', cookie: inviteCookie(`dh1_${'B'.repeat(43)}`) }).then((r) => r.json), unavailable, 'an unknown token, for the right person')
     // an account whose Google address is NOT verified, invited by that very address
     const t2 = await token(org, dept, 'unverified')
-    assert.deepEqual(await api(`${I}/status`, { as: 'unverified', cookie: inviteCookie(t2) }).then((r) => r.json), { state: 'unverified' }, 'an unverified account can accept nothing')
-    assert.status(await post(`${I}/accept`, 'unverified', {}, { cookie: inviteCookie(t2) }), 403, 'and its acceptance is refused')
+    // review R1 (2026-11-13): an account without a matching verified Google identity is not a proven Google session, so it is now
+    // refused one step earlier (the guard, 403 google_session_required) instead of reaching the status route's "unverified" answer
+    const unverifiedStatus = await api(`${I}/status`, { as: 'unverified', cookie: inviteCookie(t2) })
+    assert.deepEqual([unverifiedStatus.status, unverifiedStatus.json?.error?.code, noData(unverifiedStatus)], [403, 'google_session_required', true], 'an unverified account can accept nothing (and is told to sign in with Google, nothing about the invitation)')
+    const unverifiedAccept = await post(`${I}/accept`, 'unverified', {}, { cookie: inviteCookie(t2) })
+    assert.deepEqual([unverifiedAccept.status, unverifiedAccept.json?.error?.code], [403, 'google_session_required'], 'and its acceptance is refused')
 
     const principals = await count(`select count(*) n from public.customer_principals`)
     for (const who of ['forwarded', 'outsider', 'owner', 'orgadmin']) {
@@ -481,6 +487,122 @@ export function identityStage(root, live) {
     assert.status(await live().call('/benefits/manage', { as: 'outsider' }), 200, 'and reaches the page (which then shows what they hold: nothing)')
   }, { timeout: 120_000 })
 
+  // ── review R1 (Codex, 2026-11-13): HOW THIS SESSION SIGNED IN decides, not what the account has. A session is minted here exactly
+  // as the auth server would sign it for each method (Supabase `amr`), for an account as the auth server would return it.
+  const minted = []
+  const AMR = (method) => [{ method, timestamp: 1767225600 }]
+  const LINKED = (who) => ({ app_metadata: { provider: 'email', providers: ['email', 'google'] }, identities: [{ provider: 'email', identity_data: { email: emailOf(who), email_verified: true } }, { provider: 'google', identity_data: { email: emailOf(who), email_verified: true } }] })
+  const PASSWORD_ONLY = (who) => ({ app_metadata: { provider: 'email', providers: ['email'] }, identities: [{ provider: 'email', identity_data: { email: emailOf(who), email_verified: true } }] })
+  /** A session of `who` opened with `amr` (undefined = no amr claim), for the account `userOver` describes; `claimsOf` signs another person's claims. */
+  const signedInBy = (who, amr, userOver = {}, claimsOf = who) => {
+    const n = minted.length
+    const user = { ...userFor(who), ...userOver }
+    const jwt = tokenForMethod(claimsOf, amr, { qa_variant: n })
+    live().standin.state.tokens.set(jwt, { ...user, __refresh: `qa-method-${n}` })
+    minted.push(jwt)
+    const c = sessionCookie(live().standin.url, jwt, user, `qa-method-${n}`)
+    return { cookie: `${c.name}=${c.value}`, browser: { name: c.name, value: c.value, domain: '127.0.0.1', path: '/' } }
+  }
+  const forgetMinted = () => { for (const t of minted.splice(0)) live().standin.state.tokens.delete(t) }
+  const code = (r) => `${r.status}:${r.json?.error?.code ?? ''}`
+  const headGrants = () => count(`select count(*) n from public.customer_access_grants where capability = 'department_head'`)
+
+  stage.test('session-method', 'R1: רק חיבור Google נוכחי מנהל או מאשר; סיסמה, קישור, שחזור או ראיה חסרה נדחים — גם כש־Google מקושר לחשבון', 'security', async () => {
+    await fresh()
+    try {
+      const org = await createOrg('ארגון שיטת כניסה'); const dept = await createDept(org, 'קבלה')
+      // REPRODUCED 1 (Codex, 82e2deb: HTTP 200 and one head grant): a PASSWORD session on a Google-LINKED account accepts an invitation
+      const t = await token(org, dept, 'head')
+      const linkedPassword = signedInBy('head', AMR('password'), LINKED('head'))
+      assert.equal(code(await api(`${I}/status`, { cookie: `${linkedPassword.cookie}; ${inviteCookie(t)}` })), '403:google_session_required', 'the invitation is not even shown to a password session')
+      const refused = await post(`${I}/accept`, undefined, {}, { cookie: `${linkedPassword.cookie}; ${inviteCookie(t)}` })
+      assert.equal(code(refused), '403:google_session_required', 'REPRODUCED 1: a password session on a Google-linked account cannot accept')
+      assert.equal(await headGrants(), 0, 'and no head grant was made')
+      assert.equal(await count(`select count(*) n from public.customer_principals`), 0, 'and no principal was made')
+      // control: the same person on a Google session, same invitation
+      assert.status(await post(`${I}/accept`, 'head', {}, { cookie: inviteCookie(t) }), 200, 'CONTROL: the same invitation accepted on a Google session')
+      assert.equal(await headGrants(), 1, 'CONTROL: exactly one head grant')
+
+      // REPRODUCED 2 (Codex, 82e2deb: HTTP 200): a password-only account WITH a valid organization-admin grant renames its organization
+      const own = await createOrg('ארגון של מנהל'); await seedAdmin(own, 'orgadmin')
+      const passwordOnly = signedInBy('orgadmin', AMR('password'), PASSWORD_ONLY('orgadmin'))
+      const renamed = await api(`${B}/organizations/${own}`, { method: 'PATCH', body: { name: 'שונה בסיסמה' }, cookie: passwordOnly.cookie })
+      assert.equal(code(renamed), '403:google_session_required', 'REPRODUCED 2: a password-only administrator cannot change the organization')
+      assert.equal((await sql(`select name from public.customer_organizations where id = $1`, [own]))[0].name, 'ארגון של מנהל', 'and the name did not change')
+      assert.status(await api(`${B}/organizations/${own}`, { method: 'PATCH', as: 'orgadmin', body: { name: 'שונה ב־Google' } }), 200, 'CONTROL: the same administrator on a Google session')
+
+      // every other way a session can be opened, on every identity door; nothing is written by any of them
+      const auditsBefore = await count(`select count(*) n from public.customer_identity_audit`)
+      const sessions = [
+        ['magic link, Google linked', signedInBy('orgadmin', AMR('magiclink'), LINKED('orgadmin'))],
+        ['recovery link, Google linked', signedInBy('orgadmin', AMR('recovery'), LINKED('orgadmin'))],
+        ['one-time code, Google linked', signedInBy('orgadmin', AMR('otp'), LINKED('orgadmin'))],
+        ['password, Google identity only (provider list says google)', signedInBy('orgadmin', AMR('password'))],
+        ['no amr claim at all', signedInBy('orgadmin', undefined)],
+        ['malformed amr (plain strings)', signedInBy('orgadmin', ['oauth'])],
+        ['OAuth, but no verified Google identity on the account', signedInBy('orgadmin', AMR('oauth'), PASSWORD_ONLY('orgadmin'))],
+        ['OAuth claims of ANOTHER user on this account', signedInBy('orgadmin', AMR('oauth'), {}, 'head')],
+      ]
+      const answers = []
+      for (const [label, s] of sessions) {
+        answers.push([label, 'scopes', code(await api(`${B}/scopes`, { cookie: s.cookie }))])
+        answers.push([label, 'rename', code(await api(`${B}/organizations/${own}`, { method: 'PATCH', body: { name: 'לא' }, cookie: s.cookie }))])
+        answers.push([label, 'switch off', code(await api(`${B}/organizations/${own}`, { method: 'PATCH', body: { state: 'inactive' }, cookie: s.cookie }))])
+        answers.push([label, 'new department', code(await post(`${B}/organizations/${own}/departments`, undefined, { name: 'לא' }, { cookie: s.cookie }))])
+      }
+      assert.deepEqual(answers.filter(([, , c]) => c !== '403:google_session_required'), [], 'answers other than 403 google_session_required:')
+      assert.equal(await count(`select count(*) n from public.customer_identity_audit`), auditsBefore, 'none of them wrote anything')
+      assert.equal((await sql(`select state from public.customer_organizations where id = $1`, [own]))[0].state, 'active', 'the organization is still on')
+
+      // the owner family: a full owner on a password session is refused by the identity check (the staff app is unchanged)
+      const ownerPassword = signedInBy('owner', AMR('password'), LINKED('owner'))
+      assert.equal(code(await api(`${O}/organizations`, { cookie: ownerPassword.cookie })), '403:google_session_required', 'the owner on a password session: no organization list')
+      assert.equal(code(await post(`${O}/organizations`, undefined, { name: 'לא' }, { cookie: ownerPassword.cookie })), '403:google_session_required', 'and cannot create one')
+      assert.status(await api(`${O}/organizations`, { as: 'owner' }), 200, 'CONTROL: the owner on a Google session')
+      // the quick and employee-code refusals keep their own codes (the screens say which sign-in is needed)
+      quick('orgadmin')
+      assert.equal(code(await api(`${B}/scopes`, { as: 'orgadmin' })), '403:quick_session', 'a quick session')
+      live().db('pos_quick_sessions').length = 0
+      assert.equal(code(await api(`${B}/scopes`, { cookie: codeSession(ID.dana) })), '403:full_session_required', 'an employee-code session')
+      assert.status(await api(`${B}/scopes`, {}), 401, 'signed out')
+      // the staff app does not use this rule: an owner on a password session still opens the owner dashboard exactly as before
+      assert.status(await live().call('/owner/dashboard', { cookie: ownerPassword.cookie }), 200, 'the owner dashboard is unchanged for that session')
+    } finally { forgetMinted() }
+  }, { timeout: 180_000 })
+
+  // ── review R2 (Codex, 2026-11-13): switching an organization off must not hide it from its administrator
+  stage.test('org-recovery', 'R2: ארגון כבוי נשאר אצל המנהל שלו (עם מצבו) ואפשר להפעיל אותו מחדש; ראש מחלקה וכל אדם אחר אינם רואים ואינם מפעילים', 'security', async () => {
+    await fresh()
+    const a = await createOrg('אלפא'); const b = await createOrg('בטא'); const d = await createDept(a, 'רצפה')
+    assert.status(await post(`${I}/accept`, 'head', {}, { cookie: inviteCookie(await token(a, d, 'head')) }), 200, 'a head in Alpha (invited in setup)')
+    await seedAdmin(a, 'orgadmin'); await seedAdmin(b, 'orgadmin')
+    const listed = async () => (await api(`${B}/scopes`, { as: 'orgadmin' })).json.organizations.map((o) => [o.name, o.state])
+    const headDepartments = async () => (await api(`${B}/scopes`, { as: 'head' })).json.departments.length
+    const state = async (org) => (await sql(`select state from public.customer_organizations where id = $1`, [org]))[0].state
+    assert.deepEqual(await listed(), [['אלפא', 'active'], ['בטא', 'active']], 'both listed, with their state')
+    assert.status(await api(`${B}/organizations/${a}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'inactive' } }), 200, 'Alpha switched off by its administrator')
+    assert.deepEqual(await listed(), [['בטא', 'active'], ['אלפא', 'inactive']], 'REGRESSION R2: Alpha is still listed, marked inactive')
+    assert.deepEqual(await listed(), [['בטא', 'active'], ['אלפא', 'inactive']], 'and again on the next load')
+    const detail = await api(`${B}/organizations/${a}`, { as: 'orgadmin' })
+    assert.deepEqual([detail.status, detail.json?.organization?.state], [200, 'inactive'], 'its administrator opens it and sees it is off')
+    assert.status(await post(`${B}/organizations/${a}/departments`, 'orgadmin', { name: 'לא עכשיו' }), 403, 'no new department while it is off')
+    assert.equal(await headDepartments(), 0, 'its department head has nothing while it is off')
+    for (const [who, url] of [['head', `${B}/organizations/${a}`], ['outsider', `${B}/organizations/${a}`], ['owner', `${O}/organizations/${a}`], ['gm', `${O}/organizations/${a}`]]) {
+      assert.status(await api(url, { method: 'PATCH', as: who, body: { state: 'active' } }), 403, `${who} cannot switch it back on`)
+    }
+    assert.equal(await state(a), 'inactive', 'it is still off after those attempts')
+    assert.deepEqual((await api(`${B}/scopes`, { as: 'outsider' })).json.organizations, [], 'an outsider lists nothing')
+    assert.status(await api(`${B}/organizations/${a}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'active' } }), 200, 'its administrator switches it back on')
+    assert.deepEqual([await listed(), await headDepartments()], [[['אלפא', 'active'], ['בטא', 'active']], 1], 'both active again, and the head\'s kept grant works again')
+    // several organizations
+    for (const org of [a, b]) assert.status(await api(`${B}/organizations/${org}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'inactive' } }), 200, 'switched off')
+    assert.deepEqual(await listed(), [['אלפא', 'inactive'], ['בטא', 'inactive']], 'both off, both still listed')
+    assert.status(await api(`${B}/organizations/${b}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'active' } }), 200, 'Beta back on')
+    assert.deepEqual(await listed(), [['בטא', 'active'], ['אלפא', 'inactive']], 'Beta on, Alpha still listed and off')
+    assert.status(await api(`${B}/organizations/${a}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'active' } }), 200, 'Alpha back on')
+    assert.deepEqual(await listed(), [['אלפא', 'active'], ['בטא', 'active']], 'both on')
+  }, { timeout: 120_000 })
+
   // ── the screens, in a real browser
   const settled = (page) => page.evaluate(() => Promise.race([
     Promise.all(document.getAnimations().filter((a) => { const t = a.effect?.getTiming?.(); return t && t.iterations !== Infinity }).map((a) => a.finished.catch(() => null))),
@@ -637,6 +759,129 @@ export function identityStage(root, live) {
       await at(broken.page, 'organization-row').first().waitFor({ timeout: 15_000 })
     } finally { await fault({ mode: 'none' }); await broken.close() }
   }, { timeout: 180_000 })
+
+  // review R1 on screen: a signed-in session that is not a Google sign-in gets a usable way back (a fresh Google sign-in that returns
+  // to the same page), never a loop of redirects and never the management screen.
+  const openMinted = async (session, url, opts = {}) => {
+    const s = await live().page(null, opts)
+    await s.context.addCookies([session.browser])
+    const paths = []
+    s.page.on('framenavigated', (frame) => { if (frame === s.page.mainFrame()) paths.push(new URL(frame.url()).pathname) })
+    await s.page.goto(live().base + url, { waitUntil: 'networkidle' })
+    await settled(s.page)
+    return { ...s, paths }
+  }
+  stage.test('ui-reauth', 'R1 במסך: חיבור שאינו Google מקבל כרטיס "להתחבר שוב עם Google" בלי לולאת הפניות, קריא בכל חמשת המראות; אחרי כניסה עם Google הכול עובד', 'e2e', async () => {
+    await fresh()
+    try {
+      const org = await createOrg('ארגון חיבור'); const dept = await createDept(org, 'קבלה')
+      const t = await token(org, dept, 'head')   // issued in setup; this organization keeps no administrator, so it stays usable
+      await seedAdmin(await createOrg('ארגון של המנהל'), 'orgadmin')   // the password session below belongs to a real administrator
+      const problems = []
+      let measured = 0
+      for (const look of LOOKS) {
+        const session = signedInBy('orgadmin', AMR('password'), LINKED('orgadmin'))
+        if (look === LOOKS[0]) {
+          // the door sends a signed-in session on ONCE, and the management page answers it (200) without sending it anywhere
+          const door = await live().call('/benefits', { cookie: session.cookie })
+          assert.equal(`${door.status} ${new URL(door.headers.get('location') ?? 'http://x/', live().base).pathname}`, '307 /benefits/manage', 'the door sends the session on')
+          const page = await live().call('/benefits/manage', { cookie: session.cookie })
+          assert.deepEqual([page.status, page.headers.get('location'), /data-identity="reauth"/.test(page.text)], [200, null, true], 'the management page answers with the sign-in-again card, no redirect')
+        }
+        const s = await openMinted(session, '/benefits/manage', { theme: look })
+        try {
+          await at(s.page, 'reauth').waitFor({ timeout: 15_000 })
+          if (look === LOOKS[0]) {
+            assert.equal(new URL(s.page.url()).pathname, '/benefits/manage', 'the browser stays on the management page')
+            const before = s.paths.length
+            await s.page.waitForTimeout(2500)
+            assert.equal(s.paths.length, before, `no further navigation by itself (no loop): ${s.paths.join(' → ')}`)
+            assert.equal(await at(s.page, 'reauth').getAttribute('data-reason'), 'other', 'it says this session was not opened with Google')
+            assert.equal(await s.page.getByRole('button', { name: 'התחברות מחדש עם Google' }).count(), 1, 'one button: sign in again with Google')
+            assert.deepEqual([await at(s.page, 'benefits-manage').count(), await at(s.page, 'org').count()], [0, 0], 'nothing of the organization is shown')
+            assert.equal(await s.page.getByRole('button', { name: 'החשבון' }).count(), 1, 'signing out stays available in the top bar')
+            assert.deepEqual(s.errors, [], 'no script errors')
+          }
+          const r = await auditScreen(s.page)
+          measured += r.measured
+          for (const f of r.failures) problems.push(`${look} reauth: "${f.text}" ${f.ratio}:1`)
+        } finally { await s.close() }
+      }
+      assert.ok(measured > 15, `texts measured: ${measured}`)
+      assert.deepEqual(problems.slice(0, 12), [], `${problems.length} texts below AA on the sign-in-again card:`)
+
+      // the invitation page: a password session on a Google-linked account sees the same card, the token cookie survives, and the
+      // same browser on a Google session (as after the round trip) sees the invitation and accepts it
+      const s = await openMinted(signedInBy('head', AMR('password'), LINKED('head')), `/benefits/invite#${t}`)
+      try {
+        await at(s.page, 'reauth').waitFor({ timeout: 15_000 })
+        assert.equal(await at(s.page, 'invite-ready').count(), 0, 'the invitation is not shown to the password session')
+        assert.equal(await headGrants(), 0, 'nothing accepted')
+        const google = sessionCookie(live().standin.url, tokenFor('head'), userFor('head'), 'refresh-head')
+        await s.context.addCookies([{ name: google.name, value: google.value, domain: '127.0.0.1', path: '/' }])
+        await s.page.reload({ waitUntil: 'networkidle' })
+        await at(s.page, 'invite-ready').waitFor({ timeout: 15_000 })
+        await s.page.locator('[data-identity="invite-accept"]').click()
+        await at(s.page, 'invite-accepted').waitFor({ timeout: 15_000 })
+        assert.equal(await headGrants(), 1, 'accepted once on the Google session')
+      } finally { await s.close() }
+    } finally { forgetMinted() }
+  }, { timeout: 300_000 })
+
+  // review R2 on screen: Codex switched the organization off and lost it (no reactivation, also after reload)
+  stage.test('ui-recovery', 'R2 במסך: אחרי כיבוי הארגון המנהל עדיין רואה אותו (מסומן כבוי, גם אחרי טעינה מחדש) ומפעיל אותו; עם שני ארגונים הבחירה מראה את המצב', 'e2e', async () => {
+    await fresh()
+    const a = await createOrg('אלפא'); await createDept(a, 'רצפה'); await seedAdmin(a, 'orgadmin')
+    const state = async (org) => (await sql(`select state from public.customer_organizations where id = $1`, [org]))[0].state
+    const s = await open('orgadmin', '/benefits/manage')
+    try {
+      const p = s.page
+      await at(p, 'org').waitFor({ timeout: 15_000 })
+      await p.getByRole('button', { name: 'כיבוי הארגון', exact: true }).click()
+      await p.getByRole('button', { name: 'לכבות? ההזמנות הפתוחות יבוטלו', exact: true }).click()
+      await at(p, 'org-inactive-note').waitFor({ timeout: 15_000 })
+      assert.equal(await state(a), 'inactive', 'it is off in the database')
+      assert.deepEqual([await at(p, 'no-access').count(), await p.getByRole('button', { name: 'הפעלת הארגון', exact: true }).count()], [0, 1], 'REGRESSION R2: still shown, with the reactivation button')
+      assert.ok(await at(p, 'org-inactive-note').evaluate((el) => el.classList.contains('gl-note--bad')), 'the off state is said in red (bad news)')
+      assert.deepEqual([await at(p, 'new-department').count(), await p.getByRole('button', { name: 'כיבוי המחלקה', exact: true }).count()], [0, 0], 'no department work offered while it is off')
+      await p.reload({ waitUntil: 'networkidle' })
+      await at(p, 'org-inactive-note').waitFor({ timeout: 15_000 })
+      assert.equal(await p.getByRole('button', { name: 'הפעלת הארגון', exact: true }).count(), 1, 'after a reload: still there, still recoverable')
+      // contrast of the off state in all five looks
+      const problems = []
+      for (const look of LOOKS) {
+        const v = await open('orgadmin', '/benefits/manage', { theme: look })
+        try { await at(v.page, 'org-inactive-note').waitFor({ timeout: 15_000 }); for (const f of (await auditScreen(v.page)).failures) problems.push(`${look}: "${f.text}" ${f.ratio}:1`) } finally { await v.close() }
+      }
+      assert.deepEqual(problems.slice(0, 12), [], `${problems.length} texts below AA on the switched-off organization:`)
+      await p.getByRole('button', { name: 'הפעלת הארגון', exact: true }).click()
+      await p.waitForFunction(() => !document.querySelector('[data-identity="org-inactive-note"]'), null, { timeout: 15_000 })
+      assert.equal(await state(a), 'active', 'switched back on from the screen')
+      assert.equal(await at(p, 'new-department').count(), 1, 'department work is offered again')
+
+      // two organizations: switch the open one off, reload, find it in the chooser marked off, open it and switch it on
+      const b = await createOrg('בטא'); await seedAdmin(b, 'orgadmin')
+      await p.reload({ waitUntil: 'networkidle' })
+      await p.locator('[data-identity="org-choice"]').nth(1).waitFor({ timeout: 15_000 })
+      await p.getByRole('button', { name: 'כיבוי הארגון', exact: true }).click()
+      await p.getByRole('button', { name: 'לכבות? ההזמנות הפתוחות יבוטלו', exact: true }).click()
+      await at(p, 'org-inactive-note').waitFor({ timeout: 15_000 })
+      await p.reload({ waitUntil: 'networkidle' })
+      await p.locator('[data-identity="org-choice"]').nth(1).waitFor({ timeout: 15_000 })
+      const chips = await p.locator('[data-identity="org-choice"]').evaluateAll((els) => els.map((el) => [el.textContent.replace('כבוי', '').trim(), el.getAttribute('data-state'), el.textContent.includes('כבוי')]))
+      assert.deepEqual(chips, [['בטא', 'active', false], ['אלפא', 'inactive', true]], 'both in the chooser, the switched-off one marked')
+      await p.locator('[data-identity="org-choice"][data-state="inactive"]').click()
+      await at(p, 'org-inactive-note').waitFor({ timeout: 15_000 })
+      await p.getByRole('button', { name: 'הפעלת הארגון', exact: true }).click()
+      await p.waitForFunction(() => !document.querySelector('[data-identity="org-choice"][data-state="inactive"]'), null, { timeout: 15_000 })
+      assert.deepEqual([await state(a), await state(b)], ['active', 'active'], 'both on again')
+      assert.deepEqual(s.errors, [], 'no script errors')
+    } finally { await s.close() }
+    // and someone who does not administer it never sees it, on or off
+    await api(`${B}/organizations/${a}`, { method: 'PATCH', as: 'orgadmin', body: { state: 'inactive' } })
+    const other = await open('outsider', '/benefits/manage')
+    try { await at(other.page, 'no-access').waitFor({ timeout: 15_000 }); assert.equal(await other.page.getByText('אלפא').count(), 0, 'an outsider sees nothing of it') } finally { await other.close() }
+  }, { timeout: 300_000 })
 
   // 2026-11-13 (Opus continuation): the invitation page was not in the contrast audit, and nothing drove a screen by keyboard.
   stage.test('ui-keyboard', 'עמוד ההזמנה: קריא בכל חמשת המראות, ואפשר לאשר אותו במקלדת בלבד עם טבעת מיקוד גלויה', 'a11y', async () => {

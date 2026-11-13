@@ -6,22 +6,36 @@ import { Building2, CircleAlert, RefreshCw, ShieldOff, Users } from 'lucide-reac
 import type { ManageScopes } from '@/lib/identity/server/organizations'
 import Pill from '@/components/glass/Pill'
 import { identityApi, refusalText } from './api'
+import BenefitsReauth, { reauthReason, type ReauthReason } from './BenefitsReauth'
 import OrganizationManager from './OrganizationManager'
 
 // /benefits/manage (FABLE-002): what the signed-in person holds, and nothing else. An organization's administrator manages that
-// organization here (the same screen the owner uses during setup); a department head sees their department, only theirs. Someone
+// organization here (the same screen the owner uses during setup), also while it is switched off: it stays listed with its state
+// so the administrator can switch it back on (review R2). A department head sees their department, only theirs, and only while the
+// department and its organization are on. Someone
 // who holds nothing is told so and is offered nothing. The lists come from the person's own live grants on every load.
 export default function BenefitsManage() {
   const [scopes, setScopes] = useState<ManageScopes | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  const [reauth, setReauth] = useState<ReauthReason | null>(null)
 
   const load = useCallback(async () => {
     const result = await identityApi<ManageScopes>('/api/benefits/manage/scopes')
-    if (result.ok) { setScopes(result.data); setProblem(null); setOpen((current) => current ?? result.data.organizations[0]?.organizationId ?? null) }
-    else { setScopes(null); setProblem(refusalText(result)) }
+    if (result.ok) {
+      setScopes(result.data); setProblem(null); setReauth(null)
+      // keep the organization that is open, also after it was switched off (it is still listed, with its state, for its administrator)
+      setOpen((current) => (current && result.data.organizations.some((o) => o.organizationId === current) ? current : result.data.organizations[0]?.organizationId ?? null))
+    } else {
+      setScopes(null)
+      const reason = reauthReason(result)
+      if (reason) setReauth(reason)
+      else setProblem(refusalText(result))
+    }
   }, [])
   useEffect(() => { void load() }, [load])
+
+  if (reauth) return <BenefitsReauth returnTo="/benefits/manage" reason={reauth} />
 
   if (problem) {
     return (
@@ -72,7 +86,7 @@ export default function BenefitsManage() {
           {scopes.organizations.length > 1 && (
             <div className="gl-surf gl-card"><span className="gl-field__label" id="benefits-organization">הארגון שמוצג</span><div className="gl-wrap" role="radiogroup" aria-labelledby="benefits-organization">
               {scopes.organizations.map((organization) => (
-                <button key={organization.organizationId} type="button" role="radio" aria-checked={open === organization.organizationId} className={`gl-chip${open === organization.organizationId ? ' is-on' : ''}`} onClick={() => setOpen(organization.organizationId)}>{organization.name}</button>
+                <button key={organization.organizationId} type="button" role="radio" aria-checked={open === organization.organizationId} className={`gl-chip${open === organization.organizationId ? ' is-on' : ''}`} data-identity="org-choice" data-state={organization.state} onClick={() => setOpen(organization.organizationId)}>{organization.name}{organization.state !== 'active' && <Pill tiny tone="quiet">כבוי</Pill>}</button>
               ))}
             </div></div>
           )}

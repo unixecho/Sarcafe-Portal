@@ -129,11 +129,42 @@ and its bootstrap rule are byte for byte what Codex verified (`verify:identity-o
 | Surface | Path | Who (guard) |
 |---|---|---|
 | Owner | `/owner/members`, `/api/owner/members/*` | a FULL owner session (the existing `requireOwner`, unchanged) AND `business_admin` on the Sarcafe business, asked from the database (`requireOwnerBusiness`). The business is this deployment's constant (`OWNER_BUSINESS_SLUG`), never a value from a request or a cookie |
-| Organization administrator | `/benefits/manage`, `/api/benefits/manage/organizations/[id]/*` | a verified full Google sign-in with a live `organization_admin` grant on exactly that organization (`requireOrganizationAdmin`). No staff row needed, none created |
-| Anyone signed in | `/api/benefits/manage/scopes`, `/api/benefits/invite/status`, `/api/benefits/invite/accept` | a verified full Google sign-in (`requireBenefitsUser`): says who is asking, gives nothing |
+| Organization administrator | `/benefits/manage`, `/api/benefits/manage/organizations/[id]/*` | a session that is a proven Google sign-in (see "Current-session proof" below) with a live `organization_admin` grant on exactly that organization (`requireOrganizationAdmin`). No staff row needed, none created |
+| Anyone signed in | `/api/benefits/manage/scopes`, `/api/benefits/invite/status`, `/api/benefits/invite/accept` | a session that is a proven Google sign-in (`requireBenefitsUser`): says who is asking, gives nothing |
 | Public | `/benefits` (sign-in door), `/benefits/invite` (page), `/api/benefits/invite/exchange` | nobody yet: these say nothing about any invitation |
 
 Behind every route the `customer_*` function rechecks the same actor for the same scope, so a route guard is never the only lock.
+The owner family also needs the proven Google session: `requireOwnerBusiness` asks `requireIdentityAccess`, which applies the same
+current-session rule after the unchanged `requireOwner`.
+
+### Current-session proof (review R1, 2026-11-13)
+Every identity guard asks how THIS session signed in, not what the account has (`src/lib/identity/session-proof.ts`, used by
+`server/session.ts`; one refusal rule, `sessionRefusal` in `access.ts`, for both families):
+1. the auth server returns the user for the session (`auth.getUser()`), and the installed SDK validates the current access token's
+   claims (`auth.getClaims()`: the signature against the project's keys, or, for a symmetric key, the auth server itself);
+2. the claims belong to that user (`sub` equals the user id) and name their session (`session_id`); not anonymous;
+3. the session's `amr` (Supabase's documented `[{ method, timestamp }]`) contains `oauth`, and every other entry is neutral
+   (`token_refresh` or a second factor: `totp`, `mfa/*`). Anything that signs a person in another way (password, otp, magiclink,
+   recovery, invite, email/signup, email_change, anonymous, sso/saml, web3, `oauth_provider/authorization_code`, an unknown method)
+   disqualifies; a missing, empty or malformed `amr` (including the plain-string form) disqualifies;
+4. the account holds a Google identity whose own address Google verified and that equals the account's confirmed address
+   (`verifiedGoogleEmail`).
+A session passing all four is `via: 'google'`. A quick six-digit session is `quick` (asked by the claims' own `session_id`, before
+anything else), an auth-user session failing any step is `other`, the employee-code cookie is `employee_code`. Refusals carry a
+code the screens act on: `403 google_session_required`, `403 quick_session`, `403 full_session_required`; `401` signed out. The auth
+server not answering, or the quick-session lookup failing, is `503` (never access). The verified address is returned only on a
+`google` session. `user_metadata`, `app_metadata.provider(s)` and the identity list are never read as proof of the session.
+
+**What `amr` cannot say:** `oauth` does not name the provider. Steps 3 + 4 mean "an OAuth sign-in on an account whose Google
+identity is verified"; that equals "a Google sign-in" only while **Google is the only OAuth provider enabled** in the project's Auth
+settings. That setting and **one real Google round trip** (sign in on a preview, open `/benefits/manage`, accept an invitation) are
+release prerequisites. Enabling any other OAuth provider requires a provider-specific provenance review first.
+
+**Reauthentication:** a signed-in session that is not `google` sees `BenefitsReauth` on `/benefits/manage` and `/benefits/invite`:
+what is needed, and one "sign in again with Google" button that returns to the same page (the invitation cookie survives). Nothing
+redirects by itself (the middleware still sends a signed-in visitor of `/benefits` to `/benefits/manage` once, and that page never
+redirects a signed-in session), so there is no loop; signing out stays in the top bar's menu. The staff app is unchanged: the staff
+session resolver, `requireOwner`, POS and employee-code login do not use this rule.
 
 ### Who may manage an organization (`customer_org_manage_check`)
 One rule for departments, invitations, department heads and the organization's own name and state:
@@ -166,6 +197,12 @@ of one invitation happen one after the other.
 - `customer_org_update`, `customer_department_create`, `customer_department_update`: rename, switch off, switch on. Switching
   off revokes the open invitations (audited with the count). Grants are kept and stop working while the department or the
   organization is off (`customer_access_check` needs both active), and work again when it is switched back on.
+- **A switched-off organization stays with its administrator (review R2).** `customer_manage_scopes` lists every organization the
+  person holds a live `organization_admin` grant on, active or not, with its `state`; `/benefits/manage` shows it marked off (red
+  note, "כבוי" in the chooser) with the button that switches it back on, also after a reload. While it is off only looking,
+  renaming, switching it on and taking authority away are accepted (`customer_org_manage_check(..., true)`); new departments,
+  department changes and invitations are refused, and the screen does not offer them. Department heads see departments only in
+  active organizations and active departments, and acceptance refuses both. Nobody without a live administrator grant lists it.
 - A department is always named together with its organization: a department id from another organization is refused exactly like
   one that does not exist.
 - `customer_department_head_revoke`: whoever may manage the organization ends a department head's grant. It refuses any grant
@@ -191,8 +228,11 @@ of one invitation happen one after the other.
   prove nothing. The server computes the digest from the auth server's answer; nothing the browser sends is used.
 - **Acceptance** (`customer_invitation_accept`), in one transaction: the invitation is open (not used, not revoked, not expired),
   the recipient digest matches, the user is not the issuer, the department and organization are active, the **issuer still has
-  the authority to invite** (an invitation carries no more authority than its issuer has now: it dies when their grant ends, or
-  when the organization gets its own administrator after a business invited), the user's principal is not switched off. Then the
+  the authority to invite** (an invitation carries no more authority than its issuer has NOW: it cannot be used while the issuer
+  lacks that authority, for example once the organization has its own administrator after a business invited in setup. It is
+  **not revoked** by that: if the authority returns before it expires (the last administrator is revoked, so setup returns), it
+  is usable again. Codex verified this lifecycle and it is kept; the future appoint-administrator screen must explain it), the
+  user's principal is not switched off. Then the
   principal is created if the user has none (audit `principal.create`), the `department_head` grant is written (audit
   `access.grant`) or an existing live one is kept, the invitation is marked used with that principal and grant, and
   `invitation.accept` is written.
@@ -275,8 +315,10 @@ is created or consumed.
   with that query must be checked on a preview before release.
 - The invitation cookie holds the token for up to 30 minutes on the recipient's device (HttpOnly, never readable by a script).
 - A department head has nothing to do yet beyond seeing their department: registration and approval are FABLE-003.
-- `/benefits` is classified as a private (administration) route in `scripts/check-a11y-scope.mjs`, so the customer accessibility
-  widget and skip link are not drawn there. The people there are not staff and not customers; the owner may decide otherwise.
+- `/benefits`, `/benefits/manage` and `/benefits/invite` are private administration pages without the customer accessibility
+  widget and skip link (D2, decided by Codex 2026-11-13, for exactly these three); component accessibility (keyboard, focus,
+  contrast in five looks, RTL, reduced motion) still applies. Any new benefits page needs its own classification.
+- The current-session proof depends on Google being the only OAuth provider; a real Google round trip was not made (see above).
 - Not built on purpose: e-mail or SMS delivery, organization-administrator invitations, switching a principal off, erasure.
 
 ### Review continuation, 2026-11-13 (Claude Opus 5.5, owner-authorized replacement for Fable; not a Codex verification)
@@ -286,18 +328,49 @@ is created or consumed.
 - **Open decision D1 (setup authority), behaviour pinned, not approved:** `verify:identity-org-sql` section "under review (D1)".
   While an organization has no live administrator, ANY business with a draft/active agreement can revoke the other business's
   invitations, end heads it invited and switch the organization off/on; a suspended agreement loses that at once; the bootstrap
-  ends it for both businesses and kills setup-era invitations; heads accepted during setup keep their grant. In practice only the
+  ends it for both businesses and makes setup-era invitations unusable while an administrator exists (corrected wording: they are
+  not revoked, and work again if setup returns before they expire); heads accepted during setup keep their grant. In practice only the
   creating business has an agreement (no function attaches a second business), so the cross-business case needs data written
   outside this slice.
 - **Open decision D2 (`/benefits` private):** `check:a11y-scope` now classifies `/benefits` subpages one by one (`invite`,
   `manage`); a new one (the planned `/benefits/register` for invited employees) fails the check until it is decided on purpose.
-- **Identity proof, residual risk for review:** the recipient check proves the *account* holds a Google identity with that verified
+- **Identity proof, residual risk for review (SUPERSEDED by review R1 below):** the recipient check proves the *account* holds a Google identity with that verified
   address; it does not check that the *current session* was made through Google (the JWT `amr`). If the hosted project allows
   e-mail/password sign-up without confirmation, or manual identity linking, a pre-created account could later absorb the victim's
   Google identity. Hosted Auth settings must be checked (see handoff); an `amr` check was not added because it cannot be verified
   without a real Google sign-in.
 - QA `identity.ui-keyboard`: the invitation page's states in all five looks (contrast) and keyboard-only acceptance with a visible
   focus ring.
+
+## Codex review decision, 2026-11-13 (`82e2deb`)
+
+FABLE-002 has **CHANGES REQUESTED**, not verification. The existing full QA suite passed, but independent API/browser probes found two missing cases: non-OAuth sessions pass the identity guards (including password acceptance of an invitation on a Google-linked account), and deactivating an organization removes it from its administrator's management list, hiding reactivation. Correct both and add regressions before FABLE-003.
+
+- **Current-session policy:** for identity management/acceptance, require validated OAuth session evidence and the account's matching confirmed Google-verified identity, with quick/code sessions still denied. Supabase AMR says `oauth`, not `google`, and is not provider-specific. Google-only OAuth provider configuration and a real Google round trip are explicit release prerequisites; any additional provider requires a provider-specific provenance review. Linked identities or user-editable metadata alone are insufficient. Hosted account takeover was not reproduced.
+- **D1 accepted for this slice:** setup follows the current no-live-administrator plus draft/active-agreement rule, including its tested shared-business consequences. Administrator appointment must be available before release; revisit/restrict setup authority before a later attach-business feature. **Bootstrap does not permanently revoke pending setup invitations:** they are unusable while their issuer lacks authority and can become usable again if that authority returns before expiry. An independent SQL probe verified that revival after the last administrator is revoked. The appointment flow must explain this rule; no silent lifecycle change is authorized by the correction.
+- **D2 accepted for the current three pages:** `/benefits`, `/benefits/manage`, `/benefits/invite` are private administration pages without the customer widget/skip link, retaining component accessibility requirements. Future member-facing registration needs its own classification.
+- **Evidence and exact corrections:** newest Codex entry in root `handoff.md`; FABLE-002 remains changes requested and FABLE-003 unauthorized. Both identity migrations remain NOT APPLIED TO PRODUCTION.
+
+## Review corrections R1 / R2, 2026-11-13 (Claude Opus 5.5, owner-authorized; ready for Codex review, not verified)
+
+- **R1, current-session authentication:** see "Current-session proof" above. Files: `src/lib/identity/session-proof.ts` (new, pure),
+  `server/session.ts` (labels from the validated claims; the old code labelled every auth user `google`), `types.ts` (`via` is now
+  `google | quick | other | employee_code`; denial `google_session_required`), `access.ts` (`sessionRefusal`), `server/guard.ts`
+  (coded 403s), `components/identity/BenefitsReauth.tsx` (new), `BenefitsManage.tsx`, `InvitationAccept.tsx`,
+  `app/benefits/manage/page.tsx`. QA stand-in: seeded sessions carry `amr: [{ method: 'oauth' }]` like a real Google sign-in;
+  `tokenForMethod` mints the others.
+- **R2, inactive-organization recovery:** `customer_manage_scopes` in `20261112162132_customer_org_management.sql` (edited in place:
+  the migration was never applied anywhere but in-memory/disposable databases) lists inactive organizations for their live
+  administrators with `state`; `ManageScopes.organizations[].state`; `BenefitsManage` keeps the open organization and marks the
+  chooser; `OrganizationManager` says the organization is off (red) and stops offering department work while it is.
+- **D1 / D2 as decided by Codex**, wording corrected above (setup invitations are unusable, not revoked, after appointment).
+- **Tests added:** unit `identity-session-proof` (both reproduced cases and 30 other sessions, with the reason for each),
+  `identity-session-resolver` (the real resolver transpiled with the SDK mocked: labels, fail-closed lookups), five new rows in
+  `identity-guard`; `verify:identity-org-sql` section "review R2" (single and two organizations, off / fresh read / on, head and
+  invitation stay off, six outsiders refused, expired / revoked / switched-off administrators) and the D1 revival check (162 →
+  183 checks); QA identity `session-method` (both reproduced HTTP cases with Google controls, eight other sessions on four doors,
+  owner family, quick and code codes, staff dashboard unchanged), `org-recovery` (API), `ui-reauth` (no loop, five looks, invite
+  page then Google acceptance), `ui-recovery` (switch off → still there → reload → switch on, two organizations, five looks).
 
 ## Before it is applied to production (not done, not authorized)
 

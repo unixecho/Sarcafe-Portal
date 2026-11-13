@@ -174,7 +174,8 @@ export async function acceptInvitation(tokenDigest: string, authUserId: string, 
 // ---------------------------------------------------------------- what the signed-in user holds
 
 export type ManageScopes = {
-  organizations: Array<{ organizationId: string; name: string }>
+  /** Every organization the person administers, switched-off ones included (state shown) so they can be switched back on. */
+  organizations: Array<{ organizationId: string; name: string; state: 'active' | 'inactive' }>
   departments: Array<{ organizationId: string; organizationName: string; departmentId: string; departmentName: string }>
 }
 
@@ -182,7 +183,7 @@ export async function manageScopes(authUserId: string): Promise<ManageScopes> {
   const row = await call('customer_manage_scopes', { p_auth_user_id: authUserId })
   if (row.ok !== true) throw identityUnavailable()
   return {
-    organizations: list(row.organizations).map((o) => ({ organizationId: text(o.organization_id), name: text(o.name) })),
+    organizations: list(row.organizations).map((o) => ({ organizationId: text(o.organization_id), name: text(o.name), state: o.state === 'active' ? 'active' as const : 'inactive' as const })),
     departments: list(row.departments).map((d) => ({
       organizationId: text(d.organization_id), organizationName: text(d.organization_name), departmentId: text(d.department_id), departmentName: text(d.department_name),
     })),

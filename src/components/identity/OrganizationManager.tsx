@@ -108,6 +108,7 @@ export default function OrganizationManager({ apiBase, organizationId, onChanged
       <section className="gl-surf gl-card" aria-label={`הארגון ${org.name}`}>
         <h2 className="gl-card__title"><Building2 size={18} aria-hidden="true" /><span>{org.name}</span><Pill tone={active ? 'ok' : 'quiet'}>{active ? 'פעיל' : 'כבוי'}</Pill></h2>
         {detail.via === 'setup' && <p className="gl-note" data-identity="setup-note">לארגון הזה עדיין אין מנהל משלו, ולכן אתם מנהלים אותו בשלב ההקמה.</p>}
+        {!active && <p className="gl-note gl-note--bad" data-identity="org-inactive-note">הארגון כבוי: ראשי המחלקות אינם יכולים להיכנס, ואי אפשר להוסיף מחלקות או לשלוח הזמנות. הפעילו אותו כדי לחזור לנהל.</p>}
         <div className="gl-field">
           <span className="gl-field__label" id={`org-name-${org.id}`}>שם הארגון</span>
           <Input aria-labelledby={`org-name-${org.id}`} icon={<Building2 size={17} />} maxLength={80} value={orgName} onValueChange={setOrgName} />
@@ -182,7 +183,7 @@ export default function OrganizationManager({ apiBase, organizationId, onChanged
 
             <div className="gl-card__actions">
               {on
-                ? <Confirm label="כיבוי המחלקה" sure="לכבות? ראשי המחלקה יאבדו גישה" busy={busy} onConfirm={() => void act(() => identityApi(`${base}/departments/${department.id}`, { method: 'PATCH', body: { state: 'inactive' } }), 'המחלקה כובתה.')} />
+                ? active && <Confirm label="כיבוי המחלקה" sure="לכבות? ראשי המחלקה יאבדו גישה" busy={busy} onConfirm={() => void act(() => identityApi(`${base}/departments/${department.id}`, { method: 'PATCH', body: { state: 'inactive' } }), 'המחלקה כובתה.')} />
                 : <Button disabled={busy || !active} onClick={() => void act(() => identityApi(`${base}/departments/${department.id}`, { method: 'PATCH', body: { state: 'active' } }), 'המחלקה הופעלה.')}>הפעלת המחלקה</Button>}
             </div>
           </section>

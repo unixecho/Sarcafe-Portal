@@ -51,7 +51,12 @@ export function userFor(who) {
     created_at: '2026-01-01T00:00:00Z',
   }
 }
-export const tokenFor = (who) => fakeJwt({ sub: SESSIONS[who].sub, session_id: SESSIONS[who].sessionId, email: `${who}@qa.sarcafe.invalid` })
+// What the auth server signs for a Google sign-in: the session's authentication method is OAuth (Supabase's `amr`, documented shape
+// { method, timestamp }). A test that needs a session opened another way (password, magic link, recovery, nothing) mints it with
+// tokenForMethod and registers it itself (qa/live/identity.mjs); the seeded sessions are all Google sign-ins, like the real ones.
+export const GOOGLE_AMR = [{ method: 'oauth', timestamp: 1767225600 }]
+export const tokenForMethod = (who, amr, extra = {}) => fakeJwt({ sub: SESSIONS[who].sub, session_id: SESSIONS[who].sessionId, email: `${who}@qa.sarcafe.invalid`, ...(amr === undefined ? {} : { amr }), ...extra })
+export const tokenFor = (who) => tokenForMethod(who, GOOGLE_AMR)
 
 export function seed() {
   const t = today()

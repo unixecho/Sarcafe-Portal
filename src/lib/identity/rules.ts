@@ -38,7 +38,7 @@ export function normalizeScope(input: unknown): IdentityScope | null {
 /** A capability may only be asked for in its own scope shape. */
 export const capabilityFitsScope = (capability: IdentityCapability, scope: IdentityScope): boolean => SCOPE_OF[capability] === scope.kind
 
-/** Identity administration needs a verified auth user on a full sign-in. An employee-code or quick session never qualifies. */
+/** Identity administration needs a verified auth user whose CURRENT session is a proven Google sign-in. Nothing else qualifies. */
 export const hasFullIdentitySession = (session: IdentitySession | null | undefined): session is IdentitySession & { authUserId: string } =>
   !!session && session.via === 'google' && session.full === true && isUuid(session.authUserId)
 

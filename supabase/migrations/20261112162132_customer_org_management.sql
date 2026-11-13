@@ -679,7 +679,13 @@ revoke all on function public.customer_org_detail(uuid, uuid) from public, anon,
 grant execute on function public.customer_org_detail(uuid, uuid) to service_role;
 
 -- What the signed-in user holds: the organizations they administer and the departments they head (live grants of an active
--- principal, in active organizations and departments). Someone who holds nothing gets two empty lists.
+-- principal). Someone who holds nothing gets two empty lists.
+--   organizations: every organization with a live organization_admin grant, ACTIVE OR INACTIVE, with its state. An administrator who
+--     switched their organization off must still find it, to switch it back on (customer_org_manage_check(..., true) already lets
+--     them; FABLE-002 review R2). Being listed opens nothing by itself: every action rechecks, and while it is off only looking,
+--     renaming, switching it on and taking authority away are accepted.
+--   departments: only in ACTIVE organizations and ACTIVE departments. A head of a switched-off department or organization has
+--     nothing to open (and invitation acceptance refuses both).
 create or replace function public.customer_manage_scopes(p_auth_user_id uuid)
 returns jsonb language plpgsql stable set search_path = '' as $$
 begin
@@ -687,10 +693,10 @@ begin
   return jsonb_build_object(
     'ok', true,
     'organizations', coalesce((
-      select jsonb_agg(jsonb_build_object('organization_id', o.id, 'name', o.name) order by lower(o.name), o.id)
+      select jsonb_agg(jsonb_build_object('organization_id', o.id, 'name', o.name, 'state', o.state) order by o.state, lower(o.name), o.id)
         from public.customer_access_grants g
         join public.customer_principals p on p.id = g.principal_id and p.state = 'active' and p.auth_user_id = p_auth_user_id
-        join public.customer_organizations o on o.id = g.organization_id and o.state = 'active'
+        join public.customer_organizations o on o.id = g.organization_id
        where g.scope_kind = 'organization' and g.capability = 'organization_admin'
          and g.revoked_at is null and (g.expires_at is null or g.expires_at > now())), '[]'::jsonb),
     'departments', coalesce((

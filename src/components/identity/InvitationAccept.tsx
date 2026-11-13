@@ -6,6 +6,7 @@ import { Building2, Check, CircleAlert, MailQuestion, RefreshCw, ShieldCheck, Us
 import { isInvitationToken } from '@/lib/identity/invitations'
 import { glassToast } from '@/components/glass/toast'
 import { identityApi, refusalText, when } from './api'
+import BenefitsReauth, { reauthReason, type ReauthReason } from './BenefitsReauth'
 import BenefitsSignIn from './BenefitsSignIn'
 
 // /benefits/invite (FABLE-002): accepting a department-head invitation.
@@ -21,7 +22,7 @@ const ICON_ROW = { display: 'flex', alignItems: 'center', gap: 6 } as const
 type Status =
   | { state: 'none' | 'unverified' | 'unavailable' }
   | { state: 'ready'; organizationName: string; departmentName: string; expiresAt: string }
-type View = { kind: 'working' } | { kind: 'sign-in' } | { kind: 'status'; status: Status } | { kind: 'accepted' } | { kind: 'problem'; text: string }
+type View = { kind: 'working' } | { kind: 'sign-in' } | { kind: 'reauth'; reason: ReauthReason } | { kind: 'status'; status: Status } | { kind: 'accepted' } | { kind: 'problem'; text: string }
 
 export default function InvitationAccept() {
   const [view, setView] = useState<View>({ kind: 'working' })
@@ -32,7 +33,12 @@ export default function InvitationAccept() {
     const result = await identityApi<Status>('/api/benefits/invite/status')
     if (result.ok) setView({ kind: 'status', status: result.data })
     else if (result.status === 401) setView({ kind: 'sign-in' })
-    else setView({ kind: 'problem', text: result.status === 403 ? 'כדי לאשר הזמנה צריך להתחבר התחברות מלאה עם Google.' : refusalText(result) })
+    else {
+      // signed in, but not with a proven Google session on this connection: a fresh Google sign-in that comes back here (the
+      // invitation cookie survives it); never a redirect of its own
+      const reason = reauthReason(result)
+      setView(reason ? { kind: 'reauth', reason } : { kind: 'problem', text: result.status === 403 ? 'כדי לאשר הזמנה צריך להתחבר התחברות מלאה עם Google.' : refusalText(result) })
+    }
   }, [])
 
   useEffect(() => {
@@ -55,6 +61,8 @@ export default function InvitationAccept() {
     const result = await identityApi<{ ok: true }>('/api/benefits/invite/accept', { method: 'POST', body: {} })
     setBusy(false)
     if (result.ok) { setView({ kind: 'accepted' }); glassToast('ההזמנה אושרה.', 'ok'); return }
+    const reason = reauthReason(result)
+    if (reason) { setView({ kind: 'reauth', reason }); return }
     if (result.status === 403) { setView({ kind: 'status', status: { state: 'unavailable' } }); return }
     glassToast(refusalText(result), 'bad')
   }
@@ -90,6 +98,7 @@ export default function InvitationAccept() {
       </section>
     )
   }
+  if (view.kind === 'reauth') return <BenefitsReauth returnTo="/benefits/invite" reason={view.reason} />
   if (view.kind === 'accepted') {
     return (
       <section className="gl-surf gl-surf--ok gl-card" role="status" data-identity="invite-accepted">

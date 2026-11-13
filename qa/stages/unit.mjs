@@ -6,7 +6,7 @@ import ts from 'typescript'
 import { createStage, assert, startChecks } from '../lib/harness.mjs'
 import { buildReport } from '../lib/report.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts', 'src/lib/identity/invitations.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts', 'src/lib/identity/invitations.ts', 'src/lib/identity/session-proof.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -22,7 +22,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') }, invitations: get('src/lib/identity/invitations.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') }, invitations: get('src/lib/identity/invitations.ts'), proof: get('src/lib/identity/session-proof.ts') }
 }
 
 export function unitStage(root) {
@@ -319,6 +319,12 @@ export function unitStage(root) {
       ['signed out', null, 'business_admin', business(ID.b1), db({ legacyOwner: true }), '401:unauthenticated', 0],
       ['an owner on an employee-code session', { authUserId: null, via: 'employee_code', full: false, staff: owner }, 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:full_session_required', 0],
       ['an owner on a quick Google session', full(owner, { full: false }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:quick_session', 0],
+      // FABLE-002 review R1: how THIS session signed in decides, not what the account has
+      ['an owner on a quick session (resolver shape)', full(owner, { via: 'quick', full: false }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:quick_session', 0],
+      ['an owner on a password / link session', full(owner, { via: 'other', full: false }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), '403:google_session_required', 0],
+      ['an administrator on a password session, with a grant', full(null, { via: 'other', full: false }), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({ orgA: true }), '403:google_session_required', 0],
+      ['a session marked other but "full" (never trusted)', full(null, { via: 'other', full: true }), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({ orgA: true }), '403:google_session_required', 0],
+      ['an unknown session kind', full(null, { via: 'saml' }), 'organization_admin', { kind: 'organization', organizationId: ID.orgA }, db({ orgA: true }), '403:google_session_required', 0],
       ['an owner, full session, Sarcafe', full(owner), 'business_admin', business(ID.b1), db({ legacyOwner: true }), 'ok:legacy_owner', 1],
       ['an owner by badge only', full({ id: ID.staff, role: 'staff', badge: 'owner' }), 'business_admin', business(ID.b1), db({ legacyOwner: true }), 'ok:legacy_owner', 1],
       ['WRONG BUSINESS: the same owner, another business', full(owner), 'business_admin', business(ID.b2), db({ legacyOwner: true }), '403:denied', 1],
@@ -380,6 +386,125 @@ export function unitStage(root) {
     ]
     assert.deepEqual(unproven.filter(([label, u]) => label !== 'user_metadata next to another Google address' && v.verifiedGoogleEmail(u) !== null).map(([label]) => label), [], 'accounts that prove no address:')
     assert.equal(v.verifiedGoogleEmail(unproven[unproven.length - 1][1]), 'other@example.org', 'self-declared metadata never replaces the address Google verified')
+  })
+  // ── FABLE-002 review R1: the CURRENT session must be a Google sign-in. Supabase's `amr` says `oauth` (not which provider); the
+  // account must also hold a matching, confirmed, Google-verified identity; claims must belong to the validated user.
+  stage.test('identity-session-proof', 'זהויות: רק חיבור שנפתח עכשיו ב־OAuth, של אותו משתמש, עם זהות Google מאומתת תואמת; סיסמה, קישור, שחזור או ראיה חסרה נדחים גם כש־Google מקושר', 'security', async () => {
+    const p = m.proof
+    const U = 'd0000000-0000-4000-8000-000000000012'
+    const S = 'e0000000-0000-4000-8000-000000000012'
+    const t = 1767225600
+    const googleUser = (over = {}) => ({ id: U, email: 'head@example.org', email_confirmed_at: '2026-01-01T00:00:00Z', identities: [{ provider: 'google', identity_data: { email: 'head@example.org', email_verified: true } }], ...over })
+    const claims = (amr, over = {}) => ({ sub: U, session_id: S, role: 'authenticated', is_anonymous: false, ...(amr === undefined ? {} : { amr }), ...over })
+    const at = (method) => ({ method, timestamp: t })
+    const yes = p.proveGoogleSession(claims([at('oauth')]), googleUser())
+    assert.deepEqual(yes, { google: true, sessionId: S, verifiedEmail: 'head@example.org' }, 'a Google sign-in')
+    assert.equal(p.proveGoogleSession(claims([at('oauth'), at('token_refresh')]), googleUser()).google, true, 'still Google after the token is refreshed')
+    assert.equal(p.proveGoogleSession(claims([at('oauth'), at('totp')]), googleUser()).google, true, 'Google plus a second factor')
+    const linked = googleUser({ app_metadata: { provider: 'email', providers: ['email', 'google'] }, identities: [{ provider: 'email', identity_data: { email: 'head@example.org', email_verified: true } }, { provider: 'google', identity_data: { email: 'head@example.org', email_verified: true } }] })
+    const passwordOnly = googleUser({ app_metadata: { provider: 'email', providers: ['email'] }, identities: [{ provider: 'email', identity_data: { email: 'head@example.org', email_verified: true } }] })
+    const reason = (c, u) => { const r = p.proveGoogleSession(c, u); return r.google ? 'google' : r.reason }
+    const refused = [
+      // the two cases Codex reproduced at 82e2deb
+      ['REPRODUCED: password session on a Google-linked account', claims([at('password')]), linked, 'not_oauth'],
+      ['REPRODUCED: password session on a password-only account', claims([at('password')]), passwordOnly, 'not_oauth'],
+      ['magic link on a Google-linked account', claims([at('magiclink')]), linked, 'not_oauth'],
+      ['one-time code', claims([at('otp')]), linked, 'not_oauth'],
+      ['recovery link', claims([at('recovery')]), linked, 'not_oauth'],
+      ['invite link', claims([at('invite')]), linked, 'not_oauth'],
+      ['sign-up confirmation', claims([at('email/signup')]), linked, 'not_oauth'],
+      ['e-mail change', claims([at('email_change')]), linked, 'not_oauth'],
+      ['SAML', claims([at('sso/saml')]), linked, 'not_oauth'],
+      ['anonymous method', claims([at('anonymous')]), linked, 'not_oauth'],
+      ['Supabase acting as an OAuth server for another app', claims([at('oauth_provider/authorization_code')]), linked, 'not_oauth'],
+      ['an unknown method', claims([at('google')]), linked, 'not_oauth'],
+      ['OAuth mixed with a password', claims([at('password'), at('oauth')]), linked, 'not_oauth'],
+      ['only a refresh, no sign-in method', claims([at('token_refresh')]), linked, 'not_oauth'],
+      ['amr missing', claims(undefined), linked, 'malformed_amr'],
+      ['amr empty', claims([]), linked, 'malformed_amr'],
+      ['amr a string', claims('oauth'), linked, 'malformed_amr'],
+      ['amr as plain strings (RFC 8176 form)', claims(['oauth']), linked, 'malformed_amr'],
+      ['amr entry without a timestamp', claims([{ method: 'oauth' }]), linked, 'malformed_amr'],
+      ['amr entry with a text timestamp', claims([{ method: 'oauth', timestamp: '1767225600' }]), linked, 'malformed_amr'],
+      ['amr entry null', claims([null]), linked, 'malformed_amr'],
+      ['anonymous user', claims([at('oauth')], { is_anonymous: true }), linked, 'anonymous'],
+      ['claims of ANOTHER user', claims([at('oauth')], { sub: 'd0000000-0000-4000-8000-000000000099' }), linked, 'subject_mismatch'],
+      ['claims without a subject', claims([at('oauth')], { sub: undefined }), linked, 'subject_mismatch'],
+      ['no validated user', claims([at('oauth')]), null, 'subject_mismatch'],
+      ['no claims at all', null, linked, 'no_claims'],
+      ['no session id', claims([at('oauth')], { session_id: undefined }), linked, 'no_session_id'],
+      ['OAuth on a password-only account (no Google identity)', claims([at('oauth')]), passwordOnly, 'no_verified_google_identity'],
+      ['OAuth, Google says unverified', claims([at('oauth')]), googleUser({ identities: [{ provider: 'google', identity_data: { email: 'head@example.org', email_verified: false } }] }), 'no_verified_google_identity'],
+      ['OAuth, Google identity for another address', claims([at('oauth')]), googleUser({ identities: [{ provider: 'google', identity_data: { email: 'other@example.org', email_verified: true } }] }), 'no_verified_google_identity'],
+      ['OAuth, account address not confirmed', claims([at('oauth')]), googleUser({ email_confirmed_at: null }), 'no_verified_google_identity'],
+      ['OAuth, only user_metadata and app_metadata claim Google', claims([at('oauth')]), googleUser({ identities: [], app_metadata: { provider: 'google', providers: ['google'] }, user_metadata: { email: 'head@example.org', email_verified: true, iss: 'https://accounts.google.com' } }), 'no_verified_google_identity'],
+    ]
+    assert.deepEqual(refused.map(([label, c, u]) => [label, reason(c, u)]), refused.map(([label, , , want]) => [label, want]), 'every session that is not a proven Google sign-in, and why')
+    assert.equal(p.boundSessionId(claims([at('oauth')], { sub: 'someone-else' }), googleUser()), null, 'a session id is read only from the user\'s own claims')
+  })
+
+  // The real resolver (src/lib/identity/server/session.ts), transpiled, with the SDK and the lookups mocked: the label it gives is
+  // decided by the current session's claims, and every failure of the check is closed.
+  stage.test('identity-session-resolver', 'זהויות: מי מחובר — הסשן הנוכחי מסווג נכון (Google, קוד מהיר, אחר); תקלה בבדיקה = 503 ולעולם לא גישה', 'security', async () => {
+    const loadResolver = (mocks) => {
+      const src = fs.readFileSync(path.join(root, 'src/lib/identity/server/session.ts'), 'utf8')
+      const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText
+      const mod = { exports: {} }
+      new Function('require', 'module', 'exports', js)((id) => { if (id in mocks) return mocks[id]; throw new Error(`unexpected dependency ${id}`) }, mod, mod.exports)
+      return mod.exports
+    }
+    const U = 'd0000000-0000-4000-8000-000000000011'
+    const S = 'e0000000-0000-4000-8000-000000000011'
+    const user = (over = {}) => ({ id: U, email: 'orgadmin@example.org', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: { provider: 'google', providers: ['google'] }, identities: [{ provider: 'google', identity_data: { email: 'orgadmin@example.org', email_verified: true } }], ...over })
+    const linked = () => user({ app_metadata: { provider: 'email', providers: ['email', 'google'] }, identities: [{ provider: 'email', identity_data: { email: 'orgadmin@example.org', email_verified: true } }, { provider: 'google', identity_data: { email: 'orgadmin@example.org', email_verified: true } }] })
+    const passwordOnly = () => user({ app_metadata: { provider: 'email', providers: ['email'] }, identities: [{ provider: 'email', identity_data: { email: 'orgadmin@example.org', email_verified: true } }] })
+    const amr = (method) => [{ method, timestamp: 1767225600 }]
+    const retryable = Object.assign(new Error('fetch failed'), { status: 0, __retryable: true })
+    const run = async ({ u = user(), claims = { sub: U, session_id: S, amr: amr('oauth') }, claimsError = null, claimsThrow = false, quick = false, quickThrow = false, staff = null }) => {
+      let quickAsked = 0
+      const resolver = loadResolver({
+        'server-only': {}, react: { cache: (fn) => fn },
+        '@supabase/supabase-js': { isAuthRetryableFetchError: (e) => !!e?.__retryable },
+        '@/lib/supabase/server': { createServerSupabaseClient: async () => ({ auth: {
+          getUser: async () => ({ data: { user: u }, error: null }),
+          getClaims: async () => { if (claimsThrow) throw new Error('boom'); return claimsError ? { data: null, error: claimsError } : { data: { claims, header: {}, signature: new Uint8Array() }, error: null } },
+        } }) },
+        '@/lib/staff/session': { resolveStaffIdentity: async () => staff },
+        '@/lib/pos/server/quick-login': { isQuickSessionId: async (id) => { quickAsked++; if (quickThrow) throw new Error('down'); assert.equal(id, S, 'the quick lookup is asked about the claims\' own session'); return quick } },
+        '@/lib/identity/session-proof': m.proof,
+      })
+      const out = await resolver.resolveIdentitySession()
+      return { ...out, quickAsked }
+    }
+    const shape = (r) => (r.failed ? 'failed' : `${r.session.via}/${r.session.full ? 'full' : 'not-full'}/${r.verifiedEmail ? 'email' : 'no-email'}`)
+    const cases = [
+      ['a Google sign-in', {}, 'google/full/email'],
+      ['REPRODUCED: password session on a Google-linked account', { u: linked(), claims: { sub: U, session_id: S, amr: amr('password') } }, 'other/not-full/no-email'],
+      ['REPRODUCED: password session on a password-only account', { u: passwordOnly(), claims: { sub: U, session_id: S, amr: amr('password') } }, 'other/not-full/no-email'],
+      ['magic link on a Google-linked account', { u: linked(), claims: { sub: U, session_id: S, amr: amr('magiclink') } }, 'other/not-full/no-email'],
+      ['recovery link', { u: linked(), claims: { sub: U, session_id: S, amr: amr('recovery') } }, 'other/not-full/no-email'],
+      ['no amr in the token', { claims: { sub: U, session_id: S } }, 'other/not-full/no-email'],
+      ['malformed amr', { claims: { sub: U, session_id: S, amr: ['oauth'] } }, 'other/not-full/no-email'],
+      ['claims of another user', { claims: { sub: 'd0000000-0000-4000-8000-000000000099', session_id: S, amr: amr('oauth') } }, 'other/not-full/no-email'],
+      ['OAuth without a verified Google identity', { u: passwordOnly() }, 'other/not-full/no-email'],
+      ['the SDK refuses the token (not an outage)', { claimsError: Object.assign(new Error('invalid JWT'), { status: 401 }) }, 'other/not-full/no-email'],
+      ['a quick (six-digit) session', { quick: true }, 'quick/not-full/no-email'],
+      ['the auth server does not answer the claims check', { claimsError: retryable }, 'failed'],
+      ['the auth server answers 500', { claimsError: Object.assign(new Error('x'), { status: 502 }) }, 'failed'],
+      ['the claims check throws', { claimsThrow: true }, 'failed'],
+      ['the quick-session lookup fails', { quickThrow: true }, 'failed'],
+    ]
+    const got = []
+    for (const [label, opts] of cases) got.push([label, shape(await run(opts))])
+    assert.deepEqual(got, cases.map(([label, , want]) => [label, want]), 'how each session is labelled')
+    assert.equal((await run({ claims: { sub: U, amr: amr('oauth') } })).quickAsked, 0, 'no session id: the quick table is not asked and the session is not Google')
+    // the staff row follows the auth user only (unchanged), and is never a reason to be "google"
+    const owner = { id: 'a0000000-0000-4000-8000-000000000001', via: 'google', auth_user_id: U, role: 'owner', badge: null, branch_id: null }
+    const pw = await run({ u: linked(), claims: { sub: U, session_id: S, amr: amr('password') }, staff: owner })
+    assert.deepEqual([pw.session.via, pw.session.full, pw.session.staff?.id], ['other', false, owner.id], 'an owner on a password session keeps the staff facts but is not a Google session')
+    // and the guard rule refuses each non-Google label with the code its screen acts on
+    const i = m.identity
+    assert.deepEqual([pw, await run({ quick: true }), await run({})].map((r) => i.sessionRefusal(r.session)?.code ?? 'pass'), ['google_session_required', 'quick_session', 'pass'], 'what the guards answer')
   })
   // The identity module now has callers (FABLE-002). It still must not have changed who gets into the existing app: only the listed
   // route families and screens may use it, and nothing outside it touches the identity tables or functions.
