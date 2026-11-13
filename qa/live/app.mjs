@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { startStandin, sessionCookie } from '../standin/supabase.mjs'
-import { seed, tokenFor, userFor } from '../standin/seed.mjs'
+import { seed, tokenFor, userFor, SESSIONS } from '../standin/seed.mjs'
+import { startIdentityDb } from '../standin/identity-db.mjs'
 import { run, start, NODE, packageBin } from '../lib/exec.mjs'
 import { workDir, removeScratch, copySource, linkDependencies, sourceFingerprint, assertPortFree } from '../lib/scratch.mjs'
 import { resolveBrowser } from '../lib/browser.mjs'
@@ -38,14 +39,19 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
   await assertPortFree(APP_PORT, 'the test app')
 
   // Everything started from here on is closed again when a later step fails: nothing is left running or listening.
-  let standin = null, server = null, browser = null
+  let standin = null, server = null, browser = null, identity = null
   const closeAll = async () => {
     await browser?.close().catch(() => null)
     await server?.stop().catch(() => null)
     await standin?.close().catch(() => null)
+    await identity?.close().catch(() => null)
   }
   try {
-    standin = await startStandin({ port: STANDIN_PORT, seed })
+    // the identity functions run on a real Postgres with the real migrations (qa/standin/identity-db.mjs); the stand-in's
+    // customer_businesses table serves that database's Sarcafe row, so the app resolves the same business the functions know
+    identity = await startIdentityDb(root, { users: Object.values(SESSIONS).map((s) => s.sub), staff: seed().staff.filter((s) => s.auth_user_id) })
+    log('  identity database ready (PGlite, every migration applied)')
+    standin = await startStandin({ port: STANDIN_PORT, seed: () => ({ ...seed(), customer_businesses: [{ ...identity.business }] }), rpcBackend: identity })
     const fingerprint = sourceFingerprint(root)
     let built = false
     if (reuseBuild) {
@@ -92,6 +98,8 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     const headers = { ...(opts.headers ?? {}) }
     const c = cookieFor(opts.as)
     if (c) headers.cookie = `${c.name}=${c.value}`
+    // extra cookies ("name=value; name2=value2"), e.g. the invitation cookie or an employee-code session
+    if (opts.cookie) headers.cookie = headers.cookie ? `${headers.cookie}; ${opts.cookie}` : opts.cookie
     if (opts.body !== undefined) { headers['content-type'] ??= 'application/json'; }
     if (opts.origin === true) headers.origin = base
     else if (typeof opts.origin === 'string') headers.origin = opts.origin
@@ -123,7 +131,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
   const control = async (pathname, body) => (await fetch(standin.url + pathname, { method: body === undefined ? 'GET' : 'POST', body: body === undefined ? undefined : JSON.stringify(body) })).json()
 
   return {
-    base, standin, browser, call, page, control,
+    base, standin, browser, call, page, control, identity,
     db: (table) => standin.db[table] ?? [],
     reset: () => standin.reset(),
     stop: closeAll,

@@ -61,6 +61,17 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'no-referrer' },
         ],
       },
+      // The identity pages and routes (FABLE-002, docs/SARCAFE_IDENTITY.md): invitations and the people behind organizations. Never
+      // cached, never indexed, and no Referer leaves them (the invitation token itself is only ever in a URL fragment or an
+      // HttpOnly cookie; this is the backstop). The routes set the same headers themselves; these rules also cover their errors.
+      ...['/benefits', '/benefits/:path*', '/owner/members', '/api/benefits/:path*', '/api/owner/members/:path*'].map((source) => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      })),
       // The ONE exception to "never framed": the payslip viewer shows a private document inside our own page. It is the
       // last rule so it wins for this path; only our own origin may frame it, and the route checks who may read the file.
       {

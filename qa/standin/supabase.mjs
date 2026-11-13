@@ -130,7 +130,9 @@ function project(rows, select) {
 }
 
 // ── the server ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = {}) {
+// `rpcBackend` ({ handles(name), rpc(name, args) }): functions answered by something real instead of the table above. The identity
+// functions are answered by a real Postgres with the real migrations (identity-db.mjs).
+export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpcBackend = null } = {}) {
   const state = { db: {}, tokens: new Map(), limits: new Map(), fault: { mode: 'none' }, missingTables: new Set(), missingFns: new Set(), requests: 0, byPath: new Map() }
   const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set() }
   reset()
@@ -310,7 +312,7 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
       if (state.missingFns.has(fn)) return json(res, 404, { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` })
       const args = JSON.parse(body || '{}')
       try {
-        const result = RPC[fn] ? RPC[fn](args) : null
+        const result = rpcBackend?.handles(fn) ? await rpcBackend.rpc(fn, args) : RPC[fn] ? RPC[fn](args) : null
         return json(res, 200, result)
       } catch (err) { return json(res, 400, { code: err.code ?? 'P0001', message: err.message }) }
     }

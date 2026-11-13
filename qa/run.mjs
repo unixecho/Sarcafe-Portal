@@ -21,6 +21,7 @@ import { securityStage } from './live/security.mjs'
 import { featuresStage } from './live/features.mjs'
 import { uiStage } from './live/ui.mjs'
 import { survivalStage } from './live/survival.mjs'
+import { identityStage } from './live/identity.mjs'
 import { kioskStaticStage } from './kiosk/static.mjs'
 import { kioskApiStage } from './kiosk/api.mjs'
 import { kioskUiStage } from './kiosk/ui.mjs'
@@ -74,7 +75,7 @@ if (wantSuite('kiosk')) {
 }
 
 const liveStages = [
-  ...(wantSuite('dashboard') ? ['security', 'features', 'ui', 'survival'] : []),
+  ...(wantSuite('dashboard') ? ['security', 'features', 'ui', 'survival', 'identity'] : []),
   ...(wantSuite('kiosk') ? ['kiosk-api', 'kiosk-ui'] : []),
 ].filter(want)
 if (liveStages.length) {
@@ -87,6 +88,7 @@ if (liveStages.length) {
     if (liveStages.includes('features')) await runStage(featuresStage(get))
     if (liveStages.includes('ui')) await runStage(uiStage(get, metrics))
     if (liveStages.includes('survival')) await runStage(survivalStage(get))
+    if (liveStages.includes('identity')) await runStage(identityStage(ROOT, get))
     if (liveStages.includes('kiosk-api')) await runStage(kioskApiStage(get), 'kiosk')
     if (liveStages.includes('kiosk-ui')) await runStage(kioskUiStage(get, kioskMetrics), 'kiosk')
   } catch (err) {

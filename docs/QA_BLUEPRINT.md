@@ -13,7 +13,7 @@ production build serves both.
 | `npm run qa` | both suites, both reports (≈20–30 min, most of it the production build and the 30+ regression scripts) |
 | `npm run qa -- --suite kiosk` | one suite (`dashboard` or `kiosk`) |
 | `npm run qa:fast` | everything except the existing `check:*` / `verify:*` scripts |
-| `npm run qa -- --only static,unit` | some stages (dashboard: `harness, static, checks, unit, security, features, ui, survival`; kiosk: `kiosk-static, kiosk-checks, kiosk-api, kiosk-ui`) |
+| `npm run qa -- --only static,unit` | some stages (dashboard: `harness, static, checks, unit, security, features, ui, survival, identity`; kiosk: `kiosk-static, kiosk-checks, kiosk-api, kiosk-ui`) |
 | `npm run qa -- --reuse-build` | keep the last production build. It is kept only when it was made from exactly today's source (a fingerprint of every file that goes into the build is stored beside it); after any edit the suite says so and builds again |
 | `npm run qa -- --post` | also send both reports to the portal (in GitHub Actions: GitHub's identity token; by hand: `QA_REPORT_SECRET`) |
 | `node qa/tools/send-digest.mjs --dry` | what the 07:00 notification would say right now (sends nothing) |
@@ -105,6 +105,7 @@ are optional fallbacks. Migration `20261105090000` creates `qa_runs` (with `suit
 | security | `qa/live/security.mjs` | security, recovery | against the running app: **all API routes signed out** (no data, no 500, no leaked stack/SQL), cross-site writes blocked, form posts refused, security headers, `no-store` on private data, pages redirect to sign-in, roles (employee / manager / owner / developer), the QA report endpoint's lock |
 | features | `qa/live/features.mjs` | e2e, security, survival, recovery | the team message matrix (recipients, push-enabled only, roles, branches, shift windows, validation, limits, duplicates, fail-closed limiter, before-migration mode, inbox) and the tool history (sync, merge, isolation, validation, reset, before-migration) |
 | ui | `qa/live/ui.mjs` | e2e, a11y, perf, survival | real Chromium as each person: dashboards, notifications menu (green / red), branch switch, the team message flow with server error and offline, the finder, employee and manager homes, developer + QA page, the on-shift carousel, the dock at 3 widths, **text contrast against the real pixels in all 5 looks**, no sideways scroll at 360/768/1280, scroll smoothness at 4x CPU throttle |
+| identity | `qa/live/identity.mjs` | security, e2e, a11y, survival, recovery | organizations, departments and department-head invitations (`docs/SARCAFE_IDENTITY.md`). The app's identity calls are answered by a **real Postgres with the real migrations** (`qa/standin/identity-db.mjs`, PGlite), so the answers are the real SQL's: who may call each route (owner, general manager, employee, quick and code sessions, external people, signed out), tenants and swapped ids, an invitation's whole life (intended recipient, forwarded link, self-declared address, expiry, revocation, replay, six at once), the limiter failing closed, outages and a migration that is not applied, the sign-in return and the middleware, and the screens in a browser (five looks, three widths, iPhone edges, reduced motion) |
 | survival | `qa/live/survival.mjs` | survival, recovery | the database fails with internal details, goes down, is slow, comes back: clean errors, no leaks, recovery without restart, a send during an outage retries once exactly; **while sign-in cannot be checked every owner and staff route answers 503, never 401** (401 only for a missing session) |
 
 **The kiosk suite** (its own report):
@@ -132,6 +133,7 @@ qa/
   lib/browser.mjs          this run's browser: the first candidate that passes a bounded readiness check (browser-probe.mjs)
   lib/scratch.mjs          the build copy: what goes in, the link to the packages, the source fingerprint, safe removal
   standin/supabase.mjs     in-memory PostgREST + GoTrue user + RPCs + fault injection (down / error / slow / missing tables & functions)
+  standin/identity-db.mjs  a real Postgres (PGlite) with every migration: answers the identity functions the app calls
   standin/seed.mjs         the project's world (people, branches, shifts) relative to today
   live/app.mjs             production build of THIS checkout against the stand-in, `call(path, { as })`, `page(who)`, control
   live/*.mjs               the live stages

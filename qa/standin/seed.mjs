@@ -27,7 +27,13 @@ export const ID = {
   shiftOld: 'c0000000-0000-4000-8000-000000000006',
   shiftFar: 'c0000000-0000-4000-8000-000000000007',
 }
-const AUTH = { owner: 'd0000000-0000-4000-8000-000000000001', dev: 'd0000000-0000-4000-8000-000000000002', gm: 'd0000000-0000-4000-8000-000000000003', dana: 'd0000000-0000-4000-8000-000000000004', itai: 'd0000000-0000-4000-8000-000000000005', noa: 'd0000000-0000-4000-8000-000000000006' }
+// The last five are NOT staff (no staff row, ever): the identity system's external people (FABLE-002, qa/live/identity.mjs).
+//   orgadmin   an organization's administrator        head, head2   people who are invited to head a department
+//   forwarded  someone an invitation was forwarded to (their user_metadata CLAIMS the head's address: self-declared, proves nothing)
+//   unverified an account whose Google address is not verified     outsider  signed in, holds nothing
+const AUTH = { owner: 'd0000000-0000-4000-8000-000000000001', dev: 'd0000000-0000-4000-8000-000000000002', gm: 'd0000000-0000-4000-8000-000000000003', dana: 'd0000000-0000-4000-8000-000000000004', itai: 'd0000000-0000-4000-8000-000000000005', noa: 'd0000000-0000-4000-8000-000000000006',
+  orgadmin: 'd0000000-0000-4000-8000-000000000011', head: 'd0000000-0000-4000-8000-000000000012', head2: 'd0000000-0000-4000-8000-000000000013', forwarded: 'd0000000-0000-4000-8000-000000000014', unverified: 'd0000000-0000-4000-8000-000000000015', outsider: 'd0000000-0000-4000-8000-000000000016' }
+export const emailOf = (who) => `${who}@qa.sarcafe.invalid`
 export const SESSIONS = Object.fromEntries(Object.entries(AUTH).map(([who, sub]) => [who, { sub, sessionId: sub.replace(/^d/, 'e') }]))
 
 export const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
@@ -36,7 +42,14 @@ const weekStart = (iso) => addDays(iso, -new Date(`${iso}T00:00:00Z`).getUTCDay(
 
 export function userFor(who) {
   const s = SESSIONS[who]
-  return { id: s.sub, aud: 'authenticated', role: 'authenticated', email: `${who}@qa.sarcafe.invalid`, app_metadata: { provider: 'google' }, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' }
+  // like a real Google sign-in: the auth server lists the Google identity with the address Google verified
+  const verified = who !== 'unverified'
+  return {
+    id: s.sub, aud: 'authenticated', role: 'authenticated', email: emailOf(who), email_confirmed_at: verified ? '2026-01-01T00:00:00Z' : null, app_metadata: { provider: 'google' },
+    user_metadata: who === 'forwarded' ? { email: emailOf('head'), email_verified: true, full_name: 'Head One' } : {},
+    identities: [{ provider: 'google', identity_data: { email: emailOf(who), email_verified: verified, sub: s.sub } }],
+    created_at: '2026-01-01T00:00:00Z',
+  }
 }
 export const tokenFor = (who) => fakeJwt({ sub: SESSIONS[who].sub, session_id: SESSIONS[who].sessionId, email: `${who}@qa.sarcafe.invalid` })
 

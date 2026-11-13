@@ -6,12 +6,17 @@
 // customer_access_grant from two psql sessions. Synthetic ids only; no port is published; the container is removed at the end.
 // It is not part of `npm run qa` (it needs Docker), so its name is not check:* / verify:*.
 //
+// FABLE-002 (20261112162132_customer_org_management.sql) added sections 4-8: department-head invitations. Many sessions accept ONE
+// invitation at the same moment (exactly one may win); one new user accepts two invitations of two organizations at once (one
+// principal); an acceptance races a revocation; an acceptance waits for a bootstrap that ends its issuer's authority, and the
+// other way round. `--without-lock` also removes the two locks of customer_invitation_accept.
+//
 //   node scripts/identity-concurrency-docker.mjs                 exit 0 = passed, 1 = failed, 2 = NOT RUN (no Docker / no image)
 //   node scripts/identity-concurrency-docker.mjs --without-lock  removes the organization row lock inside the throwaway database
 //                                                                and runs the same assertions: it MUST fail (proves the test bites)
 
 import { spawn, spawnSync } from 'node:child_process'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -85,7 +90,7 @@ try {
   `)
   const files = readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()
   const applied = docker([...PSQL, '-o', '/dev/null', ...files.flatMap((file) => ['-f', `/migrations/${file}`])])
-  check(`all ${files.length} migrations apply to real Postgres 16, the identity migration last`, applied.status === 0 && /_customer_identity_foundation\.sql$/.test(files[files.length - 1]), (applied.stderr || '').trim().split('\n').slice(0, 3).join(' | '))
+  check(`all ${files.length} migrations apply to real Postgres 16, the identity migrations last (foundation, then organization management)`, applied.status === 0 && /_customer_identity_foundation\.sql$/.test(files[files.length - 2]) && /_customer_org_management\.sql$/.test(files[files.length - 1]), (applied.stderr || '').trim().split('\n').slice(0, 3).join(' | '))
   if (applied.status !== 0) throw new Error('migrations did not apply')
   check('the server really is Postgres 16 with more than one connection allowed', /^16\./.test(sql('show server_version')[0]) && Number(sql('show max_connections')[0]) > 2)
 
@@ -95,6 +100,11 @@ try {
     if (!def.includes(needle)) throw new Error('the lock statement was not found in customer_access_grant')
     sql(def.replace(needle, 'where o.id = p_organization_id;'))
     console.log('  (mutation applied in the throwaway database only: customer_access_grant no longer locks the organization row)')
+    const accept = sql(`select pg_get_functiondef('public.customer_invitation_accept(text,uuid,text)'::regprocedure)`).join('\n')
+    const needles = ['where o.id = v_organization for update;', 'where i.token_digest = p_token_digest for update;']
+    if (!needles.every((n) => accept.includes(n))) throw new Error('the lock statements were not found in customer_invitation_accept')
+    sql(needles.reduce((def, n) => def.replace(n, n.replace(' for update;', ';')), accept))
+    console.log('  (and customer_invitation_accept no longer locks the organization row or the invitation row)')
   }
 
   // ---------------------------------------------------------------- the synthetic world: two businesses, their administrators
@@ -164,6 +174,108 @@ try {
     const done = await revoke
     check('the revoke (still uncommitted) made the bootstrap wait, and after it committed the bootstrap was allowed', answer(done).status === 'revoked' && answer(boot).ok === true && answer(boot).status === 'created' && boot.ms >= 1500, `${JSON.stringify(answer(boot))} after ${boot.ms} ms`)
     check('one live administrator remains', live(org) === 1)
+  }
+
+  // ================================================================ FABLE-002: department-head invitations
+  const digest = (text) => createHash('sha256').update(text).digest('hex')
+  const dept = (org, name = 'Department') => { const d = randomUUID(); sql(`insert into public.customer_departments (id, organization_id, name) values ('${d}', '${org}', '${name}')`); return d }
+  let invitations = 0
+  /** An open invitation issued by business A's administrator (setup authority) for a recipient named by `who`. */
+  const invitation = (org, department, who, issuer = id.uA) => {
+    const token = digest(`token:${++invitations}:${randomUUID()}`)
+    const inv = randomUUID()
+    sql(`insert into public.customer_invitations (id, purpose, organization_id, department_id, token_digest, recipient_digest, recipient_hint, issued_by_auth_user_id, expires_at)
+         values ('${inv}', 'department_head', '${org}', '${department}', '${token}', '${digest('recipient:' + who)}', 'r***@example.test', '${issuer}', now() + interval '1 day')`)
+    return { id: inv, token }
+  }
+  const newUser = () => { const u = randomUUID(); sql(`insert into auth.users (id) values ('${u}')`); return u }
+  const acceptCall = (token, user) => `select public.customer_invitation_accept('${token}', '${user}', '${digest('recipient:' + user)}');`
+  const headGrants = (org, department) => Number(sql(`select count(*) from public.customer_access_grants where capability = 'department_head' and organization_id = '${org}' and department_id = '${department}' and revoked_at is null`)[0])
+  const principalsOf = (user) => Number(sql(`select count(*) from public.customer_principals where auth_user_id = '${user}'`)[0])
+  const auditsOf = (target, operation) => Number(sql(`select count(*) from public.customer_identity_audit where target_id = '${target}' and operation = '${operation}'`)[0])
+  const accepted = (run) => answer(run).ok === true && answer(run).status === 'accepted'
+  const refusedCleanly = (run) => run.code === 0 && answer(run).ok === false && answer(run).error === 'denied'
+
+  // ---------------------------------------------------------------- 4. many sessions accept ONE invitation at the same moment
+  const ROUNDS = 6; const SESSIONS = 8
+  console.log(`\nrace: ${SESSIONS} sessions accept the same invitation at the same moment, ${ROUNDS} fresh invitations`)
+  {
+    let exactlyOne = 0; let clean = 0; let consistent = 0
+    for (let i = 0; i < ROUNDS; i++) {
+      const org = organization(); const d = dept(org); const user = newUser(); const inv = invitation(org, d, user)
+      const runs = await Promise.all(Array.from({ length: SESSIONS }, () => session(acceptCall(inv.token, user))))
+      const wins = runs.filter(accepted).length
+      if (wins === 1) exactlyOne++
+      if (runs.filter(refusedCleanly).length === SESSIONS - 1 && runs.every((r) => r.code === 0)) clean++
+      if (headGrants(org, d) === 1 && principalsOf(user) === 1 && auditsOf(inv.id, 'invitation.accept') === 1
+        && sql(`select count(*) from public.customer_invitations where id = '${inv.id}' and consumed_at is not null and grant_id is not null`)[0] === '1') consistent++
+    }
+    check(`in all ${ROUNDS} rounds exactly one of the ${SESSIONS} acceptances won`, exactlyOne === ROUNDS, `exactly one: ${exactlyOne} of ${ROUNDS}`)
+    check('every other session was refused with a plain "denied" (no SQL error, no unique violation)', clean === ROUNDS, `clean rounds: ${clean} of ${ROUNDS}`)
+    check('after every round: one department_head grant, one principal, one invitation.accept audit row, the invitation used once', consistent === ROUNDS, `${consistent} of ${ROUNDS}`)
+  }
+
+  // ---------------------------------------------------------------- 5. one NEW user accepts two invitations of two organizations at once
+  console.log(`\nrace: a user with no principal accepts invitations of two different organizations at the same moment, ${ROUNDS} times`)
+  {
+    let both = 0; let onePrincipal = 0
+    for (let i = 0; i < ROUNDS; i++) {
+      const orgX = organization(); const orgY = organization(); const dX = dept(orgX); const dY = dept(orgY); const user = newUser()
+      const invX = invitation(orgX, dX, user); const invY = invitation(orgY, dY, user)
+      const [x, y] = await Promise.all([session(acceptCall(invX.token, user)), session(acceptCall(invY.token, user))])
+      if (accepted(x) && accepted(y) && headGrants(orgX, dX) === 1 && headGrants(orgY, dY) === 1) both++
+      const p = sql(`select id from public.customer_principals where auth_user_id = '${user}'`)
+      if (p.length === 1 && auditsOf(p[0], 'principal.create') === 1) onePrincipal++
+    }
+    check('both acceptances succeeded every time (different organizations do not block or break each other)', both === ROUNDS, `${both} of ${ROUNDS}`)
+    check('and the user ended with exactly ONE principal and one principal.create audit row', onePrincipal === ROUNDS, `${onePrincipal} of ${ROUNDS}`)
+  }
+
+  // ---------------------------------------------------------------- 6. an acceptance racing a revocation
+  console.log(`\nrace: the recipient accepts while the issuer revokes the invitation, ${ROUNDS} times`)
+  {
+    let oneOutcome = 0; const tally = { accepted: 0, revoked: 0 }
+    for (let i = 0; i < ROUNDS; i++) {
+      const org = organization(); const d = dept(org); const user = newUser(); const inv = invitation(org, d, user)
+      const [a, r] = await Promise.all([session(acceptCall(inv.token, user)), session(`select public.customer_invitation_revoke('${id.uA}', '${inv.id}', 'race');`)])
+      const row = sql(`select (consumed_at is not null)::int || ',' || (revoked_at is not null)::int from public.customer_invitations where id = '${inv.id}'`)[0]
+      const won = accepted(a)
+      // accepted: used, not revoked, one grant, and the revocation answered "conflict". revoked: not used, no grant, the acceptance answered "denied".
+      const okAccepted = won && row === '1,0' && headGrants(org, d) === 1 && answer(r).ok === false && answer(r).error === 'conflict'
+      const okRevoked = !won && refusedCleanly(a) && row === '0,1' && headGrants(org, d) === 0 && answer(r).status === 'revoked'
+      if (okAccepted) tally.accepted++
+      if (okRevoked) tally.revoked++
+      if (okAccepted !== okRevoked) oneOutcome++
+    }
+    check('every race ended in exactly one consistent outcome: accepted (and the revocation told "conflict") or revoked (and no grant)', oneOutcome === ROUNDS, `${oneOutcome} of ${ROUNDS}`)
+    console.log(`  (accepted ${tally.accepted}, revoked ${tally.revoked})`)
+  }
+
+  // ---------------------------------------------------------------- 7. a bootstrap that ends the issuer's authority, held open
+  console.log('\nheld transaction: the organization gets its first administrator (3 s open) while the recipient accepts an invitation issued in setup')
+  {
+    const org = organization(); const d = dept(org); const user = newUser(); const inv = invitation(org, d, user)
+    const boot = session(`begin; ${grantCall(id.uA, next(), org)} select pg_sleep(3); commit;`)
+    await sleep(1000)
+    const acceptance = session(acceptCall(inv.token, user))
+    await sleep(1000)
+    const waiting = Number(sql(`select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query like '%customer_invitation_accept%' and pid <> pg_backend_pid()`)[0])
+    const [b, a] = await Promise.all([boot, acceptance])
+    check('the acceptance WAITED on the organization lock while the bootstrap was open', waiting === 1, `sessions waiting on a lock: ${waiting}`)
+    check('after the bootstrap committed the acceptance was refused: its issuer (a business in setup) no longer has authority', answer(b).ok === true && refusedCleanly(a) && a.ms >= 1500, `${JSON.stringify(answer(a))} after ${a.ms} ms`)
+    check('no grant and no principal were created, and the invitation is still unused', headGrants(org, d) === 0 && principalsOf(user) === 0 && sql(`select count(*) from public.customer_invitations where id = '${inv.id}' and consumed_at is null`)[0] === '1')
+  }
+
+  // ---------------------------------------------------------------- 8. the other way round: the acceptance is first
+  console.log('\nheld transaction: the recipient\'s acceptance is open for 3 s while a business bootstraps the first administrator')
+  {
+    const org = organization(); const d = dept(org); const user = newUser(); const inv = invitation(org, d, user)
+    const acceptance = session(`begin; ${acceptCall(inv.token, user)} select pg_sleep(3); commit;`)
+    await sleep(1000)
+    const boot = await session(grantCall(id.uB, next(), org))
+    const a = await acceptance
+    check('the bootstrap waited for the acceptance, and both succeeded in that order', accepted(a) && answer(boot).ok === true && answer(boot).status === 'created' && boot.ms >= 1500, `${JSON.stringify(answer(boot))} after ${boot.ms} ms`)
+    check('the head\'s grant exists (the acceptance was decided while its issuer still had authority), with one live administrator', headGrants(org, d) === 1 && live(org) === 1)
   }
 } catch (error) {
   check('the run completed', false, String(error.message))

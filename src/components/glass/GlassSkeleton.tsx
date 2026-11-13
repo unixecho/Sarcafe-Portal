@@ -6,7 +6,7 @@ import { BRANCH_COOKIE } from '@/lib/branches/current'
 // the page's title, and shimmering blocks where the cards will be (the app's .sk convention, tinted for glass in glass.css). The dock
 // is not drawn here: it belongs to the layout and stays on screen the whole time. The router has this ready before the tap (Next
 // prefetches each tab's loading state), so a tab switch shows it at once and only the server's own time remains.
-export type SkeletonKind = 'owner' | 'employee' | 'dev' | 'qa' | 'kiosk'
+export type SkeletonKind = 'owner' | 'employee' | 'dev' | 'qa' | 'kiosk' | 'members'
 
 const Line = ({ kind }: { kind?: 'title' | 'short' }) => <span className={`sk gl-sk-line${kind ? ` gl-sk-line--${kind}` : ''}`} />
 const Card = ({ lines = 2, height }: { lines?: number; height?: number }) => (
@@ -24,6 +24,12 @@ const Shortcuts = () => (
 const Welcome = () => <div className="gl-welcome gl-sk-card"><Line kind="title" /><Line kind="short" /></div>
 
 function Body({ kind }: { kind: SkeletonKind }) {
+  if (kind === 'members') return (
+    <>
+      <Card lines={2} height={150} />
+      {[0, 1, 2].map((i) => <span key={i} className="sk gl-sk-tile" style={{ height: 64 }} />)}
+    </>
+  )
   if (kind === 'kiosk') return (
     <>
       <span className="sk gl-sk-chip" style={{ width: '100%' }} />

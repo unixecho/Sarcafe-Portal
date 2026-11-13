@@ -8,7 +8,7 @@ import {
 export const TOOL_ICONS: Record<string, LucideIcon> = {
   'staff-list': Users, 'add-staff': UserPlus, 'schedule-manage': CalendarClock, 'approve-swap': Repeat, 'checklists-track': ClipboardCheck, compose: Megaphone,
   'on-shift': UsersRound, issues: TriangleAlert, 'pos-quick': ShoppingBag, 'pos-events': Receipt, 'tablet-avail': Tablet, 'mark-soldout': PackageX,
-  'pos-soon': ShoppingBag, 'my-pos': Receipt, 'menu-editor': ClipboardList, 'publish-menu': FileEdit, reviews: Star, feedback: MessageCircle, waitlist: UserPlus,
+  'pos-soon': ShoppingBag, 'my-pos': Receipt, 'menu-editor': ClipboardList, 'publish-menu': FileEdit, reviews: Star, feedback: MessageCircle, waitlist: UserPlus, members: Building2,
   'export-waitlist': Download, kiosk: MonitorSmartphone, 'kiosk-poll': QrCode, links: Link2, audit: History, intro: Sparkles, a11y: Accessibility,
   branches: Building2, 'my-schedule': CalendarClock, constraints: Clock, swap: Repeat, 'checklist-open': ListChecks, 'checklist-close': ClipboardCheck,
   'report-issue': Wrench, workshop: Coffee, profile: UserRound, payslip: FileText, 'login-code': KeyRound, look: Palette, push: Bell, signout: LogOut,

@@ -21,6 +21,9 @@ import ts from 'typescript'
 const root = fileURLToPath(new URL('../', import.meta.url))
 const migrations = path.join(root, 'supabase/migrations') + path.sep
 const NEW = '20261112125033_customer_identity_foundation.sql'
+// The identity migrations that come AFTER the foundation, in order (FABLE-002 on: each has its own verifier). This file still checks
+// the foundation with all of them applied, so a later migration that weakened a foundation rule would fail here.
+const LATER = ['20261112162132_customer_org_management.sql']
 const TABLES = ['customer_members', 'customer_principals', 'customer_businesses', 'customer_business_branches', 'customer_organizations', 'customer_departments', 'customer_business_orgs', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships', 'customer_identity_audit']
 const FUNCTIONS = ['customer_access_check(uuid,text,uuid,uuid,uuid)', 'customer_access_grant(uuid,uuid,text,uuid,uuid,uuid,timestamptz,text)', 'customer_access_revoke(uuid,uuid,text)']
 const TRIGGER_FUNCTIONS = ['customer_keep_columns()', 'customer_identity_audit_keep()']
@@ -60,8 +63,9 @@ await db.exec(`
 // ------------------------------------------------------------------ the migration
 console.log('\nmigration')
 const files = readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()
-check('the identity migration is the newest file (its timestamp is later than every other)', files[files.length - 1] === NEW, files[files.length - 1])
+check('the foundation migration is later than every non-identity migration, and only the known identity migrations follow it, in order', JSON.stringify(files.slice(files.indexOf(NEW) + 1)) === JSON.stringify(LATER), files.slice(files.indexOf(NEW) + 1).join(', ') || 'nothing follows it')
 const before = {}
+const after = {}
 for (const file of files) {
   if (file === NEW) {
     before.staff = await count(`select count(*) n from public.staff`)
@@ -71,6 +75,11 @@ for (const file of files) {
   }
   try { await db.exec(readFileSync(migrations + file, 'utf8')) }
   catch (error) { check(`apply ${file}`, false, String(error.message).split('\n')[0]); console.error(error); process.exit(1) }
+  if (file === NEW) {
+    // what the foundation itself added, read before any later identity migration is applied
+    after.functions = await count(`select count(*) n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public'`)
+    after.tables = (await all(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).map((r) => r.relname)
+  }
 }
 check('all migrations apply in order', true)
 const snapshot = async () => JSON.stringify({
@@ -89,8 +98,8 @@ await db.exec(readFileSync(migrations + NEW, 'utf8'))
 const second = await snapshot()
 await db.exec(readFileSync(migrations + NEW, 'utf8'))
 check('re-applying the identity migration twice changes nothing (tables, columns, constraints, indexes, triggers, functions, grants, seed)', first === second && second === await snapshot())
-check('it added exactly the eleven identity tables and no other', JSON.stringify((await all(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).map((r) => r.relname).filter((t) => !before.tables.includes(t))) === JSON.stringify([...TABLES].sort()))
-check('it added exactly five functions (three callable, two trigger functions)', await count(`select count(*) n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public'`) === before.functions + 5)
+check('it added exactly the eleven identity tables and no other', JSON.stringify(after.tables.filter((t) => !before.tables.includes(t))) === JSON.stringify([...TABLES].sort()))
+check('it added exactly five functions (three callable, two trigger functions)', after.functions === before.functions + 5)
 check('it added no row-level policy and changed no existing one', await count(`select count(*) n from pg_policies where schemaname = 'public'`) === before.policies)
 check('it created no staff row', await count(`select count(*) n from public.staff`) === before.staff)
 
@@ -527,7 +536,10 @@ await as('service_role', async () => {
 })
 // the project's own functions (an extension's, like pgcrypto's digest, are not ours and not exposed as RPCs by name collision rules)
 check('no function name in the whole schema has two signatures (PGRST203)', await count(`select count(*) n from (select proname from pg_proc p where p.pronamespace = 'public'::regnamespace and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e') group by proname having count(*) > 1) t`) === 0)
-check('the identity functions are exactly these five, each once, and none is internal_*', (await all(`select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' f from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname like 'customer\\_%' and p.proname not like 'customer\\_waitlist%' and p.proname not like 'customer\\_feedback%' order by 1`)).map((x) => x.f).join(' | ')
+check('no function is internal_*customer*, and every customer_* function outside the waitlist and feedback domains (the later identity migrations\' too) is closed to the browser roles', await count(`select count(*) n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname like 'internal\\_%customer%'`) === 0
+  && await count(`select count(*) n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname like 'customer\\_%' and p.proname not like 'customer\\_waitlist%' and p.proname not like 'customer\\_feedback%' and (has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute'))`) === 0)
+// (the functions of the later identity migrations are listed and checked by their own verifiers: scripts/verify-identity-org-sql.mjs)
+check('the foundation\'s functions are exactly these five, each once with this signature, with every later identity migration applied', (await all(`select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' f from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname in ('customer_access_check', 'customer_access_grant', 'customer_access_revoke', 'customer_identity_audit_keep', 'customer_keep_columns') order by 1`)).map((x) => x.f).join(' | ')
   === 'customer_access_check(p_auth_user_id uuid, p_capability text, p_business_id uuid, p_organization_id uuid, p_department_id uuid) | customer_access_grant(p_actor_auth_user_id uuid, p_principal_id uuid, p_capability text, p_business_id uuid, p_organization_id uuid, p_department_id uuid, p_expires_at timestamp with time zone, p_reason text) | customer_access_revoke(p_actor_auth_user_id uuid, p_grant_id uuid, p_reason text) | customer_identity_audit_keep() | customer_keep_columns()')
 check('every parameter is p_*, and the callable functions run as the caller with an empty search path', (await all(`select unnest(p.proargnames) a from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname in ('customer_access_check','customer_access_grant','customer_access_revoke')`)).every((x) => x.a.startsWith('p_'))
   && await count(`select count(*) n from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname in ('customer_access_check','customer_access_grant','customer_access_revoke','customer_keep_columns','customer_identity_audit_keep') and not p.prosecdef and p.proconfig @> array['search_path=""']`) === 5)

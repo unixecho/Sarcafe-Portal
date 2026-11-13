@@ -37,7 +37,7 @@ const MENU_EDITOR_PREFIXES = [
 // /owner/feedback is owner-only, not menu-edit-scoped — unsolicited public
 // correspondence, sometimes with a contact address attached, and being
 // trusted with the menu has never implied being handed that.
-const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/branches', '/owner/accessibility', '/owner/feedback', '/owner/intro', '/owner/waitlist', '/owner/kiosk']
+const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists', '/owner/branches', '/owner/accessibility', '/owner/feedback', '/owner/intro', '/owner/waitlist', '/owner/kiosk', '/owner/members']
 // /owner/schedule and /staff/* are gated by isStaff() only — a delegated
 // schedule manager can be any active staff member (badge might just be
 // "barista"), so neither the editor nor the op-only check applies here.
@@ -53,6 +53,13 @@ const OP_ONLY_PREFIXES = ['/owner/dashboard', '/owner/staff', '/owner/checklists
 // board, whose credential is its link) and /api/* (every route guards itself — the
 // matcher below lets /api through and the PROTECTED_ROUTES check never matches it).
 const STAFF_ONLY_PREFIXES = ['/owner/schedule', '/staff', '/pos']
+// /benefits (FABLE-002, docs/SARCAFE_IDENTITY.md): organization administrators and department heads. They are verified Google users
+// who are NOT staff, so /benefits is deliberately in NONE of the lists above: a staff gate would send every one of them to
+// /no-access, and nothing here lets them into a staff, owner or POS path (those lists still decide those paths, unchanged).
+// /benefits/manage needs a signed-in user and sends everyone else to the benefits sign-in door (never to the staff /login);
+// what a signed-in user may see or do there is decided by their grants, on the page and again in every /api/benefits route.
+// /benefits (the door) and /benefits/invite (which says nothing before a verified sign-in) are open pages.
+const BENEFITS_SIGNED_IN_PREFIXES = ['/benefits/manage']
 const EMPLOYEE_SESSION_COOKIE = 'sarcafe_staff_session'
 
 const PROTECTED_ROUTES = [...MENU_EDITOR_PREFIXES, ...OP_ONLY_PREFIXES, ...STAFF_ONLY_PREFIXES]
@@ -163,6 +170,21 @@ export async function middleware(request: NextRequest) {
   const opProtected = !checklistBuilder && matchesAny(pathname, OP_ONLY_PREFIXES)
   const onboarding = pathname === '/staff/onboarding'
   const staffProtected = !onboarding && matchesAny(pathname, STAFF_ONLY_PREFIXES)
+
+  if (!user && matchesAny(pathname, BENEFITS_SIGNED_IN_PREFIXES)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/benefits'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+  // The benefits sign-in door is for someone who is not signed in. A signed-in visitor goes on to the page that shows what they
+  // hold (which may be nothing); being signed in still opens nothing by itself.
+  if (user && pathname === '/benefits') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/benefits/manage'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
 
   const employeeSession = !user && (pathname.startsWith('/staff') || pathname === '/pos') ? await hasValidEmployeeSession(request) : false
 

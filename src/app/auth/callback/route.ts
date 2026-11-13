@@ -6,6 +6,7 @@ import { isDeveloper } from '@/lib/checklists/developer'
 import { revokeEmployeeSession } from '@/lib/staff/session'
 import { clearBackCookie, clearLinkCookie, GOOGLE_LINK_COOKIE, LINK_BACK_COOKIE, ONBOARDING_HEADERS, tokenHash } from '@/lib/staff/invitations'
 import { POS_RETURN_COOKIE, safePosReturn } from '@/lib/staff/navigation'
+import { isBenefitsReturn } from '@/lib/identity/invitations'
 
 function safeNext(raw: string | null): string | null {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('://') || raw.includes('\\') || /[\x00-\x1f]/.test(raw)) return null
@@ -17,6 +18,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const next = safeNext(searchParams.get('next'))
   const linking = searchParams.has('link')
+  // Benefits (FABLE-002, docs/SARCAFE_IDENTITY.md): an organization's administrator or a department head is a verified Google user
+  // who is NOT staff. `next` is one of two exact pages (never a prefix, never a value carried further), and only for a plain sign-in.
+  const benefits = !linking && isBenefitsReturn(next) ? next : null
+  const signInFailed = benefits ? '/benefits?error=auth' : '/login?error=auth'
   const redirect = (path: string) => NextResponse.redirect(`${origin}${path}`, { headers: ONBOARDING_HEADERS })
   const supabase = await createServerSupabaseClient()
   const completedRedirect = async (path: string) => {
@@ -34,11 +39,11 @@ export async function GET(request: NextRequest) {
     clearBackCookie(response)
     return response
   }
-  if (!code) return linking ? failLink() : redirect('/login?error=auth')
+  if (!code) return linking ? failLink() : redirect(signInFailed)
   const { data: exchanged, error } = await supabase.auth.exchangeCodeForSession(code)
-  if (error) return linking ? failLink() : redirect('/login?error=auth')
+  if (error) return linking ? failLink() : redirect(signInFailed)
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user || !exchanged.session) return linking ? failLink() : redirect('/login?error=auth')
+  if (!user || !exchanged.session) return linking ? failLink() : redirect(signInFailed)
 
   if (linking) {
     const proof = (await cookies()).get(GOOGLE_LINK_COOKIE)?.value
@@ -53,6 +58,11 @@ export async function GET(request: NextRequest) {
     clearBackCookie(response)
     return response
   }
+
+  // A benefits sign-in ends on its own page, here: it claims no staff invitation, reads no staff row and is never sent into the staff
+  // app. Being signed in opens nothing by itself: the benefits pages and every route behind them decide by grants, and the
+  // middleware and the staff / owner / POS guards refuse this user exactly as they refuse any signed-in non-employee.
+  if (benefits) return completedRedirect(benefits)
 
   // Legacy owner-entered email invitations remain compatible. Explicit link
   // intents above never fall back to claiming a different employee by email.

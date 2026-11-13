@@ -6,7 +6,7 @@ import ts from 'typescript'
 import { createStage, assert, startChecks } from '../lib/harness.mjs'
 import { buildReport } from '../lib/report.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts', 'src/lib/identity/invitations.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -22,7 +22,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') } }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') }, invitations: get('src/lib/identity/invitations.ts') }
 }
 
 export function unitStage(root) {
@@ -348,20 +348,65 @@ export function unitStage(root) {
     assert.deepEqual(asked[0], { authUserId: ID.user, capability: 'business_admin', businessId: ID.b1, organizationId: null, departmentId: null }, 'the database is asked about the session\'s own user and exactly that scope')
     assert.deepEqual([ok.staffId, ok.grantId, ok.principalId, ok.scope], [ID.staff, null, null, business(ID.b1)], 'what a passing answer carries')
   })
-  // Nothing uses the identity module yet: it must not have changed who gets into the existing app.
-  stage.test('identity-isolated', 'זהויות: היסוד החדש לא נוגע בכניסה, בבעלים, בצוות, בקופה, בקיוסק או ברשימת ההמתנה, ואין לו מסך או נתיב', 'security', async () => {
+  // ── department-head invitations (FABLE-002): the pure rules. The database's side is scripts/verify-identity-org-sql.mjs, the
+  // routes and screens are qa/live/identity.mjs.
+  stage.test('identity-invitations', 'הזמנות: אסימון של 256 ביט עם קידומת מטרה, הקישור נושא אותו רק ב־fragment, וכתובת מוכחת רק על ידי Google', 'security', async () => {
+    const v = m.invitations
+    const token = 'dh1_' + 'aB3-_'.repeat(8) + 'xyz'
+    assert.ok(v.isInvitationToken(token), 'a well-formed token')
+    assert.deepEqual(['', null, undefined, 42, 'dh1_short', token + 'x', token.slice(0, -1), 'xx1_' + token.slice(4), token.replace('B', '+'), token.replace('B', '/'), ' ' + token, token + '?a=1', token + '#x'].filter((t) => v.isInvitationToken(t)), [], 'tokens that must be refused:')
+    const link = v.invitationLink('https://portal.example', token)
+    assert.equal(link, 'https://portal.example/benefits/invite#' + token, 'the link')
+    const url = new URL(link)
+    assert.deepEqual([url.pathname, url.search, url.hash], ['/benefits/invite', '', '#' + token], 'the token is in the fragment only: nothing a server, a log or a Referer ever sees')
+    assert.deepEqual([v.INVITATION_COOKIE_PATH, v.INVITATION_COOKIE_MAX_AGE <= 3600, v.DEFAULT_INVITATION_EXPIRY_HOURS, [...v.INVITATION_EXPIRY_HOURS]], ['/api/benefits/invite', true, 72, [24, 72, 168]], 'the cookie is short-lived and scoped; the expiry choices')
+    assert.ok(v.isInvitationExpiry(24) && !v.isInvitationExpiry(1) && !v.isInvitationExpiry('24') && !v.isInvitationExpiry(24 * 365), 'only the offered expiries')
+    assert.deepEqual([...v.BENEFITS_RETURNS], ['/benefits/manage', '/benefits/invite'], 'the two return pages')
+    assert.deepEqual(['/benefits', '/benefits/', '/benefits/manage/', '/benefits/manage/x', '/benefits/manage?x', '/benefits/invite#t', '//benefits/manage', '/owner/members', '/staff', null, undefined, ['/benefits/manage']].filter((p) => v.isBenefitsReturn(p)), [], 'returns that must be refused (an exact list, never a prefix):')
+    assert.deepEqual([v.normalizeEmail('  Head.One@Example.ORG '), v.normalizeEmail('a+b@x.co'), v.normalizeEmail('h.ead@x.co')], ['head.one@example.org', 'a+b@x.co', 'h.ead@x.co'], 'trimmed and lower-cased, never folded (two addresses are never guessed to be one person)')
+    assert.deepEqual(['', 'x', 'x@', '@x.co', 'a b@x.co', 'a@x', 'a@x..co', 'a@-x.co', 'a@x\n.co', 'a@x.co,b@y.co', '<a@x.co>', 'a'.repeat(65) + '@x.co', 'a@' + 'b'.repeat(250) + '.co', null, 5, {}].filter((e) => v.normalizeEmail(e) !== null).map(String), [], 'addresses that must be refused:')
+    assert.deepEqual([v.recipientHint('head.one@example.org'), v.recipientHint('x@y.co')], ['h***@example.org', 'x***@y.co'], 'the masked hint')
+    const user = (over = {}) => ({ email: 'head@example.org', email_confirmed_at: '2026-01-01T00:00:00Z', identities: [{ provider: 'google', identity_data: { email: 'Head@Example.org', email_verified: true } }], ...over })
+    assert.equal(v.verifiedGoogleEmail(user()), 'head@example.org', 'a Google-verified account')
+    const unproven = [
+      ['nobody', null], ['no identities', user({ identities: [] })], ['identities missing', user({ identities: undefined })],
+      ['an e-mail / password identity', user({ identities: [{ provider: 'email', identity_data: { email: 'head@example.org', email_verified: true } }] })],
+      ['Google says the address is not verified', user({ identities: [{ provider: 'google', identity_data: { email: 'head@example.org', email_verified: false } }] })],
+      ['"verified" as a string', user({ identities: [{ provider: 'google', identity_data: { email: 'head@example.org', email_verified: 'true' } }] })],
+      ['the account address is not confirmed', user({ email_confirmed_at: null })],
+      ['the Google identity is for another address', user({ identities: [{ provider: 'google', identity_data: { email: 'other@example.org', email_verified: true } }] })],
+      ['only user_metadata claims it', { email: null, email_confirmed_at: '2026-01-01T00:00:00Z', identities: [], user_metadata: { email: 'head@example.org', email_verified: true } }],
+      ['user_metadata next to another Google address', user({ email: 'other@example.org', identities: [{ provider: 'google', identity_data: { email: 'other@example.org', email_verified: true } }], user_metadata: { email: 'head@example.org' } })].slice(0, 2),
+    ]
+    assert.deepEqual(unproven.filter(([label, u]) => label !== 'user_metadata next to another Google address' && v.verifiedGoogleEmail(u) !== null).map(([label]) => label), [], 'accounts that prove no address:')
+    assert.equal(v.verifiedGoogleEmail(unproven[unproven.length - 1][1]), 'other@example.org', 'self-declared metadata never replaces the address Google verified')
+  })
+  // The identity module now has callers (FABLE-002). It still must not have changed who gets into the existing app: only the listed
+  // route families and screens may use it, and nothing outside it touches the identity tables or functions.
+  stage.test('identity-isolated', 'זהויות: רק נתיבי הזהויות והמסכים שלהם משתמשים במודול; הוא לא נוגע בצוות, בקופה, בקיוסק או ברשימת ההמתנה', 'security', async () => {
     const src = path.join(root, 'src')
     const files = []
     const walk = (dir) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(ts|tsx)$/.test(e.name)) files.push(p) } }
     walk(src)
     const rel = (f) => path.relative(root, f).split(path.sep).join('/')
     const inside = (f) => rel(f).startsWith('src/lib/identity/')
+    // who may import the module: the two API families, their pages and screens, and two exact files of the existing app
+    const ALLOWED = [/^src\/app\/api\/owner\/members\//, /^src\/app\/api\/benefits\//, /^src\/app\/owner\/members\//, /^src\/app\/benefits\//, /^src\/components\/identity\//, /^src\/app\/auth\/callback\/route\.ts$/]
     const users = files.filter((f) => !inside(f) && /['"]@\/lib\/identity\//.test(fs.readFileSync(f, 'utf8'))).map(rel)
-    assert.deepEqual(users, [], 'files outside src/lib/identity that import it (this slice has no route and no screen):')
-    const reach = files.filter((f) => !inside(f) && /customer_(members|principals|businesses|business_branches|organizations|departments|business_orgs|access_grants|org_memberships|business_memberships|identity_audit|access_check|access_grant|access_revoke)\b/.test(fs.readFileSync(f, 'utf8'))).map(rel)
+    assert.ok(users.length >= 20, `the routes and screens of this slice import it (${users.length})`)
+    assert.deepEqual(users.filter((f) => !ALLOWED.some((re) => re.test(f))), [], 'files outside the identity routes and screens that import the identity module:')
+    // the existing app's two touch points take ONE pure thing each
+    const callback = fs.readFileSync(path.join(root, 'src/app/auth/callback/route.ts'), 'utf8')
+    assert.deepEqual([...callback.matchAll(/from '@\/lib\/identity\/([^']+)'/g)].map((x) => x[1]), ['invitations'], 'the auth callback imports only the pure return-page rule')
+    assert.ok(!/customer_|createServiceRoleClient\(\)\.rpc\('customer/.test(callback), 'and never touches an identity table or function')
+    assert.ok(!/@\/lib\/identity/.test(fs.readFileSync(path.join(root, 'src/middleware.ts'), 'utf8')), 'the middleware does not import the identity module at all')
+    const reach = files.filter((f) => !inside(f) && /customer_(members|principals|businesses|business_branches|organizations|departments|business_orgs|access_grants|org_memberships|business_memberships|identity_audit|invitations|access_check|access_grant|access_revoke|org_\w+|department_\w+|invitation_\w+|manage_scopes)\b/.test(fs.readFileSync(f, 'utf8'))).map(rel)
     assert.deepEqual(reach, [], 'files outside src/lib/identity that touch the identity tables or functions:')
+    // a browser component reaches only the pure files (types are erased)
+    const client = files.filter((f) => /^\s*['"]use client['"]/.test(fs.readFileSync(f, 'utf8')))
+    assert.deepEqual(client.filter((f) => /^\s*import\s+(?!type\b)[^'"]*['"]@\/lib\/identity\/server\//m.test(fs.readFileSync(f, 'utf8'))).map(rel), [], 'browser components that import the server part of the identity module:')
     const server = files.filter((f) => rel(f).startsWith('src/lib/identity/server/'))
-    assert.ok(server.length >= 3, 'the server part exists')
+    assert.ok(server.length >= 7, 'the server part exists')
     assert.deepEqual(server.filter((f) => !/^import 'server-only'/.test(fs.readFileSync(f, 'utf8'))).map(rel), [], 'server files that do not start with server-only:')
     const pure = files.filter((f) => inside(f) && !rel(f).startsWith('src/lib/identity/server/'))
     assert.deepEqual(pure.filter((f) => /server-only|node:|supabase|next\/|process\.env/.test(fs.readFileSync(f, 'utf8'))).map(rel), [], 'pure rule files that reach a server, a secret or the database:')
