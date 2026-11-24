@@ -8,6 +8,7 @@ import { glassToast } from '@/components/glass/toast'
 import { identityApi, refusalText, uploadPhoto, when } from './api'
 import PrivatePhoto, { StatePill } from './PrivatePhoto'
 import { DetailsForm, type Details } from './RegistrationFlow'
+import MemberCard from './MemberCard'
 
 // "הבקשות שלי" (FABLE-003): the signed-in person's own applications, in every organization, and nothing of anyone else. They can see
 // the state, their own photo (through the private proxy) and change their details; a changed name, nickname or photo goes back to
@@ -20,6 +21,7 @@ export default function MyMemberships({ onLoaded }: { onLoaded?: (count: number)
   const [editing, setEditing] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [photoOf, setPhotoOf] = useState<string | null>(null)
+  const [cardOf, setCardOf] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const result = await identityApi<Mine>('/api/benefits/me')
@@ -73,6 +75,9 @@ export default function MyMemberships({ onLoaded }: { onLoaded?: (count: number)
               {m.state === 'pending' && <p className="gl-note">הבקשה ממתינה לאישור ראש המחלקה. עד אז אין הטבה.</p>}
               {m.state === 'rejected' && <p className="gl-note gl-note--bad"><CircleAlert size={16} aria-hidden="true" />הבקשה נדחתה. אפשר לתקן פרטים ולשלוח שוב.</p>}
               {m.state === 'inactive' && <p className="gl-note">החברות הושבתה על ידי מקום העבודה.</p>}
+              {m.state === 'approved' && m.open && (cardOf === m.membershipId
+                ? <MemberCard membershipId={m.membershipId} onClose={() => setCardOf(null)} />
+                : <div className="gl-card__actions"><Button variant="filled" onClick={() => { setCardOf(m.membershipId); setPhotoOf(null); setEditing(null) }} data-identity="my-card">הכרטיס שלי</Button></div>)}
               {(m.hasPendingPhoto || m.hasApprovedPhoto) && (
                 photoOf === m.membershipId
                   ? <div className="gl-inset"><PrivatePhoto url={`/api/benefits/me/${m.membershipId}/photo?which=${which}`} label="התמונה שלי" /><div className="gl-card__actions"><Button onClick={() => setPhotoOf(null)}>הסתרת התמונה</Button></div></div>

@@ -8,8 +8,9 @@ import { pathToFileURL } from 'node:url'
 
 /** The functions answered from the real database (the waitlist and feedback customer_* functions are not part of it). */
 // FABLE-003 adds registration, review, photos and the person's own applications (customer_dept_review_check, customer_my_memberships …)
-export const IDENTITY_FUNCTION = /^customer_(access|org|department|invitation|manage|dept|registration|photo|membership|my)_[a-z_]+$/
-const TABLES = ['customer_consent_events', 'customer_member_photos', 'customer_member_profiles', 'customer_registration_sessions', 'customer_registration_invites', 'customer_notices', 'customer_invitations', 'customer_identity_audit', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships',
+// FABLE-004 adds scanner grants, credentials and verification
+export const IDENTITY_FUNCTION = /^customer_(access|org|department|invitation|manage|dept|registration|photo|membership|my|scanner|credential|verification)_[a-z_]+$/
+const TABLES = ['customer_verifications', 'customer_credentials', 'customer_scanner_grants', 'customer_consent_events', 'customer_member_photos', 'customer_member_profiles', 'customer_registration_sessions', 'customer_registration_invites', 'customer_notices', 'customer_invitations', 'customer_identity_audit', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships',
   'customer_principals', 'customer_members', 'customer_business_orgs', 'customer_departments', 'customer_organizations']
 
 export async function startIdentityDb(root, { users = [], staff = [] } = {}) {

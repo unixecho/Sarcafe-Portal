@@ -1,5 +1,76 @@
 # Sarcafe — cross-agent handoff
 
+## MASTER PROMPT TO SEND TO CODEX (2026-11-24)
+
+You are Codex, architect and independent reviewer of the Sarcafe hybrid identity system. Claude (Opus 5.5, owner-authorized in place of
+Fable) has continued the implementation ahead of your reviews, on the owner's explicit instruction of 2026-11-24 ("go ahead and develop
+everything you can and prepare a master prompt for codex when you're done"). Nothing below is verified until you verify it.
+
+**Where:** worktree `C:\Users\Johnathan\Desktop\Sarcafe-identity-pc`, branch `codex/identity-pc`. Read the root `handoff.md` (the
+newest entries, top of the file), `docs/SARCAFE_IDENTITY.md` (sections FABLE-002 … FABLE-005), `docs/identity-system/09-agent-task-tracker.md`.
+**Push state:** FABLE-003 (`ff8affe`) and FABLE-004 (the commit after it) are LOCAL commits on `codex/identity-pc`, NOT pushed (the owner must say "push" first). FABLE-005 was drafted (SQL passing 89/89 in a scratch copy) but is NOT in the repository.
+
+**Review in this order, one task at a time, each against its own `docs/identity-system/fable-tasks/FABLE-00N.md`:**
+
+1. **FABLE-002 round 2** — `git diff 82e2deb 7d227ac` (handoff `cccfee7`). Your round-1 R1 (current-session Google proof) and R2 (inactive
+   organization recovery). Open points: `amr` `token_refresh` treated as neutral; the migration edited in place (never applied
+   anywhere real); the `unverified` QA assertion changed to `403 google_session_required`.
+2. **FABLE-003** (employee registration, private photos, review) — commit `ff8affe` (`git diff cccfee7 ff8affe`). Migration
+   `20261124074218_customer_employee_registration.sql`. Decisions to rule on: **D3** employees must also hold a proven Google session
+   (the registration session alone would let a department head approve themselves); **D4** owners (also in setup) never see employees
+   or their photos; **D5** `/benefits/register` private for now (the a11y widget's start-up toast measured 3.3:1 in "crema"); **D6** a
+   change of name, nickname or photo sends an approved membership back to pending at once. Also check: the photo pipeline
+   (`src/lib/identity/server/photo.ts`, sharp 0.35.5 now a direct pinned dependency), the private bucket + restrictive storage policy,
+   the proxy's hash check, the cleanup job (CRON_SECRET, deliberately not in `vercel.json`), the edits to earlier verifiers (they now
+   measure their own migration's additions; counts unchanged), the stand-in's new private storage.
+3. **FABLE-004** (revocable QR cards, scanner grants, verification) — commit the commit right after `ff8affe` (see `git log`). Migration `20261124084601_customer_identity_verification.sql`. Check: the card token is
+   opaque and superseded on every open; the membership-version binding; scanner grants only from a business administrator of the legacy
+   business, checked against the live staff row; ACTIVE agreement required; minimum shown; same-operator photo and decision; stale after
+   deactivation; the decoded QR never navigated (`parseScannedCredential`); camera tracks stopped (stub-camera test); kiosk key / code /
+   quick sessions refused.
+4. **FABLE-005** — NOT built in the repository (drafted only, outside it). Design to rule on before it is built: Check: nothing seeded, switch OFF by
+   default and read inside the redemption transaction; the money rule (`customer_benefit_amount` and its TS twin); frozen published
+   versions; idempotency bound to the request hash; duplicate sale index; daily limit with locks; deactivation between match and
+   redemption; reversal as a compensating row. **Business decision to surface to the owner:** which sale a benefit attaches to (the
+   portal's POS order vs the external terminal / HYP) — the ledger records a typed receipt reference and total and changes no payment.
+
+**How to verify (each task, then the whole):**
+- `npx tsc --noEmit -p .`
+- `npm run verify:identity-sql`, `verify:identity-org-sql`, `verify:identity-registration-sql`, `verify:identity-verification-sql`,
+  `verify:identity-benefits-sql`, `verify:schedule-sql`, `verify:checklist-sql`, `verify:onboarding-sql`, `verify:waitlist-sql`,
+  `check:identity-photo`, `check:a11y-scope`
+- `node qa/run.mjs --only identity,registration,verification,benefits` (fresh build), then the full `npm run qa` (about 25 minutes)
+- `npm run identity:concurrency-docker` (Docker; covers FABLE-001/002 races only — the new functions have no two-session race test yet)
+- Independent probes of your own (as in your FABLE-002 round 1): wrong-tenant ids, sessions opened another way, a forwarded registration
+  link, a second operator, replayed and altered redemption requests, a swapped storage object.
+- Negative controls Claude ran for FABLE-003 (seven deliberate migration breaks, each caught) are in the handoff; please repeat a few.
+
+**Claude's own results (to check, not to trust):** FABLE-003: full `npm run qa` dashboard 182/183 (the one failure, a 360 px overflow, fixed and rerun 14/14), kiosk 38/38; SQL 185; photo 27; seven negative controls caught. FABLE-004: see its handoff entry (live verification stage unfinished when committed).
+
+**Not done / not proven:** Linux runs (Docker not started this session), real Supabase Auth / Storage / bucket policy, a real Google
+sign-in, a real camera / phone / BDF tablet, GitHub Actions (commits carry `[skip ci]`), two-session races for FABLE-003…005, the
+production database (all identity migrations NOT applied: no ledger rows). FABLE-006…012 not started.
+
+**Safety held:** no push without the owner (see above), no deployment, no production query or write, no message / e-mail / SMS / push, no
+Wallet pass, no notice published, no policy published, the redemption switch OFF, synthetic people and images only, `main` and
+`codex/identity-plan` untouched, Ayeka Bar untouched.
+
+**What to return:** for each task VERIFIED or CHANGES REQUESTED with numbered items (R1, R2 …), your rulings on D3–D6 and on the
+sale-attachment question, and whether FABLE-006 may start. Write your verdict as the newest entry in root `handoff.md` and the tracker,
+and end with a "PROMPT TO SEND TO CLAUDE" section for the corrections.
+
+## Claude (Opus 5.5) addendum, 2026-11-24: FABLE-004 (revocable QR cards, scanner grants, verification) built and tested — READY FOR CODEX REVIEW (not verified); migration NOT APPLIED TO PRODUCTION
+
+- **Model / authority:** as in the FABLE-003 entry below (owner's instruction of 2026-11-24; built on top of the unreviewed FABLE-002 and FABLE-003).
+- **Base:** `ff8affe` (FABLE-003). This entry is part of the FABLE-004 commit.
+- **What was built:** `docs/SARCAFE_IDENTITY.md`, section "FABLE-004". Migration `supabase/migrations/20261124084601_customer_identity_verification.sql` (3 tables, 10 functions + 2 trigger functions), `src/lib/identity/{verification.ts, server/verification.ts, server/verification-handlers.ts}`, `requireScanner` in `server/guard.ts`, 7 route files, `/staff/benefits/scan` (+ loading), screens `MemberCard` (in "הבקשות שלי"), `ScanVerifier`, `OwnerScanners` (on `/owner/members`).
+- **Test changes to earlier work:** `scripts/lib/identity-pglite.mjs` gains `upTo` (a verifier can build the database only up to its own migration); `verify-identity-registration-sql` now measures its migration's additions right after it and checks only functions that existed before it (later migrations add their own); the `LATER` lists of the three earlier verifiers name the new file; unit stage gains `identity-registration-rules` and `identity-qr-parse`; stand-in answers the new functions; static guard list knows `requireScanner`.
+- **Found and fixed while testing:** `customer_verification_scan` read an unassigned record for an unknown card (`record "v_view" is not assigned yet`): restructured so every unusable card falls to the one refusal; a branch-name assumption in the verifier (the seed maps two branches already).
+- **Commands and results:** tsc exit 0; SQL verifiers (Windows): identity 229, org 183, registration 185, verification 89, all 0 failed; unit 31/31; static 10/10; live (fresh build) identity and registration stages passed, verification stage 6+ tests passed (owner grants, card, scan matrix, not-a-card, flow, outage, card UI) and was STILL RUNNING (stub-camera scan test, five looks) when this commit was made because the usage limit was reached: its final result is NOT recorded. Full `npm run qa` was NOT run on this commit.
+- **Not run / limits:** a real camera (a canvas stream stands in), the BDF tablet, a real phone; Linux; two-session races; Codex review.
+- **Safety:** no production query or write; migration NOT APPLIED TO PRODUCTION; no push; no deployment; no scanner grant anywhere real; synthetic people only.
+- **Exact next step:** Codex reviews FABLE-002 round 2, then FABLE-003, then FABLE-004 (this commit).
+
 ## Claude (Opus 5.5) addendum, 2026-11-24: FABLE-003 (employee registration, private photos, review) built and tested — READY FOR CODEX REVIEW (not verified); migration NOT APPLIED TO PRODUCTION; built AHEAD of the FABLE-002 verdict on the owner's instruction
 
 - **Model:** Claude Opus 5.5, `claude-opus-5-5` (self-reported by the session's system context). Owner-authorized replacement for Fable.

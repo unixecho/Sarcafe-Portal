@@ -6,7 +6,7 @@ import ts from 'typescript'
 import { createStage, assert, startChecks } from '../lib/harness.mjs'
 import { buildReport } from '../lib/report.mjs'
 
-const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts', 'src/lib/identity/invitations.ts', 'src/lib/identity/session-proof.ts']
+const MODULES = ['src/lib/tools/index.ts', 'src/lib/tools/search.ts', 'src/lib/tools/badges.ts', 'src/lib/team-message/rules.ts', 'src/lib/push/notice-tone.ts', 'src/lib/qa/report.ts', 'src/lib/staff/access.ts', 'src/lib/checklists/developer.ts', 'src/lib/nav/dock.ts', 'src/lib/kiosk/device-settings.ts', 'src/lib/kiosk/remote-rules.ts', 'src/lib/kiosk/pin-record.ts', 'src/lib/kiosk/stock.ts', 'src/lib/kiosk/enroll.ts', 'src/lib/kiosk/menu-edit.ts', 'src/lib/qa/digest.ts', 'src/lib/identity/types.ts', 'src/lib/identity/rules.ts', 'src/lib/identity/access.ts', 'src/lib/identity/invitations.ts', 'src/lib/identity/session-proof.ts', 'src/lib/identity/registration.ts', 'src/lib/identity/verification.ts']
 
 function load(root) {
   const out = path.join(root, 'qa/.cache/unit')
@@ -22,7 +22,7 @@ function load(root) {
   }
   const req = createRequire(path.join(out, 'x.js'))
   const get = (rel) => req(`./${rel.replace(/\.ts$/, '.js')}`)
-  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') }, invitations: get('src/lib/identity/invitations.ts'), proof: get('src/lib/identity/session-proof.ts') }
+  return { tools: get('src/lib/tools/index.ts'), search: get('src/lib/tools/search.ts'), badges: get('src/lib/tools/badges.ts'), rules: get('src/lib/team-message/rules.ts'), tone: get('src/lib/push/notice-tone.ts'), report: get('src/lib/qa/report.ts'), dock: get('src/lib/nav/dock.ts'), remote: { ...get('src/lib/kiosk/remote-rules.ts'), ...get('src/lib/kiosk/pin-record.ts') }, digest: get('src/lib/qa/digest.ts'), stock: get('src/lib/kiosk/stock.ts'), enroll: get('src/lib/kiosk/enroll.ts'), menuEdit: get('src/lib/kiosk/menu-edit.ts'), identity: { ...get('src/lib/identity/rules.ts'), ...get('src/lib/identity/access.ts') }, invitations: get('src/lib/identity/invitations.ts'), proof: get('src/lib/identity/session-proof.ts'), registration: get('src/lib/identity/registration.ts'), verification: get('src/lib/identity/verification.ts') }
 }
 
 export function unitStage(root) {
@@ -356,6 +356,28 @@ export function unitStage(root) {
   })
   // ── department-head invitations (FABLE-002): the pure rules. The database's side is scripts/verify-identity-org-sql.mjs, the
   // routes and screens are qa/live/identity.mjs.
+  // ── FABLE-003 / FABLE-004: the pure rules of registration and of the card a staff member scans
+  stage.test('identity-registration-rules', 'רישום: אסימון קישור וחלון בקידומת מטרה, שמות נקיים בלי איחוד, והחלטות לפי מצב', 'security', async () => {
+    const r = m.registration
+    assert.ok(r.isRegistrationToken('er1_' + 'A'.repeat(43)) && !r.isRegistrationToken('dh1_' + 'A'.repeat(43)) && !r.isRegistrationToken('er1_short'), 'a registration link token has its own prefix (never a department-head token)')
+    assert.ok(r.isSessionToken('rs1_' + 'b'.repeat(43)) && !r.isSessionToken('er1_' + 'b'.repeat(43)), 'and a registration session secret another one')
+    assert.equal(r.registrationLink('https://portal.example', 'er1_x'), 'https://portal.example/benefits/register#er1_x', 'the link carries its token in the fragment')
+    assert.deepEqual(['  דנה   בן  ', '', 'a'.repeat(61), 'abc', 42].map((v) => r.normalizeName(v, r.NAME_MAX)), ['דנה בן', null, null, null, null], 'names: trimmed, inner spaces made one, bounded, no control characters')
+    assert.equal(r.normalizeName('Dana', 60) === r.normalizeName('dana', 60), false, 'nothing is folded: two spellings stay two (no automatic matching)')
+    assert.deepEqual(Object.fromEntries(Object.entries(r.DECISIONS_FOR).map(([k, v]) => [k, [...v]])), { pending: ['approve', 'reject'], approved: ['deactivate'], inactive: ['reactivate'], rejected: [] }, 'which decision each state allows')
+  })
+  stage.test('identity-qr-parse', 'כרטיס: QR נושא רק אסימון אטום; כתובת, קבלה, טקסט או אסימון בתוך טקסט אינם כרטיס ואינם נפתחים', 'security', async () => {
+    const v = m.verification
+    const token = 'sc1_' + 'Z'.repeat(43)
+    assert.equal(v.parseScannedCredential(token), token, 'a card')
+    assert.equal(v.parseScannedCredential(`  ${token}
+`), token, 'whitespace around it is allowed')
+    const bad = [`https://evil.example/${token}`, `x${token}`, `${token} y`, 'javascript:alert(1)', '/order/' + 'a'.repeat(40), 'sc1_short', 'er1_' + 'Z'.repeat(43), 'Z'.repeat(500), null, 7, { token }]
+    assert.deepEqual(bad.map((b) => v.parseScannedCredential(b)), bad.map(() => null), 'everything else is not a card')
+    assert.equal(v.displayName({ firstName: 'דנה', lastName: 'בדיקה', nickname: 'דני' }), 'דנה בדיקה (דני)', 'the name the operator sees')
+    assert.ok(v.CARD_LIFETIME_SECONDS <= 24 * 3600 && v.VERIFICATION_SECONDS === 120 && v.MATCH_SECONDS === 300, 'the lifetimes the database enforces')
+  })
+
   stage.test('identity-invitations', 'הזמנות: אסימון של 256 ביט עם קידומת מטרה, הקישור נושא אותו רק ב־fragment, וכתובת מוכחת רק על ידי Google', 'security', async () => {
     const v = m.invitations
     const token = 'dh1_' + 'aB3-_'.repeat(8) + 'xyz'

@@ -493,11 +493,64 @@ rejected / replaced photos and rejected applications' names after the published 
 - Switching a department off does not revoke its registration links (they stop working while it is off, like FABLE-002's invitations).
 - No erasure on request yet (rejected / replaced data is removed only by the published retention).
 
+## FABLE-004: revocable QR cards and staff verification with a photo comparison
+
+Status: **built and tested locally (2026-11-24, Claude Opus 5.5, owner-authorized, ahead of Codex's FABLE-002 and FABLE-003 reviews);
+NOT reviewed by Codex; migration `20261124084601_customer_identity_verification.sql` is NOT applied to production.**
+
+### What it adds
+- Three tables: `customer_scanner_grants` (who may scan, for one business and optionally one branch), `customer_credentials` (the digest
+  of each card QR, bound to the membership AND its version, at most a day), `customer_verifications` (one scan: operator, business,
+  branch, card, membership version, two minutes; a match is valid five minutes for one redemption).
+- Ten `customer_*` functions (service role only, one signature each) and two trigger functions (a revoked grant or card stays revoked; a
+  decided verification is final except matched → consumed / expired / stale).
+- API: `/api/benefits/me/[membershipId]/card` (the employee), `/api/benefits/verify/{scope,scan,[id]/photo,[id]/decide}` (the operator,
+  guard `requireScanner`), `/api/owner/members/scanners/*` (the owner). Pages: `/staff/benefits/scan` (new, glass, inside the staff app);
+  "הכרטיס שלי" in "הבקשות שלי"; "הרשאות סריקה" on `/owner/members`.
+
+### The rules
+- **The card QR carries an opaque token only** (`sc1_` + 32 random bytes): no name, phone, organization, department, photo or URL. Only
+  its digest is stored. Opening the card makes a fresh token (15 minutes, renewed a minute before the end while on screen) and revokes
+  every earlier one, so a screenshot of an older card is dead; hiding the card or the page going to the background drops it. A review
+  decision or a change of details bumps the membership version: every card made before it stops working at once.
+- **Scanning needs an explicit grant** from a business administrator (the owner): the staff member, every branch or one. Being staff,
+  a general manager, the owner, signed in, on a code or quick session, or holding the kiosk key is never enough. The grant is checked
+  against the LIVE staff row (a switched-off staff member stops at once). Only the legacy business (Sarcafe, whose staff these are) can
+  grant today.
+- **A scan opens a verification** only for an approved membership at the card's version, of an organization whose agreement with the
+  scanning business is ACTIVE (draft or suspended: refused), with its department and organization on and an approved photo. The
+  operator sees the minimum (first and last name, nickname, organization, department) and the photo; every refusal is one sentence
+  that says nothing about the person (and one audit row with the operator's ids only).
+- **The operator compares the person with the photo and decides** (match / mismatch / cancel); no face recognition. Only the same
+  operator reads the photo and decides; a membership change in between makes the match "stale"; an operator has one open verification
+  at a time; at most 30 scans a minute. Taking a grant away ends that operator's open and matched verifications.
+- **The decoded QR text is never navigated to or shown**: the route accepts exactly one token shape (`parseScannedCredential`) and
+  refuses everything else before the database is asked.
+- **The scanner screen** starts the camera only while scanning, stops every track on a find, on cancel, when the page is hidden or left,
+  decodes a downscaled frame with jsQR loaded on demand, and clears the person and the photo (revoking its object URL) on a decision,
+  after two minutes, or when the page is hidden. A late answer for an earlier person is dropped.
+
+### Tests
+- `npm run verify:identity-verification-sql` (PGlite, part of `npm run qa`): 89 checks — the migration (newest, idempotent, three tables,
+  twelve functions, earlier ones unchanged, nothing seeded), privileges, grants (who may give, the live staff row, branch fit), cards
+  (own approved membership only, digest only, version bound, superseded, hidden, expired), scans (no grant, wrong branch, unknown,
+  minimum shown, bound context), photo and decision (same operator only, stale after deactivation, expired, once), agreements (draft,
+  suspended), department off, the scan limit, the rows' own rules.
+- Unit `identity-qr-parse` and `identity-registration-rules`.
+- QA stage `verification` (`qa/live/identity-verification.mjs`): who grants, the card, the scan matrix (kiosk key, code and quick
+  sessions), not-a-card codes, the whole flow with a superseded card and deactivation in between, outages; the card in a browser (QR
+  on a canvas only, gone when hidden), the scanner with a stub camera whose tracks must end, five looks.
+
+### Limits
+- A real camera, the BDF tablet and a real phone screen were not used (a canvas stream stands in for the camera).
+- Scanning is for Sarcafe's own staff only (the legacy business); another business's operators need a later design.
+- The card is a web page today; Wallet passes (FABLE-006/007) reuse the same credential rules with their own token storage.
+
 ## Before it is applied to production (not done, not authorized)
 
-Three migrations, in this order: `20261112125033_customer_identity_foundation.sql`, `20261112162132_customer_org_management.sql`, then
-`20261124074218_customer_employee_registration.sql` (run the "Check after applying" query at the end of each and record each ledger
-row). Before that: `npm run verify:identity-sql`, `verify:identity-org-sql`, `verify:identity-registration-sql`, `verify:schedule-sql`,
+Four migrations, in this order: `20261112125033_customer_identity_foundation.sql`, `20261112162132_customer_org_management.sql`,
+`20261124074218_customer_employee_registration.sql`, then `20261124084601_customer_identity_verification.sql` (run the "Check after applying" query at the end of each and record each ledger
+row). Before that: `npm run verify:identity-sql`, `verify:identity-org-sql`, `verify:identity-registration-sql`, `verify:identity-verification-sql`, `verify:schedule-sql`,
 `verify:checklist-sql`, `verify:onboarding-sql`, and a duplicate-name check in `pg_proc`.
 
 

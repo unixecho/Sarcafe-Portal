@@ -76,7 +76,8 @@ export async function throttleWrites(authUserId: string) {
  */
 export async function throttleCredential(
   kind: 'invite-create' | 'invite-exchange' | 'invite-status' | 'invite-accept'
-    | 'register-create' | 'register-exchange' | 'register-open' | 'register-status' | 'register-photo' | 'register-submit' | 'member-change' | 'photo-read',
+    | 'register-create' | 'register-exchange' | 'register-open' | 'register-status' | 'register-photo' | 'register-submit' | 'member-change' | 'photo-read'
+    | 'card-issue' | 'verify-scan',
   subject: string, max: number, windowSeconds: number) {
   if (!(await checkCredentialRateLimit(`identity-${kind}:${credentialFingerprint(subject)}`, max, windowSeconds))) throw RateLimited()
 }

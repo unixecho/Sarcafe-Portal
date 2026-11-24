@@ -82,7 +82,7 @@ const call = (fn, args) => as('service_role', async () => (await one(`select pub
 
 check('all migrations apply in order', true)
 // Later identity migrations (FABLE-003 and on) may follow it; nothing else may come between or after them.
-const LATER = ['20261124074218_customer_employee_registration.sql']
+const LATER = ['20261124074218_customer_employee_registration.sql', '20261124084601_customer_identity_verification.sql']
 check('the new migration comes right after the foundation, and only the known later identity migrations follow it, in order', files[files.indexOf(NEW) - 1] === FOUNDATION && JSON.stringify(files.slice(files.indexOf(NEW) + 1)) === JSON.stringify(LATER), files.slice(files.indexOf(FOUNDATION)).join(', '))
 const snapshot = async () => JSON.stringify({
   columns: await all(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name like 'customer\\_%' order by 1, 2`),

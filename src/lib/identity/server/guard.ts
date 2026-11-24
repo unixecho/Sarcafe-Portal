@@ -122,6 +122,24 @@ export async function requireOrganizationAdmin(organizationId: string): Promise<
  * another department, an administrator of another organization and anyone else get the same 403: an organization's employees and
  * their photos are reviewed by the organization's own people. The function behind every call rechecks the actor again.
  */
+/**
+ * /api/benefits/verify/*: an operator on a PROVEN Google session (requireBenefitsUser: an employee-code or quick session, a password
+ * session and the shared kiosk key never pass). The scanner grant itself (business, branch, a live staff row) is decided by the
+ * database on every call (customer_scanner_check), so this guard gives nothing by itself. The business is this deployment's constant
+ * (OWNER_BUSINESS_SLUG), never a value from a request or a cookie.
+ */
+export async function requireScanner(): Promise<IdentityActor & { businessId: string }> {
+  const actor = await requireBenefitsUser()
+  let business: { id: string } | null
+  try {
+    business = await findActiveBusinessBySlug(OWNER_BUSINESS_SLUG)
+  } catch {
+    throw identityUnavailable()
+  }
+  if (!business) throw identityUnavailable()
+  return { ...actor, businessId: business.id }
+}
+
 export async function requireDepartmentReviewer(organizationId: string, departmentId: string): Promise<IdentityActor & { via: 'department_head' | 'organization_admin' }> {
   const actor = await requireBenefitsUser()
   if (!isUuid(organizationId) || !isUuid(departmentId)) throw BadRequest()

@@ -44,10 +44,23 @@ const hex = () => randomBytes(32).toString('hex')
 // ------------------------------------------------------------------ the migrations
 section('migration')
 const before = {}
+// what the schema was right AFTER this migration (taken when the next file starts, or at the end when it is the newest), so the
+// tables and functions a LATER identity migration adds are not counted against this one
+const after = {}
+const picture = async (db) => ({
+  tables: (await db.query(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).rows.map((r) => r.relname),
+  functions: (await db.query(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).rows.map((r) => r.proname),
+  grants: (await db.query(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' and table_name like 'customer\\_%' order by 1, 2, 3`)).rows,
+  policies: Number((await db.query(`select count(*) n from pg_policies where schemaname = 'public'`)).rows[0].n),
+  rows: Number((await db.query(`select (select count(*) from public.customer_notices) + (select count(*) from public.customer_registration_invites) + (select count(*) from public.customer_member_photos) n`)).rows[0].n),
+})
+let previous = null
 let opened
 try {
   opened = await openIdentityDb(root, {
     onFile: async (file, db) => {
+      if (previous === NEW) Object.assign(after, await picture(db))
+      previous = file
       if (file !== NEW) return
       before.tables = (await db.query(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).rows.map((r) => r.relname)
       before.functions = (await db.query(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).rows.map((r) => r.proname)
@@ -59,6 +72,7 @@ try {
   })
 } catch (error) { check('all migrations apply in order', false, String(error.message)); console.error(error); process.exit(1) }
 const { db, files } = opened
+if (!after.tables) Object.assign(after, await picture(db))
 const one = async (sql, params = []) => (await db.query(sql, params)).rows[0]
 const all = async (sql, params = []) => (await db.query(sql, params)).rows
 const count = async (sql, params = []) => Number((await one(sql, params)).n)
@@ -69,7 +83,9 @@ const as = async (role, fn) => { await db.exec(`set role ${role}`); try { return
 const call = (fn, args) => as('service_role', async () => (await one(`select public.${fn}(${Object.keys(args).map((key, i) => `${key} => $${i + 1}`).join(', ')}) r`, Object.values(args))).r)
 
 check('all migrations apply in order', true)
-check('the new migration is the newest file and comes right after FABLE-002', files[files.length - 1] === NEW && files[files.length - 2] === PREVIOUS, files.slice(-2).join(', '))
+// later identity migrations (FABLE-004 on) may follow it; this file checks what THIS migration added at the moment it was applied
+const LATER = ['20261124084601_customer_identity_verification.sql']
+check('the new migration comes right after FABLE-002, and only the known later identity migrations follow it', files[files.indexOf(NEW) - 1] === PREVIOUS && JSON.stringify(files.slice(files.indexOf(NEW) + 1)) === JSON.stringify(LATER), files.slice(files.indexOf(PREVIOUS)).join(', '))
 const snapshot = async () => JSON.stringify({
   columns: await all(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name like 'customer\\_%' order by 1, 2`),
   constraints: await all(`select conrelid::regclass::text t, conname, pg_get_constraintdef(oid) d from pg_constraint where conrelid::regclass::text like '%customer\\_%' order by 1, 2`),
@@ -87,16 +103,13 @@ await db.exec(sqlText)
 const second = await snapshot()
 await db.exec(sqlText)
 check('re-applying the new migration twice changes nothing (columns, constraints, indexes, triggers, functions, privileges, bucket, policies, rows)', first === second && second === await snapshot())
-const tablesNow = (await all(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).map((r) => r.relname)
-check('it added exactly six tables', same(tablesNow.filter((t) => !before.tables.includes(t)), TABLES), tablesNow.filter((t) => !before.tables.includes(t)).join(', '))
-const functionsNow = (await all(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).map((r) => r.proname)
-check('it added exactly sixteen functions: the fourteen callable ones and two trigger functions', same(functionsNow.filter((f) => !before.functions.includes(f)), [...FUNCTIONS.map((f) => f.split('(')[0]), ...TRIGGER_FUNCTIONS].sort()), functionsNow.filter((f) => !before.functions.includes(f)).join(', '))
-check('every earlier identity function is byte for byte what it was (signature, body, privileges)', same(await all(`select p.proname, md5(p.prosrc) body, pg_get_function_identity_arguments(p.oid) a, p.proacl::text acl from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname like 'customer\\_%' and p.proname <> all($1) order by 1, 3`, [[...FUNCTIONS.map((f) => f.split('(')[0]), ...TRIGGER_FUNCTIONS]]), before.identity))
-check('it changed no privilege on any earlier identity table', same(await all(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' and table_name like 'customer\\_%' and table_name <> all($1) order by 1, 2, 3`, [TABLES]), before.grants))
+check('it added exactly six tables', same(after.tables.filter((t) => !before.tables.includes(t)), TABLES), after.tables.filter((t) => !before.tables.includes(t)).join(', '))
+check('it added exactly sixteen functions: the fourteen callable ones and two trigger functions', same(after.functions.filter((f) => !before.functions.includes(f)), [...FUNCTIONS.map((f) => f.split('(')[0]), ...TRIGGER_FUNCTIONS].sort()), after.functions.filter((f) => !before.functions.includes(f)).join(', '))
+check('every earlier identity function is byte for byte what it was (signature, body, privileges)', same(await all(`select p.proname, md5(p.prosrc) body, pg_get_function_identity_arguments(p.oid) a, p.proacl::text acl from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = any($1) order by 1, 3`, [[...new Set(before.identity.map((f) => f.proname))]]), before.identity))
+check('it changed no privilege on any earlier identity table', same(after.grants.filter((g) => !TABLES.includes(g.table_name)), before.grants))
 check('customer_org_memberships keeps its columns (only a unique index on (organization_id, id) is added for the scoped foreign keys)', same(await all(`select column_name, data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'customer_org_memberships' order by 1`), before.membershipColumns)
   && await count(`select count(*) n from pg_indexes where tablename = 'customer_org_memberships' and indexname = 'customer_org_memberships_scope_idx'`) === 1)
-check('no row-level policy in public, no seed row, no notice published (collection is closed until the business publishes one)', await count(`select count(*) n from pg_policies where schemaname = 'public'`) === before.policies
-  && await count(`select (select count(*) from public.customer_notices) + (select count(*) from public.customer_registration_invites) + (select count(*) from public.customer_member_photos) n`) === 0)
+check('no row-level policy in public, no seed row, no notice published (collection is closed until the business publishes one)', after.policies === before.policies && after.rows === 0)
 const code = sqlText.replace(/^\s*--.*$/gm, '')
 check('the migration text never writes staff, auth, POS, the waitlist or customer_invitations, and redefines no earlier function', !/insert\s+into\s+(public\.)?(staff|customer_waitlist|pos_|customer_invitations)|insert\s+into\s+auth\.|update\s+(public\.)?(staff|pos_|customer_invitations)\b|alter\s+table\s+(public\.)?(staff|branches|customer_waitlist|customer_invitations)\b/i.test(code)
   && !/create\s+(or\s+replace\s+)?function\s+public\.customer_(access_check|access_grant|access_revoke|org_[a-z_]+|department_[a-z_]+|invitation_[a-z_]+|manage_scopes|keep_columns|identity_audit_keep|invitations_final)\s*\(/i.test(code))

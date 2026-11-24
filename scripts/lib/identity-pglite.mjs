@@ -28,12 +28,13 @@ export const migrationFiles = (root) => readdirSync(path.join(root, 'supabase/mi
 
 /**
  * A fresh database with the migrations applied in order. `onFile(file, db)` runs BEFORE each file is applied (to take a
- * "before" picture); a migration that fails throws with its file name.
+ * "before" picture); a migration that fails throws with its file name. `upTo` (a file name): stop after that file, so a verifier
+ * sees exactly what its own migration added even when later migrations exist (FABLE-004 on).
  */
-export async function openIdentityDb(root, { onFile } = {}) {
+export async function openIdentityDb(root, { onFile, upTo } = {}) {
   const db = new PGlite({ extensions: { pgcrypto } })
   await db.exec(SUPABASE_STANDINS)
-  const files = migrationFiles(root)
+  const files = migrationFiles(root).filter((file) => !upTo || file <= upTo)
   for (const file of files) {
     if (onFile) await onFile(file, db)
     try { await db.exec(readFileSync(path.join(root, 'supabase/migrations', file), 'utf8')) }

@@ -8,6 +8,7 @@ import Pill from '@/components/glass/Pill'
 import { glassToast } from '@/components/glass/toast'
 import { identityApi, refusalText } from './api'
 import OrganizationManager from './OrganizationManager'
+import OwnerScanners from './OwnerScanners'
 
 // /owner/members (FABLE-002): the organizations that have an agreement with Sarcafe. The owner creates one (it is born with a draft
 // agreement), opens it, and sets it up while it has no administrator of its own. An organization that has its own administrator is
@@ -103,6 +104,7 @@ export default function OwnerOrganizations() {
             ))}
           </ul>
         )}
+      <OwnerScanners />
     </div>
   )
 }
