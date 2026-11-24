@@ -6,6 +6,8 @@
 //   control (HTTP, test only):  POST /__qa/fault  { mode: 'none'|'down'|'slow'|'error', ms?, tables? }
 //                               POST /__qa/missing { tables: [...], functions: [...] }   (a migration that is not applied)
 //                               GET  /__qa/db/<table>        POST /__qa/reset
+//                               GET  /__qa/storage            the stored objects' keys, sizes and sha-256 (FABLE-003)
+//                               POST /__qa/storage { put: { key, base64 } } | { delete: key }   (a test replaces or loses an object)
 import http from 'node:http'
 import { randomUUID, createHash, generateKeyPairSync, sign as signBytes } from 'node:crypto'
 
@@ -133,8 +135,9 @@ function project(rows, select) {
 // `rpcBackend` ({ handles(name), rpc(name, args) }): functions answered by something real instead of the table above. The identity
 // functions are answered by a real Postgres with the real migrations (identity-db.mjs).
 export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpcBackend = null } = {}) {
-  const state = { db: {}, tokens: new Map(), limits: new Map(), fault: { mode: 'none' }, missingTables: new Set(), missingFns: new Set(), requests: 0, byPath: new Map() }
-  const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set() }
+  // storage: private buckets only (FABLE-003's customer-identity-photos), keyed "<bucket>/<path>"; only the SERVICE key reaches them
+  const state = { db: {}, tokens: new Map(), limits: new Map(), fault: { mode: 'none' }, missingTables: new Set(), missingFns: new Set(), requests: 0, byPath: new Map(), storage: new Map() }
+  const reset = () => { state.db = structuredClone(seed()); state.tokens = new Map(Object.entries(state.db.__tokens ?? {})); delete state.db.__tokens; state.limits.clear(); state.fault = { mode: 'none' }; state.missingTables = new Set(state.db.__missingTables ?? []); delete state.db.__missingTables; state.missingFns = new Set(); state.storage = new Map() }
   reset()
   const table = (name) => (state.db[name] ??= [])
   const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_enrollments: [['code_hash']], kiosk_pairings: [['code'], ['token_hash']], kiosk_devices: [['id'], ['slug']], ...keys }
@@ -259,7 +262,7 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpc
     return null
   }
 
-  async function handle(req, res, body) {
+  async function handle(req, res, body, raw) {
     const url = new URL(req.url, 'http://x')
     const path = url.pathname
     // control plane
@@ -275,6 +278,16 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpc
       }
       // per endpoint ("/auth/v1/user", "/rest/v1/staff", …), so a test can count round trips; POST {clear:true} starts a new count
       if (path === '/__qa/jwks' || path === '/__qa/.well-known/jwks') return json(res, 200, { keys: [{ ...OIDC.publicKey.export({ format: 'jwk' }), kid: OIDC_KID, alg: 'RS256', use: 'sig' }] })
+      if (path === '/__qa/storage') {
+        if (req.method === 'POST') {
+          const b = JSON.parse(body || '{}')
+          if (b.put) state.storage.set(b.put.key, { bytes: Buffer.from(b.put.base64, 'base64'), contentType: 'image/jpeg' })
+          if (b.delete) state.storage.delete(b.delete)
+          if (b.clear) state.storage.clear()
+          return json(res, 200, { ok: true })
+        }
+        return json(res, 200, [...state.storage.entries()].map(([key, o]) => ({ key, size: o.bytes.length, sha256: createHash('sha256').update(o.bytes).digest('hex'), contentType: o.contentType })))
+      }
       if (path === '/__qa/stats') { if (body && JSON.parse(body).clear) { state.byPath.clear(); state.requests = 0 } return json(res, 200, { requests: state.requests, byPath: Object.fromEntries(state.byPath) }) }
       return json(res, 404, {})
     }
@@ -302,7 +315,31 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpc
     }
     if (path.startsWith('/auth/v1/logout')) { res.writeHead(204); return res.end() }
     if (path.startsWith('/auth/v1/')) return json(res, 404, { msg: 'not in stand-in' })
-    if (path.startsWith('/storage/v1/')) return json(res, 404, { statusCode: '404', error: 'not_found', message: 'not in stand-in' })
+    if (path.startsWith('/storage/v1/')) {
+      // private storage, as the real service answers it: only the service role key; no public URL, no listing, no signed URL here
+      const bearer = (req.headers.authorization ?? '').replace(/^Bearer /, '')
+      if (bearer !== 'qa-service-role-key') return json(res, 400, { statusCode: '403', error: 'Unauthorized', message: 'new row violates row-level security policy' })
+      const object = path.match(/^\/storage\/v1\/object\/([\w-]+)\/(.+)$/)
+      if (object && req.method === 'POST') {
+        const key = `${object[1]}/${decodeURIComponent(object[2])}`
+        if (state.storage.has(key) && req.headers['x-upsert'] !== 'true') return json(res, 400, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' })
+        state.storage.set(key, { bytes: Buffer.from(raw), contentType: String(req.headers['content-type'] ?? 'application/octet-stream') })
+        return json(res, 200, { Key: key, Id: randomUUID() })
+      }
+      if (object && req.method === 'GET') {
+        const found = state.storage.get(`${object[1]}/${decodeURIComponent(object[2])}`)
+        if (!found) return json(res, 400, { statusCode: '404', error: 'not_found', message: 'Object not found' })
+        res.writeHead(200, { 'content-type': found.contentType, 'content-length': found.bytes.length })
+        return res.end(found.bytes)
+      }
+      const bucket = path.match(/^\/storage\/v1\/object\/([\w-]+)$/)
+      if (bucket && req.method === 'DELETE') {
+        const prefixes = JSON.parse(body || '{}').prefixes ?? []
+        const gone = prefixes.filter((p) => state.storage.delete(`${bucket[1]}/${p}`)).map((p) => ({ name: p, bucket_id: bucket[1] }))
+        return json(res, 200, gone)
+      }
+      return json(res, 404, { statusCode: '404', error: 'not_found', message: 'not in stand-in' })
+    }
     if (path.startsWith('/realtime/')) return json(res, 404, {})
 
     // RPC
@@ -383,9 +420,9 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {}, rpc
   }
 
   const server = http.createServer((req, res) => {
-    let body = ''
-    req.on('data', (c) => { body += c })
-    req.on('end', () => { handle(req, res, body).catch((err) => { try { json(res, 500, { message: String(err?.message ?? err) }) } catch { /* socket gone */ } }) })
+    const chunks = []
+    req.on('data', (c) => { chunks.push(c) })
+    req.on('end', () => { const raw = Buffer.concat(chunks); handle(req, res, raw.toString('utf8'), raw).catch((err) => { try { json(res, 500, { message: String(err?.message ?? err) }) } catch { /* socket gone */ } }) })
   })
   await new Promise((resolve) => server.listen(port, '127.0.0.1', resolve))
   const actual = server.address().port

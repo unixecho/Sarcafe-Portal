@@ -23,7 +23,7 @@ const migrations = path.join(root, 'supabase/migrations') + path.sep
 const NEW = '20261112125033_customer_identity_foundation.sql'
 // The identity migrations that come AFTER the foundation, in order (FABLE-002 on: each has its own verifier). This file still checks
 // the foundation with all of them applied, so a later migration that weakened a foundation rule would fail here.
-const LATER = ['20261112162132_customer_org_management.sql']
+const LATER = ['20261112162132_customer_org_management.sql', '20261124074218_customer_employee_registration.sql']
 const TABLES = ['customer_members', 'customer_principals', 'customer_businesses', 'customer_business_branches', 'customer_organizations', 'customer_departments', 'customer_business_orgs', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships', 'customer_identity_audit']
 const FUNCTIONS = ['customer_access_check(uuid,text,uuid,uuid,uuid)', 'customer_access_grant(uuid,uuid,text,uuid,uuid,uuid,timestamptz,text)', 'customer_access_revoke(uuid,uuid,text)']
 const TRIGGER_FUNCTIONS = ['customer_keep_columns()', 'customer_identity_audit_keep()']

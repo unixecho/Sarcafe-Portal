@@ -999,7 +999,7 @@ export function identityStage(root, live) {
     assert.deepEqual(files.filter((f) => /#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(text(f).replace(/\/\/.*$/gm, ''))).map(rel), [], 'files that hard-code a colour (the looks own the colours):')
     assert.deepEqual(files.filter((f) => /localStorage|sessionStorage|document\.cookie/.test(text(f))).map(rel), [], 'files that keep anything in browser storage:')
     assert.deepEqual(files.filter((f) => /console\.(log|info|debug)\(/.test(text(f))).map(rel), [], 'files that log (a token must never reach a log):')
-    for (const route of ['src/app/owner/members', 'src/app/benefits', 'src/app/benefits/manage', 'src/app/benefits/invite']) {
+    for (const route of ['src/app/owner/members', 'src/app/benefits', 'src/app/benefits/manage', 'src/app/benefits/invite', 'src/app/benefits/register']) {
       assert.ok(fs.existsSync(path.join(root, route, 'page.tsx')) && fs.existsSync(path.join(root, route, 'loading.tsx')), `${route} has a page and a loading skeleton`)
     }
     const used = files.map(text).join('\n')

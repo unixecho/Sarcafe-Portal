@@ -7,6 +7,8 @@ import type { ManageScopes } from '@/lib/identity/server/organizations'
 import Pill from '@/components/glass/Pill'
 import { identityApi, refusalText } from './api'
 import BenefitsReauth, { reauthReason, type ReauthReason } from './BenefitsReauth'
+import DepartmentMembers from './DepartmentMembers'
+import MyMemberships from './MyMemberships'
 import OrganizationManager from './OrganizationManager'
 
 // /benefits/manage (FABLE-002): what the signed-in person holds, and nothing else. An organization's administrator manages that
@@ -19,6 +21,9 @@ export default function BenefitsManage() {
   const [problem, setProblem] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [reauth, setReauth] = useState<ReauthReason | null>(null)
+  // FABLE-003: the person's own applications (an employee who holds no grant sees only these); null until they are known
+  const [ownCount, setOwnCount] = useState<number | null>(null)
+  const onOwn = useCallback((count: number) => setOwnCount(count), [])
 
   const load = useCallback(async () => {
     const result = await identityApi<ManageScopes>('/api/benefits/manage/scopes')
@@ -56,15 +61,19 @@ export default function BenefitsManage() {
 
   if (scopes.organizations.length === 0 && scopes.departments.length === 0) {
     return (
-      <section className="gl-surf gl-card" data-identity="no-access">
+      <div className="gl-list">
+        <MyMemberships onLoaded={onOwn} />
+        {ownCount === 0 && <section className="gl-surf gl-card" data-identity="no-access">
         <h2 className="gl-card__title"><ShieldOff size={18} aria-hidden="true" />אין לחשבון הזה הרשאות ניהול</h2>
         <p className="gl-note">החשבון שאיתו התחברתם אינו מנהל ארגון ואינו ראש מחלקה. אם קיבלתם קישור הזמנה, פתחו אותו והתחברו עם כתובת ה־Google שאליה נשלח. אפשר גם להתנתק מהתפריט שלמעלה ולהתחבר עם חשבון אחר.</p>
-      </section>
+      </section>}
+      </div>
     )
   }
 
   return (
     <div className="gl-list" data-identity="benefits-manage">
+      <MyMemberships />
       {scopes.departments.length > 0 && (
         <section className="gl-field" aria-label="המחלקות שלי">
           <h2 className="sr-only">המחלקות שלי</h2>
@@ -73,7 +82,7 @@ export default function BenefitsManage() {
               <li key={department.departmentId} className="gl-surf gl-card" data-identity="my-department" data-department={department.departmentId}>
                 <h3 className="gl-card__title"><Users size={18} aria-hidden="true" /><span>{department.departmentName}</span><Pill tone="ok">ראש מחלקה</Pill></h3>
                 <p className="gl-note" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 size={15} aria-hidden="true" /><span>{department.organizationName}</span></p>
-                <p className="gl-note">אתם ראש המחלקה הזו. רישום העובדים ואישורם ייפתחו כאן בשלב הבא; כרגע אין פעולות נוספות.</p>
+                <DepartmentMembers organizationId={department.organizationId} departmentId={department.departmentId} departmentName={department.departmentName} />
               </li>
             ))}
           </ul>
@@ -91,7 +100,7 @@ export default function BenefitsManage() {
             </div></div>
           )}
           {open && scopes.organizations.some((organization) => organization.organizationId === open) && (
-            <OrganizationManager apiBase="/api/benefits/manage" organizationId={open} onChanged={() => void load()} />
+            <OrganizationManager apiBase="/api/benefits/manage" organizationId={open} onChanged={() => void load()} reviewEmployees />
           )}
         </section>
       )}

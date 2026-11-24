@@ -372,11 +372,133 @@ FABLE-002 has **CHANGES REQUESTED**, not verification. The existing full QA suit
   owner family, quick and code codes, staff dashboard unchanged), `org-recovery` (API), `ui-reauth` (no loop, five looks, invite
   page then Google acceptance), `ui-recovery` (switch off → still there → reload → switch on, two organizations, five looks).
 
+## FABLE-003: employee registration, private photos and review
+
+Status: **built and tested locally (2026-11-24, Claude Opus 5.5, owner-authorized while FABLE-002 waits for Codex); NOT reviewed by
+Codex; migration `20261124074218_customer_employee_registration.sql` is NOT applied to production.** It is built ON TOP of the
+FABLE-002 corrections that Codex has not verified yet: if Codex changes FABLE-002, this slice may need to follow.
+
+### What it adds
+- Six tables: `customer_notices` (the versioned text a person accepts, with the retention the business decided), `customer_registration_invites`
+  (single-use links, digests only), `customer_registration_sessions` (short, bound to one link AND one signed-in user),
+  `customer_member_profiles` (first / last name and nickname, as THIS organization holds them), `customer_member_photos` (facts of a photo;
+  the image is in private storage), `customer_consent_events` (append-only evidence). One unique index on `customer_org_memberships
+  (organization_id, id)` for the scoped foreign keys; no other earlier object changes (the verifiers compare every earlier identity function
+  byte for byte).
+- Fourteen `customer_*` functions (service role only, one signature each) and two trigger functions; a private bucket
+  `customer-identity-photos` (public = false, JPEG only, 2 MB) with a RESTRICTIVE storage policy that denies every browser role.
+- API: `/api/benefits/register/*` (the employee), `/api/benefits/me/*` (the employee's own applications),
+  `/api/benefits/manage/organizations/[o]/departments/[d]/{registrations,members}/*` (a reviewer), `/api/cron/identity-photo-cleanup`
+  (CRON_SECRET; **not scheduled**). Pages: `/benefits/register` (new), and `/benefits/manage` gains "הבקשות שלי" and the department's employees.
+
+### Who may do what
+| Who | May |
+|---|---|
+| The department's head (live `department_head` grant on exactly that pair) | make / end that department's registration links, list its applications and members, see their photos, approve / reject / deactivate / reactivate |
+| An administrator of the organization | the same, for every department of it |
+| The employee (a proven Google session, `requireBenefitsUser`) | open a link into a registration session, upload one photo, submit one application per organization; see and change their own applications; see their own photo |
+| A business owner (also in setup), a general manager, a head of another department, another organization, anyone else | nothing here (`403`, the same answer for "not yours" and "does not exist") |
+
+`customer_dept_review_check` is the one rule (both the organization and the department must be on). **Owners never review an
+organization's employees and never see their photos** (decision for Codex, D4 below). The route names the organization and
+department; the review and photo functions refuse a membership of another department even for someone who reviews both.
+
+### The flow
+1. **A link.** A reviewer makes a link (`er1_` + 32 random bytes; 3 / 7 / 14 days; at most 100 open per department). Only
+   `sha256("sarcafe:identity:registration:link:v1:" + token)` is stored. It is answered once and copied by hand; nothing is sent.
+   `<origin>/benefits/register#<token>`: the token is in the fragment.
+2. **The page** removes the fragment at once and posts the token to `/api/benefits/register/exchange` (public, format check only,
+   fail-closed limiter), which sets an HttpOnly cookie for `/api/benefits/register` (30 minutes).
+3. **Google sign-in** (return page `/benefits/register` added to `BENEFITS_RETURNS`). Then `/open` (`customer_registration_open`):
+   the link must be open, its department and organization on, its issuer still a reviewer of that department (a link carries no
+   more authority than its issuer has now; it is usable again if that authority returns before it expires, like FABLE-002's
+   invitations), the person not the issuer, not already registered in that organization ('conflict'), and **a notice must be
+   published** ('closed' otherwise). It makes a registration session (`rs1_` secret in a second HttpOnly cookie, one hour; the table
+   refuses more than two) bound to the link and the person, ending their earlier one on the same link. At most ten opens per link.
+4. **The photo** (`/photo`, the raw file, at most 8 MB, read as a bounded stream): `src/lib/identity/server/photo.ts` checks the
+   bytes' own signature (JPEG / PNG / WebP), decodes it completely with sharp 0.35.5 (now a pinned dependency) within 40 megapixels,
+   refuses SVG / HTML / PDF / GIF / HEIC, a lying signature, animation, truncation, less than 200 px, then turns it upright and makes
+   a NEW JPEG of at most 1024 px with no metadata at all (no EXIF, GPS, camera, ICC, XMP), and checks the result once more. The row is
+   written first (`customer_photo_intent`, state `uploading`; the DATABASE makes the object path `org/<organization>/<photo id>.jpg`),
+   then the object is uploaded (never overwriting).
+5. **The application** (`/submit`, `customer_registration_submit`, one transaction): the notice the person accepted must be the one
+   published now ('stale'); the principal is created when they have none (with a member), an operator principal (a head, an
+   administrator) gets a separate member for the application; a PENDING membership of that department, the names, the photo linked,
+   the consent event, the link consumed, the session used, the audit (ids only). The same session or link cannot submit twice.
+6. **Review** (`customer_membership_review` with the version the screen showed): approve (pending → approved; the waiting photo
+   becomes THE photo), reject (reason required), deactivate (reason required, at once), reactivate. Nobody reviews their own
+   application (checked by principal AND by auth user). Every decision bumps the version and writes `membership.<decision>`. That
+   version is the extension point for later credentials and Wallet passes: they bind to it, so a decision invalidates them at once.
+7. **Changes by the employee** (`/api/benefits/me/[id]`, `customer_membership_resubmit`): a changed first / last name, nickname or a
+   new photo sends the membership back to PENDING (version + 1); the approved photo is kept until its replacement is approved. An
+   inactive membership is changed only by a reviewer. A rejected one may be corrected and sent again.
+
+### Photos stay private
+- Read only through the proxy routes, after `customer_photo_open` rechecks the viewer (a reviewer of THAT department, named in the
+  path, or the applicant), and every read is an audit row `photo.read`. No signed URL, no public URL, no listing, ever.
+- The proxy recomputes the stored object's sha-256 and refuses one that does not match the database (a swapped object is not shown).
+- Responses: `image/jpeg`, `private, no-store`, `Pragma: no-cache`, `no-referrer`, `nosniff`, `Cross-Origin-Resource-Policy: same-origin`,
+  `Content-Security-Policy: default-src 'none'; sandbox`. Refusals are JSON with the same private headers (`next.config.mjs` covers
+  `/api/benefits/*`). The service worker (`public/sw.js`) has no fetch handler, so it caches nothing.
+- The screens fetch the photo with `cache: 'no-store'`, show it from an object URL that is revoked when it leaves the screen (closed,
+  another person, a decision, the page hidden, unmount); a late answer for a photo no longer asked for is dropped. No `next/image`.
+
+### Notice and retention (nothing invented)
+**Collection is closed until the business publishes a notice.** No notice is seeded and there is no screen for it yet: the text and
+the retention must be written and approved by the business, then inserted as `published` (SQL editor, or a later owner tool). The
+retention is stored WITH the notice (`{ "rejected_days": n, "replaced_photo_days": n }`); a missing key means nothing of that kind is
+deleted by age. The cleanup job (when scheduled) deletes uploads that never became an application after one hour (always), and
+rejected / replaced photos and rejected applications' names after the published number of days.
+
+### Tests
+- `npm run verify:identity-registration-sql` (PGlite, part of `npm run qa`): 185 checks — the migration (newest, idempotent, exactly six
+  tables and sixteen functions, every earlier identity function byte for byte, no earlier privilege changed), privileges and the bucket,
+  who reviews (16 cases, an owner in setup included), links, the session (closed, draft, expiry, revoked, switched off, issuer without authority and back, limits),
+  photos (the path made by the database, limits, another tenant refused by the table), the application (stale notice, names,
+  replay, one per organization, two people with the same names stay two, an operator applying), review (self-review, ID swaps,
+  stale, conflicts, every decision, retention dates), the list, photo reads (scope, self, rejected), changes sent back to review,
+  own data, cleanup, the rows' own rules, nobody became staff.
+- Negative controls (2026-11-24, a scratch copy, never the repository): seven deliberate breaks of the migration each make
+  `verify:identity-registration-sql` fail: self-review allowed, a stale notice accepted, collection open without a notice, review not
+  matched to the route's department, a photo read across departments, an owner in setup reviewing, a change keeping the approval.
+- `npm run check:identity-photo` (part of `npm run qa`): 27 checks on crafted images with the real sharp.
+- `verify:identity-sql` and `verify:identity-org-sql` now measure their own migration's additions at the moment it was applied (later
+  identity migrations may follow); counts unchanged (229, 183).
+- QA stage `registration` (`qa/live/identity-registration.mjs`): closed collection, the reviewer matrix, the link and the session over
+  HTTP, photo checks over HTTP (stored bytes inspected), review with the proxy's headers, a tampered object, the employee's own
+  changes, an approved employee is not staff, storage outage and the cleanup job, a missing migration; the screens in a real browser
+  (registration, review with the photo, five looks, 360 px).
+
+### Decisions for Codex (FABLE-003)
+- **D3, employees sign in with Google.** The plan's registration session is kept (short, one link, one person), and the applicant must
+  also hold a proven Google session. It is what makes "nobody reviews their own application" checkable, and gives the employee a way
+  back to their own application and photo. Without it, a department head could register and approve themselves. Cost: an employee
+  needs a Google account.
+- **D4, owners do not review employees.** Only the organization's own people (its administrator, the department's head) see employees'
+  names and photos; Sarcafe owners do not, also in setup.
+- **D5, `/benefits/register` is private for now** (no customer widget or skip link, like the three administration pages of D2). It was
+  first made customer-facing; the widget's own start-up toast then measured 3.3:1 in the light "crema" look of the /benefits look
+  system. The page itself is tested for contrast in five looks, keyboard use and RTL. Employees are members of the public, so this
+  should be revisited (adapt the widget's colours to the five looks, then classify it customer-facing).
+- **D6, a change of details sends an approved membership back to pending at once** (it gives nothing until re-approved), rather than
+  keeping the old approved details active beside the pending ones. The approved photo is kept for the reviewer to compare.
+
+### Limits of this slice
+- The notice text, its language set (Hebrew only today) and the retention durations are business inputs; nothing collects until then.
+- The cleanup route is not scheduled (no `vercel.json` entry): schedule it with the release.
+- Real Supabase Storage semantics (bucket policy, service-role-only download) are not proven by the stand-in; a test project is needed.
+- The reviewer list shows at most 100 people per state on one page (no paging control in the screen yet).
+- A registration link is not bound to a person (employees may have no address known to the head); the reviewer's visual check is the
+  authority. A forwarded link lets someone else apply, and the head rejects them.
+- Switching a department off does not revoke its registration links (they stop working while it is off, like FABLE-002's invitations).
+- No erasure on request yet (rejected / replaced data is removed only by the published retention).
+
 ## Before it is applied to production (not done, not authorized)
 
-Two migrations, in this order: `20261112125033_customer_identity_foundation.sql`, then `20261112162132_customer_org_management.sql`
-(run the "Check after applying" query at the end of each and record both ledger rows). Before that: `npm run verify:identity-sql`,
-`verify:identity-org-sql`, `verify:schedule-sql`, `verify:checklist-sql`, `verify:onboarding-sql`, and a duplicate-name check in `pg_proc`.
+Three migrations, in this order: `20261112125033_customer_identity_foundation.sql`, `20261112162132_customer_org_management.sql`, then
+`20261124074218_customer_employee_registration.sql` (run the "Check after applying" query at the end of each and record each ledger
+row). Before that: `npm run verify:identity-sql`, `verify:identity-org-sql`, `verify:identity-registration-sql`, `verify:schedule-sql`,
+`verify:checklist-sql`, `verify:onboarding-sql`, and a duplicate-name check in `pg_proc`.
 
 
 Run `verify:identity-sql` with the three mandatory verifiers and `verify:waitlist-sql`, check `pg_proc` for duplicate names, run the

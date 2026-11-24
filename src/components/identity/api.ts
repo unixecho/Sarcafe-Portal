@@ -1,6 +1,6 @@
 // How the identity screens talk to their API routes: one fetch, one way to turn a refusal into words. Browser-safe (no secrets).
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string }
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; code: string; message?: string }
 
 export async function identityApi<T>(url: string, init?: { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown }): Promise<ApiResult<T>> {
   try {
@@ -11,9 +11,21 @@ export async function identityApi<T>(url: string, init?: { method?: 'GET' | 'POS
       headers: init?.body === undefined ? undefined : { 'content-type': 'application/json' },
       body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     })
-    const data = (await response.json().catch(() => null)) as (T & { error?: { code?: string } }) | null
+    const data = (await response.json().catch(() => null)) as (T & { error?: { code?: string; message?: string } }) | null
     if (response.ok && data) return { ok: true, data }
-    return { ok: false, status: response.status, code: data?.error?.code ?? '' }
+    return { ok: false, status: response.status, code: data?.error?.code ?? '', message: data?.error?.message }
+  } catch {
+    return { ok: false, status: 0, code: 'offline' }
+  }
+}
+
+/** A photo, sent as the raw file (FABLE-003). The server checks and re-encodes it; its refusal says why in plain words (`message`). */
+export async function uploadPhoto(url: string, file: File): Promise<ApiResult<{ photoId: string; width: number; height: number }>> {
+  try {
+    const response = await fetch(url, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'content-type': file.type || 'application/octet-stream' }, body: file })
+    const data = (await response.json().catch(() => null)) as ({ photoId: string; width: number; height: number } & { error?: { code?: string; message?: string } }) | null
+    if (response.ok && data?.photoId) return { ok: true, data }
+    return { ok: false, status: response.status, code: data?.error?.code ?? '', message: data?.error?.message }
   } catch {
     return { ok: false, status: 0, code: 'offline' }
   }
@@ -26,6 +38,9 @@ export function refusalText(result: { status: number; code: string }): string {
   if (result.code === 'self_invite') return 'אי אפשר להזמין את עצמכם.'
   if (result.code === 'conflict') return 'השם הזה כבר קיים, או שהפעולה כבר בוצעה.'
   if (result.code === 'limit') return 'הגעתם למספר המרבי.'
+  if (result.code === 'stale') return 'הפרטים השתנו מאז שנפתח המסך. טענו מחדש ונסו שוב.'
+  if (result.code === 'closed') return 'ההרשמה עדיין לא נפתחה.'
+  if (result.code === 'registration_unavailable') return 'הקישור אינו זמין. בקשו קישור חדש ממי ששלח לכם אותו.'
   if (result.status === 400) return 'הפרטים שהוזנו אינם תקינים.'
   if (result.status === 403) return 'אין לכם הרשאה לפעולה הזו.'
   if (result.status === 429) return 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.'

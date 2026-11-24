@@ -26,8 +26,9 @@ export const INVITATION_COOKIE_MAX_AGE = 30 * 60
  */
 export const invitationLink = (origin: string, token: string) => `${origin}/benefits/invite#${token}`
 
-/** The only places a benefits sign-in may return to (the auth callback accepts exactly these, never a prefix). */
-export const BENEFITS_RETURNS = ['/benefits/manage', '/benefits/invite'] as const
+/** The only places a benefits sign-in may return to (the auth callback accepts exactly these, never a prefix). FABLE-003 adds the
+ *  employee registration page. */
+export const BENEFITS_RETURNS = ['/benefits/manage', '/benefits/invite', '/benefits/register'] as const
 export const isBenefitsReturn = (path: unknown): path is (typeof BENEFITS_RETURNS)[number] =>
   typeof path === 'string' && (BENEFITS_RETURNS as readonly string[]).includes(path)
 

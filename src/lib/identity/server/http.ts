@@ -54,10 +54,14 @@ export async function readIdentityBody<S extends z.ZodTypeAny>(request: Request,
  * A refusal from the database as a response. 'denied' is ONE answer for "not yours", "no such organization / department /
  * invitation" and "not allowed": the caller never learns which. 'conflict' and 'limit' are said only after authority has passed.
  */
-export function refuse(error: 'denied' | 'bad_request' | 'conflict' | 'limit'): never {
+export function refuse(error: 'denied' | 'bad_request' | 'conflict' | 'limit' | 'stale' | 'closed'): never {
   if (error === 'bad_request') throw BadRequest()
   if (error === 'conflict') throw new ApiError(409, 'conflict', 'כבר קיים או כבר טופל.')
   if (error === 'limit') throw new ApiError(409, 'limit', 'הגעתם למספר המרבי.')
+  // FABLE-003: the version or the notice the screen showed is no longer the current one (reload and look again)
+  if (error === 'stale') throw new ApiError(409, 'stale', 'הפרטים השתנו מאז שנפתח המסך. טענו מחדש ונסו שוב.')
+  // FABLE-003: registration is closed (no published notice)
+  if (error === 'closed') throw new ApiError(409, 'closed', 'ההרשמה עדיין לא נפתחה.')
   throw Forbidden()
 }
 
@@ -70,6 +74,9 @@ export async function throttleWrites(authUserId: string) {
  * Anything that makes, trades or spends an invitation token. Fails CLOSED: when the limiter cannot say an attempt is allowed, the
  * attempt is refused (429) and nothing is created or consumed.
  */
-export async function throttleCredential(kind: 'invite-create' | 'invite-exchange' | 'invite-status' | 'invite-accept', subject: string, max: number, windowSeconds: number) {
+export async function throttleCredential(
+  kind: 'invite-create' | 'invite-exchange' | 'invite-status' | 'invite-accept'
+    | 'register-create' | 'register-exchange' | 'register-open' | 'register-status' | 'register-photo' | 'register-submit' | 'member-change' | 'photo-read',
+  subject: string, max: number, windowSeconds: number) {
   if (!(await checkCredentialRateLimit(`identity-${kind}:${credentialFingerprint(subject)}`, max, windowSeconds))) throw RateLimited()
 }

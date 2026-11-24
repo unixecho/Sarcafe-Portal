@@ -9,6 +9,7 @@ import Pill from '@/components/glass/Pill'
 import Seg from '@/components/glass/Seg'
 import { glassToast } from '@/components/glass/toast'
 import { identityApi, refusalText, when, type ApiResult } from './api'
+import DepartmentMembers from './DepartmentMembers'
 
 // One organization for someone who may manage it (FABLE-002): its departments, each department's heads and open invitations, and
 // the invitation form. The same screen serves the owner (apiBase /api/owner/members) and an organization's own administrator
@@ -33,7 +34,9 @@ function Confirm({ label, sure, busy, onConfirm }: { label: string; sure: string
     : <Button disabled={busy} onClick={() => setArmed(true)}>{label}</Button>
 }
 
-export default function OrganizationManager({ apiBase, organizationId, onChanged }: { apiBase: string; organizationId: string; onChanged?: () => void }) {
+// `reviewEmployees` (FABLE-003): the organization's own administrator (the benefits family) also reviews each department's employees
+// here. The owner pages never pass it: a business owner, also in setup, does not see an organization's employees or their photos.
+export default function OrganizationManager({ apiBase, organizationId, onChanged, reviewEmployees = false }: { apiBase: string; organizationId: string; onChanged?: () => void; reviewEmployees?: boolean }) {
   const base = `${apiBase}/organizations/${organizationId}`
   const [detail, setDetail] = useState<OrganizationDetail | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -44,6 +47,7 @@ export default function OrganizationManager({ apiBase, organizationId, onChanged
   const [hours, setHours] = useState<Record<string, string>>({})
   const [fresh, setFresh] = useState<Fresh | null>(null)
   const [copied, setCopied] = useState(false)
+  const [employeesOf, setEmployeesOf] = useState<string | null>(null)
   const generation = useRef(0)
 
   const load = useCallback(async () => {
@@ -181,7 +185,14 @@ export default function OrganizationManager({ apiBase, organizationId, onChanged
               </div>
             )}
 
+            {reviewEmployees && on && active && (
+              employeesOf === department.id
+                ? <DepartmentMembers organizationId={org.id} departmentId={department.id} departmentName={department.name} />
+                : null
+            )}
+
             <div className="gl-card__actions">
+              {reviewEmployees && on && active && <Button onClick={() => setEmployeesOf(employeesOf === department.id ? null : department.id)} data-identity="department-employees">{employeesOf === department.id ? 'סגירת עובדי המחלקה' : 'עובדי המחלקה'}</Button>}
               {on
                 ? active && <Confirm label="כיבוי המחלקה" sure="לכבות? ראשי המחלקה יאבדו גישה" busy={busy} onConfirm={() => void act(() => identityApi(`${base}/departments/${department.id}`, { method: 'PATCH', body: { state: 'inactive' } }), 'המחלקה כובתה.')} />
                 : <Button disabled={busy || !active} onClick={() => void act(() => identityApi(`${base}/departments/${department.id}`, { method: 'PATCH', body: { state: 'active' } }), 'המחלקה הופעלה.')}>הפעלת המחלקה</Button>}

@@ -103,7 +103,7 @@ export async function startLive(root, { log = console.log, reuseBuild = false } 
     if (opts.body !== undefined) { headers['content-type'] ??= 'application/json'; }
     if (opts.origin === true) headers.origin = base
     else if (typeof opts.origin === 'string') headers.origin = opts.origin
-    const res = await fetch(base + pathname, { method: opts.method ?? 'GET', headers, body: opts.body === undefined ? undefined : typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body), redirect: 'manual' })
+    const res = await fetch(base + pathname, { method: opts.method ?? 'GET', headers, body: opts.body === undefined ? undefined : typeof opts.body === 'string' || opts.body instanceof Uint8Array ? opts.body : JSON.stringify(opts.body), redirect: 'manual' })
     const text = await res.text()
     let json = null
     try { json = JSON.parse(text) } catch { /* not JSON */ }

@@ -6,10 +6,11 @@ import { createStage, assert } from '../lib/harness.mjs'
 import { run, npm, NODE, packageBin } from '../lib/exec.mjs'
 
 // Every route must name one of these guards, or be on PUBLIC with its reason. A new unguarded route fails the suite.
-const GUARDS = /requireOwner|requireMenuEditor|requireAnyMenuEditor|resolveStaffIdentity|requireStaffIdentity|qaCallerAllowed|requireSchedule\w*|requirePublishedScheduleViewer|bearerMatches|privateStaffRoute|messengerFor|resolveTabletWrite|requireOrderStaff|performOrderDispatch|performDispatch|keysMatch|requirePos\w*|requireStaff\w*|requireOwnerBusiness|requireOrganizationAdmin|requireBenefitsUser|getUser\(\)/
+const GUARDS = /requireOwner|requireMenuEditor|requireAnyMenuEditor|resolveStaffIdentity|requireStaffIdentity|qaCallerAllowed|requireSchedule\w*|requirePublishedScheduleViewer|bearerMatches|privateStaffRoute|messengerFor|resolveTabletWrite|requireOrderStaff|performOrderDispatch|performDispatch|keysMatch|requirePos\w*|requireStaff\w*|requireOwnerBusiness|requireOrganizationAdmin|requireBenefitsUser|requireDepartmentReviewer|getUser\(\)/
 export const PUBLIC_ROUTES = {
   'auth/quick-login': 'the six-digit sign-in itself: credential rate limit, fails closed',
   'benefits/invite/exchange': 'the invitation page trades the token from the link\'s fragment for an HttpOnly cookie before anyone is signed in: same-origin, strict body, format check only (the database is not asked and nothing about the invitation is said), credential rate limit that fails closed; seeing or accepting an invitation needs a verified sign-in (status, accept)',
+  'benefits/register/exchange': 'the employee registration page trades the token of the link (from the URL fragment) for an HttpOnly cookie before anyone is signed in (FABLE-003): same-origin, strict body, format check only (the database is not asked, nothing about the link is said), credential rate limit that fails closed; opening the link, the photo and the application need a proven Google sign-in (open, status, photo, submit)',
   'board/[token]': 'the cart board, opened by its secret token',
   'branches': 'public branch list for the portal (names, hours, links)',
   'feedback': 'customer suggestion box: GET answers only { enabled }, POST is same-origin, size-capped and rate limited',

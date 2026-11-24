@@ -367,7 +367,7 @@ export function unitStage(root) {
     assert.deepEqual([url.pathname, url.search, url.hash], ['/benefits/invite', '', '#' + token], 'the token is in the fragment only: nothing a server, a log or a Referer ever sees')
     assert.deepEqual([v.INVITATION_COOKIE_PATH, v.INVITATION_COOKIE_MAX_AGE <= 3600, v.DEFAULT_INVITATION_EXPIRY_HOURS, [...v.INVITATION_EXPIRY_HOURS]], ['/api/benefits/invite', true, 72, [24, 72, 168]], 'the cookie is short-lived and scoped; the expiry choices')
     assert.ok(v.isInvitationExpiry(24) && !v.isInvitationExpiry(1) && !v.isInvitationExpiry('24') && !v.isInvitationExpiry(24 * 365), 'only the offered expiries')
-    assert.deepEqual([...v.BENEFITS_RETURNS], ['/benefits/manage', '/benefits/invite'], 'the two return pages')
+    assert.deepEqual([...v.BENEFITS_RETURNS], ['/benefits/manage', '/benefits/invite', '/benefits/register'], 'the three return pages (FABLE-003 adds the employee registration page)')
     assert.deepEqual(['/benefits', '/benefits/', '/benefits/manage/', '/benefits/manage/x', '/benefits/manage?x', '/benefits/invite#t', '//benefits/manage', '/owner/members', '/staff', null, undefined, ['/benefits/manage']].filter((p) => v.isBenefitsReturn(p)), [], 'returns that must be refused (an exact list, never a prefix):')
     assert.deepEqual([v.normalizeEmail('  Head.One@Example.ORG '), v.normalizeEmail('a+b@x.co'), v.normalizeEmail('h.ead@x.co')], ['head.one@example.org', 'a+b@x.co', 'h.ead@x.co'], 'trimmed and lower-cased, never folded (two addresses are never guessed to be one person)')
     assert.deepEqual(['', 'x', 'x@', '@x.co', 'a b@x.co', 'a@x', 'a@x..co', 'a@-x.co', 'a@x\n.co', 'a@x.co,b@y.co', '<a@x.co>', 'a'.repeat(65) + '@x.co', 'a@' + 'b'.repeat(250) + '.co', null, 5, {}].filter((e) => v.normalizeEmail(e) !== null).map(String), [], 'addresses that must be refused:')
@@ -516,7 +516,8 @@ export function unitStage(root) {
     const rel = (f) => path.relative(root, f).split(path.sep).join('/')
     const inside = (f) => rel(f).startsWith('src/lib/identity/')
     // who may import the module: the two API families, their pages and screens, and two exact files of the existing app
-    const ALLOWED = [/^src\/app\/api\/owner\/members\//, /^src\/app\/api\/benefits\//, /^src\/app\/owner\/members\//, /^src\/app\/benefits\//, /^src\/components\/identity\//, /^src\/app\/auth\/callback\/route\.ts$/]
+    // FABLE-003 adds the one scheduled job of the identity system: the photo cleanup (CRON_SECRET, not scheduled until release)
+    const ALLOWED = [/^src\/app\/api\/owner\/members\//, /^src\/app\/api\/benefits\//, /^src\/app\/owner\/members\//, /^src\/app\/benefits\//, /^src\/components\/identity\//, /^src\/app\/auth\/callback\/route\.ts$/, /^src\/app\/api\/cron\/identity-photo-cleanup\/route\.ts$/]
     const users = files.filter((f) => !inside(f) && /['"]@\/lib\/identity\//.test(fs.readFileSync(f, 'utf8'))).map(rel)
     assert.ok(users.length >= 20, `the routes and screens of this slice import it (${users.length})`)
     assert.deepEqual(users.filter((f) => !ALLOWED.some((re) => re.test(f))), [], 'files outside the identity routes and screens that import the identity module:')

@@ -7,8 +7,9 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** The functions answered from the real database (the waitlist and feedback customer_* functions are not part of it). */
-export const IDENTITY_FUNCTION = /^customer_(access|org|department|invitation|manage)_[a-z_]+$/
-const TABLES = ['customer_invitations', 'customer_identity_audit', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships',
+// FABLE-003 adds registration, review, photos and the person's own applications (customer_dept_review_check, customer_my_memberships …)
+export const IDENTITY_FUNCTION = /^customer_(access|org|department|invitation|manage|dept|registration|photo|membership|my)_[a-z_]+$/
+const TABLES = ['customer_consent_events', 'customer_member_photos', 'customer_member_profiles', 'customer_registration_sessions', 'customer_registration_invites', 'customer_notices', 'customer_invitations', 'customer_identity_audit', 'customer_access_grants', 'customer_org_memberships', 'customer_business_memberships',
   'customer_principals', 'customer_members', 'customer_business_orgs', 'customer_departments', 'customer_organizations']
 
 export async function startIdentityDb(root, { users = [], staff = [] } = {}) {
@@ -31,7 +32,7 @@ export async function startIdentityDb(root, { users = [], staff = [] } = {}) {
     /** One RPC, as PostgREST would run it: the service role, named arguments. Throws the database's own error. */
     rpc: (name, args) => exclusive(async () => {
       const keys = Object.keys(args)
-      if (!IDENTITY_FUNCTION.test(name) || keys.some((key) => !/^p_[a-z_]+$/.test(key))) throw Object.assign(new Error('not an identity function'), { code: 'PGRST202' })
+      if (!IDENTITY_FUNCTION.test(name) || keys.some((key) => !/^p_[a-z0-9_]+$/.test(key))) throw Object.assign(new Error('not an identity function'), { code: 'PGRST202' })
       await db.exec('set role service_role')
       try { return (await db.query(`select public.${name}(${keys.map((key, i) => `${key} => $${i + 1}`).join(', ')}) r`, keys.map((key) => args[key]))).rows[0].r }
       finally { await db.exec('reset role') }

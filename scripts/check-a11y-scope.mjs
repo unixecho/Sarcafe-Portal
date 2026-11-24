@@ -41,10 +41,13 @@ check('no private folder is a customer prefix', PRIVATE.every((n) => !S.isCustom
 // administrators' / heads' page and the invitation page. The plan (docs/identity-system/02-architecture.md) also puts invited
 // EMPLOYEES of an organization under /benefits (/benefits/register); they are not a small known team, so a new /benefits page
 // must be decided on purpose here instead of silently inheriting "private, no accessibility widget".
-const BENEFITS_PRIVATE = ['invite', 'manage']
+// FABLE-003 (2026-11-24): the employees' registration page is decided on purpose as PRIVATE for now (decision D5 for Codex and the
+// owner). Made customer-facing, the accessibility widget's own start-up toast measured below AA in the light "crema" look of the
+// /benefits look system (3.3:1); the page itself passes AA in all five looks, by keyboard and RTL. Revisit with the widget's colours.
+const BENEFITS_PRIVATE = ['invite', 'manage', 'register']
 const benefitsPages = readdirSync(join(app, 'benefits')).filter((n) => statSync(join(app, 'benefits', n)).isDirectory())
-check('every /benefits page is classified (today: only the administration pages, all private)', benefitsPages.every((n) => BENEFITS_PRIVATE.includes(n)), benefitsPages.filter((n) => !BENEFITS_PRIVATE.includes(n)).join(', '))
-check('/benefits, /benefits/manage and /benefits/invite get no widget and no skip link', ['/benefits', '/benefits/manage', '/benefits/invite'].every((p) => S.isCustomerFacing(p) === false))
+check('every /benefits page is classified (today: all private, decided one by one)', benefitsPages.every((n) => BENEFITS_PRIVATE.includes(n)), benefitsPages.filter((n) => !BENEFITS_PRIVATE.includes(n)).join(', '))
+check('/benefits, /benefits/manage, /benefits/invite and /benefits/register get no widget and no skip link', ['/benefits', '/benefits/manage', '/benefits/invite', '/benefits/register'].every((p) => S.isCustomerFacing(p) === false))
 
 section('the wiring')
 const layout = read('src/app/layout.tsx')

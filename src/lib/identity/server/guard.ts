@@ -4,6 +4,7 @@ import { ApiError, BadRequest, Forbidden, Unauthorized } from '@/lib/http/errors
 import { authorizeIdentityAction, sessionRefusal } from '@/lib/identity/access'
 import { isUuid } from '@/lib/identity/rules'
 import { identityManageCheck, identityUnavailable } from '@/lib/identity/server/organizations'
+import { reviewCheck } from '@/lib/identity/server/registration'
 import { findActiveBusinessBySlug, identityAccessCheck } from '@/lib/identity/server/repository'
 import { requireOwner } from '@/lib/owner/guard'
 import { resolveIdentitySession } from '@/lib/identity/server/session'
@@ -110,4 +111,21 @@ export async function requireOrganizationAdmin(organizationId: string): Promise<
   const check = await identityManageCheck(actor.authUserId, organizationId, true)
   if (!check.ok || check.via !== 'organization_admin') throw Forbidden()
   return actor
+}
+
+// ---------------------------------------------------------------- FABLE-003: reviewing a department's employees
+
+/**
+ * /api/benefits/manage/organizations/[organizationId]/departments/[departmentId]/{registrations,members}/*: a REVIEWER of exactly
+ * this department: its own department head, or an administrator of its organization (customer_dept_review_check, asked from the
+ * database on every call; both the organization and the department must be on). A business owner (also in setup), a head of
+ * another department, an administrator of another organization and anyone else get the same 403: an organization's employees and
+ * their photos are reviewed by the organization's own people. The function behind every call rechecks the actor again.
+ */
+export async function requireDepartmentReviewer(organizationId: string, departmentId: string): Promise<IdentityActor & { via: 'department_head' | 'organization_admin' }> {
+  const actor = await requireBenefitsUser()
+  if (!isUuid(organizationId) || !isUuid(departmentId)) throw BadRequest()
+  const check = await reviewCheck(actor.authUserId, organizationId, departmentId)
+  if (!check.ok) throw Forbidden()
+  return { ...actor, via: check.via }
 }

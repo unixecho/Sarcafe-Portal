@@ -41,10 +41,24 @@ const bad = (answer) => same(answer, BAD)
 // ------------------------------------------------------------------ the migrations
 console.log('\nmigration')
 const before = {}
+// What the schema looked like right AFTER this migration (taken before the next file runs, or at the end when it is the newest), so
+// "what did THIS migration add" stays true when later identity migrations (FABLE-003 and on) are applied after it.
+const after = {}
+const picture = async (db) => ({
+  tables: (await db.query(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).rows.map((r) => r.relname),
+  functions: (await db.query(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).rows.map((r) => r.proname),
+  grants: (await db.query(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' and table_name like 'customer\\_%' order by 1, 2, 3`)).rows,
+  policies: Number((await db.query(`select count(*) n from pg_policies where schemaname = 'public'`)).rows[0].n),
+  staff: Number((await db.query(`select count(*) n from public.staff`)).rows[0].n),
+  rows: Number((await db.query(`select (select count(*) from public.customer_invitations) + (select count(*) from public.customer_organizations) + (select count(*) from public.customer_principals) + (select count(*) from public.customer_identity_audit) n`)).rows[0].n),
+})
+let previous = null
 let opened
 try {
   opened = await openIdentityDb(root, {
     onFile: async (file, db) => {
+      if (previous === NEW) Object.assign(after, await picture(db))
+      previous = file
       if (file !== NEW) return
       before.tables = (await db.query(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).rows.map((r) => r.relname)
       before.functions = (await db.query(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).rows.map((r) => r.proname)
@@ -56,6 +70,7 @@ try {
   })
 } catch (error) { check('all migrations apply in order', false, String(error.message)); console.error(error); process.exit(1) }
 const { db, files } = opened
+if (!after.tables) Object.assign(after, await picture(db))
 const one = async (sql, params = []) => (await db.query(sql, params)).rows[0]
 const all = async (sql, params = []) => (await db.query(sql, params)).rows
 const count = async (sql, params = []) => Number((await one(sql, params)).n)
@@ -66,7 +81,9 @@ const as = async (role, fn) => { await db.exec(`set role ${role}`); try { return
 const call = (fn, args) => as('service_role', async () => (await one(`select public.${fn}(${Object.keys(args).map((key, i) => `${key} => $${i + 1}`).join(', ')}) r`, Object.values(args))).r)
 
 check('all migrations apply in order', true)
-check('the new migration is the newest file and comes right after the foundation', files[files.length - 1] === NEW && files[files.length - 2] === FOUNDATION, files.slice(-2).join(', '))
+// Later identity migrations (FABLE-003 and on) may follow it; nothing else may come between or after them.
+const LATER = ['20261124074218_customer_employee_registration.sql']
+check('the new migration comes right after the foundation, and only the known later identity migrations follow it, in order', files[files.indexOf(NEW) - 1] === FOUNDATION && JSON.stringify(files.slice(files.indexOf(NEW) + 1)) === JSON.stringify(LATER), files.slice(files.indexOf(FOUNDATION)).join(', '))
 const snapshot = async () => JSON.stringify({
   columns: await all(`select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name like 'customer\\_%' order by 1, 2`),
   constraints: await all(`select conrelid::regclass::text t, conname, pg_get_constraintdef(oid) d from pg_constraint where conrelid::regclass::text like '%customer\\_%' order by 1, 2`),
@@ -82,14 +99,12 @@ await db.exec(sqlText)
 const second = await snapshot()
 await db.exec(sqlText)
 check('re-applying the new migration twice changes nothing (columns, constraints, indexes, triggers, functions, privileges, rows)', first === second && second === await snapshot())
-const tablesNow = (await all(`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by 1`)).map((r) => r.relname)
-check('it added exactly one table, customer_invitations', same(tablesNow.filter((t) => !before.tables.includes(t)), ['customer_invitations']))
-const functionsNow = (await all(`select p.proname from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' order by 1`)).map((r) => r.proname)
-check('it added exactly fourteen functions: the thirteen callable ones and one trigger function', same(functionsNow.filter((f) => !before.functions.includes(f)), [...FUNCTIONS.map((f) => f.split('(')[0]), 'customer_invitations_final'].sort()))
+check('it added exactly one table, customer_invitations', same(after.tables.filter((t) => !before.tables.includes(t)), ['customer_invitations']))
+check('it added exactly fourteen functions: the thirteen callable ones and one trigger function', same(after.functions.filter((f) => !before.functions.includes(f)), [...FUNCTIONS.map((f) => f.split('(')[0]), 'customer_invitations_final'].sort()))
 check('the foundation\'s five functions are byte for byte what they were (signature and body)', same(await all(`select p.proname, md5(p.prosrc) body, pg_get_function_identity_arguments(p.oid) a from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = any($1) order by 1`, [FOUNDATION_FUNCTIONS]), before.foundation))
-check('it changed no privilege on any earlier identity table', same((await all(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema = 'public' and table_name like 'customer\\_%' and table_name <> 'customer_invitations' order by 1, 2, 3`)), before.grants))
-check('it added no row-level policy, no staff row and no seed row', await count(`select count(*) n from pg_policies where schemaname = 'public'`) === before.policies && await count(`select count(*) n from public.staff`) === before.staff
-  && await count(`select (select count(*) from public.customer_invitations) + (select count(*) from public.customer_organizations) + (select count(*) from public.customer_principals) + (select count(*) from public.customer_identity_audit) n`) === 0)
+// measured right after this migration (`after`), so the tables a LATER identity migration adds are not counted against it
+check('it changed no privilege on any earlier identity table', same(after.grants.filter((g) => g.table_name !== 'customer_invitations'), before.grants))
+check('it added no row-level policy, no staff row and no seed row', after.policies === before.policies && after.staff === before.staff && after.rows === 0)
 check('the migration text never redefines a foundation function and never writes staff, auth, POS or the waitlist', !/function\s+public\.customer_access_(check|grant|revoke)\s*\(/i.test(sqlText.replace(/^\s*--.*$/gm, ''))
   && !/insert\s+into\s+(public\.)?(staff|customer_waitlist|pos_)|insert\s+into\s+auth\.|update\s+(public\.)?(staff|pos_)|alter\s+table\s+(public\.)?(staff|branches|customer_waitlist|customer_(?!invitations))/i.test(sqlText))
 check('the invitation table has no column for a token, an address, a phone or a name: only digests and a masked hint', same((await all(`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'customer_invitations' order by 1`)).map((r) => r.column_name),
