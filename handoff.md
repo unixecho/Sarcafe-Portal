@@ -1,5 +1,11 @@
 # Sarcafe — cross-agent handoff
 
+## Claude (Opus 5.5) note, 2026-11-24: FABLE-004 QA finished after its commit (`fcc0c15`); branch pushed on the owner's word
+
+- `node qa/run.mjs --only static,identity,registration,verification` (fresh build, started before `fcc0c15`, same source): exit 1, **58 / 59**. Static 10/10, identity 25/25, registration 14/14, verification 9/10.
+- The one failure, NOT investigated: `verification.ui-scan` (the scanner screen with a stub camera) timed out after 30 s waiting to click `[data-identity="scan-camera"]`. Whether the screen or the test is wrong is unknown. Codex: please check it first in the FABLE-004 review.
+- The owner said "Yes, push" (2026-11-24): `codex/identity-pc` pushed with `ff8affe` (FABLE-003), `fcc0c15` (FABLE-004 + the master prompt) and this note. `main` and `codex/identity-plan` not moved. All identity migrations still NOT APPLIED TO PRODUCTION.
+
 ## MASTER PROMPT TO SEND TO CODEX (2026-11-24)
 
 You are Codex, architect and independent reviewer of the Sarcafe hybrid identity system. Claude (Opus 5.5, owner-authorized in place of
