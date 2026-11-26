@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Copy, Eraser, Inbox, MoreHorizontal, Send, Share, Undo2, WandSparkles, X } from 'lucide-react'
+import { AlertTriangle, BellOff, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Copy, Eraser, Inbox, MoreHorizontal, Send, Share, Undo2, UserPlus, WandSparkles, X } from 'lucide-react'
 import SheetShell from '@/components/SheetShell'
 import PromptSheet, { type PromptRequest } from '@/components/PromptSheet'
 import ConfirmSheet, { type ConfirmRequest } from '@/components/ConfirmSheet'
 import { useShifts } from '@/components/shifts/ShiftsProvider'
 import WeekGrid from '@/components/shifts/WeekGrid'
 import ShiftSheet from '@/components/shifts/ShiftSheet'
+import DayFillSheet from '@/components/shifts/DayFillSheet'
 import WarningsPanel from '@/components/shifts/WarningsPanel'
 import RequestsPanel from '@/components/shifts/RequestsPanel'
 import PlanningPanel from '@/components/shifts/PlanningPanel'
@@ -21,7 +22,9 @@ import { evaluate } from '@/lib/shifts/rules'
 import { coverageOf } from '@/lib/shifts/coverage'
 import { unpublishedChanges } from '@/lib/shifts/snapshot-diff'
 import { indexByShift, managerInbox } from '@/lib/shifts/view'
-import { addDays, formatDateLabel, requestsOpen, weekDates } from '@/lib/shifts/time'
+import { addDays, formatDateLabel, hasStarted, parseISODate, requestsOpen, weekDates } from '@/lib/shifts/time'
+import { seatsFor } from '@/lib/shifts/day-fill'
+import { REACH_TEXT, unreachableAmong } from '@/lib/shifts/reach'
 import type { NotificationLink } from '@/lib/shifts/types'
 
 type Tab = 'week' | 'requests' | 'problems' | 'settings' | 'log'
@@ -47,6 +50,9 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
   // A link from an alert opens the tab it is about (?tab=requests): the decisions waiting for a manager.
   const [tab, setTab] = useState<Tab>(initialTab === 'requests' ? 'requests' : 'week')
   const [sheet, setSheet] = useState<SheetState | null>(null)
+  const [fillDay, setFillDay] = useState<{ date: string; weekId: string } | null>(null)
+  const lastFill = useRef<{ date: string; weekId: string } | null>(null)
+  if (fillDay) lastFill.current = fillDay
   const lastSheet = useRef<SheetState | null>(null)
   if (sheet) lastSheet.current = sheet
   const [moreOpen, setMoreOpen] = useState(false)
@@ -107,6 +113,19 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
   }
 
   const openShift = (shiftId: string | null, date: string) => currentWeek && setSheet({ shiftId, date, weekId: currentWeek.id })
+  const openFill = (date: string) => currentWeek && setFillDay({ date, weekId: currentWeek.id })
+
+  // Where "start filling" begins: the first day from today on that is open and still has an empty seat (or no shifts yet).
+  const fillableDays = weekDates(weekStart).filter((d) => d >= db.now.date && (db.settings.workingDays.includes(parseISODate(d).getUTCDay()) || weekShifts.some((s) => s.date === d)))
+  const firstGap =
+    fillableDays.find((d) => {
+      const onDay = weekShifts.filter((s) => s.date === d && !hasStarted(s, db.now))
+      if (onDay.length === 0) return !weekShifts.some((s) => s.date === d)
+      return onDay.some((s) => (byShift.get(s.id) ?? []).length < seatsFor(s.requirements, (byShift.get(s.id) ?? []).length))
+    }) ?? null
+
+  // People on this week's board who will not hear about it (no app, or notifications off).
+  const unreachable = unreachableAmong(db.roster, weekShifts.filter((s) => !hasStarted(s, db.now)).flatMap((s) => (byShift.get(s.id) ?? []).map((a) => a.staffId)))
 
   function follow(link: NotificationLink) {
     setNotesOpen(false)
@@ -290,6 +309,11 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
                 </p>
               </div>
             </div>
+            {firstGap && (
+              <button type="button" className="sch-btn sch-btn--primary press sch-fillstart" onClick={() => openFill(firstGap)}>
+                <UserPlus size={19} aria-hidden="true" /> {weekShifts.length === 0 ? 'התחלת שיבוץ — יום אחרי יום' : `המשך שיבוץ מיום ${formatDateLabel(firstGap)}`}
+              </button>
+            )}
             <div className="sch-row" style={{ flexWrap: 'wrap' }}>
               <button type="button" className="sch-btn press" disabled={busy || weekShifts.length === 0 || planningOpen || pendingForWeek > 0} onClick={fillRemaining} title={planningOpen ? 'זמין לאחר סגירת ההגשה ביום שלישי' : pendingForWeek ? 'טפלו קודם בבקשות לשבוע הזה' : 'שומר את הבחירות הידניות ומשלים חוסרים'}>
                 <WandSparkles size={18} aria-hidden="true" /> {busy ? 'מעדכן…' : 'השלמת חוסרים הוגנת'}
@@ -323,6 +347,30 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
             </button>
           )}
 
+          {unreachable.length > 0 && (
+            <div className="sch-card sch-card--danger" role="note">
+              <div className="sch-row" style={{ alignItems: 'flex-start' }}>
+                <BellOff size={20} aria-hidden="true" color="var(--danger)" style={{ flex: 'none', marginTop: 2 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p className="sch-h" style={{ fontSize: '0.95rem' }}>
+                    {unreachable.length === 1 ? `${unreachable[0]!.name} בסידור ולא יקבל/ת הודעות` : `${unreachable.length} עובדים בסידור לא יקבלו הודעות`}
+                  </p>
+                  <ul className="sch-reachlist">
+                    {unreachable.map((u) => (
+                      <li key={u.staffId}>
+                        <strong>{u.name}</strong> · {REACH_TEXT[u.reach]}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="sch-sub">שלחו להם את הסידור בוואטסאפ (כפתור &quot;שיתוף&quot;) ובקשו מהם להיכנס לאפליקציה ולהפעיל התראות.</p>
+                </div>
+              </div>
+              <button type="button" className="sch-btn sch-btn--sm press" style={{ alignSelf: 'flex-start' }} onClick={() => setShareOpen(true)}>
+                <Share size={16} aria-hidden="true" /> שיתוף הסידור
+              </button>
+            </div>
+          )}
+
           {weekShifts.length > 0 && (
             <p className="sch-sub" aria-live="polite">
               {weekShifts.length} משמרות בשבוע
@@ -336,7 +384,7 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
             <EmptyState
               icon={<CalendarPlus size={30} aria-hidden="true" />}
               title="עוד אין משמרות בשבוע הזה"
-              hint="לחצו על ״משמרת״ בכל יום כדי להוסיף. השעות יתמלאו לבד לפי התבניות שהגדרתם בהגדרות."
+              hint="לחצו על ״שיבוץ עובדים״ ביום שתרצו: המשמרות של היום מוכנות מהתבניות, ובוחרים עובד/ת לכל משמרת בלחיצה אחת."
             >
               <button type="button" className="sch-btn sch-btn--primary press" disabled={busy} onClick={prepareWeek}>
                 <CalendarPlus size={18} aria-hidden="true" /> הכנת שבוע מהתבניות
@@ -361,6 +409,7 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
             dayNotes={currentWeek?.dayNotes}
             onShiftClick={(s) => openShift(s.id, s.date)}
             onAdd={(date) => openShift(null, date)}
+            onFillDay={openFill}
             onEditNote={(date) =>
               setPrompt({ date, title: `הערה ל${formatDateLabel(date)}`, label: 'הערה ליום (תוצג לעובדים)', initialValue: currentWeek?.dayNotes[date] ?? '', submitLabel: 'שמירה', allowEmpty: true })
             }
@@ -406,6 +455,18 @@ function ScheduleWorkspaceBody({ branchName, shareBranches, initialTab }: { bran
         weekId={(sheet ?? lastSheet.current)?.weekId ?? ''}
         date={(sheet ?? lastSheet.current)?.date ?? weekStart}
         shiftId={(sheet ?? lastSheet.current)?.shiftId ?? null}
+      />
+
+      <DayFillSheet
+        open={!!fillDay}
+        onClose={() => setFillDay(null)}
+        weekId={(fillDay ?? lastFill.current)?.weekId ?? ''}
+        date={(fillDay ?? lastFill.current)?.date ?? weekStart}
+        canPublish={!published || changes.total > 0}
+        onPublish={() => {
+          setFillDay(null)
+          void publish()
+        }}
       />
 
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)}>

@@ -162,6 +162,20 @@ export function featuresStage(live) {
     assert.ok(!itai.json.notifications.some((n) => n.kind === 'staff.message'), 'someone without notifications got it')
   })
 
+  // ── someone on the schedule will not get its alerts (owner, 2026-11-26): the owner is told once, in red, until the set changes
+  stage.test('unreachable-notice', 'עובד/ת בסידור בלי אפליקציה או בלי התראות: הבעלים מקבל/ת התראה אחת עם השם, ולא עוד אחת בכל כניסה', 'e2e', async () => {
+    const first = await live().call('/api/staff/notifications', { as: 'owner' })
+    assert.status(first, 200)
+    const notes = first.json.notifications.filter((n) => n.kind === 'schedule.unreachable')
+    assert.equal(notes.length, 1, 'one notice')
+    assert.match(notes[0].title, /איתי/, 'names the person with notifications off')
+    assert.match(notes[0].body, /ההתראות כבויות/)
+    await live().call('/api/staff/notifications', { as: 'owner' })
+    assert.equal(live().db('schedule_notifications').filter((n) => n.kind === 'schedule.unreachable').length, 1, 'not written again on the next visit')
+    const dana = await live().call('/api/staff/notifications', { as: 'dana' })
+    assert.ok(!dana.json.notifications.some((n) => n.kind === 'schedule.unreachable'), 'an employee does not get it')
+  })
+
   // ── the tool finder's history
   stage.test('tu-before', 'לפני המיגרציה: ההיסטוריה עונה "לא מסונכרן" והאתר ממשיך לעבוד', 'recovery', async () => {
     await live().control('/__qa/missing', { tables: ['staff_tool_usage', 'staff_tool_searches'], functions: ['staff_tool_usage_record'] })

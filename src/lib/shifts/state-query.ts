@@ -172,16 +172,19 @@ async function branchTimezone(service: Service, branchId: string): Promise<strin
  * their names — never the manager's private notes or hour caps.
  */
 async function loadRoster(service: Service, branchId: string, isManager: boolean, viewerStaffId: string, branchScoped: boolean) {
-  const [{ data: staffRows }, { data: memberRows }] = await Promise.all([
+  const [{ data: staffRows }, { data: memberRows }, { data: pushRows }] = await Promise.all([
     service
       .from('staff')
       .select('id, display_name, first_name, last_name, handle, email, badge, role, active, branch_id, auth_user_id, avatar_emoji'),
     service.from('schedule_members').select('*').eq('branch_id', branchId),
+    // Only a manager is told who has notifications on (lib/shifts/reach.ts); nobody else's query asks.
+    isManager ? service.from('staff_push_subscriptions').select('staff_id') : Promise.resolve({ data: [] as { staff_id: string }[] }),
   ])
+  const pushOn = isManager ? new Set((pushRows ?? []).map((r) => r.staff_id as string)) : undefined
   const members = new Map((memberRows ?? []).map((m) => [m.staff_id as string, m as Record<string, unknown>]))
   return (staffRows ?? [])
     .filter((s) => (isManager || s.active !== false) && (branchScoped ? s.branch_id === null || s.branch_id === branchId || isOp(s) : s.id === viewerStaffId))
-    .map((s) => serializeRosterRow(s as Record<string, unknown>, members.get(s.id as string), isManager))
+    .map((s) => serializeRosterRow(s as Record<string, unknown>, members.get(s.id as string), isManager, pushOn))
 }
 
 async function loadLive(service: Service, branchId: string, windowStarts: string[]): Promise<[ShiftsDB['weeks'], Shift[], Assignment[]]> {

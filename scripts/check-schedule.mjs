@@ -66,7 +66,7 @@ function emit(tsPath) {
 
 // Pure modules only. Server-only files (guard, state-query, dispatch-write) and
 // type-only files are deliberately NOT here — and the purity check below proves it.
-const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf', 'time-off', 'constraints']
+const PURE = ['time', 'names', 'presets', 'coverage', 'messages', 'snapshot-diff', 'rules', 'view', 'access', 'schema', 'config', 'serialize', 'actions', 'people', 'hours-edit', 'draft', 'poster-model', 'poster-pdf', 'time-off', 'constraints', 'day-fill', 'reach']
 for (const n of PURE) emit(join(SHIFTS, `${n}.ts`))
 emit(join(SRC, 'lib', 'staff', 'access.ts'))
 
@@ -89,6 +89,8 @@ const PM = await load('lib/shifts/poster-model.mjs')
 const PDF = await load('lib/shifts/poster-pdf.mjs')
 const TO = await load('lib/shifts/time-off.mjs')
 const CN = await load('lib/shifts/constraints.mjs')
+const DF = await load('lib/shifts/day-fill.mjs')
+const RE = await load('lib/shifts/reach.mjs')
 
 // ---- Output ---------------------------------------------------------------------------------------------
 let pass = 0
@@ -282,7 +284,7 @@ const baseSettings = {
   safety: { maxWeeklyHours: 20, minRestHours: 10, maxDailyHours: 10, maxConsecutiveDays: 6 }, ruleSeverity: {},
   features: { availability: true, swaps: true }, scheduleManagers: [], onboardedAt: null,
 }
-const roster = ['dana', 'yossi'].map((id) => ({ staffId: id, displayName: id, avatarEmoji: null, badge: null, active: true, schedulable: true, defaultRoleId: null, maxWeeklyHours: null, employmentType: null, sortOrder: null, note: null, hasLogin: true }))
+const roster = ['dana', 'yossi'].map((id) => ({ staffId: id, displayName: id, avatarEmoji: null, badge: null, active: true, schedulable: true, defaultRoleId: null, maxWeeklyHours: null, employmentType: null, sortOrder: null, note: null, hasLogin: true, hasPush: true }))
 const sh = (id, date, s, e, req = []) => ({ id, branchId: 'B1', weekId: 'W', date, startTime: s, endTime: e, presetId: null, stationId: null, requirements: req, requestsOpen: false, note: null, updatedAt: null })
 const as = (id, shiftId, staffId) => ({ id, shiftId, staffId, staffName: staffId, roleId: 'barista', status: 'assigned' })
 const shifts = [sh('s1', '2030-01-07', '07:00', '17:00'), sh('s2', '2030-01-08', '07:00', '17:00'), sh('s3', '2030-01-09', '07:00', '17:00')]
@@ -545,6 +547,57 @@ check('an employee can never name a status or a decider', throwsZod(() => S.pars
 check('decideTimeOff takes ids, a verdict, a note and force only as a boolean', S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [U, U2], approve: true, note: 'בכיף', force: true }).type === 'decideTimeOff' && throwsZod(() => S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [], approve: true })) && throwsZod(() => S.parseAction({ type: 'decideTimeOff', branchId: U, ids: [U], approve: true, force: 'yes' })))
 check('saveShift carries who does the checklists, and only as a person id', S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: U2 }).checklistLeadStaffId === U2 && S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: null }).checklistLeadStaffId === null && throwsZod(() => S.parseAction({ type: 'saveShift', weekId: U, date: '2030-01-08', startTime: '07:00', endTime: '13:00', requirements: [], assignees: [], checklistLeadStaffId: 'dana' })))
 check('the refusals for a day off and for a pick outside the shift say what to do', Msg.scheduleMessage('time_off').includes('יום חופש') && Msg.scheduleMessage('not_on_shift').includes('צ׳קליסטים') && Msg.scheduleStatus('time_off') === 409)
+
+// ============================================================================================================
+section('guided day filling — one tap = one person, the next empty shift is asked next')
+{
+  const dfSettings = { presets: [{ id: 'evening', name: 'ערב', startTime: '13:00', endTime: '20:00' }, { id: 'morning', name: 'בוקר', startTime: '07:00', endTime: '13:00', roleId: 'barista' }], openTime: '07:00', closeTime: '20:00', dayHours: {} }
+  const never = () => false
+  const empty = DF.seedDay({ date: '2030-01-06', settings: dfSettings, shifts: [], assignments: [], started: never })
+  eq('an empty day starts from the templates, earliest first', empty.map((s) => s.name), ['בוקר', 'ערב'])
+  eq('a template that names a role asks for one of it (same rule as sched_prepare_week)', empty[0].requirements, [{ roleId: 'barista', min: 1 }])
+  eq('the first empty seat is selected on open', DF.nextStep(empty, new Set()), { key: 'tpl:0', seat: 0 })
+  let day = DF.placePerson(empty, 'tpl:0', 0, { staffId: 'dana', roleId: null })
+  eq('…after a pick, the next empty shift is asked', DF.nextStep(day, new Set()), { key: 'tpl:1', seat: 0 })
+  check('a person cannot take a second seat on the same shift', DF.draftBlock(DF.addSeat(day, 'tpl:0'), 'tpl:0', 1, 'dana')?.kind === 'same_shift')
+  const twice = DF.placePerson(DF.addSeat(day, 'tpl:0'), 'tpl:0', 1, { staffId: 'dana', roleId: null })
+  check('…and placePerson refuses it even if asked (no double booking on one shift)', twice.find((s) => s.key === 'tpl:0').people.length === 1)
+  check('a non-overlapping shift the same day is allowed (and reported)', DF.draftBlock(day, 'tpl:1', 0, 'dana') === null && DF.alsoToday(day, 'tpl:1', 'dana').length === 1)
+  const custom = DF.addCustomShift(day, '2030-01-06', '10:00', '14:00', ' הכנות ', 1)
+  eq('a custom-hours shift carries its label as the note (shown in the schedule)', custom.day.find((s) => s.key === custom.key).note, 'הכנות')
+  check('…and a person on 07–13 cannot also take 10–14 that day', DF.draftBlock(custom.day, custom.key, 0, 'dana')?.kind === 'overlap_today')
+  const skipped = new Set([DF.stepId({ key: 'tpl:1', seat: 0 })])
+  eq('a skipped seat is not asked again; the day is then done', DF.nextStep(day, skipped), null)
+  eq('only shifts with someone on them are created', DF.changedShifts(day).map((s) => s.key), ['tpl:0'])
+  const saved = [{ id: 's1', branchId: 'b', weekId: 'w', date: '2030-01-06', startTime: '07:00', endTime: '13:00', presetId: 'morning', stationId: null, requirements: [{ roleId: 'barista', min: 2 }], requestsOpen: false, note: null, updatedAt: 't' }]
+  const asg = [{ id: 'a1', shiftId: 's1', staffId: 'dana', staffName: null, roleId: 'barista', status: 'assigned', checklistLead: false }]
+  const live = DF.seedDay({ date: '2030-01-06', settings: dfSettings, shifts: saved, assignments: asg, started: never })
+  check('a day with shifts uses them (no templates added) and keeps who is on them', live.length === 1 && live[0].people[0].assignmentId === 'a1')
+  eq('a shift asking for 2 has 2 seats; the empty one is asked', DF.nextStep(live, new Set()), { key: 's1', seat: 1 })
+  eq('nothing changed = nothing to save', DF.changedShifts(live).length, 0)
+  eq('tapping the person already there keeps their saved assignment', DF.placePerson(live, 's1', 0, { staffId: 'dana', roleId: 'x' })[0].people[0], { staffId: 'dana', roleId: 'barista', assignmentId: 'a1' })
+  check('a started shift is locked and never asked about', DF.nextStep(DF.seedDay({ date: '2030-01-06', settings: dfSettings, shifts: saved, assignments: asg, started: () => true }), new Set()) === null)
+  eq('seats: at least one, the minimums, never fewer than the people on it', [DF.seatsFor([], 0), DF.seatsFor([{ roleId: 'a', min: 3 }], 1), DF.seatsFor([], 4)], [1, 3, 4])
+}
+
+section('who will not hear about the schedule (no app / notifications off)')
+{
+  eq('no login = no app', RE.reachOf({ hasLogin: false, hasPush: false }), 'no_app')
+  eq('login without a device = notifications off', RE.reachOf({ hasLogin: true, hasPush: false }), 'no_push')
+  eq('login + device = ok', RE.reachOf({ hasLogin: true, hasPush: true }), 'ok')
+  eq('not a manager (hasPush null) = unknown, never shown', RE.reachOf({ hasLogin: true, hasPush: null }), 'unknown')
+  const r = [
+    { staffId: 'b', displayName: 'יוסי', active: true, hasLogin: true, hasPush: false },
+    { staffId: 'a', displayName: 'דנה', active: true, hasLogin: false, hasPush: false },
+    { staffId: 'c', displayName: 'תמר', active: true, hasLogin: true, hasPush: true },
+    { staffId: 'd', displayName: 'גל', active: false, hasLogin: false, hasPush: false },
+  ]
+  const list = RE.unreachableAmong(r, ['b', 'a', 'b', 'c', 'd', null])
+  eq('each person once, in name order, only the unreachable and active', list.map((u) => u.name), ['דנה', 'יוסי'])
+  check('the owner notice names them and says what to do', /2 עובדים/.test(RE.unreachableNotice(list).title) && /וואטסאפ/.test(RE.unreachableNotice(list).body))
+  check('the notice key changes when the set changes (written once per change)', RE.unreachableKey('2030-01-05', list) !== RE.unreachableKey('2030-01-05', list.slice(0, 1)))
+  check('the serializer tells only a manager who has notifications on', Z.serializeRosterRow({ id: 'x', active: true }, undefined, true, new Set(['x'])).hasPush === true && Z.serializeRosterRow({ id: 'x', active: true }, undefined, false, new Set(['x'])).hasPush === null)
+}
 
 // ============================================================================================================
 section('purity — these modules know nothing about React, Next or the database')

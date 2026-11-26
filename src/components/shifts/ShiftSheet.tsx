@@ -386,6 +386,23 @@ export default function ShiftSheet({
             </p>
             {outsideHours && <Notice tone="info">השעות חורגות משעות הפעילות ביום הזה. זה בסדר אם יש הכנה או סגירה — רק שימו לב.</Notice>}
             {!timesValid && <InlineError>שעת הסיום חייבת להיות שונה משעת ההתחלה.</InlineError>}
+            {/* Hours that are not a template get a label right here (e.g. "הכנות"): it is the shift's note, shown next to the
+                hours on the board, in each employee's schedule and on the shared poster. */}
+            {!matched && timesValid && (
+              <div className="sch-block">
+                <label>
+                  <span className="sch-label">תווית לשעות האלה (תופיע בסידור העבודה)</span>
+                  <input className="sch-input" value={form.note} maxLength={300} onChange={(e) => patch({ note: e.target.value })} placeholder="למשל: הכנות, תגבור, חצי משמרת" />
+                </label>
+                <div className="sch-wrapflex" role="group" aria-label="תוויות מוכנות">
+                  {['הכנות', 'תגבור', 'סגירה', 'חצי משמרת', 'הדרכה'].map((l) => (
+                    <button key={l} type="button" className="sch-chip press" aria-pressed={form.note === l} onClick={() => patch({ note: l })}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ---- who works it ---- */}
@@ -570,10 +587,10 @@ export default function ShiftSheet({
                     })}
                   </div>
                 </div>
-                <label>
+                {matched && <label>
                   <span className="sch-label">הערה למשמרת</span>
                   <input className="sch-input" value={form.note} maxLength={300} onChange={(e) => patch({ note: e.target.value })} placeholder="למשל: משלוח בבוקר" />
-                </label>
+                </label>}
               </div>
             )}
           </div>

@@ -1,12 +1,14 @@
 'use client'
 
-import { AlertTriangle, ArrowLeftRight, BellRing, Check, Plus, UserX } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, BellRing, Check, Plus, UserPlus, UserX } from 'lucide-react'
 import { Person, Pill } from '@/components/shifts/ui'
 import { hoursFor, matchPreset } from '@/lib/shifts/presets'
 import { nameOf, indexByShift, pendingRequestsByShift, swapPendingAssignmentIds, shiftFacts } from '@/lib/shifts/view'
 import { formatDateLabel, formatShiftLabel, hasStarted, relativeDayLabel, weekDates, weekdayLongLabel } from '@/lib/shifts/time'
 import { staffColor } from '@/lib/shifts/people'
 import { avoidText, fitFor } from '@/lib/shifts/time-off'
+import { seatsFor } from '@/lib/shifts/day-fill'
+import { reachOf, reachText } from '@/lib/shifts/reach'
 import type { Assignment, Shift, ShiftsDB, Warning } from '@/lib/shifts/types'
 
 // The manager's week board. (The employee's own view is EmployeeSchedule.tsx.)
@@ -29,13 +31,15 @@ type Props = {
   onAdd?: (date: string) => void
   /** Edit the note of this date. */
   onEditNote?: (date: string) => void
+  /** Open the guided "fill this day" sheet (DayFillSheet). */
+  onFillDay?: (date: string) => void
   dayNotes?: Record<string, string>
 }
 
 // Warnings the coverage pills already say in their own words.
 const COVERED_BY_PILLS = new Set(['understaffed', 'overstaffed', 'unassigned_shift'])
 
-export default function WeekGrid({ weekStart, db, shifts, assignments, warnings, onShiftClick, onAdd, onEditNote, dayNotes }: Props) {
+export default function WeekGrid({ weekStart, db, shifts, assignments, warnings, onShiftClick, onAdd, onEditNote, onFillDay, dayNotes }: Props) {
   const dates = weekDates(weekStart)
   const viewer = db.viewerStaffId
   const byShift = indexByShift(assignments)
@@ -68,6 +72,13 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, warnings,
         const hours = hoursFor(date, db.settings)
         const relative = relativeDayLabel(date, db.now)
         const note = dayNotes?.[date]
+        // Empty seats left on this day's shifts that have not started (what the guided sheet will ask about).
+        const open = dayShifts.filter((s) => !hasStarted(s, db.now))
+        const emptySeats = open.reduce((n, s) => {
+          const people = (byShift.get(s.id) ?? []).length
+          return n + Math.max(0, seatsFor(s.requirements, people) - people)
+        }, 0)
+        const canFill = !!onFillDay && date >= db.now.date && (dayShifts.length === 0 ? isWorkingDay : open.length > 0)
         return (
           <section key={date} className={`sch-day${isToday ? ' sch-day--today' : ''}${isWorkingDay ? '' : ' sch-day--closed'}`} aria-label={`${weekdayLongLabel(dow)} ${formatDateLabel(date)}`}>
             <header className="sch-day__head">
@@ -102,12 +113,12 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, warnings,
             )}
 
             {dayShifts.length === 0 ? (
-              onAdd ? (
+              onAdd && !canFill ? (
                 <button type="button" className="sch-add sch-add--block press" onClick={() => onAdd(date)}>
                   <Plus size={16} aria-hidden="true" /> הוספת משמרת
                 </button>
               ) : (
-                <p className="sch-sub sch-faint">אין משמרות</p>
+                <p className="sch-sub sch-faint">{canFill ? 'עוד אין משמרות — לחצו על "שיבוץ" ונעבור משמרת אחרי משמרת' : 'אין משמרות'}</p>
               )
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -126,6 +137,18 @@ export default function WeekGrid({ weekStart, db, shifts, assignments, warnings,
                   />
                 ))}
               </div>
+            )}
+
+            {canFill && (
+              <button
+                type="button"
+                className={`sch-btn sch-btn--sm press sch-fillday${dayShifts.length === 0 || emptySeats > 0 ? ' sch-btn--primary' : ''}`}
+                onClick={() => onFillDay!(date)}
+                aria-label={`שיבוץ עובדים ל${weekdayLongLabel(dow)} ${formatDateLabel(date)}`}
+              >
+                <UserPlus size={17} aria-hidden="true" />
+                {dayShifts.length === 0 ? 'שיבוץ עובדים ליום הזה' : emptySeats > 0 ? `שיבוץ עובדים · ${emptySeats === 1 ? 'מקום אחד ריק' : `${emptySeats} מקומות ריקים`}` : 'שינוי השיבוץ של היום'}
+              </button>
             )}
           </section>
         )
@@ -182,6 +205,7 @@ function ShiftCard({
           {shift.startTime}–{shift.endTime}
         </span>
         {preset && <span className="sch-shift__label">{preset.name}</span>}
+        {!preset && shift.note && <span className="sch-shift__label">{shift.note}</span>}
         {station && (
           <span className="sch-shift__label">
             · {station.emoji} {station.name}
@@ -206,6 +230,7 @@ function ShiftCard({
                 flag={flag}
                 tag={tag}
                 lead={a.checklistLead && assignments.length > 1}
+                reach={past ? undefined : reachText(reachOf(row))}
                 key={a.id}
                 name={nameOf(db, a.staffId, a.staffName)}
                 role={a.roleId ? roleById.get(a.roleId) : null}
@@ -249,7 +274,7 @@ function ShiftCard({
             {otherWarnings.length > 1 ? ` (+${otherWarnings.length - 1})` : ''}
           </Pill>
         )}
-        {shift.note && <span className="sch-sub">{shift.note}</span>}
+        {shift.note && preset && <span className="sch-sub">{shift.note}</span>}
       </div>
     </>
   )

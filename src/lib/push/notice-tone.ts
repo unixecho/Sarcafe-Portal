@@ -13,7 +13,7 @@ const OK_KINDS = new Set([
 const BAD_KINDS = new Set([
   'swap.declined', 'swap.decline', 'swap.rejected', 'swap.reject', 'swap.cancelled', 'swap.cancel', 'request.reject', 'request.cancelled',
   'request.cancel', 'timeoff.decline', 'timeoff.cancelled', 'schedule.unpublish', 'checklist.late', 'checklist.gap', 'issues.digest',
-  'dev.kiosk_battery', 'staff.deactivate', 'dev.qa_digest_fail',
+  'dev.kiosk_battery', 'staff.deactivate', 'dev.qa_digest_fail', 'schedule.unreachable',
 ])
 const OK_WORDS = /(אושר|אושרה|אושרו|פורסם|פורסמה|התקבל|הושלם|הצליח|נשלח בהצלחה)/
 const BAD_WORDS = /(נדח|בוטל|בוטלה|לא הוגש|לא נשלח|נכשל|תקלה|חסר|אזל|באיחור|סוללה חלשה)/

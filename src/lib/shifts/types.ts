@@ -67,6 +67,8 @@ export type ScheduleStaffRow = {
   note: string | null
   /** Has a linked sign-in — i.e. can open the app, see their schedule and answer a swap. */
   hasLogin: boolean
+  /** At least one of their devices has the app's notifications on. Managers only (null for anyone else): see lib/shifts/reach.ts. */
+  hasPush: boolean | null
 }
 
 export type PublishedSnapshot = { shifts: Shift[]; assignments: Assignment[] }

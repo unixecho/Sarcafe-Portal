@@ -40,7 +40,7 @@ export function serializeSettings(row: Record<string, unknown>): ShiftSettings {
  * the note) — an ordinary employee gets a name and nothing else, so one person's
  * private note can never reach a colleague.
  */
-export function serializeRosterRow(staff: Record<string, unknown>, member: Record<string, unknown> | undefined, manager: boolean): ScheduleStaffRow {
+export function serializeRosterRow(staff: Record<string, unknown>, member: Record<string, unknown> | undefined, manager: boolean, pushOn?: ReadonlySet<string>): ScheduleStaffRow {
   const operator = staff.role === 'owner' || staff.badge === 'owner' || staff.badge === 'developer'
   return {
     staffId: staff.id as string,
@@ -59,6 +59,8 @@ export function serializeRosterRow(staff: Record<string, unknown>, member: Recor
     // Not private: it only says whether the person can open the app — which a colleague needs to
     // know before sending them a swap they could never answer.
     hasLogin: staff.auth_user_id != null,
+    // Whether their alerts reach a phone: the manager's to know ("who will not hear about the schedule"), nobody else's.
+    hasPush: manager && pushOn ? pushOn.has(staff.id as string) : null,
   }
 }
 

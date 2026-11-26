@@ -7,11 +7,15 @@ import { parseBody } from '@/lib/pos/server/guard'
 import { privateStaffRoute } from '@/lib/staff/records'
 import { isDeveloper } from '@/lib/checklists/developer'
 import { alertTitle } from '@/lib/push/staff-rules'
+import { isOp } from '@/lib/staff/access'
+import { ensureUnreachableNotice } from '@/lib/shifts/unreachable-server'
 
 const headers = { 'Cache-Control': 'private, no-store' }
 export const GET = privateStaffRoute(async () => {
   const me = await requireStaffIdentity()
   const service = createServiceRoleClient()
+  // The owner is told when someone on the coming schedule will not get its alerts (no app / notifications off).
+  if (isOp(me)) await ensureUnreachableNotice(service, me.id)
   const [items, count] = await Promise.all([
     service.from('schedule_notifications').select('id, kind, title, body, link, created_at, read_at').eq('staff_id', me.id).order('created_at', { ascending: false }).limit(40),
     service.from('schedule_notifications').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).is('read_at', null),

@@ -138,6 +138,36 @@ export async function startStandin({ port = 0, seed = () => ({}), keys = {} } = 
   const uniques = { staff_tool_usage: [['staff_id', 'tool_id']], staff_messages: [['id']], schedule_members: [['branch_id', 'staff_id']], staff_push_subscriptions: [['endpoint']], qa_digests: [['day']], kiosk_pin_resets: [['device_id']], kiosk_enrollments: [['code_hash']], kiosk_pairings: [['code'], ['token_hash']], kiosk_devices: [['id'], ['slug']], ...keys }
 
   const RPC = {
+    // The scheduler's one shift write (sched_save_shift, migration 20261028120000), reduced to what the QA flows need: create or
+    // update the shift, replace its people (kept assignment ids survive), refuse a person on two overlapping shifts that day.
+    sched_save_shift({ p_week_id, p_shift_id, p_date, p_start, p_end, p_preset_id, p_station_id, p_requirements, p_requests_open, p_note, p_assignees }) {
+      const week = table('schedule_weeks').find((w) => w.id === p_week_id)
+      if (!week) return { ok: false, reason: 'not_found' }
+      const shifts = table('shifts')
+      const id = p_shift_id ?? crypto.randomUUID()
+      const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+      const span = (st, en) => [mins(st), mins(en) > mins(st) ? mins(en) : mins(en) + 1440]
+      const [a0, a1] = span(p_start, p_end)
+      for (const person of p_assignees ?? []) {
+        const clash = table('shift_assignments').some((x) => x.staff_id === person.staffId && x.shift_id !== id && (() => {
+          const o = shifts.find((s) => s.id === x.shift_id && s.shift_date === p_date)
+          if (!o) return false
+          const [b0, b1] = span(o.start_time, o.end_time)
+          return a0 < b1 && b0 < a1
+        })())
+        if (clash) return { ok: false, reason: 'conflict' }
+      }
+      const row = { id, week_id: p_week_id, branch_id: week.branch_id, shift_date: p_date, start_time: p_start, end_time: p_end, preset_id: p_preset_id ?? null, station_id: p_station_id ?? null, requirements: p_requirements ?? [], requests_open: !!p_requests_open, note: p_note ?? null, updated_at: new Date().toISOString() }
+      const at = shifts.findIndex((s) => s.id === id)
+      if (at >= 0) shifts[at] = { ...shifts[at], ...row }; else shifts.push(row)
+      const all = table('shift_assignments')
+      const kept = all.filter((x) => x.shift_id !== id)
+      const names = new Map(table('staff').map((x) => [x.id, x.display_name]))
+      const mine = (p_assignees ?? []).map((person) => ({ id: person.assignmentId ?? crypto.randomUUID(), branch_id: week.branch_id, shift_id: id, staff_id: person.staffId, staff_name: names.get(person.staffId) ?? null, role_id: person.roleId ?? null, status: 'assigned', checklist_lead: false }))
+      all.length = 0
+      all.push(...kept, ...mine)
+      return { ok: true, shiftId: id }
+    },
     // supabase/migrations 012 + 014: one item's (or type's) available / quantity in draft, and in published when p_publish;
     // a quantity of 0 also marks it sold out (patch_availability_fields)
     set_availability({ p_menu_id, p_item_uid, p_type_uid, p_available, p_quantity, p_publish }) {

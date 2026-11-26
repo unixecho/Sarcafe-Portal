@@ -22,6 +22,7 @@ const PEER = '22222222-2222-4222-8222-222222222222'
 const SLIP = '33333333-3333-4333-8333-333333333333'
 const PEER_SLIP = '44444444-4444-4444-8444-444444444444'
 let me = null
+const unreachableRuns = []
 let trace = []
 let failTable = null
 let rejectInsert = false
@@ -74,6 +75,8 @@ const overrides = {
   '@/lib/checklists/developer': load('src/lib/checklists/developer.ts'),
   '@/lib/push/staff-rules': load('src/lib/push/staff-rules.ts'),
   '@/lib/rate-limit': { checkRateLimit: async () => true, checkCredentialRateLimit: async () => true },
+  // The owner's "who on the schedule will not get alerts" notice (lib/shifts/unreachable-server.ts): recorded, run by its own QA test.
+  '@/lib/shifts/unreachable-server': { ensureUnreachableNotice: async (_service, staffId) => { unreachableRuns.push(staffId) } },
 }
 const guard = load('src/lib/pos/server/guard.ts', overrides)
 overrides['@/lib/pos/server/guard'] = guard
@@ -117,8 +120,10 @@ eq(calls[0].slice(0, 4), ['signed', 'staff-payslips', 'own.pdf', 60], 'Download 
 me = { ...me, role: 'owner' }
 response = await slips.GET(new NextRequest('http://localhost/'), ctx(PEER_SLIP))
 eq(response.status, 303, 'Full owner can download employee payslip')
+unreachableRuns.length = 0
 reset(); me = { id: STAFF, via: 'employee_code', quick: true }
 response = await updates.GET()
+eq(unreachableRuns, [], 'an employee reading their alerts does not run the owner schedule check')
 eq((await response.json()).notifications.map((n) => n.id), [SLIP], 'PIN dashboard only returns own notifications'); privateResponse(response)
 response = await updates.POST(request({ ids: [SLIP, PEER_SLIP] }))
 eq(response.status, 200, 'Read acknowledgement succeeds')

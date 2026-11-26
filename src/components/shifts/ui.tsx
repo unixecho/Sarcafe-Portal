@@ -5,7 +5,7 @@
 // requests inbox and the staff list.
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, Ban, CheckCircle2, ClipboardCheck, Clock, Hand, Info, XCircle } from 'lucide-react'
+import { AlertTriangle, Ban, BellOff, CheckCircle2, ClipboardCheck, Clock, Hand, Info, XCircle } from 'lucide-react'
 import { initialsOf } from '@/lib/shifts/names'
 import type { RequestStatus, ShiftRole, SwapStatus } from '@/lib/shifts/types'
 
@@ -71,11 +71,11 @@ export function Avatar({ name, color, emoji, large }: { name: string; color?: st
  *  'dayoff' = an approved day off. `lead` marks the person who does the shift's checklists. */
 export type PersonFlag = 'avoid' | 'pending' | 'dayoff'
 
-export function Person({ name, role, color, emoji, faded, note, flag, tag, lead }: { name: string; role?: ShiftRole | null; color?: string; emoji?: string | null; faded?: boolean; note?: string; flag?: PersonFlag; tag?: string; lead?: boolean }) {
+export function Person({ name, role, color, emoji, faded, note, flag, tag, lead, reach }: { name: string; role?: ShiftRole | null; color?: string; emoji?: string | null; faded?: boolean; note?: string; flag?: PersonFlag; tag?: string; lead?: boolean; /** Why this person will not get the schedule's alerts (no app / alerts off). */ reach?: string }) {
   return (
     <span className={`sch-person${faded ? ' sch-person--faded' : ''}${flag ? ` sch-person--${flag}` : ''}`} title={note}>
       <Avatar name={name} color={color ?? role?.color} emoji={emoji} />
-      {tag || lead ? (
+      {tag || lead || reach ? (
         // A person with something to say about them (a wish, the checklists) gets it on its own line under the name, so a
         // narrow day column never has to squeeze it next to the name.
         <span className="sch-person__stack">
@@ -84,6 +84,7 @@ export function Person({ name, role, color, emoji, faded, note, flag, tag, lead 
             {role && <span className="sch-faint" style={{ fontSize: '0.74rem', fontWeight: 600 }}>· {role.name}</span>}
           </span>
           {tag && <span className="sch-person__tag">{tag}</span>}
+          {reach && <span className="sch-person__reach"><BellOff size={12} aria-hidden="true" /> {reach}</span>}
           {lead && <span className="sch-person__lead" role="img" aria-label="ממלא/ת את הצ׳קליסטים של המשמרת" title="ממלא/ת את הצ׳קליסטים של המשמרת"><ClipboardCheck size={12} aria-hidden="true" /> צ׳קליסטים</span>}
         </span>
       ) : (

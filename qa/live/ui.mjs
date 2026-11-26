@@ -264,6 +264,49 @@ export function uiStage(live, metrics) {
     }
   }, { timeout: 120_000 })
 
+  // Owner, 2026-11-26: the owner once picked two people for one shift by mistake and stopped using the scheduler. The guided day
+  // sheet asks one shift at a time, one tap = one person, then moves on; אישור saves the day and opens the next one.
+  stage.test('day-fill', 'שיבוץ יום: המשמרת הראשונה נבחרת לבד, לחיצה על שם משבצת וממשיכה, "אישור" שומר ועובר ליום הבא; מי שלא יקבל הודעות מסומן באדום', 'e2e', async () => {
+    live().reset()
+    const s = await open('owner', '/owner/schedule', { width: 390, height: 844 })
+    try {
+      const p = s.page
+      await p.getByRole('button', { name: 'השבוע הבא' }).click()
+      await p.waitForTimeout(900)
+      const before = live().db('shift_assignments').length
+      await p.locator('.sch-fillday', { hasText: 'שיבוץ עובדים ליום הזה' }).first().click()
+      const sheet = p.getByRole('dialog', { name: /^שיבוץ/ })
+      await sheet.waitFor({ timeout: 8000 })
+      await p.waitForTimeout(500)
+      assert.match(await sheet.innerText(), /מי עובד\/ת במשמרת הזו\?/, 'the first shift is selected and asks who works')
+      assert.match(await sheet.locator('.dfs-person', { hasText: 'איתי' }).innerText(), /לא יקבל\/ת הודעה/, 'איתי (notifications off) is marked in the picker')
+      await sheet.locator('.dfs-person', { hasText: 'איתי' }).click()
+      await p.waitForTimeout(400)
+      assert.match(await sheet.locator('.dfs-placed').innerText(), /איתי ב/, 'the green confirmation names him')
+      const asked = await sheet.innerText()
+      if (/מי עובד\/ת במשמרת הזו\?/.test(asked)) {
+        // the next shift of the day is selected by itself, and איתי cannot be put on a shift that overlaps his
+        await sheet.getByRole('button', { name: 'לסיכום' }).click()
+        await p.waitForTimeout(300)
+      }
+      assert.match(await sheet.innerText(), /סיכום|מלא ✓/, 'the day summary')
+      assert.equal(live().db('shift_assignments').length, before, 'nothing saved before אישור')
+      await sheet.getByRole('button', { name: /^אישור ומעבר ל/ }).click()
+      await p.waitForTimeout(1500)
+      assert.equal(live().db('shift_assignments').length, before + 1, 'one person saved')
+      assert.ok(live().db('shift_assignments').some((a) => a.staff_id === ID.itai && ![ID.shiftTodayAm, ID.shiftTomorrowAm, ID.shiftDraft].includes(a.shift_id)), 'איתי on the new shift')
+      assert.match(await sheet.innerText(), /מי עובד\/ת במשמרת הזו\?|סיכום|מלא/, 'the next day opened')
+      await sheet.getByRole('button', { name: 'סגירה' }).click()
+      await p.waitForTimeout(900)
+      assert.equal(await p.getByRole('dialog').count(), 0, 'closes without asking: nothing unsaved')
+      // on the board: a red line on his chip and the card that lists who will not get alerts
+      assert.ok(await p.locator('.sch-person__reach').count() >= 1, 'the red line on his chip')
+      assert.match(await p.locator('.sch-card--danger').first().innerText(), /איתי/, 'the "will not get alerts" card')
+      assert.ok((await overflowX(p)) <= 0, 'horizontal overflow')
+      assert.deepEqual(s.errors, [], 'page errors:')
+    } finally { await s.close(); live().reset() }
+  }, { timeout: 90_000 })
+
   stage.test('skeleton-fast', 'שרת איטי: הסרגל נשאר והשלד של הדף מופיע מיד, והתוכן מחליף אותו כשהוא מגיע', 'perf', async () => {
     const s = await open('owner', '/owner/schedule')
     try {
