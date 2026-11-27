@@ -17,7 +17,7 @@ import { callPosRpc, parseBody, posJson, rpcFailure } from '@/lib/pos/server/gua
 
 const body = z
   .object({
-    staffId: z.string().uuid(),
+    staffId: z.guid(),
     action: z.enum(['generate', 'set', 'clear']).optional(),
     passcode: z.string().regex(/^\d{6}$/).optional(),
     employeeNo: z.string().regex(/^(?=.*[1-9])\d{1,5}$/).optional(),

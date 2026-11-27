@@ -26,7 +26,8 @@
 .qa-tile svg { color: var(--text-dim); }
 .qa-tile b { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; direction: ltr; }
 .qa-tile span { font-size: 0.72rem; color: var(--text-dim); }
-.qa-tile--ok svg, .qa-tile--ok b { color: var(--gl-ok); }
+.qa-tile--ok svg { color: var(--gl-ok); }
+.qa-tile--ok b { color: var(--gl-ok-text); }
 .qa-tile--bad svg, .qa-tile--bad b { color: var(--gl-bad); }
 .qa-tile--warn svg, .qa-tile--warn b { color: var(--qa-warn); }
 

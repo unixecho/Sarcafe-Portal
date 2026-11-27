@@ -109,7 +109,7 @@ function isCrossSiteApiWrite(request: NextRequest): boolean {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (isCrossSiteApiWrite(request)) {
     return NextResponse.json({ error: { code: 'forbidden', message: 'You do not have access to do that.' } }, { status: 403 })
   }

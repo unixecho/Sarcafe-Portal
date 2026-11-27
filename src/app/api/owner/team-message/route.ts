@@ -25,10 +25,10 @@ export const GET = apiRoute(async (request: NextRequest) => {
 const Body = z.object({
   branch: z.string().min(1).max(40),
   audience: z.enum(['all', 'shift']),
-  shiftId: z.string().uuid().optional(),
-  assignmentId: z.string().uuid().optional(),
+  shiftId: z.guid().optional(),
+  assignmentId: z.guid().optional(),
   text: z.string().max(4 * MAX_TEXT),
-  requestId: z.string().uuid(),
+  requestId: z.guid(),
 }).strict().superRefine((body, ctx) => {
   if (body.audience === 'all' && (body.shiftId || body.assignmentId)) ctx.addIssue({ code: 'custom', path: ['audience'], message: 'all takes no shift' })
   if (body.audience === 'shift' && !body.shiftId) ctx.addIssue({ code: 'custom', path: ['shiftId'], message: 'shift required' })

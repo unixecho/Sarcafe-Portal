@@ -11,6 +11,7 @@
 
 .native-app {
   --gl-ok: #4ade80;
+  --gl-ok-text: var(--gl-ok); /* green WORDS; --gl-ok stays the fill (pills, dots) */
   --gl-bad: #ff6b6b;
   --gl-ink: var(--on-neon, #150f0c);
   --gl-surf: color-mix(in srgb, var(--bg-elev) 80%, transparent);
@@ -56,6 +57,9 @@
 .native-app:is([data-staff-theme='crema'], [data-staff-theme='latte']) {
   --lg-muted: color-mix(in srgb, var(--text) 86%, transparent); /* light glass needs stronger secondary text (QA ui.readable) */
   --gl-ok: #15803d;
+  /* green words need a darker ink than green fills: #15803d measured 4:1 / 3.98:1 ("עדכני" stat) once the bell menu dims the page
+     (QA ui.readable, 2026-11-27); #166534 is ~7:1 on white and stays above AA under the dim */
+  --gl-ok-text: #166534;
   --gl-bad: #b42318;
   --gl-surf: color-mix(in srgb, var(--bg-elev) 84%, transparent);
   --gl-surf-strong: color-mix(in srgb, var(--bg-elev) 94%, transparent);
@@ -128,9 +132,9 @@
 /* a stream, like the phone's notification centre: at most two lines of title and two of text; tapping opens the whole thing */
 .gl-nt__top strong, .gl-nt__body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .gl-nt__time { font-size: 0.7rem !important; opacity: 0.85; }
-.gl-nt--ok .gl-nt__top strong { color: var(--gl-ok); }
+.gl-nt--ok .gl-nt__top strong { color: var(--gl-ok-text); }
 .gl-nt--bad .gl-nt__top strong { color: var(--gl-bad); }
-.gl-tone-ok { color: var(--gl-ok); }
+.gl-tone-ok { color: var(--gl-ok-text); }
 .gl-tone-bad { color: var(--gl-bad); }
 /* a status line on a tinted block: the BLOCK carries the green / red, the words keep the text color (green words on a tinted light
    card read 3.9:1 in crema / latte — QA kiosk-ui.readable) */
@@ -212,7 +216,7 @@ button.gl-surf, a.gl-surf { border: 0; font: inherit; text-align: start; cursor:
 .gl-stat__word { font-size: 1.15rem !important; padding-block: 3px; }
 .gl-stat span { font-size: 0.74rem; color: var(--text-dim); }
 .gl-stat--bad b { color: var(--gl-bad); }
-.gl-stat--ok b { color: var(--gl-ok); }
+.gl-stat--ok b { color: var(--gl-ok-text); }
 
 .gl-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .gl-row-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; width: 100%; }

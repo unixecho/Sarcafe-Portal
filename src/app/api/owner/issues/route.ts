@@ -7,9 +7,9 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { loadShortageReport, ISSUE_REPORT_DAYS, GAP_REPORT_DAYS } from '@/lib/checklists/issues-server'
 
 const bodySchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('resolve'), branchId: z.string().uuid(), itemId: z.string().min(1).max(100), note: z.string().max(300).optional() }),
+  z.object({ action: z.literal('resolve'), branchId: z.guid(), itemId: z.string().min(1).max(100), note: z.string().max(300).optional() }),
   // A checklist nobody sent is closed ("not needed"): the same dismissal the shift tracker uses.
-  z.object({ action: z.literal('closeGap'), branchId: z.string().uuid(), shiftId: z.string().uuid(), kind: z.enum(['opening', 'handover', 'closing']), note: z.string().max(300).optional() }),
+  z.object({ action: z.literal('closeGap'), branchId: z.guid(), shiftId: z.guid(), kind: z.enum(['opening', 'handover', 'closing']), note: z.string().max(300).optional() }),
 ])
 
 // חוסרים ופערים: one report per branch holding what the checklists said is missing or not working (grouped by what it

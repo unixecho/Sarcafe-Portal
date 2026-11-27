@@ -229,7 +229,7 @@ check('the notification bar uses the same resolver as the push, so a tap on eith
   check('the checklist links are plain paths, so they survive the sign-in redirect', /^\/[A-Za-z0-9/_-]*$/.test(L.staffChecklistPath(ID)) && /^\/[A-Za-z0-9/_-]*$/.test(L.ownerChecklistPath(ID)))
   check('only an exact checklist id is accepted as a sign-in destination', L.isStaffChecklistPath(`/staff/checklists/${ID}`) && !L.isStaffChecklistPath('/staff/checklists') && !L.isStaffChecklistPath(`/staff/checklists/${ID}/x`) && !L.isStaffChecklistPath('/staff/checklists/not-an-id') && !L.isStaffChecklistPath(`/owner/checklists/${ID}`) && L.isOwnerChecklistPath(`/owner/checklists/${ID}`) && !L.isOwnerChecklistPath(`/staff/checklists/${ID}`))
 }
-const mw = read('src/middleware.ts')
+const mw = read('src/proxy.ts')
 check('the middleware keeps the checklist id through the sign-in redirect (staff and owner), and falls back to the list for anything else', /isStaffChecklistPath\(pathname\) \? pathname : '\/staff\/checklists'/.test(mw) && /isOwnerChecklistPath\(pathname\) \|\| checklistBuilder\) url\.searchParams\.set\('next', pathname\)/.test(mw))
 check('the code sign-in page and route accept a checklist destination', /isStaffChecklistPath\(next\) \? next/.test(read('src/app/login/page.tsx')) && /refine\(isStaffChecklistPath\)/.test(read('src/app/api/auth/quick-login/route.ts')))
 for (const route of ['src/app/staff/checklists/[id]/page.tsx', 'src/app/owner/checklists/[id]/page.tsx']) check(`the per-checklist page exists (${route})`, existsSync(join(ROOT, route)))

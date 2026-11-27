@@ -147,8 +147,8 @@ check("next.config: CSP keeps frame-ancestors 'none' and adds base-uri/object-sr
 check('next.config: HSTS is sent', config.includes('Strict-Transport-Security'))
 check("next.config: the payslip viewer keeps its own frame-ancestors 'self' (and no object-src, which breaks PDF viewers)", /payslips\/:id\/view[\s\S]*frame-ancestors 'self'"/.test(config))
 
-const middleware = read('src/middleware.ts')
-check('middleware refuses cross-site API writes before anything else', /export async function middleware[\s\S]{0,120}isCrossSiteApiWrite\(request\)/.test(middleware))
+const middleware = read('src/proxy.ts')
+check('middleware refuses cross-site API writes before anything else', /export async function proxy[\s\S]{0,120}isCrossSiteApiWrite\(request\)/.test(middleware))
 check('middleware exempts only the kiosk and public feedback routes', middleware.includes("const CROSS_ORIGIN_API_PREFIXES = ['/api/kiosk/', '/api/feedback']"))
 
 const signout = read('src/app/api/auth/signout/route.ts')

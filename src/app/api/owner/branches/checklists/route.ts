@@ -5,7 +5,7 @@ import { requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const bodySchema = z.object({
-  branchId: z.string().uuid(),
+  branchId: z.guid(),
   kind: z.enum(['opening', 'handover', 'closing']),
   enabled: z.boolean(),
 }).strict()

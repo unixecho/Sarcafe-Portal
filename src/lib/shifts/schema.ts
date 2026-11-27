@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { HM_PATTERN, ISO_DATE_PATTERN } from './time'
 import type { ScheduleAction } from './actions'
 
-const uuid = z.string().uuid()
+const uuid = z.guid()
 const isoDate = z.string().regex(ISO_DATE_PATTERN)
 const hm = z.string().regex(HM_PATTERN)
 const slug = z.string().trim().min(1).max(64)

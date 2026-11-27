@@ -330,12 +330,12 @@ section("the owner's switch: the gate, the API, the page, the tile")
   check('it accepts a bare boolean and refuses anything else', /z\.object\(\{ enabled: z\.boolean\(\) \}\)/.test(route))
   check('it writes the row PUBLIC: or the signed-out portal would silently ignore the owner\'s "off"', /is_public: true/.test(patch))
   check('it upserts on the key, so there is no migration to forget', /\.upsert\(/.test(patch) && /onConflict: 'key'/.test(patch))
-  check('it busts the settings cache tag, so the next load of any page reflects the flip', /revalidateTag\(SETTINGS_TAG\)/.test(patch))
+  check('it busts the settings cache tag, so the next load of any page reflects the flip', /revalidateTag\(SETTINGS_TAG, \{ expire: 0 \}\)/.test(patch))
   check('it records who flipped it', /updated_by: staff\.auth_user_id/.test(patch))
   check('it is rate limited per owner', /checkRateLimit\(`intro-admin:\$\{staff\.auth_user_id\}`/.test(patch))
   check('the GET defaults ON when there is no row, and normalizes what it finds', /data \? normalizeIntroEnabled\(data\.value\) : DEFAULT_INTRO_ENABLED/.test(route))
 
-  const mw = read('src/middleware.ts')
+  const mw = read('src/proxy.ts')
   const ops = (mw.match(/const OP_ONLY_PREFIXES = \[([^\]]*)\]/) || [])[1] || ''
   check('/owner/intro is OP-only in the middleware\'s list', /'\/owner\/intro'/.test(ops))
 

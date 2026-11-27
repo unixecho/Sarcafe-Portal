@@ -1,6 +1,6 @@
 // The tool index: every page and action a person can reach from the home screen, what people call it, and who may see it.
 // PURE (no React, no icons, no Supabase): the finder, the shortcuts, the API that records use and scripts/check-tools.mjs read it.
-// The routes are the real ones; `roles` mirrors the access rules in src/middleware.ts (OP_ONLY / MENU_EDITOR / STAFF prefixes):
+// The routes are the real ones; `roles` mirrors the access rules in src/proxy.ts (OP_ONLY / MENU_EDITOR / STAFF prefixes):
 //   op       an owner (isOp)                         — every /owner page
 //   manager  owner or general manager                — the menu-editor pages and the manager's schedule
 //   staff    anyone signed in to the staff app      — their own shifts, checklists, profile

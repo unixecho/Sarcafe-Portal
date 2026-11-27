@@ -12,6 +12,7 @@ import { parseBody } from '@/lib/pos/server/guard'
 import { checkCredentialRateLimit, credentialFingerprint, clientIp } from '@/lib/rate-limit'
 
 const answerSchema = z.record(
+  z.string(),
   z.object({
     result: z.enum(['ok', 'issue']),
     reason: z.string().max(1000).optional(),
@@ -21,8 +22,8 @@ const answerSchema = z.record(
 )
 
 const writeSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('save'), assignmentId: z.string().uuid(), answers: answerSchema }),
-  z.object({ action: z.literal('submit'), assignmentId: z.string().uuid(), answers: answerSchema, attested: z.literal(true) }),
+  z.object({ action: z.literal('save'), assignmentId: z.guid(), answers: answerSchema }),
+  z.object({ action: z.literal('submit'), assignmentId: z.guid(), answers: answerSchema, attested: z.literal(true) }),
   z.object({ action: z.literal('change_passcode'), currentPasscode: z.string().regex(/^\d{6}$/), newPasscode: z.string().regex(/^\d{6}$/) }),
 ])
 

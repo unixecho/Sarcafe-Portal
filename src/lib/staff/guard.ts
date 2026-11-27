@@ -5,7 +5,7 @@ import { isQuickSessionId, validatedSessionId } from '@/lib/pos/server/quick-log
 
 // Being signed in with Google is NOT being staff — anyone with a Google
 // account can authenticate against this project (see /login and
-// middleware.ts). Every route that requires staff-level trust must call
+// proxy.ts). Every route that requires staff-level trust must call
 // this, never just check for a session.
 export async function requireStaff(): Promise<AccessRow & { id: string; auth_user_id: string }> {
   const supabase = await createServerSupabaseClient()

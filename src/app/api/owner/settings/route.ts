@@ -26,6 +26,6 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
 
   if (error) throw BadRequest('Could not save setting.')
 
-  revalidateTag(SETTINGS_TAG)
+  revalidateTag(SETTINGS_TAG, { expire: 0 })
   return NextResponse.json({ ok: true })
 })

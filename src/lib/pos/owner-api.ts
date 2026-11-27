@@ -63,7 +63,7 @@ export type BranchInfo = {
   timezone: string
 }
 
-const uuid = z.string().uuid()
+const uuid = z.guid()
 const branchRef = z.string().trim().regex(/^[A-Za-z0-9-]{1,80}$/)
 const refString = z.string().min(1).max(80)
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)

@@ -22,7 +22,7 @@ export const normalizePairCode = (s: string) => s.replace(/[\s-]/g, '').toUpperC
 
 export const installRequestSchema = z
   .object({
-    branchId: z.string().uuid(),
+    branchId: z.guid(),
     slug: z.string().regex(DEVICE_SLUG_PATTERN),
     name: z.string().trim().min(2).max(60),
     pin: z.string().max(16),

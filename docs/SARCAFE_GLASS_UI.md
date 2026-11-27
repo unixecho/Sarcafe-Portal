@@ -9,7 +9,7 @@ will use the glisse feature"). The owner dashboard, the employee home, the devel
 1. **The account button's menu is the signature.** Every menu, popover, picker and notification list looks like it: glisse's `<Menu>`
    when it opens from an icon button, the `.gl-pop` surface otherwise (same tokens, same radius, same shadow).
 2. **One badge style**: the orange pill (`<Pill>` / `.gl-pill`), like "2 בקשות". Only ever with a true, known number.
-3. **Good news green, bad news and errors red** (`--gl-ok`, `--gl-bad`; `.gl-pill--ok/--bad`, `.gl-surf--ok/--bad`, `glassToast(msg, 'ok' | 'bad')`).
+3. **Good news green, bad news and errors red** (`--gl-ok`, `--gl-bad`; `.gl-pill--ok/--bad`, `.gl-surf--ok/--bad`, `glassToast(msg, 'ok' | 'bad')`). Green **words** use `--gl-ok-text` (darker in crema/latte, ~7:1 on white); `--gl-ok` is for green fills (pills, dots).
    Neutral stays the look's own accent. Status is never colour alone: an icon or words go with it.
 4. The top bar stays exactly as it is (logo, branch switch for a manager, bell, account).
 5. **The home tool lists are the owner's** (2026-10-16/17): the owner's three categories, the employee's "במהלך השירות" and a general

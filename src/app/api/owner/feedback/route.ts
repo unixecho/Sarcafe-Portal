@@ -63,7 +63,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
 
 const patchSchema = z.union([
   z.object({ enabled: z.boolean() }),
-  z.object({ id: z.string().uuid(), status: z.enum(FEEDBACK_STATUSES) }),
+  z.object({ id: z.guid(), status: z.enum(FEEDBACK_STATUSES) }),
 ])
 
 export const PATCH = apiRoute(async (request: NextRequest) => {
@@ -92,7 +92,7 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
       .single()
     if (error) throw BadRequest('Could not save setting.')
 
-    revalidateTag(SETTINGS_TAG)
+    revalidateTag(SETTINGS_TAG, { expire: 0 })
     return NextResponse.json({ enabled: data.value as boolean })
   }
 

@@ -27,14 +27,9 @@ export const PUBLIC_ROUTES = {
 }
 
 // Known advisories that need a major upgrade, reviewed and accepted (docs/SECURITY_AUDIT_2026-10-28.md). They stay visible in the
-// morning review; anything NOT on this list fails the suite. Review again when Next 16 / zod 4 are adopted.
-export const ACCEPTED_ADVISORIES = {
-  'GHSA-qx2v-qp2m-jg93': 'PostCSS inside Next 15 (build time only, our own CSS); fix = Next 16',
-  'GHSA-6g55-p6wh-862q': 'PostCSS inside Next 15 (build time only, no user CSS); fix = Next 16',
-  'GHSA-fxqj-rqcc-2cmp': 'PostCSS inside Next 15 (build time only, no user CSS); fix = Next 16',
-  'GHSA-r28c-9q8g-f849': 'PostCSS inside Next 15 (build time only, no user CSS); fix = Next 16',
-  'GHSA-mrhx-c7xc-m3w5': 'zod 3: every API body is size-capped before validation (parseBody 128 KB, QA report 600 KB); fix = zod 4',
-}
+// morning review; anything NOT on this list fails the suite. Empty since 2026-11-27: Next 16 (its PostCSS 8.5.23) and zod 4
+// closed every one that was listed (four PostCSS advisories inside Next 15, and zod 3's oversized-collection one).
+export const ACCEPTED_ADVISORIES = {}
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

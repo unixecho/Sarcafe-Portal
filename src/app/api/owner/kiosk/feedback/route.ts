@@ -72,7 +72,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
   )
 })
 
-const actionSchema = z.object({ id: z.string().uuid(), hidden: z.boolean() }).strict()
+const actionSchema = z.object({ id: z.guid(), hidden: z.boolean() }).strict()
 
 export const POST = apiRoute(async (request: NextRequest) => {
   await requireOwner()

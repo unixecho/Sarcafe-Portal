@@ -11,7 +11,7 @@ import { checkCredentialRateLimit } from '@/lib/rate-limit'
 export const POST = privateStaffRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const owner = await requireOwner()
   assertSameOrigin(request)
-  const id = z.string().uuid().parse((await params).id)
+  const id = z.guid().parse((await params).id)
   if (!(await checkCredentialRateLimit(`payslip:${owner.id}`, 30, 3600))) throw new ApiError(429, 'rate_limited', 'יותר מדי העלאות. נסו שוב בהמשך.')
   if (Number(request.headers.get('content-length')) > PAYSLIP_LIMIT + 64 * 1024) throw BadRequest('הקובץ גדול מדי. אפשר עד 4MB.')
   const form = await request.formData()

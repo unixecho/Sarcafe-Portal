@@ -23,12 +23,12 @@ const definitionSchema = z.object({
   categories: z.array(z.object({ id: z.string().min(1).max(100), title: z.string().min(1).max(200), items: z.array(itemSchema).min(1).max(200) })).min(1).max(50),
 })
 const bodySchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('publish'), branchId: z.string().uuid(), kind: z.enum(['opening', 'handover', 'closing']), name: z.string().min(1).max(200), definition: definitionSchema }),
-  z.object({ action: z.literal('seen'), assignmentId: z.string().uuid() }),
-  z.object({ action: z.literal('resolve'), assignmentId: z.string().uuid(), note: z.string().max(1000).optional() }),
+  z.object({ action: z.literal('publish'), branchId: z.guid(), kind: z.enum(['opening', 'handover', 'closing']), name: z.string().min(1).max(200), definition: definitionSchema }),
+  z.object({ action: z.literal('seen'), assignmentId: z.guid() }),
+  z.object({ action: z.literal('resolve'), assignmentId: z.guid(), note: z.string().max(1000).optional() }),
   // An owner closes a checklist nobody sent ("not needed"), and can take it back. See isDismissed in window.ts.
-  z.object({ action: z.literal('dismiss'), assignmentId: z.string().uuid(), note: z.string().max(300).optional() }),
-  z.object({ action: z.literal('restore'), assignmentId: z.string().uuid() }),
+  z.object({ action: z.literal('dismiss'), assignmentId: z.guid(), note: z.string().max(300).optional() }),
+  z.object({ action: z.literal('restore'), assignmentId: z.guid() }),
 ])
 
 export const GET = apiRoute(async (request: NextRequest) => {

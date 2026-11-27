@@ -41,7 +41,7 @@ export const remoteActionSchema = z.discriminatedUnion('action', [
 export type RemoteAction = z.infer<typeof remoteActionSchema>
 
 /** What the app sends after adopting a PIN (POST /api/kiosk/device/pin). */
-export const pinAckSchema = z.object({ device: slug.optional(), id: z.string().uuid() }).strict()
+export const pinAckSchema = z.object({ device: slug.optional(), id: z.guid() }).strict()
 
 /** A command stored on the tablet's row, read back tolerant of anything else. */
 export function readCommand(raw: unknown): KioskCommand | null {

@@ -41,8 +41,8 @@ export function unitStage(root) {
     const missing = Object.values(m.tools.HOME_TOOL_GROUPS).flat().flatMap((g) => g.ids).filter((id) => !m.tools.toolById(id))
     assert.deepEqual(missing, [], 'home groups name unknown tools:')
   })
-  stage.test('index-access', 'החיפוש לא מציע לאף אחד עמוד שהשרת יחסום בפניו (מול middleware.ts)', 'security', async () => {
-    const mw = fs.readFileSync(path.join(root, 'src/middleware.ts'), 'utf8')
+  stage.test('index-access', 'החיפוש לא מציע לאף אחד עמוד שהשרת יחסום בפניו (מול proxy.ts)', 'security', async () => {
+    const mw = fs.readFileSync(path.join(root, 'src/proxy.ts'), 'utf8')
     const list = (name) => [...(mw.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\]`))?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1])
     const opOnly = list('OP_ONLY_PREFIXES')
     assert.ok(opOnly.length > 3, 'could not read OP_ONLY_PREFIXES')
@@ -77,7 +77,7 @@ export function unitStage(root) {
     for (const p of ['/owner/dashboard', '/owner/schedule', '/owner/staff', '/owner/checklists', '/owner/kiosk/control']) assert.ok(d.onDockRoot(op, p), `owner dock on ${p}`)
     for (const p of ['/owner/kiosk', '/owner/schedule/print', '/owner/checklists/x', '/owner/editor']) assert.ok(!d.onDockRoot(op, p), `no owner dock on ${p}`)
     // the employee tabs never lead to an owner-only page (the middleware's list)
-    const mw = fs.readFileSync(path.join(root, 'src/middleware.ts'), 'utf8')
+    const mw = fs.readFileSync(path.join(root, 'src/proxy.ts'), 'utf8')
     const opOnly = [...(mw.match(/const OP_ONLY_PREFIXES = \[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1])
     assert.ok(opOnly.length > 3, 'could not read OP_ONLY_PREFIXES')
     const roots = ep.roots.map((re) => re.replace(/^\^|\$$/g, ''))

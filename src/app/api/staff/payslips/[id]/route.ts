@@ -9,7 +9,7 @@ import { PAYSLIP_BUCKET, privateStaffRoute } from '@/lib/staff/records'
 export const GET = privateStaffRoute(async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const me = await requireStaffIdentity()
   if (me.quick || me.via !== 'google') throw Forbidden('כדי לפתוח תלוש שכר צריך להתחבר עם Google')
-  const id = z.string().uuid().parse((await params).id)
+  const id = z.guid().parse((await params).id)
   const service = createServiceRoleClient()
   let query = service.from('staff_payslips').select('object_path, file_name').eq('id', id)
   if (!isOp(me)) query = query.eq('staff_id', me.id)

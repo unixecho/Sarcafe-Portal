@@ -30,7 +30,7 @@ export const exceptionSchema = z
 
 export const adSchema = z
   .object({
-    id: z.string().uuid().nullable(),
+    id: z.guid().nullable(),
     kind: z.enum(AD_KINDS),
     title: oneLine(80).pipe(z.string().min(1)),
     body: oneLine(400),
@@ -43,7 +43,7 @@ export const adSchema = z
 
 export const optionSchema = z
   .object({
-    id: z.string().uuid().nullable(),
+    id: z.guid().nullable(),
     label: oneLine(60).pipe(z.string().min(1)),
     enabled: z.boolean(),
   })
@@ -73,10 +73,10 @@ export type ContentSaveException = z.infer<typeof exceptionSchema>
 
 export const feedbackSchema = z
   .object({
-    optionIds: z.array(z.string().uuid()).max(MAX_VOTES),
+    optionIds: z.array(z.guid()).max(MAX_VOTES),
     suggestion: z.string().max(SUGGESTION_MAX * 2).optional().default(''),
     rating: z.number().int().min(1).max(5).nullable().optional().default(null),
-    requestId: z.string().uuid(),
+    requestId: z.guid(),
     /** Honeypot: a person never sees this field; a bot fills it. */
     website: z.string().max(200).optional().default(''),
   })

@@ -66,7 +66,7 @@ check('the branch manager is one tap from the owner dashboard', /href="\/owner\/
 check('the developer\'s alerts carry their audience, everyone else\'s do not', /const named = \{ developer: isDeveloper\(me\) \}/.test(read('src/app/api/staff/notifications/route.ts')) && /alertTitle\(row\.kind as string, row\.title as string, named\)/.test(read('src/app/api/staff/notifications/route.ts')) && /\/api\/staff\/notifications/.test(read('src/components/glass/GlassTopBar.tsx')))
 
 section('the branch manager')
-const middleware = read('src/middleware.ts')
+const middleware = read('src/proxy.ts')
 check('it is owner-only at the door, in both pages and in the API', /OP_ONLY_PREFIXES = \[[^\]]*'\/owner\/branches'/.test(middleware) && /isOp\(me\)\) redirect\('\/no-access'\)/.test(read('src/app/owner/branches/page.tsx')) && /isOp\(me\)\) redirect\('\/no-access'\)/.test(read('src/app/owner/branches/[slug]/page.tsx')) && /requireOwner\(\)/.test(read('src/app/api/owner/branches/checklists/route.ts')))
 const api = read('src/app/api/owner/branches/checklists/route.ts')
 const mig = readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('_branch_manager_checklists_constraints.sql')).map((f) => read(`supabase/migrations/${f}`)).join('\n')
@@ -106,7 +106,7 @@ eq('the builder address names the branch and the form', LK.branchChecklistBuilde
 check('only that shape (and the bare parent) is a builder address: nothing else under /owner/branches is let through the manager door',
   ['/owner/branches/maor/checklists/opening', '/owner/branches/givat-haviva/checklists/closing', '/owner/branches/maor/checklists'].every((v) => LK.isBranchChecklistBuilderPath(v))
   && ['/owner/branches', '/owner/branches/maor', '/owner/branches/maor/checklists/other', '/owner/branches/maor/checklists/opening/x', '/owner/branches/../checklists/opening', '/owner/branches/Maor/checklists/opening', '//owner/branches/maor/checklists/opening', '/owner/branches/maor/checklists/opening?x=1'].every((v) => !LK.isBranchChecklistBuilderPath(v)))
-const mw = read('src/middleware.ts')
+const mw = read('src/proxy.ts')
 check('middleware treats the builder as menu-editor access (owner or general manager), not owner-only, and keeps its address through sign-in',
   /const checklistBuilder = isBranchChecklistBuilderPath\(pathname\)/.test(mw) && /editorProtected = checklistBuilder \|\|/.test(mw) && /opProtected = !checklistBuilder &&/.test(mw) && /isOwnerChecklistPath\(pathname\) \|\| checklistBuilder/.test(mw))
 const builderPage = read('src/app/owner/branches/[slug]/checklists/[kind]/page.tsx')

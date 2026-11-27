@@ -10,7 +10,7 @@ type Context = { params: Promise<{ id: string }> }
 
 export const GET = credentialRoute(async (_request: NextRequest, context: Context) => {
   await requireOwner()
-  const id = z.string().uuid().parse((await context.params).id)
+  const id = z.guid().parse((await context.params).id)
   const { data, error } = await createServiceRoleClient().from('staff_invitations')
     .select('created_at, expires_at, consumed_at, revoked_at').eq('staff_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (error) throw new ApiError(500, 'internal_error', 'לא הצלחנו לטעון את מצב ההזמנה.')
@@ -20,7 +20,7 @@ export const GET = credentialRoute(async (_request: NextRequest, context: Contex
 export const POST = credentialRoute(async (request: NextRequest, context: Context) => {
   const owner = await requireOwner()
   await parseBody(request, z.object({}).strict())
-  const id = z.string().uuid().parse((await context.params).id)
+  const id = z.guid().parse((await context.params).id)
   const invitation = await createStaffInvitation(owner.id, id, new URL(request.url).origin)
   return NextResponse.json({ invitation }, { headers: ONBOARDING_HEADERS })
 })
@@ -28,7 +28,7 @@ export const POST = credentialRoute(async (request: NextRequest, context: Contex
 export const DELETE = credentialRoute(async (request: NextRequest, context: Context) => {
   const owner = await requireOwner()
   await parseBody(request, z.object({}).strict())
-  const id = z.string().uuid().parse((await context.params).id)
+  const id = z.guid().parse((await context.params).id)
   const { data, error } = await createServiceRoleClient().rpc('staff_revoke_invitation', { p_actor: owner.id, p_staff: id })
   if (error || (data as { ok?: boolean })?.ok !== true) throw new ApiError(409, 'conflict', 'לא הצלחנו לבטל את הקישור. נסו שוב.')
   return NextResponse.json({ ok: true }, { headers: ONBOARDING_HEADERS })

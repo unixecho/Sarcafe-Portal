@@ -51,6 +51,6 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   if (error) throw BadRequest('Could not save setting.')
 
   // Next load of any page reflects the flip.
-  revalidateTag(SETTINGS_TAG)
+  revalidateTag(SETTINGS_TAG, { expire: 0 })
   return NextResponse.json({ enabled: normalizeIntroEnabled(data.value) })
 })

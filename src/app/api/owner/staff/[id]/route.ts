@@ -8,7 +8,7 @@ import { refusal } from '@/lib/shifts/dispatch-write'
 // One person's detail, for the edit sheet: the things the list does not carry —
 // can this record be deleted at all (has it any history?), how many shifts is
 // the person still on, and the trail of who changed what. Owner only.
-const idSchema = z.string().uuid()
+const idSchema = z.guid()
 
 type Ctx = { params: Promise<{ id: string }> }
 

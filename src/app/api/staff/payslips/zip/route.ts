@@ -15,7 +15,7 @@ import { safeEntryName, uniqueNames, zipStream } from '@/lib/staff/zip'
 export const GET = privateStaffRoute(async (request: NextRequest) => {
   const me = await requirePayslipReader()
   const wanted = (request.nextUrl.searchParams.get('ids') ?? '').split(',').filter(Boolean)
-  const ids = [...new Set(z.array(z.string().uuid()).min(1).max(MAX_ZIP_FILES).parse(wanted))]
+  const ids = [...new Set(z.array(z.guid()).min(1).max(MAX_ZIP_FILES).parse(wanted))]
   if (!(await checkCredentialRateLimit(`payslip-zip:${me.id}`, 30, 3600))) throw new ApiError(429, 'rate_limited', 'יותר מדי הורדות. נסו שוב בעוד זמן קצר.')
 
   const service = createServiceRoleClient()

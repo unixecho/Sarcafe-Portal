@@ -224,7 +224,7 @@ export const deviceReportSchema = z
     /** The control panel's "send a test alert": nothing is recorded, one test alert goes to the developer. */
     test: z.literal(true).optional(),
     /** The dashboard's command (pending_command.id) the tablet carried out since its last report (docs/SARCAFE_KIOSK_REMOTE.md). */
-    commandDone: z.string().uuid().optional(),
+    commandDone: z.guid().optional(),
   })
   .strict()
 

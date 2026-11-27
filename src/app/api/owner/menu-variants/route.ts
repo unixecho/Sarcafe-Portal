@@ -124,7 +124,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
 const patchSchema = z.object({
   branch: z.string(),
-  variantId: z.string().uuid(),
+  variantId: z.guid(),
   name: z.object({ he: z.string().optional(), en: z.string().optional(), ar: z.string().optional() }).optional(),
   excludedUids: z.array(z.string()).optional(),
   scheduleEnabled: z.boolean().optional(),
@@ -203,7 +203,7 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   return NextResponse.json({ ok: true })
 })
 
-const deleteSchema = z.object({ branch: z.string(), variantId: z.string().uuid() })
+const deleteSchema = z.object({ branch: z.string(), variantId: z.guid() })
 
 export const DELETE = apiRoute(async (request: NextRequest) => {
   const body = deleteSchema.parse(await request.json())

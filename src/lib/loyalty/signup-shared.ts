@@ -49,7 +49,7 @@ export const webSignupSchema = z
     acknowledged: z.literal(true),
     /** The separate, optional marketing consent. */
     marketing: z.boolean(),
-    requestId: z.string().uuid(),
+    requestId: z.guid(),
     lang: z.enum(LOYALTY_LANGS),
     /** Issued by the page (src/lib/loyalty/signup-server.ts): proves the form was loaded, not posted blind. */
     token: z.string().min(10).max(120),

@@ -52,7 +52,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
 })
 
 const actionSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   action: z.enum(['grant_marketing', 'withdraw_marketing', 'erase']),
 })
 

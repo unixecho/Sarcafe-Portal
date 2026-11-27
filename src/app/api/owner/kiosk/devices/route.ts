@@ -24,14 +24,14 @@ import {
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 const createSchema = z
-  .object({ slug: z.string().regex(DEVICE_SLUG_PATTERN), name: deviceNameSchema, branchId: z.string().uuid() })
+  .object({ slug: z.string().regex(DEVICE_SLUG_PATTERN), name: deviceNameSchema, branchId: z.guid() })
   .strict()
 
 const patchSchema = z
   .object({
     slug: z.string().regex(DEVICE_SLUG_PATTERN),
     name: deviceNameSchema.optional(),
-    branchId: z.string().uuid().optional(),
+    branchId: z.guid().optional(),
     active: z.boolean().optional(),
     settings: settingsPatchSchema.optional(),
   })

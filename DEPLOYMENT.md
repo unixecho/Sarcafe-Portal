@@ -76,7 +76,7 @@ Supabase's free tier pauses a project after 7 days with zero API activity. The Q
 
 ## 4. Known defensive code (don't remove without understanding why)
 
-- `src/middleware.ts` forwards a stray `?code=` landing on `/` to `/auth/callback`. This exists because the OAuth redirect has intermittently landed on the app root instead of `/auth/callback` despite every relevant config (Supabase redirect_to, Redirect URLs allowlist) being verified correct at the time — the Google Console fix in §1 (the bare-origin redirect URI) is the suspected real root cause, but this middleware forward stays as a safety net since the exact mechanism was never fully confirmed.
+- `src/proxy.ts` (Next 16's name for middleware; was `src/middleware.ts` until 2026-11-27) forwards a stray `?code=` landing on `/` to `/auth/callback`. This exists because the OAuth redirect has intermittently landed on the app root instead of `/auth/callback` despite every relevant config (Supabase redirect_to, Redirect URLs allowlist) being verified correct at the time — the Google Console fix in §1 (the bare-origin redirect URI) is the suspected real root cause, but this middleware forward stays as a safety net since the exact mechanism was never fully confirmed.
 - `src/app/auth/callback/route.ts` surfaces the actual Postgrest/GoTrue error message via `?reason=` and `?detail=` on the `/no-access` redirect instead of swallowing it — keep this; it's what made the two bugs above possible to diagnose at all without direct log access.
 
 ## 5. Web Push (order-ready notifications)

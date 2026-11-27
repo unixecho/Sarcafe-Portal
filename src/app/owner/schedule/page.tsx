@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 // Manage-gated, but NOT via the usual hasAnyMenuEditAccess/isOp coarse
 // checks — a delegated schedule manager can be any staff member (their
 // badge might just be "barista"), so middleware only requires isStaff()
-// here (see middleware.ts's STAFF_ONLY_PREFIXES) and this page does the
+// here (see proxy.ts's STAFF_ONLY_PREFIXES) and this page does the
 // real per-branch resolution: an owner/general_manager sees every branch
 // they're allowed at; anyone else only the branch(es) that delegated them
 // via that branch's shift_settings.schedule_managers[]. A staff member who
@@ -54,7 +54,7 @@ export default async function OwnerSchedulePage({ searchParams }: { searchParams
   const cookieStore = await cookies()
   const initialBranch = resolveCurrentBranchSlug(manageableBranches, cookieStore.get(BRANCH_COOKIE)?.value)
 
-  // /owner/dashboard is OP-only (see middleware.ts) — a general_manager or
+  // /owner/dashboard is OP-only (see proxy.ts) — a general_manager or
   // delegated schedule manager can reach this page but not that one, so
   // their back button must point somewhere they can actually land.
   const backHref = isOp(me) ? '/owner/dashboard' : '/staff/schedule'

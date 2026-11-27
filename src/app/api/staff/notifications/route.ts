@@ -27,7 +27,7 @@ export const GET = privateStaffRoute(async () => {
 })
 export const POST = privateStaffRoute(async (request: NextRequest) => {
   const me = await requireStaffIdentity()
-  const { ids } = await parseBody(request, z.object({ ids: z.array(z.string().uuid()).min(1).max(40) }).strict())
+  const { ids } = await parseBody(request, z.object({ ids: z.array(z.guid()).min(1).max(40) }).strict())
   const { error } = await createServiceRoleClient().from('schedule_notifications').update({ read_at: new Date().toISOString() }).eq('staff_id', me.id).is('read_at', null).in('id', ids)
   if (error) throw new ApiError(503, 'unavailable', 'לא הצלחנו לסמן כנקרא')
   return NextResponse.json({ ok: true }, { headers })

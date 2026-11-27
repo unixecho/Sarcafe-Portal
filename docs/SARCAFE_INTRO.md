@@ -64,7 +64,7 @@ Design reference: `docs/intro-preview/` is the review page the owner approved fr
 | `src/lib/settings/keys.ts`, `server.ts` | `intro_enabled` (default on) and `getIntroEnabled()`. |
 | `src/app/api/owner/intro/route.ts` | Owner-only GET and PATCH; upserts the row with `is_public: true`, busts the settings cache tag. No migration. |
 | `src/app/owner/intro/page.tsx`, `src/components/IntroCard.tsx` | The owner's page: the switch, a preview of each version, and every line with a preview link. Tile on the owner dashboard. |
-| `src/middleware.ts` | `/owner/intro` is owner-only. |
+| `src/proxy.ts` | `/owner/intro` is owner-only. |
 | `scripts/check-intro.mjs` (`npm run check:intro`) | 430 checks against the real files. |
 
 ### The installed customer app

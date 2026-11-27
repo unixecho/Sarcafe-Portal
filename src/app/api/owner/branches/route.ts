@@ -153,7 +153,7 @@ const reviewsSchema = z.object({
 })
 
 const patchSchema = z.object({
-  branchId: z.string().uuid(),
+  branchId: z.guid(),
   links: linksSchema.optional(),
   reviews: reviewsSchema.optional(),
 })

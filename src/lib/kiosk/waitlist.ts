@@ -46,7 +46,7 @@ export const signupSchema = z
     acknowledged: z.literal(true),
     /** The separate, optional marketing consent. */
     marketing: z.boolean(),
-    requestId: z.string().uuid(),
+    requestId: z.guid(),
     privacyVersion: z.enum(versionsOf('privacy')),
     consentVersion: z.enum(versionsOf('consent')),
     termsVersion: z.enum(versionsOf('terms')),

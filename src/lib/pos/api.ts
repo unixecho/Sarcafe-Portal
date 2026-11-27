@@ -13,7 +13,7 @@ import type {
   ItemStatus, PosErrorCode, PosMenu, PosPoint, PosPointStaff, PosRoute, PosSession, StaffDirEntry,
 } from './types'
 
-const uuid = z.string().uuid()
+const uuid = z.guid()
 
 // ---- Shared pieces --------------------------------------------------------------------
 

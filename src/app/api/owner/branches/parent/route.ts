@@ -5,9 +5,9 @@ import { requireOwner } from '@/lib/owner/guard'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const bodySchema = z.object({
-  eventId: z.string().uuid(),
+  eventId: z.guid(),
   // null detaches the event from its truck
-  parentId: z.string().uuid().nullable(),
+  parentId: z.guid().nullable(),
 }).strict()
 
 // The owner assigns an event (a stall the POS trades at) to a coffee truck, or detaches it. The POS is a subsystem of a branch:

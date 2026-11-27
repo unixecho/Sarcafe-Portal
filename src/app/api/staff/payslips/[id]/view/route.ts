@@ -11,7 +11,7 @@ import { contentDisposition, requirePayslipReader, VIEWABLE_TYPES } from '@/lib/
 // The site forbids framing every page (clickjacking); this one route may be framed, by our own pages only (next.config.mjs).
 export const GET = privateStaffRoute(async (_request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const me = await requirePayslipReader()
-  const id = z.string().uuid().parse((await params).id)
+  const id = z.guid().parse((await params).id)
   const service = createServiceRoleClient()
   let query = service.from('staff_payslips').select('object_path, file_name, content_type').eq('id', id)
   if (!isOp(me)) query = query.eq('staff_id', me.id)

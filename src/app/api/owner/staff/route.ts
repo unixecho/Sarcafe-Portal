@@ -121,7 +121,7 @@ const inviteSchema = z.object({
   phone: phoneField.nullable().default(null),
   role: z.enum(['staff', 'owner']).default('staff'),
   badge: z.string().max(40).nullable().default(null),
-  branchId: z.string().uuid().nullable().default(null),
+  branchId: z.guid().nullable().default(null),
   // REQUIRED. Absent or blank is a plain-language 400 below, not a generic zod error.
   handle: z.string().optional(),
   // The same name already belongs to an active colleague: ask once, then allow.
@@ -220,7 +220,7 @@ export const POST = credentialRoute(async (request: NextRequest) => {
 })
 
 const patchSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   // A new address, or null to clear it (only while the person has not signed in yet).
   email: z.string().trim().email().nullable().optional(),
   firstName: nameField.nullable().optional(),
@@ -229,7 +229,7 @@ const patchSchema = z.object({
   phone: phoneField.nullable().optional(),
   role: z.enum(['staff', 'owner']).optional(),
   badge: z.string().max(40).nullable().optional(),
-  branchId: z.string().uuid().nullable().optional(),
+  branchId: z.guid().nullable().optional(),
   active: z.boolean().optional(),
   /** With active:false — also take the person off every shift that has not started yet. */
   removeFromFutureShifts: z.boolean().optional(),

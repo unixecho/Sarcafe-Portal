@@ -7,7 +7,6 @@
     "prebuild": "node scripts/publish-kiosk-ota.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "check:schedule": "node scripts/check-schedule.mjs",
     "check:staff-push": "node scripts/check-staff-push.mjs",
@@ -52,12 +51,12 @@
     "gsap": "3.15.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.45.0",
-    "next": "^15.5.28",
+    "next": "^16.4.6",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "web-push": "^3.6.7",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -68,7 +67,7 @@
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.15.0",
-    "eslint-config-next": "^15.5.28",
+    "eslint-config-next": "^16.4.6",
     "playwright": "1.64.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
